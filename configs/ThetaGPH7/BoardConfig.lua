@@ -1,0 +1,52 @@
+--[[
+# This file is a part of ThetaGP.
+#
+# ThetaGP is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# ThetaGP is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.
+#
+# If not, see <https://www.gnu.org/licenses/>.
+]]
+
+local M = {}
+
+M.BoardInfo = {
+    identifier = "ThetaGPH7",
+    name = "ThetaGP_Ver.Ultra",
+    mcu = "STM32H743xx",
+    mcu_series = "STM32H7",
+}
+
+M.BoardConfig = {
+    necessary = {
+        led0 = { pin = "PC0", active_low = true },
+        keypad = {
+            drive_mode = "row_scan",
+            active_low = true,
+            row = {
+                { pin = "PA0" },
+                { pin = "PA1" },
+            },
+            col = {
+                { pin = "PB0" },
+                { pin = "PB1" },
+            }
+        },
+        usb = {
+            speed = "full_speed",
+            dp = { pin = "PA12" },
+            dm = { pin = "PA11" },
+        }
+    }
+}
+
+return M
