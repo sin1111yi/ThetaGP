@@ -140,7 +140,6 @@ set(INCLUDE_DIRS
 # Vendor-specific middleware include directories
 if(PLATFORM_VENDOR STREQUAL "ST")
     list(APPEND INCLUDE_DIRS
-        # "${MIDDLEWARE_PATH}/STM32_USB_Device_Library/Core/Inc"
         "${CMSIS_PATH}/Device/${PLATFORM_VENDOR}/${PLATFORM_MCU_NAME_PREFIX}xx/Include"
     )
 endif()
