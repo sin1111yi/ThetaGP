@@ -35,16 +35,26 @@ file(GLOB_RECURSE SRC_FILES
 # =============================================================================
 add_executable(${CMAKE_PROJECT_NAME})
 
+# GP2040-CE include directories (GP2040_CE_PATH is set in root CMakeLists.txt)
+set(GP2040_CE_INCLUDE_DIRS
+    ${GP2040_CE_PATH}/lib/nanopb
+    ${GP2040_CE_PATH}/proto
+)
+
+add_dependencies(${CMAKE_PROJECT_NAME} proto_gen)
+
 target_sources(${CMAKE_PROJECT_NAME}
     PRIVATE
     ${SRC_FILES}
     ${THETAGP_SOURCES}
+    ${PROTO_SOURCES}
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME}
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${THETAGP_INCLUDE_DIRS}
+    ${GP2040_CE_INCLUDE_DIRS}
 )
 
 target_compile_definitions(${CMAKE_PROJECT_NAME}
