@@ -22,19 +22,42 @@ cmake_minimum_required(VERSION 3.22)
 # =============================================================================
 # Project Configuration
 # =============================================================================
-
 if(NOT DEFINED TARGET)
     message(FATAL_ERROR "TARGET is not defined, please specify the target platform (e.g. -DTARGET=...)")
 endif()
 
-# Project version
-set(PROJECT_VERSION_MAJOR 0)
-set(PROJECT_VERSION_MINOR 1)
-set(PROJECT_VERSION_PATCH 0)
+if(NOT DEFINED CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
+    set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type (e.g. Debug, Release, RelWithDebInfo)" FORCE)
+endif()
 
-# =============================================================================
-# Board Configuration
-# =============================================================================
+# Get version from git
+find_package(Git)
+
+if(GIT_FOUND)
+    execute_process(COMMAND ${GIT_EXECUTABLE} describe --tags --always --dirty --abbrev=7
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_REPO_VERSION
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(COMMAND ${GIT_EXECUTABLE} describe --always --abbrev=7
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_REPO_BUILD_ID
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    string(REGEX REPLACE "v([0-9]+\\.[0-9]+\\.[0-9]+).*" "\\1" CMAKE_GIT_REPO_VERSION ${GIT_REPO_VERSION})
+
+    if(CMAKE_GIT_REPO_VERSION STREQUAL GIT_REPO_VERSION)
+        set(CMAKE_GIT_REPO_VERSION "0.0.0")
+    endif()
+
+    message(STATUS "GIT_REPO_VERSION: ${GIT_REPO_VERSION}")
+    message(STATUS "CMAKE_GIT_REPO_VERSION: ${CMAKE_GIT_REPO_VERSION}")
+    message(STATUS "GIT_REPO_BUILD_ID: ${GIT_REPO_BUILD_ID}")
+else()
+    set(CMAKE_GIT_REPO_VERSION "0.0.0")
+    message(WARNING "Git not found, using default version 0.0.0")
+endif()
+
+# Project name with version
+set(THETAGP_PROJECT_NAME "ThetaGP_${TARGET}_${CMAKE_GIT_REPO_VERSION}_${CMAKE_BUILD_TYPE}")
 
 set(ENV{TARGET} "${TARGET}")
 set(ENV{THETAGP_SOURCE_DIR} "${CMAKE_SOURCE_DIR}")
@@ -48,16 +71,24 @@ endif()
 
 message(STATUS "Found Lua: ${LUA_EXECUTABLE}")
 
+# Fetch dependencies before configuration
+message(STATUS "Fetching dependencies...")
+execute_process(
+    COMMAND ${LUA_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/fetch_deps.lua
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    RESULT_VARIABLE DEPS_FETCH_RESULT
+)
+
+if(NOT DEPS_FETCH_RESULT EQUAL 0)
+    message(FATAL_ERROR "Failed to fetch dependencies. Please check the error messages above.")
+endif()
+
 execute_process(
     COMMAND ${LUA_EXECUTABLE} ${CMAKE_SOURCE_DIR}/configs/config.lua
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
 
 include(${CMAKE_SOURCE_DIR}/configs/${TARGET}/board_config.cmake)
-
-# =============================================================================
-# Toolchain Configuration (must be before project())
-# =============================================================================
 
 # First include toolchain settings to get THETAGP_TOOLCHAIN_PREFIX and THETAGP_MIN_VERSION
 if(BOARD_MCU_SERIES STREQUAL "STM32H7")
@@ -66,26 +97,10 @@ else()
     message(FATAL_ERROR "Unsupported MCU series: ${BOARD_MCU_SERIES}. Only STM32H7 is supported currently.")
 endif()
 
-# =============================================================================
-# Build Type
-# =============================================================================
-
-if(NOT DEFINED CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
-    set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type (e.g. Debug, Release, RelWithDebInfo)" FORCE)
-endif()
-
-# =============================================================================
-# Project Definition
-# =============================================================================
-
-project(ThetaGP_${TARGET}_${CMAKE_BUILD_TYPE}
+project(${THETAGP_PROJECT_NAME}
     LANGUAGES C CXX ASM
-    VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}
+    VERSION ${CMAKE_GIT_REPO_VERSION}
 )
-
-# =============================================================================
-# Compiler Standards
-# =============================================================================
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -97,9 +112,11 @@ set(CMAKE_CXX_EXTENSIONS ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# =============================================================================
-# Subdirectories
-# =============================================================================
+# GP2040-CE path variable (used by compile_proto and src)
+set(GP2040_CE_PATH ${CMAKE_SOURCE_DIR}/GP2040-CE)
+
+include(compile_proto.cmake)
+compile_proto()
 
 add_subdirectory(lib)
 add_subdirectory(platform)
