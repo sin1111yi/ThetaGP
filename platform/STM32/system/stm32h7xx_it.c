@@ -78,8 +78,6 @@ void DebugMon_Handler(void) {}
  */
 void PendSV_Handler(void) {}
 
-void SysTick_Handler(void) { HAL_IncTick(); }
-
 /******************************************************************************/
 /* STM32H7xx Peripheral Interrupt Handlers */
 /* Add here the Interrupt Handlers for the used peripherals. */
