@@ -5,11 +5,8 @@
 
 namespace NvicExtiDefine {
 
-struct ExtiChannel {
-  ExtiCallbackHandler handler{};
-};
+std::array<NvicExti *, 16> extiInstances = {};
 
-std::array<ExtiChannel, 16> extiChannels = {};
 constexpr std::array<uint8_t, 16> extiGroups = {0, 1, 2, 3, 4, 5, 5, 5,
                                                 5, 5, 6, 6, 6, 6, 6, 6};
 std::array<uint8_t, EXTI_IRQ_GROUPS> extiGroupPriority = {
@@ -22,16 +19,6 @@ constexpr std::array<IRQn_Type, EXTI_IRQ_GROUPS> extiGroupIRQn = {
 #else
 #warning "Unknown CPU"
 #endif
-
-uint32_t NvicExti::getNvicPrioBase(NvicPriority prio) {
-  return ((static_cast<uint8_t>(prio) >> (4 - (7 - (NVIC_PRIORITYGROUP)))) >>
-          4);
-}
-
-uint32_t NvicExti::getNvicPrioSub(NvicPriority prio) {
-  return (static_cast<uint8_t>(prio) &
-          ((1 << (4 - (7 - (NVIC_PRIORITYGROUP)))) - 1));
-}
 
 NvicExti::NvicExti()
     : _triggerSrc(GpioDefine::Mode::Input),
@@ -52,12 +39,11 @@ void NvicExti::init() {
   const uint32_t pinIdx = static_cast<uint8_t>(_config.pin);
   int group = extiGroups[pinIdx];
 
-  if (pinIdx >= extiChannels.size()) {
+  if (pinIdx >= extiInstances.size()) {
     return;
   }
 
-  ExtiChannel *CHx = &extiChannels[pinIdx];
-  CHx->handler.fn = _callbackHandler.fn;
+  extiInstances[pinIdx] = this;
   disable();
 
 #if defined(STM32H7)
@@ -74,14 +60,15 @@ void NvicExti::init() {
 
   if (extiGroupPriority[group] > static_cast<uint8_t>(_priority)) {
     extiGroupPriority[group] = static_cast<uint8_t>(_priority);
-    HAL_NVIC_SetPriority(extiGroupIRQn[group], getNvicPrioBase(_priority),
-                         getNvicPrioSub(_priority));
+    HAL_NVIC_SetPriority(extiGroupIRQn[group],
+                         NVIC_PRIORITY_BASE(static_cast<uint32_t>(_priority)),
+                         NVIC_PRIORITY_SUB(static_cast<uint32_t>(_priority)));
     HAL_NVIC_EnableIRQ(extiGroupIRQn[group]);
   }
 #endif
 }
 
-void NvicExti::setCallback(ExtiCallbackFn fn) { _callbackHandler.fn = fn; }
+void NvicExti::setCallback(ExtiCallback cb) { _callback = std::move(cb); }
 
 void NvicExti::disable(void) {
 #if defined(STM32H7)
@@ -116,12 +103,11 @@ void NvicExti::release(void) {
 
   const uint32_t chIdx = static_cast<uint8_t>(_config.pin);
 
-  if (chIdx >= extiChannels.size()) {
+  if (chIdx >= extiInstances.size()) {
     return;
   }
 
-  ExtiChannel *CHx = &extiChannels[chIdx];
-  CHx->handler.fn = nullptr;
+  extiInstances[chIdx] = nullptr;
 }
 
 } // namespace NvicExtiDefine
@@ -139,9 +125,9 @@ static void EXTI_IRQnHandler(uint32_t mask) {
   while (exti_active) {
     uint32_t idx = 31 - __builtin_clz(exti_active);
     uint32_t bit = 1U << idx;
-    auto &channel = NvicExtiDefine::extiChannels[idx];
-    if (channel.handler.fn != nullptr) {
-      channel.handler.fn(&channel.handler);
+    auto *extiInstance = NvicExtiDefine::extiInstances[idx];
+    if (extiInstance && extiInstance->_callback) {
+      extiInstance->_callback(extiInstance);
     }
     exti_active &= ~bit;
   }

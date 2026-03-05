@@ -24,6 +24,7 @@
 #include "BoardConfig.h"
 #include "drivers/peripherals/gpio.h"
 #include "drivers/peripherals/nvic_exti.h"
+#include "drivers/peripherals/systick.h"
 
 using namespace GpioDefine;
 using namespace NvicExtiDefine;
@@ -39,18 +40,22 @@ Led led(LED0_PIN);
 NvicExti PC13(Port::PortC, Pin::Pin13, Mode::InterruptFalling,
               NvicPriority::PriorityMedium);
 
-void fun(void *self) { led.toggle(); }
-
 int main(void) {
   led.config(Mode::OutputPushPull, Pull::NoPull, Speed::Low);
   led.init();
 
+  cycleCounterInit();
   HAL_NVIC_SetPriorityGrouping(7 - NVIC_PROIRITY_SUB_WIDTH);
 
-  PC13.setCallback(fun);
+  PC13.setCallback([](NvicExti* self){
+    UNUSED(self);
+    led.toggle();
+  });
   PC13.init();
   PC13.enable();
 
   while (1) {
+    led.toggle();
+    delay_ms(1000);
   }
 }

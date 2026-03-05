@@ -1,8 +1,11 @@
 #pragma once
 
-#include "target/target_platform.h"
+#include "utils/utils.h"
 
+#include "drivers/peripherals/nvic.h"
 #include "drivers/peripherals/gpio.h"
+
+#include <functional>
 
 #define NVIC_PROIRITY_BASE_WIDTH (2)
 #define NVIC_PROIRITY_SUB_WIDTH (4 - NVIC_PROIRITY_BASE_WIDTH)
@@ -21,11 +24,6 @@
 
 namespace NvicExtiDefine {
 
-using ExtiCallbackFn = void (*)(void *self);
-struct ExtiCallbackHandler {
-  ExtiCallbackFn fn{nullptr};
-};
-
 enum class NvicPriority : uint8_t {
   PriorityVeryHigh,
   PriorityHigh,
@@ -39,12 +37,11 @@ class NvicExti : protected GpioDefine::Gpio {
 private:
   GpioDefine::Mode _triggerSrc;
   NvicPriority _priority;
-  ExtiCallbackHandler _callbackHandler;
-
-  uint32_t getNvicPrioBase(NvicPriority prio);
-  uint32_t getNvicPrioSub(NvicPriority prio);
 
 public:
+  using ExtiCallback = std::function<void(NvicExti *self)>;
+  ExtiCallback _callback;
+
   NvicExti();
   explicit NvicExti(GpioDefine::PinDesc pinDesc, GpioDefine::Mode triggerSrc,
                     NvicPriority priority);
@@ -52,10 +49,13 @@ public:
                     GpioDefine::Mode triggerSrc, NvicPriority priority);
 
   void init() override;
-  void setCallback(ExtiCallbackFn fn);
+  void setCallback(ExtiCallback cb);
   void release(void);
   void enable(void);
   void disable(void);
+
+  using Gpio::isInitialized;
+  using Gpio::read;
 };
 
 } // namespace NvicExtiDefine
