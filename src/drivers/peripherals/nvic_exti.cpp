@@ -28,7 +28,7 @@ uint32_t NvicExti::getNvicPrioBase(NvicPriority prio) {
           4);
 }
 
-uint32_t NvicExti::gNvicPrioSub(NvicPriority prio) {
+uint32_t NvicExti::getNvicPrioSub(NvicPriority prio) {
   return (static_cast<uint8_t>(prio) &
           ((1 << (4 - (7 - (NVIC_PRIORITYGROUP)))) - 1));
 }
@@ -75,7 +75,7 @@ void NvicExti::init() {
   if (extiGroupPriority[group] > static_cast<uint8_t>(_priority)) {
     extiGroupPriority[group] = static_cast<uint8_t>(_priority);
     HAL_NVIC_SetPriority(extiGroupIRQn[group], getNvicPrioBase(_priority),
-                         gNvicPrioSub(_priority));
+                         getNvicPrioSub(_priority));
     HAL_NVIC_EnableIRQ(extiGroupIRQn[group]);
   }
 #endif

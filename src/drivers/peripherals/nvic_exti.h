@@ -42,7 +42,7 @@ private:
   ExtiCallbackHandler _callbackHandler;
 
   uint32_t getNvicPrioBase(NvicPriority prio);
-  uint32_t gNvicPrioSub(NvicPriority prio);
+  uint32_t getNvicPrioSub(NvicPriority prio);
 
 public:
   NvicExti();
