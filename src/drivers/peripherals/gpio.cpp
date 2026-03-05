@@ -15,7 +15,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "drivers/impl/gpio.h"
+#include "drivers/peripherals/gpio.h"
 
 #include <array>
 

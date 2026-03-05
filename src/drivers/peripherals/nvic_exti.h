@@ -2,7 +2,7 @@
 
 #include "target/target_platform.h"
 
-#include "drivers/impl/gpio.h"
+#include "drivers/peripherals/gpio.h"
 
 #define NVIC_PROIRITY_BASE_WIDTH (2)
 #define NVIC_PROIRITY_SUB_WIDTH (4 - NVIC_PROIRITY_BASE_WIDTH)

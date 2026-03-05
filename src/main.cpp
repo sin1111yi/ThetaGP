@@ -22,8 +22,8 @@
 #include "stm32h7xx.h"
 
 #include "BoardConfig.h"
-#include "drivers/impl/gpio.h"
-#include "drivers/impl/nvic_exti.h"
+#include "drivers/peripherals/gpio.h"
+#include "drivers/peripherals/nvic_exti.h"
 
 using namespace GpioDefine;
 using namespace NvicExtiDefine;
