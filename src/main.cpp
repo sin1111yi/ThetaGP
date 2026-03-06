@@ -47,7 +47,7 @@ int main(void) {
   cycleCounterInit();
   HAL_NVIC_SetPriorityGrouping(7 - NVIC_PROIRITY_SUB_WIDTH);
 
-  PC13.setCallback([](NvicExti* self){
+  PC13.setCallback([](NvicExti *self) {
     UNUSED(self);
     led.toggle();
   });
