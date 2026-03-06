@@ -34,10 +34,7 @@ void NMI_Handler(void) {
 /**
  * @brief This function handles Hard fault interrupt.
  */
-void HardFault_Handler(void) {
-  while (1) {
-  }
-}
+void HardFault_Handler(void) { __asm("BKPT #0\n"); }
 
 /**
  * @brief This function handles Memory management fault.
