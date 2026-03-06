@@ -25,7 +25,7 @@
 extern "C" {
 #endif
 
-#if defined(STM32H7) || defined(STM32F4)
+#if defined(STM32H7)
 
 #define NVIC_PRIORITY_GROUPING NVIC_PRIORITYGROUP_2
 

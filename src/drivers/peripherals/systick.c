@@ -40,7 +40,7 @@ static uint32_t cpuClockFrequency = 0;
 
 static volatile int sysTickPending = 0;
 
-#if defined(STM32H7) || defined(STMF4)
+#if defined(STM32H7)
 
 #include "drivers/peripherals/nvic.h"
 
@@ -201,4 +201,8 @@ void delayMicroseconds(uint32_t us) {
 void delay_ms(uint32_t ms) {
   while (ms--)
     delay_us(1000);
+}
+
+uint32_t tusb_time_millis_api(void) {
+  return millis();
 }
