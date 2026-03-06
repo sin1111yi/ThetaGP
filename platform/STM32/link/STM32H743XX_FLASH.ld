@@ -184,6 +184,19 @@ SECTIONS
     __bss_end__ = _ebss;
   } >DTCMRAM
 
+  .dtcmram_data :
+  {
+    . = ALIGN(4);
+    _sdtcmram_data = .;   /* start address in DTCMRAM */
+    *(.dtcmram_data)
+    *(.dtcmram_data*)
+    . = ALIGN(4);
+    _edtcmram_data = .;   /* end address in DTCMRAM */
+  } >DTCMRAM AT> FLASH
+
+  /* Load address of .dtcmram_data section in FLASH */
+  _sidtcmram_data = LOADADDR(.dtcmram_data);
+
   .ram_data :
   {
     . = ALIGN(4);
