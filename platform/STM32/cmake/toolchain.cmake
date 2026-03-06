@@ -54,7 +54,7 @@ if(BOARD_MCU_SERIES STREQUAL "STM32H7")
     # Cortex-M7 flags for STM32H7
     set(TARGET_CPU_FLAGS "-mcpu=cortex-m7 -mthumb -mfpu=fpv5-d16 -mfloat-abi=hard")
 else()
-    message(FATAL_ERROR "Unsupported MCU series: ${BOARD_MCU_SERIES}. Only STM32H7 is supported currently.")
+    message(FATAL_ERROR "Unsupported MCU series: ${BOARD_MCU_SERIES}.")
 endif()
 
 # =============================================================================

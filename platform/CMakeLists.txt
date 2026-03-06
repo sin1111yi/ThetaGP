@@ -22,7 +22,6 @@ cmake_minimum_required(VERSION 3.22)
 # =============================================================================
 # Platform Path Configuration
 # =============================================================================
-
 set(PLATFORM_PATH "")
 
 if(BOARD_MCU_SERIES STREQUAL "STM32H7")
@@ -37,7 +36,6 @@ endif()
 # =============================================================================
 # Startup File and Link Script
 # =============================================================================
-
 string(TOLOWER "startup_${BOARD_MCU}" STARTUP_FILE_BASE_NAME)
 string(TOUPPER "${BOARD_MCU}_FLASH" LINK_SCRIPT_BASE_NAME)
 
@@ -55,7 +53,6 @@ endif()
 # =============================================================================
 # HAL Driver Paths
 # =============================================================================
-
 if(BOARD_MCU_SERIES STREQUAL "STM32H7")
     set(DRIVER_PATH "${CMAKE_SOURCE_DIR}/lib/Drivers/${PLATFORM_MCU_NAME_PREFIX}xx_HAL_Driver")
 endif()
@@ -78,6 +75,14 @@ endif()
 # =============================================================================
 # Compile Definitions
 # =============================================================================
+if(DEFINED LOG)
+    set(TINYUSB_DEBUG_LEVEL ${LOG})
+elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message("Compiling TinyUSB with CFG_TUSB_DEBUG=1")
+    set(TINYUSB_DEBUG_LEVEL 1)
+else()
+    set(TINYUSB_DEBUG_LEVEL 0)
+endif()
 
 set(COMPILE_DEFS
     USE_PWR_LDO_SUPPLY
@@ -85,6 +90,8 @@ set(COMPILE_DEFS
     USE_FULL_LL_DRIVER
     ${BOARD_MCU}
     ${BOARD_MCU_SERIES}
+    CFG_TUSB_MCU=OPT_MCU_${BOARD_MCU_SERIES}
+    CFG_TUSB_DEBUG=${TINYUSB_DEBUG_LEVEL}
 )
 
 # =============================================================================
@@ -108,18 +115,13 @@ set(SYSTEM_SOURCES
     "${SYSTEM_PATH}/sysmem.c"
 )
 
-# MCU series-specific files
-if(BOARD_MCU_SERIES STREQUAL "STM32H7")
-    list(APPEND SYSTEM_SOURCES
-        "${SYSTEM_PATH}/system_${PLATFORM_MCU_PREFIX}xx.c"
-        "${SYSTEM_PATH}/${PLATFORM_MCU_PREFIX}xx_it.c"
-    )
-endif()
+# MCU series-specific files in system directory (match files containing PLATFORM_MCU_PREFIX)
+file(GLOB SYSTEM_MCU_SOURCES "${SYSTEM_PATH}/*${PLATFORM_MCU_PREFIX}*")
+list(APPEND SYSTEM_SOURCES ${SYSTEM_MCU_SOURCES})
 
-# Target-specific files
-file(GLOB TARGET_SOURCES
-    "${SYSTEM_PATH}/target/target_${PLATFORM_MCU_PREFIX}xx.c"
-)
+# Target-specific files (match files containing PLATFORM_MCU_PREFIX)
+set(TARGET_PATH "${SYSTEM_PATH}/target")
+file(GLOB TARGET_SOURCES "${TARGET_PATH}/*${PLATFORM_MCU_PREFIX}*")
 list(APPEND SYSTEM_SOURCES ${TARGET_SOURCES})
 
 # =============================================================================
@@ -149,16 +151,13 @@ list(APPEND INCLUDE_DIRS "${SYSTEM_PATH}")
 # =============================================================================
 # Link Script Configuration
 # =============================================================================
-
 set(THETAGP_LINK_SCRIPT "${LINKSCRIPT_FILE}" CACHE INTERNAL "Linker script path")
 
 # =============================================================================
 # Export Variables
 # =============================================================================
-
 set(THETAGP_SOURCES
     ${DRIVER_SOURCES}
-    # ${MIDDLEWARE_SOURCES}
     ${SYSTEM_SOURCES}
     ${STARTUP_FILE}
     CACHE INTERNAL "All platform source files"
