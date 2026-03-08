@@ -27,10 +27,10 @@
 #include "drivers/peripherals/systick.h"
 
 using namespace GpioDefine;
-using namespace NvicExtiDefine;
 
-class Led : public Gpio {
+class Led : protected Gpio {
 public:
+using Gpio::init;
   using Gpio::config;
   using Gpio::toggle;
   Led(const PinDesc &pinDesc) : Gpio(pinDesc) {}
