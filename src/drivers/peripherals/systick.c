@@ -202,7 +202,3 @@ void delay_ms(uint32_t ms) {
   while (ms--)
     delay_us(1000);
 }
-
-uint32_t tusb_time_millis_api(void) {
-  return millis();
-}
