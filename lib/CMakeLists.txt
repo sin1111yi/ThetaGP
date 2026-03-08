@@ -19,3 +19,5 @@
 
 # Library source files are configured in platform/CMakeLists.txt
 # This file exists for future extensions and module organization
+
+add_subdirectory(CRC32)

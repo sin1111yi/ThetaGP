@@ -3,7 +3,6 @@ function(compile_proto)
 
     # GP2040-CE path should be set in parent CMakeLists.txt
     # set(GP2040_CE_PATH ${CMAKE_SOURCE_DIR}/GP2040-CE)
-
     set(VENV ${CMAKE_CURRENT_BINARY_DIR}/venv)
     set(VENV_FILE ${VENV}/environment.txt)
 
@@ -16,6 +15,7 @@ function(compile_proto)
     add_custom_command(
         DEPENDS ${GP2040_CE_PATH}/lib/nanopb/extra/requirements.txt
         COMMAND ${Python3_EXECUTABLE} -m venv ${VENV}
+
         # Install dependencies in specific order to avoid conflicts
         COMMAND ${VENV_BIN_DIR}/pip install --upgrade 'protobuf>=3.19'
         COMMAND ${VENV_BIN_DIR}/pip install --upgrade 'grpcio-tools==1.71.0'
@@ -34,17 +34,17 @@ function(compile_proto)
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${PROTO_OUTPUT_DIR}
         COMMAND ${VENV_BIN_DIR}/python ${NANOPB_GENERATOR}
-            -q
-            -D ${PROTO_OUTPUT_DIR}
-            -I ${GP2040_CE_PATH}/proto
-            -I ${GP2040_CE_PATH}/lib/nanopb/generator/proto
-            ${GP2040_CE_PATH}/proto/enums.proto
+        -q
+        -D ${PROTO_OUTPUT_DIR}
+        -I ${GP2040_CE_PATH}/proto
+        -I ${GP2040_CE_PATH}/lib/nanopb/generator/proto
+        ${GP2040_CE_PATH}/proto/enums.proto
         COMMAND ${VENV_BIN_DIR}/python ${NANOPB_GENERATOR}
-            -q
-            -D ${PROTO_OUTPUT_DIR}
-            -I ${GP2040_CE_PATH}/proto
-            -I ${GP2040_CE_PATH}/lib/nanopb/generator/proto
-            ${GP2040_CE_PATH}/proto/config.proto
+        -q
+        -D ${PROTO_OUTPUT_DIR}
+        -I ${GP2040_CE_PATH}/proto
+        -I ${GP2040_CE_PATH}/lib/nanopb/generator/proto
+        ${GP2040_CE_PATH}/proto/config.proto
         OUTPUT ${PROTO_OUTPUT_DIR}/config.pb.c ${PROTO_OUTPUT_DIR}/config.pb.h ${PROTO_OUTPUT_DIR}/enums.pb.c ${PROTO_OUTPUT_DIR}/enums.pb.h
         COMMENT "Compiling enums.proto and config.proto"
     )
@@ -58,6 +58,11 @@ function(compile_proto)
     set(PROTO_SOURCES
         ${PROTO_OUTPUT_DIR}/config.pb.c
         ${PROTO_OUTPUT_DIR}/enums.pb.c
+        PARENT_SCOPE
+    )
+
+    set(PROTO_INCLUDE_DIR
+        ${PROTO_OUTPUT_DIR}
         PARENT_SCOPE
     )
 endfunction()
