@@ -43,8 +43,6 @@ M.BoardConfig = {
         },
         usb = {
             speed = "full_speed",
-            dp = { pin = "PA12" },
-            dm = { pin = "PA11" },
         }
     }
 }
