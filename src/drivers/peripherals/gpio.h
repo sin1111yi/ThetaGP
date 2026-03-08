@@ -129,8 +129,8 @@ protected:
 
 public:
   Gpio();
-  explicit Gpio(const PinDesc &pinDesc);
-  explicit Gpio(Port port, Pin pin);
+  Gpio(const PinDesc &pinDesc);
+  Gpio(Port port, Pin pin);
 
   // Configuration
   void config(Mode mode, Pull pull, Speed speed);
