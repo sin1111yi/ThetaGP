@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-#define FAST_CODE DTCM_RAM_DATA
+#define FAST_CODE   DTCM_RAM_DATA
 #define COMMON_CODE RAM_DATA
 
 #ifdef __cplusplus
