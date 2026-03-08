@@ -34,7 +34,7 @@ DEPENDENCIES = {
         url = "https://github.com/OpenStickCommunity/GP2040-CE.git",
         branch = "main",
         dest = "GP2040-CE",
-        sparse_paths = {"lib/nanopb", "proto"},
+        sparse_paths = { "lib/nanopb", "proto" },
         optional = false,
     },
     {
