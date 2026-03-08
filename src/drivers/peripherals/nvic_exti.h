@@ -22,8 +22,6 @@
 #define EXTI_REG_PR (EXTI->PR)
 #endif
 
-namespace NvicExtiDefine {
-
 enum class NvicPriority : uint8_t {
   PriorityVeryHigh,
   PriorityHigh,
@@ -57,5 +55,3 @@ public:
   using Gpio::isInitialized;
   using Gpio::read;
 };
-
-} // namespace NvicExtiDefine

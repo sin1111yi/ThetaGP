@@ -3,8 +3,6 @@
 
 #include <array>
 
-namespace NvicExtiDefine {
-
 std::array<NvicExti *, 16> extiInstances = {};
 
 constexpr std::array<uint8_t, 16> extiGroups = {0, 1, 2, 3, 4, 5, 5, 5,
@@ -110,8 +108,6 @@ void NvicExti::release(void) {
   extiInstances[chIdx] = nullptr;
 }
 
-} // namespace NvicExtiDefine
-
 extern "C" {
 
 // first 16 bits only, see also definition of extiChannels.
@@ -125,7 +121,7 @@ static void EXTI_IRQnHandler(uint32_t mask) {
   while (exti_active) {
     uint32_t idx = 31 - __builtin_clz(exti_active);
     uint32_t bit = 1U << idx;
-    auto *extiInstance = NvicExtiDefine::extiInstances[idx];
+    auto *extiInstance = extiInstances[idx];
     if (extiInstance && extiInstance->_callback) {
       extiInstance->_callback(extiInstance);
     }
