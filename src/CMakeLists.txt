@@ -38,27 +38,6 @@ add_executable(${CMAKE_PROJECT_NAME})
 # GP2040-CE include directories (GP2040_CE_PATH is set in root CMakeLists.txt)
 set(GP2040_CE_INCLUDE_DIRS
     ${GP2040_CE_PATH}/lib/nanopb
-    ${GP2040_CE_PATH}/headers
-    ${GP2040_CE_PATH}/headers/addons
-    ${GP2040_CE_PATH}/headers/configs
-    ${GP2040_CE_PATH}/headers/drivers
-    ${GP2040_CE_PATH}/headers/drivers/shared
-    ${GP2040_CE_PATH}/headers/events
-    ${GP2040_CE_PATH}/headers/interfaces
-    ${GP2040_CE_PATH}/headers/interfaces/i2c
-    ${GP2040_CE_PATH}/headers/interfaces/i2c/ads1219
-    ${GP2040_CE_PATH}/headers/interfaces/i2c/pcf8575
-    ${GP2040_CE_PATH}/headers/interfaces/i2c/ssd1306
-    ${GP2040_CE_PATH}/headers/interfaces/i2c/wiiextension
-    ${GP2040_CE_PATH}/headers/gamepad
-    ${GP2040_CE_PATH}/headers/display
-    ${GP2040_CE_PATH}/headers/display/fonts
-    ${GP2040_CE_PATH}/headers/display/ui
-    ${GP2040_CE_PATH}/headers/display/ui/static
-    ${GP2040_CE_PATH}/headers/display/ui/elements
-    ${GP2040_CE_PATH}/headers/display/ui/screens
-    ${GP2040_CE_PATH}/headers/animationstation
-    ${GP2040_CE_PATH}/headers/animationstation/effects
 )
 
 add_dependencies(${CMAKE_PROJECT_NAME} proto_gen)
