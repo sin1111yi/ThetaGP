@@ -3,6 +3,10 @@
 
 #include <array>
 
+namespace ThetaGP::Drivers::NVIC_EXTI {
+
+using namespace GPIO;
+
 std::array<NvicExti *, 16> extiInstances = {};
 
 constexpr std::array<uint8_t, 16> extiGroups = {0, 1, 2, 3, 4, 5, 5, 5,
@@ -19,19 +23,16 @@ constexpr std::array<IRQn_Type, EXTI_IRQ_GROUPS> extiGroupIRQn = {
 #endif
 
 NvicExti::NvicExti()
-    : _triggerSrc(GpioDefine::Mode::Input),
-      _priority(NvicPriority::PriorityLow) {}
+    : _triggerSrc(Mode::Input), _priority(NvicPriority::PriorityLow) {}
 
-NvicExti::NvicExti(GpioDefine::PinDesc pinDesc, GpioDefine::Mode triggerSrc,
-                   NvicPriority priority)
+NvicExti::NvicExti(PinDesc pinDesc, Mode triggerSrc, NvicPriority priority)
     : Gpio(pinDesc), _triggerSrc(triggerSrc), _priority(priority) {}
 
-NvicExti::NvicExti(GpioDefine::Port port, GpioDefine::Pin pin,
-                   GpioDefine::Mode triggerSrc, NvicPriority priority)
+NvicExti::NvicExti(Port port, Pin pin, Mode triggerSrc, NvicPriority priority)
     : Gpio(port, pin), _triggerSrc(triggerSrc), _priority(priority) {}
 
 void NvicExti::init() {
-  Gpio::config(_triggerSrc, GpioDefine::Pull::PullUp, GpioDefine::Speed::High);
+  Gpio::config(_triggerSrc, Pull::PullUp, Speed::High);
   Gpio::init();
 
   const uint32_t pinIdx = static_cast<uint8_t>(_config.pin);
@@ -46,10 +47,9 @@ void NvicExti::init() {
 
 #if defined(STM32H7)
   GPIO_InitTypeDef gpioInit{.Pin = getPinMask(),
-                            .Mode =
-                                static_cast<uint32_t>(_triggerSrc) |
-                                static_cast<uint32_t>(GpioDefine::Mode::Input) |
-                                static_cast<uint32_t>(_config.mode),
+                            .Mode = static_cast<uint32_t>(_triggerSrc) |
+                                    static_cast<uint32_t>(Mode::Input) |
+                                    static_cast<uint32_t>(_config.mode),
                             .Pull = static_cast<uint32_t>(_config.pull),
                             .Speed = static_cast<uint32_t>(_config.speed),
                             .Alternate = _config.alternate};
@@ -108,6 +108,7 @@ void NvicExti::release(void) {
   extiInstances[chIdx] = nullptr;
 }
 
+} // namespace ThetaGP::Drivers::NVIC_EXTI
 extern "C" {
 
 // first 16 bits only, see also definition of extiChannels.
@@ -121,7 +122,7 @@ static void EXTI_IRQnHandler(uint32_t mask) {
   while (exti_active) {
     uint32_t idx = 31 - __builtin_clz(exti_active);
     uint32_t bit = 1U << idx;
-    auto *extiInstance = extiInstances[idx];
+    auto *extiInstance = ThetaGP::Drivers::NVIC_EXTI::extiInstances[idx];
     if (extiInstance && extiInstance->_callback) {
       extiInstance->_callback(extiInstance);
     }

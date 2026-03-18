@@ -22,6 +22,12 @@
 #define EXTI_REG_PR (EXTI->PR)
 #endif
 
+namespace ThetaGP {
+namespace Drivers {
+namespace NVIC_EXTI {
+
+using namespace GPIO;
+
 enum class NvicPriority : uint8_t {
   PriorityVeryHigh,
   PriorityHigh,
@@ -31,9 +37,9 @@ enum class NvicPriority : uint8_t {
 };
 
 // Please make sure there are hardware debounce circuits for EXTI.
-class NvicExti : protected GpioDefine::Gpio {
+class NvicExti : protected Gpio {
 private:
-  GpioDefine::Mode _triggerSrc;
+  Mode _triggerSrc;
   NvicPriority _priority;
 
 public:
@@ -41,10 +47,10 @@ public:
   ExtiCallback _callback;
 
   NvicExti();
-  explicit NvicExti(GpioDefine::PinDesc pinDesc, GpioDefine::Mode triggerSrc,
+  explicit NvicExti(PinDesc pinDesc, Mode triggerSrc,
                     NvicPriority priority);
-  explicit NvicExti(GpioDefine::Port port, GpioDefine::Pin pin,
-                    GpioDefine::Mode triggerSrc, NvicPriority priority);
+  explicit NvicExti(Port port, Pin pin,
+                    Mode triggerSrc, NvicPriority priority);
 
   void init() override;
   void setCallback(ExtiCallback cb);
@@ -55,3 +61,7 @@ public:
   using Gpio::isInitialized;
   using Gpio::read;
 };
+
+} // namespace NVIC_EXTI
+} // namespace Drivers
+} // namespace ThetaGP

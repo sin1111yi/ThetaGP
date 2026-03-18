@@ -19,18 +19,17 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "stm32h7xx.h"
-
 #include "BoardConfig.h"
 #include "drivers/peripherals/gpio.h"
 #include "drivers/peripherals/nvic_exti.h"
 #include "drivers/peripherals/systick.h"
 
-using namespace GpioDefine;
+using namespace ThetaGP::Drivers::GPIO;
+using namespace ThetaGP::Drivers::NVIC_EXTI;
 
 class Led : protected Gpio {
 public:
-using Gpio::init;
+  using Gpio::init;
   using Gpio::config;
   using Gpio::toggle;
   Led(const PinDesc &pinDesc) : Gpio(pinDesc) {}

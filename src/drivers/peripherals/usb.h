@@ -6,7 +6,7 @@
 
 #include <cstdint>
 
-namespace USB {
+namespace ThetaGP::Drivers::USB {
 
 enum class USBSpeed : uint8_t {
   UsbFullSpeed,
@@ -19,11 +19,11 @@ enum class USBPeripheral : uint8_t {
   UsbULPI,           // ULPI Bus to a PHY, then PHY to USB connector
 };
 
-enum class UlpiPin : uint8_t {
-  Clk,  // ULPI clock
-  Stp,  // ULPI strobe
-  Dir,  // ULPI direction
-  Nxt,  // ULPI next
+enum class ULPI : uint8_t {
+  CLK,  // ULPI clock
+  STP,  // ULPI strobe
+  DIR,  // ULPI direction
+  NXT,  // ULPI next
   D0,   // ULPI data bit 0
   D1,   // ULPI data bit 1
   D2,   // ULPI data bit 2
@@ -34,12 +34,12 @@ enum class UlpiPin : uint8_t {
   D7,   // ULPI data bit 7
 };
 
-class Gpio : private GpioDefine::Gpio {
+class Gpio : private GPIO::Gpio {
 public:
-  using GpioDefine ::Gpio::config;
-  using GpioDefine ::Gpio::init;
+  using GPIO::Gpio::config;
+  using GPIO::Gpio::init;
 
-  Gpio(const GpioDefine::PinDesc &pinDesc) : GpioDefine::Gpio(pinDesc) {}
+  Gpio(const GPIO::PinDesc &pinDesc) : GPIO::Gpio(pinDesc) {}
 };
 
 class USB {
@@ -50,9 +50,10 @@ private:
 
 public:
   USB(USBSpeed speed, USBPeripheral peripheral);
-  
+
   void init(void);
 
   bool isInitialized() const { return _initialized; }
 };
-} // namespace USB
+
+} // namespace ThetaGP::Drivers::USB

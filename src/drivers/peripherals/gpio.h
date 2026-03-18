@@ -21,11 +21,9 @@
 
 #include "build_info.h"
 
-namespace GpioDefine {
-
-// =============================================================================
-// Type Definitions
-// =============================================================================
+namespace ThetaGP {
+namespace Drivers {
+namespace GPIO {
 
 enum class Port : uint16_t {
   PortA,
@@ -93,10 +91,6 @@ enum class Pull : uint32_t {
 
 enum class PinState : uint8_t { Reset = GPIO_PIN_RESET, Set = GPIO_PIN_SET };
 
-// =============================================================================
-// Data Structures
-// =============================================================================
-
 /**
  * @brief Pin descriptor for board configuration macros
  */
@@ -104,10 +98,6 @@ struct PinDesc {
   Port port;
   Pin pin;
 };
-
-// =============================================================================
-// GPIO Class - Base class for general purpose I/O
-// =============================================================================
 
 class Gpio {
 protected:
@@ -152,4 +142,6 @@ public:
   bool isInitialized() const { return _initialized; }
 };
 
-} // namespace GpioDefine
+} // namespace GPIO
+} // namespace Drivers
+} // namespace ThetaGP

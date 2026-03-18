@@ -45,8 +45,15 @@ local function parse_pin(pin_str)
     local pin_num = tonumber(pin_str:match("(%d+)"))
 
     local port_map = {
-        A = "PortA", B = "PortB", C = "PortC", D = "PortD", E = "PortE",
-        F = "PortF", G = "PortG", H = "PortH", I = "PortI"
+        A = "PortA",
+        B = "PortB",
+        C = "PortC",
+        D = "PortD",
+        E = "PortE",
+        F = "PortF",
+        G = "PortG",
+        H = "PortH",
+        I = "PortI"
     }
 
     return port_map[port_char], string.format("Pin%d", pin_num)
@@ -61,8 +68,8 @@ end
 -- Generate pin struct for bind method
 local function generate_pin_macro(name, pin_str)
     local port, pin = parse_pin(pin_str)
-    return string.format('#define %-28s {GpioDefine::Port::%s, GpioDefine::Pin::%s}',
-                         name, port, pin)
+    return string.format('#define %-28s {Port::%s, Pin::%s}',
+        name, port, pin)
 end
 
 -- Generate active_low define
@@ -81,7 +88,7 @@ local function process_config(config, prefix, header_lines, cmake_lines, array_i
         -- Skip non-pin configuration entries
         if type(key) == "string" then
             local key_upper = key:upper()
-            
+
             -- Build name with single underscore separator
             local name
             if prefix then
@@ -110,14 +117,14 @@ local function process_config(config, prefix, header_lines, cmake_lines, array_i
                     -- Check if this is an array (numeric keys)
                     local is_array = false
                     local array_count = 0
-                    
+
                     for k, v in pairs(value) do
                         if type(k) == "number" then
                             is_array = true
                             array_count = array_count + 1
                         end
                     end
-                    
+
                     if is_array then
                         -- Process array items with index
                         for i, item in ipairs(value) do
@@ -127,7 +134,8 @@ local function process_config(config, prefix, header_lines, cmake_lines, array_i
                                     local item_name = name .. (array_count > 1 and "_" .. i or "")
                                     table.insert(header_lines, generate_pin_macro(item_name .. "_PIN", item.pin))
                                     if item.active_low ~= nil then
-                                        table.insert(header_lines, generate_active_low_macro(item_name .. "_ACTIVE_LOW", item.active_low))
+                                        table.insert(header_lines,
+                                            generate_active_low_macro(item_name .. "_ACTIVE_LOW", item.active_low))
                                     end
                                 else
                                     -- Nested structure in array

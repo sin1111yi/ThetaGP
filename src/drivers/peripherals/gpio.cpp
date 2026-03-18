@@ -19,15 +19,9 @@
 
 #include <array>
 
-namespace GpioDefine {
+namespace ThetaGP::Drivers::GPIO {
 
-namespace {
-
-// =============================================================================
-// Clock Enable
-// =============================================================================
-
-void enableGpioClock(GpioDefine::Port port) {
+void enableGpioClock(Port port) {
   using ClockFunc = void (*)();
   static const std::array<ClockFunc, 11> clockEnableTable = {{
       []() { __HAL_RCC_GPIOA_CLK_ENABLE(); },
@@ -53,12 +47,6 @@ void enableGpioClock(GpioDefine::Port port) {
   }
 }
 
-} // namespace
-
-// =============================================================================
-// Gpio - Constructor
-// =============================================================================
-
 Gpio::Gpio() : _initialized(false) {
   _config.port = Port::PortNone;
   _config.pin = Pin::PinNone;
@@ -80,10 +68,6 @@ Gpio::Gpio(Port port, Pin pin) : Gpio() {
   _initialized = false;
 }
 
-// =============================================================================
-// Gpio - Private Methods
-// =============================================================================
-
 GPIO_TypeDef *Gpio::getPortAddress() const {
   constexpr uint32_t GPIO_PORT_BASE = GPIOA_BASE;
   constexpr uint32_t GPIO_PORT_OFFSET = 0x400;
@@ -98,10 +82,6 @@ uint16_t Gpio::getPinMask() const {
 
 void Gpio::enableClock() const { enableGpioClock(_config.port); }
 
-// =============================================================================
-// Gpio - Public Methods - Configuration
-// =============================================================================
-
 void Gpio::config(Mode mode, Pull pull, Speed speed) {
   _config.mode = mode;
   _config.pull = pull;
@@ -113,10 +93,6 @@ void Gpio::config(Mode mode, Pull pull, Speed speed, uint32_t alternate) {
   config(mode, pull, speed);
   _config.alternate = alternate;
 }
-
-// =============================================================================
-// Gpio - Public Methods - Initialization
-// =============================================================================
 
 void Gpio::init() {
   enableClock();
@@ -132,10 +108,6 @@ void Gpio::init() {
 
   _initialized = true;
 }
-
-// =============================================================================
-// Gpio - Public Methods - Pin Operations
-// =============================================================================
 
 void Gpio::write(PinState state) {
   HAL_GPIO_WritePin(getPortAddress(), getPinMask(),
@@ -153,4 +125,4 @@ void Gpio::set() { write(PinState::Set); }
 
 void Gpio::reset() { write(PinState::Reset); }
 
-} // namespace GpioDefine
+}

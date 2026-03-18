@@ -3,27 +3,26 @@
 
 #include <array>
 
-namespace USB {
+namespace ThetaGP::Drivers::USB {
+
+using namespace GPIO;
 
 #if defined(STM32H7)
 
-using P = GpioDefine::Port;
-using N = GpioDefine::Pin;
-
 // ULPI GPIO array, index corresponds to UlpiPin enum value
 std::array<Gpio, 12> kUlpiGpios = {{
-    Gpio({P::PortA, N::Pin5}),  // Clk
-    Gpio({P::PortC, N::Pin0}),  // Stp
-    Gpio({P::PortC, N::Pin2}),  // Dir
-    Gpio({P::PortC, N::Pin3}),  // Nxt
-    Gpio({P::PortA, N::Pin3}),  // D0
-    Gpio({P::PortB, N::Pin0}),  // D1
-    Gpio({P::PortB, N::Pin1}),  // D2
-    Gpio({P::PortB, N::Pin10}), // D3
-    Gpio({P::PortB, N::Pin11}), // D4
-    Gpio({P::PortB, N::Pin12}), // D5
-    Gpio({P::PortB, N::Pin13}), // D6
-    Gpio({P::PortB, N::Pin5}),  // D7
+    Gpio({Port::PortA, Pin::Pin5}),  // CLK
+    Gpio({Port::PortC, Pin::Pin0}),  // STP
+    Gpio({Port::PortC, Pin::Pin2}),  // DIR
+    Gpio({Port::PortC, Pin::Pin3}),  // NXT
+    Gpio({Port::PortA, Pin::Pin3}),  // D0
+    Gpio({Port::PortB, Pin::Pin0}),  // D1
+    Gpio({Port::PortB, Pin::Pin1}),  // D2
+    Gpio({Port::PortB, Pin::Pin10}), // D3
+    Gpio({Port::PortB, Pin::Pin11}), // D4
+    Gpio({Port::PortB, Pin::Pin12}), // D5
+    Gpio({Port::PortB, Pin::Pin13}), // D6
+    Gpio({Port::PortB, Pin::Pin5}),  // D7
 }};
 
 constexpr uint32_t kUlpiAlternate = GPIO_AF10_OTG2_HS;
@@ -38,9 +37,8 @@ void USB::init(void) {
       _peripheral == USBPeripheral::UsbULPI) {
 #if defined(STM32H7)
     for (auto &gpio : kUlpiGpios) {
-      gpio.config(GpioDefine::Mode::AlternateFunctionPushPull,
-                  GpioDefine::Pull::NoPull, GpioDefine::Speed::VeryHigh,
-                  kUlpiAlternate);
+      gpio.config(Mode::AlternateFunctionPushPull, Pull::NoPull,
+                  Speed::VeryHigh, kUlpiAlternate);
       gpio.init();
     }
 
@@ -64,4 +62,4 @@ void USB::init(void) {
   _initialized = true;
 }
 
-} // namespace USB
+} // namespace ThetaGP::Drivers::USB
