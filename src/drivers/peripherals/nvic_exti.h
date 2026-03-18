@@ -42,6 +42,10 @@
 
 namespace ThetaGP {
 namespace Drivers {
+namespace Periph {
+
+using namespace GPIO;
+
 namespace NVIC_EXTI {
 
 enum class NvicPriority : uint8_t {
@@ -54,8 +58,8 @@ enum class NvicPriority : uint8_t {
 
 class NvicExti {
 private:
-  GPIO::Gpio _gpio;
-  GPIO::Mode _triggerSrc;
+  Gpio _gpio;
+  Mode _triggerSrc;
   NvicPriority _priority;
   bool _initialized;
 
@@ -64,10 +68,10 @@ public:
   ExtiCallback _callback;
 
   NvicExti();
-  explicit NvicExti(GPIO::PinDesc pinDesc, GPIO::Mode triggerSrc,
+  explicit NvicExti(PinDesc pinDesc, Mode triggerSrc,
                     NvicPriority priority);
-  explicit NvicExti(GPIO::Port port, GPIO::Pin pin,
-                    GPIO::Mode triggerSrc, NvicPriority priority);
+  explicit NvicExti(Port port, Pin pin,
+                    Mode triggerSrc, NvicPriority priority);
 
   void init();
   void setCallback(ExtiCallback cb);
@@ -76,13 +80,14 @@ public:
   void disable();
 
   bool isInitialized() const { return _initialized; }
-  GPIO::PinState read() const { return _gpio.read(); }
-  void write(GPIO::PinState state) { _gpio.write(state); }
+  PinState read() const { return _gpio.read(); }
+  void write(PinState state) { _gpio.write(state); }
   void set() { _gpio.set(); }
   void reset() { _gpio.reset(); }
   void toggle() { _gpio.toggle(); }
 };
 
 } // namespace NVIC_EXTI
+} // namespace Periph
 } // namespace Drivers
 } // namespace ThetaGP

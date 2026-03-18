@@ -23,6 +23,7 @@
 
 namespace ThetaGP {
 namespace Drivers {
+namespace Periph {
 namespace GPIO {
 
 enum class Port : uint16_t {
@@ -148,5 +149,6 @@ public:
 };
 
 } // namespace GPIO
+} // namespace Periph
 } // namespace Drivers
 } // namespace ThetaGP

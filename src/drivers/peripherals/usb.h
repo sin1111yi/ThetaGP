@@ -29,6 +29,10 @@
 
 namespace ThetaGP {
 namespace Drivers {
+namespace Periph {
+
+using namespace GPIO;
+
 namespace USB {
 
 enum class USBSpeed : uint8_t {
@@ -38,8 +42,8 @@ enum class USBSpeed : uint8_t {
 };
 
 enum class USBPeripheral : uint8_t {
-  UsbDifferencePair, // difference pair direct to USB connector
-  UsbULPI,           // ULPI Bus to a PHY, then PHY to USB connector
+  UsbDifferencePair,
+  UsbULPI,
 };
 
 enum class ULPI : uint8_t {
@@ -57,28 +61,24 @@ enum class ULPI : uint8_t {
   D7,  // ULPI data bit 7
 };
 
-class Gpio : private GPIO::Gpio {
-public:
-  using GPIO::Gpio::config;
-  using GPIO::Gpio::init;
-
-  Gpio(const GPIO::PinDesc &pinDesc) : GPIO::Gpio(pinDesc) {}
-};
-
 class USB {
 private:
   bool _initialized;
   USBSpeed _speed;
   USBPeripheral _peripheral;
 
+  void initULPIPins();
+  void initHighSpeedPins();
+  void initFullSpeedPins();
+
 public:
   USB(USBSpeed speed, USBPeripheral peripheral);
 
-  void init(void);
-
+  void init();
   bool isInitialized() const { return _initialized; }
 };
 
 } // namespace USB
+} // namespace Periph
 } // namespace Drivers
 } // namespace ThetaGP

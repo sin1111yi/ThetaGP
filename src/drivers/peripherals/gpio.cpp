@@ -19,7 +19,7 @@
 
 #include <array>
 
-namespace ThetaGP::Drivers::GPIO {
+namespace ThetaGP::Drivers::Periph::GPIO {
 
 void enableGpioClock(Port port) {
   using ClockFunc = void (*)();
@@ -125,4 +125,4 @@ void Gpio::set() { write(PinState::Set); }
 
 void Gpio::reset() { write(PinState::Reset); }
 
-}
+} // namespace ThetaGP::Drivers::Periph::GPIO

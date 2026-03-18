@@ -20,67 +20,84 @@
  */
 
 #include "drivers/peripherals/usb.h"
-#include "drivers/peripherals/gpio.h"
 
 #include <array>
 
-namespace ThetaGP::Drivers::USB {
+namespace ThetaGP::Drivers::Periph::USB {
 
 using namespace GPIO;
 
 #if defined(STM32H7)
 
-// ULPI GPIO array, index corresponds to UlpiPin enum value
-std::array<Gpio, 12> kUlpiGpios = {{
-    Gpio({Port::PortA, Pin::Pin5}),  // CLK
-    Gpio({Port::PortC, Pin::Pin0}),  // STP
-    Gpio({Port::PortC, Pin::Pin2}),  // DIR
-    Gpio({Port::PortC, Pin::Pin3}),  // NXT
-    Gpio({Port::PortA, Pin::Pin3}),  // D0
-    Gpio({Port::PortB, Pin::Pin0}),  // D1
-    Gpio({Port::PortB, Pin::Pin1}),  // D2
-    Gpio({Port::PortB, Pin::Pin10}), // D3
-    Gpio({Port::PortB, Pin::Pin11}), // D4
-    Gpio({Port::PortB, Pin::Pin12}), // D5
-    Gpio({Port::PortB, Pin::Pin13}), // D6
-    Gpio({Port::PortB, Pin::Pin5}),  // D7
+// ULPI pin descriptors, index corresponds to ULPI enum value
+static constexpr std::array<PinDesc, 12> kUlpiPinDescs = {{
+    {Port::PortA, Pin::Pin5},  // CLK
+    {Port::PortC, Pin::Pin0},  // STP
+    {Port::PortC, Pin::Pin2},  // DIR
+    {Port::PortC, Pin::Pin3},  // NXT
+    {Port::PortA, Pin::Pin3},  // D0
+    {Port::PortB, Pin::Pin0},  // D1
+    {Port::PortB, Pin::Pin1},  // D2
+    {Port::PortB, Pin::Pin10}, // D3
+    {Port::PortB, Pin::Pin11}, // D4
+    {Port::PortB, Pin::Pin12}, // D5
+    {Port::PortB, Pin::Pin13}, // D6
+    {Port::PortB, Pin::Pin5},  // D7
 }};
 
-constexpr uint32_t kUlpiAlternate = GPIO_AF10_OTG2_HS;
+static constexpr uint32_t kUlpiAlternate = GPIO_AF10_OTG2_HS;
 
 #endif
 
 USB::USB(USBSpeed speed, USBPeripheral peripheral)
     : _initialized(false), _speed(speed), _peripheral(peripheral) {}
 
-void USB::init(void) {
-  if (_speed == USBSpeed::UsbHighSpeedExternalPHY &&
-      _peripheral == USBPeripheral::UsbULPI) {
+void USB::initULPIPins() {
 #if defined(STM32H7)
-    for (auto &gpio : kUlpiGpios) {
-      gpio.config(Mode::AlternateFunctionPushPull, Pull::NoPull,
-                  Speed::VeryHigh, kUlpiAlternate);
-      gpio.init();
-    }
-
-    RCC_PeriphCLKInitTypeDef PeriphClkInitStruct;
-    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USB;
-    PeriphClkInitStruct.UsbClockSelection = RCC_USBCLKSOURCE_PLL;
-    HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);
-
-    __HAL_RCC_USB_OTG_HS_CLK_ENABLE();
-    __HAL_RCC_USB_OTG_HS_ULPI_CLK_ENABLE();
-#endif
-  } else if (_speed == USBSpeed::UsbHighSpeedInternalPHY &&
-             _peripheral == USBPeripheral::UsbDifferencePair) {
-
-  } else if (_speed == USBSpeed::UsbFullSpeed &&
-             _peripheral == USBPeripheral::UsbDifferencePair) {
-  } else {
-    _initialized = false;
+  for (const auto &pinDesc : kUlpiPinDescs) {
+    Gpio gpio(pinDesc);
+    gpio.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,
+                kUlpiAlternate);
+    gpio.init();
   }
 
-  _initialized = true;
+  RCC_PeriphCLKInitTypeDef periphClkInitStruct;
+  periphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USB;
+  periphClkInitStruct.UsbClockSelection = RCC_USBCLKSOURCE_PLL;
+  HAL_RCCEx_PeriphCLKConfig(&periphClkInitStruct);
+
+  __HAL_RCC_USB_OTG_HS_CLK_ENABLE();
+  __HAL_RCC_USB_OTG_HS_ULPI_CLK_ENABLE();
+#endif
 }
 
-} // namespace ThetaGP::Drivers::USB
+void USB::initHighSpeedPins() {
+  // TODO: Implement Full Speed USB initialization
+}
+
+void USB::initFullSpeedPins() {
+  // TODO: Implement Full Speed USB initialization
+}
+
+void USB::init() {
+  bool success = false;
+
+  if (_speed == USBSpeed::UsbHighSpeedExternalPHY &&
+      _peripheral == USBPeripheral::UsbULPI) {
+    initULPIPins();
+    success = true;
+  } else if (_speed == USBSpeed::UsbFullSpeed &&
+             _peripheral == USBPeripheral::UsbDifferencePair) {
+
+    initFullSpeedPins();
+    success = true;
+  } else if (_speed == USBSpeed::UsbHighSpeedInternalPHY ||
+             _peripheral == USBPeripheral::UsbDifferencePair) {
+    initHighSpeedPins();
+    success = true;
+  }
+
+  _initialized = success;
+}
+
+} // namespace ThetaGP::Drivers::Periph::USB

@@ -24,8 +24,8 @@
 #include "drivers/peripherals/nvic_exti.h"
 #include "drivers/peripherals/systick.h"
 
-using namespace ThetaGP::Drivers::GPIO;
-using namespace ThetaGP::Drivers::NVIC_EXTI;
+using namespace ThetaGP::Drivers::Periph::GPIO;
+using namespace ThetaGP::Drivers::Periph::NVIC_EXTI;
 
 class Led : protected Gpio {
 public:
