@@ -22,7 +22,6 @@
 #pragma once
 
 #include "utils/utils.h"
-
 #include "drivers/peripherals/nvic.h"
 #include "drivers/peripherals/gpio.h"
 
@@ -32,8 +31,6 @@
 #define NVIC_PROIRITY_SUB_WIDTH (4 - NVIC_PROIRITY_BASE_WIDTH)
 
 #define EXTI_IRQ_GROUPS 7
-
-// Absorb the difference in IMR and PR assignments to registers
 
 #if defined(STM32H7)
 #define EXTI_REG_IMR (EXTI_D1->IMR1)
@@ -47,8 +44,6 @@ namespace ThetaGP {
 namespace Drivers {
 namespace NVIC_EXTI {
 
-using namespace GPIO;
-
 enum class NvicPriority : uint8_t {
   PriorityVeryHigh,
   PriorityHigh,
@@ -57,30 +52,35 @@ enum class NvicPriority : uint8_t {
   PriorityVeryLow
 };
 
-// Please make sure there are hardware debounce circuits for EXTI.
-class NvicExti : protected Gpio {
+class NvicExti {
 private:
-  Mode _triggerSrc;
+  GPIO::Gpio _gpio;
+  GPIO::Mode _triggerSrc;
   NvicPriority _priority;
+  bool _initialized;
 
 public:
   using ExtiCallback = std::function<void(NvicExti *self)>;
   ExtiCallback _callback;
 
   NvicExti();
-  explicit NvicExti(PinDesc pinDesc, Mode triggerSrc,
+  explicit NvicExti(GPIO::PinDesc pinDesc, GPIO::Mode triggerSrc,
                     NvicPriority priority);
-  explicit NvicExti(Port port, Pin pin,
-                    Mode triggerSrc, NvicPriority priority);
+  explicit NvicExti(GPIO::Port port, GPIO::Pin pin,
+                    GPIO::Mode triggerSrc, NvicPriority priority);
 
-  void init() override;
+  void init();
   void setCallback(ExtiCallback cb);
-  void release(void);
-  void enable(void);
-  void disable(void);
+  void release();
+  void enable();
+  void disable();
 
-  using Gpio::isInitialized;
-  using Gpio::read;
+  bool isInitialized() const { return _initialized; }
+  GPIO::PinState read() const { return _gpio.read(); }
+  void write(GPIO::PinState state) { _gpio.write(state); }
+  void set() { _gpio.set(); }
+  void reset() { _gpio.reset(); }
+  void toggle() { _gpio.toggle(); }
 };
 
 } // namespace NVIC_EXTI

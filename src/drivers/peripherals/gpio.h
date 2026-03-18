@@ -113,8 +113,6 @@ protected:
   Config _config;
   bool _initialized;
 
-  GPIO_TypeDef *getPortAddress() const;
-  uint16_t getPinMask() const;
   void enableClock() const;
 
 public:
@@ -128,6 +126,10 @@ public:
 
   virtual void init();
 
+  // Hardware access
+  GPIO_TypeDef *getPortAddress() const;
+  uint16_t getPinMask() const;
+
   void write(PinState state);
   PinState read() const;
   void toggle();
@@ -140,6 +142,9 @@ public:
 
   // Status
   bool isInitialized() const { return _initialized; }
+
+  // Accessors for derived/composed classes
+  const Config &getConfig() const { return _config; }
 };
 
 } // namespace GPIO
