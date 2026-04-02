@@ -92,8 +92,20 @@ end
 -- Git Operations
 -- =============================================================================
 
+-- Get git reference string (tag takes precedence over branch)
+local function get_git_ref(repo)
+    if repo.tag and repo.tag ~= "" then
+        return repo.tag
+    elseif repo.branch and repo.branch ~= "" then
+        return repo.branch
+    else
+        return "main"
+    end
+end
+
 local function clone_or_pull(repo)
     local dest_path = project_root .. repo.dest
+    local ref = get_git_ref(repo)
 
     if repo.type == "git_sparse" then
         -- Handle sparse checkout with multiple paths
@@ -160,8 +172,8 @@ local function clone_or_pull(repo)
             end
         end
 
-        -- Step 3: Checkout the specified branch
-        local checkout_cmd = string.format("cd %s && git checkout %s", dest_path, repo.branch)
+        -- Step 3: Checkout the specified reference (tag or branch)
+        local checkout_cmd = string.format("cd %s && git checkout %s", dest_path, ref)
 
         if not execute_command(checkout_cmd, repo.optional) then
             if not repo.optional then
@@ -178,7 +190,7 @@ local function clone_or_pull(repo)
         -- Standard full clone
         if is_git_repo(dest_path) then
             print_info("Updating existing repository:", repo.dest)
-            local cmd = string.format("cd %s && git fetch --all && git checkout %s", dest_path, repo.branch)
+            local cmd = string.format("cd %s && git fetch --all && git checkout %s", dest_path, ref)
             if not execute_command(cmd, repo.optional) then
                 if not repo.optional then
                     print_error("Failed to update repository:", repo.name)
@@ -210,7 +222,7 @@ local function clone_or_pull(repo)
             print_info("Cloning repository:", repo.name, "to", repo.dest)
             ensure_directory(dest_path)
             local cmd = string.format("git clone --branch %s --depth 1 %s %s",
-                repo.branch, repo.url, dest_path)
+                ref, repo.url, dest_path)
             if not execute_command(cmd, repo.optional) then
                 if not repo.optional then
                     print_error("Failed to clone repository:", repo.name)

@@ -75,14 +75,6 @@ endif()
 # =============================================================================
 # Compile Definitions
 # =============================================================================
-if(DEFINED LOG)
-    set(TINYUSB_DEBUG_LEVEL ${LOG})
-elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    message("Compiling TinyUSB with CFG_TUSB_DEBUG=1")
-    set(TINYUSB_DEBUG_LEVEL 1)
-else()
-    set(TINYUSB_DEBUG_LEVEL 0)
-endif()
 
 set(COMPILE_DEFS
     USE_PWR_LDO_SUPPLY
@@ -90,8 +82,6 @@ set(COMPILE_DEFS
     USE_FULL_LL_DRIVER
     ${BOARD_MCU}
     ${BOARD_MCU_SERIES}
-    CFG_TUSB_MCU=OPT_MCU_${BOARD_MCU_SERIES}
-    CFG_TUSB_DEBUG=${TINYUSB_DEBUG_LEVEL}
 )
 
 # =============================================================================
@@ -156,19 +146,19 @@ set(THETAGP_LINK_SCRIPT "${LINKSCRIPT_FILE}" CACHE INTERNAL "Linker script path"
 # =============================================================================
 # Export Variables
 # =============================================================================
-set(THETAGP_SOURCES
+set(PLATFORM_SOURCES
     ${DRIVER_SOURCES}
     ${SYSTEM_SOURCES}
     ${STARTUP_FILE}
     CACHE INTERNAL "All platform source files"
 )
 
-set(THETAGP_INCLUDE_DIRS
+set(PLATFORM_INCLUDE_DIRS
     ${INCLUDE_DIRS}
     CACHE INTERNAL "Platform include directories"
 )
 
-set(THETAGP_COMPILE_DEFS
+set(PLATFORM_COMPILE_DEFS
     ${COMPILE_DEFS}
     CACHE INTERNAL "Platform compile definitions"
 )
