@@ -28,7 +28,7 @@ M.BoardInfo = {
 
 M.BoardConfig = {
     necessary = {
-        led0 = { pin = "PC0", active_low = true },
+        led0 = { pin = "PD8", active_low = true },
         keypad = {
             drive_mode = "row_scan",
             active_low = true,
@@ -42,9 +42,10 @@ M.BoardConfig = {
             }
         },
         usb = {
-            speed = "full_speed",
+            hw_periph = "ULPI",
+            speed = "high_speed",
         }
-    }
+    },
 }
 
 return M

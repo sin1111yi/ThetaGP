@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include "utils/types.h"
+
 #include "drivers/peripherals/gpio.h"
 
 #include "build_info.h"
@@ -42,7 +44,7 @@ enum class USBSpeed : uint8_t {
 };
 
 enum class USBPeripheral : uint8_t {
-  UsbDifferencePair,
+  USBDifferenceLine,
   UsbULPI,
 };
 
@@ -67,6 +69,7 @@ private:
   USBSpeed _speed;
   USBPeripheral _peripheral;
 
+  retval_t initPCD();
   void initULPIPins();
   void initHighSpeedPins();
   void initFullSpeedPins();
@@ -74,7 +77,7 @@ private:
 public:
   USB(USBSpeed speed, USBPeripheral peripheral);
 
-  void init();
+  retval_t init();
   bool isInitialized() const { return _initialized; }
 };
 

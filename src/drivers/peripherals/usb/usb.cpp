@@ -19,7 +19,11 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "drivers/peripherals/usb.h"
+#include "stm32h7xx.h"
+#include "stm32h7xx_hal_def.h"
+#include "utils/types.h"
+
+#include "drivers/peripherals/usb/usb.h"
 
 #include <array>
 
@@ -45,7 +49,31 @@ static constexpr std::array<PinDesc, 12> kUlpiPinDescs = {{
     {Port::PortB, Pin::Pin5},  // D7
 }};
 
-static constexpr uint32_t kUlpiAlternate = GPIO_AF10_OTG2_HS;
+static constexpr uint32_t kUlpiAlternate = GPIO_AF10_OTG2_HS; // 0x0A
+
+static PCD_HandleTypeDef pcdHandler;
+
+retval_t USB::initPCD() {
+  if (_speed == USBSpeed::UsbHighSpeedExternalPHY &&
+      _peripheral == USBPeripheral::UsbULPI) {
+    pcdHandler.Instance = USB_OTG_HS;
+    pcdHandler.Init.dev_endpoints = 9;
+    pcdHandler.Init.speed = PCD_SPEED_HIGH;
+    pcdHandler.Init.dma_enable = DISABLE;
+    pcdHandler.Init.phy_itface = USB_OTG_ULPI_PHY;
+    pcdHandler.Init.Sof_enable = DISABLE;
+    pcdHandler.Init.low_power_enable = DISABLE;
+    pcdHandler.Init.lpm_enable = DISABLE;
+    pcdHandler.Init.vbus_sensing_enable = DISABLE;
+    pcdHandler.Init.use_dedicated_ep1 = DISABLE;
+    pcdHandler.Init.use_external_vbus = DISABLE;
+    if (HAL_PCD_Init(&pcdHandler) != HAL_OK) {
+      return rvFailed;
+    }
+  }
+
+  return rvSucceed;
+}
 
 #endif
 
@@ -72,32 +100,67 @@ void USB::initULPIPins() {
 }
 
 void USB::initHighSpeedPins() {
-  // TODO: Implement Full Speed USB initialization
+#if defined(STM32H7) & 0
+  Gpio dp(Port::PortA, Pin::Pin12);
+  Gpio dm(Port::PortA, Pin::Pin11);
+
+  dp.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,
+            kUlpiAlternate);
+  dm.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,
+            kUlpiAlternate);
+
+  dp.init();
+  dm.init();
+
+  RCC_PeriphCLKInitTypeDef periphClkInitStruct = {0};
+  periphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USB;
+  periphClkInitStruct.UsbClockSelection = RCC_USBCLKSOURCE_PLL;
+  HAL_RCCEx_PeriphCLKConfig(&periphClkInitStruct);
+
+  __HAL_RCC_USB_OTG_HS_CLK_ENABLE();
+#endif
 }
 
 void USB::initFullSpeedPins() {
-  // TODO: Implement Full Speed USB initialization
+#if defined(STM32H7) & 0
+  Gpio dp(Port::PortA, Pin::Pin12);
+  Gpio dm(Port::PortA, Pin::Pin11);
+
+  dp.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,
+            kUlpiAlternate);
+  dm.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,
+            kUlpiAlternate);
+
+  dp.init();
+  dm.init();
+
+  RCC_PeriphCLKInitTypeDef periphClkInitStruct = {0};
+  periphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USB;
+  periphClkInitStruct.UsbClockSelection = RCC_USBCLKSOURCE_PLL;
+  HAL_RCCEx_PeriphCLKConfig(&periphClkInitStruct);
+
+  __HAL_RCC_USB_OTG_HS_CLK_ENABLE();
+#endif
 }
 
-void USB::init() {
-  bool success = false;
+retval_t USB::init() {
+
+  if (initPCD() != rvSucceed) {
+    return rvFailed;
+  }
 
   if (_speed == USBSpeed::UsbHighSpeedExternalPHY &&
       _peripheral == USBPeripheral::UsbULPI) {
     initULPIPins();
-    success = true;
   } else if (_speed == USBSpeed::UsbFullSpeed &&
-             _peripheral == USBPeripheral::UsbDifferencePair) {
-
+             _peripheral == USBPeripheral::USBDifferenceLine) {
     initFullSpeedPins();
-    success = true;
   } else if (_speed == USBSpeed::UsbHighSpeedInternalPHY ||
-             _peripheral == USBPeripheral::UsbDifferencePair) {
+             _peripheral == USBPeripheral::USBDifferenceLine) {
     initHighSpeedPins();
-    success = true;
   }
 
-  _initialized = success;
+  return rvSucceed;
 }
 
 } // namespace ThetaGP::Drivers::Periph::USB
