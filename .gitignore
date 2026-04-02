@@ -1,8 +1,10 @@
 build
+
 .vscode
 .cache
+
 BoardConfig.h
 board_config.cmake
+
 GP2040-CE
-lib/tinyusb
 docs
