@@ -143,9 +143,9 @@ void stage_rfft_f16(
       vst2q_f16(pOut, res);
       pOut += 16;
 
-    
+
       blockCnt--;
-   } 
+   }
 
    pB += 14;
    blockCnt = k & 7;
@@ -214,7 +214,7 @@ void merge_rfft_f16(
         vecStridesBkwd = vddupq_u16((uint16_t)14, 2);
 
         int blockCnt;
-        
+
 
    k = (S->Sint).fftLen - 1;
 
@@ -274,7 +274,7 @@ void merge_rfft_f16(
       vst2q_f16(pOut, res);
       pOut += 16;
 
-    
+
       blockCnt--;
    }
 
@@ -469,7 +469,7 @@ void merge_rfft_f16(
 
 /**
   @defgroup RealFFT Real FFT Functions
- 
+
   @par
                    The CMSIS DSP library includes specialized algorithms for computing the
                    FFT of real data sequences.  The FFT is defined over complex data but
@@ -499,11 +499,11 @@ void merge_rfft_f16(
                    and we describe each algorithm in turn.
   @par           Floating-point
                    The main functions are \ref arm_rfft_fast_f16() and \ref arm_rfft_fast_init_f16().
-                   
+
   @par
-                   The FFT of a real N-point sequence has even symmetry in the frequency domain. 
-                   The second half of the data equals the conjugate of the first half flipped in frequency. 
-                   Looking at the data, we see that we can uniquely represent the FFT using only N/2 complex numbers.
+                   The FFT of a real N-point sequence has even symmetry in the frequency domain.
+                   The second half of the data equals the conjugate of the first half flipped in frequency.
+                   Looking at the data, we see that we can _idly represent the FFT using only N/2 complex numbers.
                    These are packed into the output array in alternating real and imaginary components:
   @par
                    X = { real[0], imag[0], real[1], imag[1], real[2], imag[2] ...
@@ -555,7 +555,7 @@ void merge_rfft_f16(
                    <code>pTwiddleAReal</code>points to the A array of twiddle coefficients;
                    <code>pTwiddleBReal</code>points to the B array of twiddle coefficients;
                    <code>pCfft</code> points to the CFFT Instance structure. The CFFT structure
-                   must also be initialized.  
+                   must also be initialized.
 @par
                    Note that with MVE versions you can't initialize instance structures directly and **must
                    use the initialization function**.

@@ -1,5 +1,4 @@
 #include "stm32h7xx.h"
-
 #include "target/target_platform.h"
 
 #ifdef __cplusplus

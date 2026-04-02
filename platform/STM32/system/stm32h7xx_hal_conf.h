@@ -191,11 +191,11 @@ extern "C" {
 /**
  * @brief This is the HAL system configuration section
  */
-#define VDD_VALUE (3300UL)       /*!< Value of VDD in mv */
-#define TICK_INT_PRIORITY (15UL) /*!< tick interrupt priority */
-#define USE_RTOS 0
+#define VDD_VALUE          (3300UL) /*!< Value of VDD in mv */
+#define TICK_INT_PRIORITY  (15UL)   /*!< tick interrupt priority */
+#define USE_RTOS           0
 #define USE_SD_TRANSCEIVER 0U /*!< use uSD Transceiver */
-#define USE_SPI_CRC 0U        /*!< use CRC in SPI */
+#define USE_SPI_CRC        0U /*!< use CRC in SPI */
 
 #define USE_HAL_ADC_REGISTER_CALLBACKS                                         \
   0U /* ADC register callback disabled     */
@@ -301,12 +301,12 @@ extern "C" {
 #define ETH_TX_DESC_CNT 4U /* number of Ethernet Tx DMA descriptors */
 #define ETH_RX_DESC_CNT 4U /* number of Ethernet Rx DMA descriptors */
 
-#define ETH_MAC_ADDR0 (0x02UL)
-#define ETH_MAC_ADDR1 (0x00UL)
-#define ETH_MAC_ADDR2 (0x00UL)
-#define ETH_MAC_ADDR3 (0x00UL)
-#define ETH_MAC_ADDR4 (0x00UL)
-#define ETH_MAC_ADDR5 (0x00UL)
+#define ETH_MAC_ADDR0   (0x02UL)
+#define ETH_MAC_ADDR1   (0x00UL)
+#define ETH_MAC_ADDR2   (0x00UL)
+#define ETH_MAC_ADDR3   (0x00UL)
+#define ETH_MAC_ADDR4   (0x00UL)
+#define ETH_MAC_ADDR5   (0x00UL)
 
 /* ########################## Assert Selection
  * ##############################
