@@ -20,6 +20,7 @@
  */
 
 #include "drivers/peripherals/nvic_exti.h"
+#include "stm32h743xx.h"
 
 #include <array>
 
@@ -43,18 +44,22 @@ constexpr std::array<IRQn_Type, EXTI_IRQ_GROUPS> extiGroupIRQn = {
 #endif
 
 NvicExti::NvicExti()
-    : _gpio(), _triggerSrc(Mode::Input),
-      _priority(NvicPriority::PriorityLow), _initialized(false) {}
+    : _gpio(), _triggerSrc(Mode::Input), _priority(NvicPriority::PriorityLow),
+      _initialized(false) {}
 
-NvicExti::NvicExti(PinDesc pinDesc, Mode triggerSrc,
-                   NvicPriority priority)
+NvicExti::NvicExti(PinDesc pinDesc, Mode triggerSrc, NvicPriority priority)
     : _gpio(pinDesc), _triggerSrc(triggerSrc), _priority(priority),
       _initialized(false) {}
 
-NvicExti::NvicExti(Port port, Pin pin, Mode triggerSrc,
-                   NvicPriority priority)
+NvicExti::NvicExti(Port port, Pin pin, Mode triggerSrc, NvicPriority priority)
     : _gpio(port, pin), _triggerSrc(triggerSrc), _priority(priority),
       _initialized(false) {}
+
+void NvicExti::preinit() {
+#if defined(STM32H7)
+  HAL_NVIC_SetPriorityGrouping(NVIC_PRIORITY_GROUPING);
+#endif
+}
 
 void NvicExti::init() {
   _gpio.config(_triggerSrc, Pull::PullUp, Speed::High);
@@ -80,7 +85,8 @@ void NvicExti::init() {
                             .Speed = static_cast<uint32_t>(cfg.speed),
                             .Alternate = cfg.alternate};
 
-  HAL_GPIO_Init(_gpio.getPortAddress(), &gpioInit);
+  HAL_GPIO_Init(reinterpret_cast<GPIO_TypeDef *>(_gpio.getPortAddress()),
+                &gpioInit);
 
   if (extiGroupPriority[group] > static_cast<uint8_t>(_priority)) {
     extiGroupPriority[group] = static_cast<uint8_t>(_priority);
@@ -139,9 +145,11 @@ void NvicExti::release() {
   extiInstances[chIdx] = nullptr;
 }
 
-} // namespace ThetaGP::Drivers::NVIC_EXTI
+} // namespace ThetaGP::Drivers::Periph::NVIC_EXTI
 
 extern "C" {
+
+#if defined(STM32H7)
 
 #define EXTI_EVENT_MASK 0xFFFF
 
@@ -153,7 +161,8 @@ static void EXTI_IRQnHandler(uint32_t mask) {
   while (exti_active) {
     uint32_t idx = 31 - __builtin_clz(exti_active);
     uint32_t bit = 1U << idx;
-    auto *extiInstance = ThetaGP::Drivers::Periph::NVIC_EXTI::extiInstances[idx];
+    auto *extiInstance =
+        ThetaGP::Drivers::Periph::NVIC_EXTI::extiInstances[idx];
     if (extiInstance && extiInstance->_callback) {
       extiInstance->_callback(extiInstance);
     }
@@ -172,4 +181,7 @@ extiIrqHandler(EXTI3_IRQHandler, 0x0008);
 extiIrqHandler(EXTI4_IRQHandler, 0x0010);
 extiIrqHandler(EXTI9_5_IRQHandler, 0x03e0);
 extiIrqHandler(EXTI15_10_IRQHandler, 0xfc00);
+
+#endif
+
 } // namespace ThetaGP::Drivers::Periph::NVIC_EXTI

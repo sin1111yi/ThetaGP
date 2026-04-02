@@ -17,9 +17,8 @@
 
 #pragma once
 
-#include <cstdint>
-
 #include "build_info.h"
+#include <cstdint>
 
 namespace ThetaGP {
 namespace Drivers {
@@ -101,7 +100,7 @@ struct PinDesc {
 };
 
 class Gpio {
-protected:
+private:
   struct Config {
     Port port;
     Pin pin;
@@ -114,8 +113,6 @@ protected:
   Config _config;
   bool _initialized;
 
-  void enableClock() const;
-
 public:
   Gpio();
   Gpio(const PinDesc &pinDesc);
@@ -125,11 +122,16 @@ public:
   void config(Mode mode, Pull pull, Speed speed);
   void config(Mode mode, Pull pull, Speed speed, uint32_t alternate);
 
-  virtual void init();
+  void init();
 
-  // Hardware access
-  GPIO_TypeDef *getPortAddress() const;
+  void enableClock() const;
+  static void enableClock(const PinDesc &pinDesc);
+
+  void *getPortAddress() const;
+  static void *getPortAddress(const PinDesc &pinDesc);
+
   uint16_t getPinMask() const;
+  static uint16_t getPinMask(const PinDesc &pinDesc);
 
   void write(PinState state);
   PinState read() const;

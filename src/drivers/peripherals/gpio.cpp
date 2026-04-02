@@ -16,14 +16,17 @@
  */
 
 #include "drivers/peripherals/gpio.h"
+#include "stm32h743xx.h"
 
 #include <array>
+#include <memory>
 
 namespace ThetaGP::Drivers::Periph::GPIO {
 
 void enableGpioClock(Port port) {
   using ClockFunc = void (*)();
   static const std::array<ClockFunc, 11> clockEnableTable = {{
+#if defined(STM32H7)
       []() { __HAL_RCC_GPIOA_CLK_ENABLE(); },
       []() { __HAL_RCC_GPIOB_CLK_ENABLE(); },
       []() { __HAL_RCC_GPIOC_CLK_ENABLE(); },
@@ -39,6 +42,7 @@ void enableGpioClock(Port port) {
 #endif
       []() { __HAL_RCC_GPIOJ_CLK_ENABLE(); },
       []() { __HAL_RCC_GPIOK_CLK_ENABLE(); },
+#endif
   }};
 
   const auto index = static_cast<size_t>(port);
@@ -68,19 +72,44 @@ Gpio::Gpio(Port port, Pin pin) : Gpio() {
   _initialized = false;
 }
 
-GPIO_TypeDef *Gpio::getPortAddress() const {
+void *Gpio::getPortAddress() const {
+#if defined(STM32H7)
   constexpr uint32_t GPIO_PORT_BASE = GPIOA_BASE;
   constexpr uint32_t GPIO_PORT_OFFSET = 0x400;
-  return reinterpret_cast<GPIO_TypeDef *>(
+  return reinterpret_cast<void *>(
       GPIO_PORT_BASE +
       (static_cast<uint32_t>(_config.port) * GPIO_PORT_OFFSET));
+#endif
+  return nullptr;
+}
+
+void *getPortAddress(const PinDesc &pinDesc) {
+#if defined(STM32H7)
+  constexpr uint32_t GPIO_PORT_BASE = GPIOA_BASE;
+  constexpr uint32_t GPIO_PORT_OFFSET = 0x400;
+  return reinterpret_cast<void *>(
+      GPIO_PORT_BASE +
+      (static_cast<uint32_t>(pinDesc.port) * GPIO_PORT_OFFSET));
+#endif
+  return nullptr;
 }
 
 uint16_t Gpio::getPinMask() const {
+#if defined(STM32H7)
   return static_cast<uint16_t>(1U << static_cast<uint8_t>(_config.pin));
+#endif
+  return 0x0000;
+}
+
+uint16_t Gpio::getPinMask(const PinDesc &pinDesc) {
+#if defined(STM32H7)
+  return static_cast<uint16_t>(1U << static_cast<uint8_t>(pinDesc.pin));
+#endif
+  return 0x0000;
 }
 
 void Gpio::enableClock() const { enableGpioClock(_config.port); }
+void Gpio::enableClock(const PinDesc &pinDesc) { enableGpioClock(pinDesc.port); }
 
 void Gpio::config(Mode mode, Pull pull, Speed speed) {
   _config.mode = mode;
@@ -97,29 +126,40 @@ void Gpio::config(Mode mode, Pull pull, Speed speed, uint32_t alternate) {
 void Gpio::init() {
   enableClock();
 
+#if defined(STM32H7)
   GPIO_InitTypeDef gpioInit{.Pin = getPinMask(),
                             .Mode = static_cast<uint32_t>(_config.mode),
                             .Pull = static_cast<uint32_t>(_config.pull),
                             .Speed = static_cast<uint32_t>(_config.speed),
                             .Alternate = _config.alternate};
 
-  HAL_GPIO_Init(getPortAddress(), &gpioInit);
+  HAL_GPIO_Init(reinterpret_cast<GPIO_TypeDef *>(getPortAddress()), &gpioInit);
+#endif
   reset();
 
   _initialized = true;
 }
 
 void Gpio::write(PinState state) {
-  HAL_GPIO_WritePin(getPortAddress(), getPinMask(),
-                    static_cast<GPIO_PinState>(state));
+#if defined(STM32H7)
+  HAL_GPIO_WritePin(reinterpret_cast<GPIO_TypeDef *>(getPortAddress()),
+                    getPinMask(), static_cast<GPIO_PinState>(state));
+#endif
 }
 
 PinState Gpio::read() const {
-  return static_cast<PinState>(
-      HAL_GPIO_ReadPin(getPortAddress(), getPinMask()));
+#if defined(STM32H7)
+  return static_cast<PinState>(HAL_GPIO_ReadPin(
+      reinterpret_cast<GPIO_TypeDef *>(getPortAddress()), getPinMask()));
+#endif
 }
 
-void Gpio::toggle() { HAL_GPIO_TogglePin(getPortAddress(), getPinMask()); }
+void Gpio::toggle() {
+#if defined(STM32H7)
+  HAL_GPIO_TogglePin(reinterpret_cast<GPIO_TypeDef *>(getPortAddress()),
+                     getPinMask());
+#endif
+}
 
 void Gpio::set() { write(PinState::Set); }
 

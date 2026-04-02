@@ -29,7 +29,7 @@ extern "C" {
 
 #define NVIC_PRIORITY_GROUPING NVIC_PRIORITYGROUP_2
 
-#define NVIC_PRIO_MAX NVIC_BUILD_PRIORITY(0, 1)
+#define NVIC_PRIO_MAX          NVIC_BUILD_PRIORITY(0, 1)
 
 #define NVIC_BUILD_PRIORITY(base, sub)                                         \
   (((((base) << (4 - (7 - (NVIC_PRIORITY_GROUPING)))) |                        \
