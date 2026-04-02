@@ -166,6 +166,17 @@ PoolError MemPoolManager::addPool(uint16_t poolId, void *memory, size_t size,
   return result;
 }
 
+PoolError MemPoolManager::addPool(void *memory, size_t size, const char *name) {
+  // Auto-generate poolId: find first unused ID
+  uint16_t newId = 1;
+  for (uint16_t i = 0; i < MAX_POOLS; ++i) {
+    if (_pools[i].inUse && _pools[i].id >= newId) {
+      newId = _pools[i].id + 1;
+    }
+  }
+  return addPool(newId, memory, size, name);
+}
+
 PoolError MemPoolManager::removePool(uint16_t poolId) {
   if (!_initialized) {
     return PoolError::NotInitialized;
@@ -233,6 +244,30 @@ const MemPool *MemPoolManager::pool(uint16_t poolId) const {
   return &entry->pool;
 }
 
+MemPool *MemPoolManager::pool(const char *name) {
+  if (name == nullptr) {
+    return nullptr;
+  }
+  for (uint16_t i = 0; i < MAX_POOLS; ++i) {
+    if (_pools[i].inUse && std::strcmp(_pools[i].name, name) == 0) {
+      return &_pools[i].pool;
+    }
+  }
+  return nullptr;
+}
+
+const MemPool *MemPoolManager::pool(const char *name) const {
+  if (name == nullptr) {
+    return nullptr;
+  }
+  for (uint16_t i = 0; i < MAX_POOLS; ++i) {
+    if (_pools[i].inUse && std::strcmp(_pools[i].name, name) == 0) {
+      return &_pools[i].pool;
+    }
+  }
+  return nullptr;
+}
+
 const char *MemPoolManager::poolName(uint16_t poolId) const {
   const MemPoolEntry *entry = findEntry(poolId);
   if (entry == nullptr || !entry->inUse) {
@@ -253,12 +288,36 @@ void *MemPoolManager::alloc(uint16_t poolId, size_t size) {
   return p->alloc(size);
 }
 
+void *MemPoolManager::alloc(const char *name, size_t size) {
+  if (!_initialized || name == nullptr) {
+    return nullptr;
+  }
+
+  MemPool *p = pool(name);
+  if (p == nullptr) {
+    return nullptr;
+  }
+  return p->alloc(size);
+}
+
 PoolError MemPoolManager::free(uint16_t poolId, void *ptr) {
   if (!_initialized) {
     return PoolError::NotInitialized;
   }
 
   MemPool *p = pool(poolId);
+  if (p == nullptr) {
+    return PoolError::NotInitialized;
+  }
+  return p->free(ptr);
+}
+
+PoolError MemPoolManager::free(const char *name, void *ptr) {
+  if (!_initialized || name == nullptr) {
+    return PoolError::NotInitialized;
+  }
+
+  MemPool *p = pool(name);
   if (p == nullptr) {
     return PoolError::NotInitialized;
   }
