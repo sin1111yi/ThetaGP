@@ -35,21 +35,21 @@ extern "C" {
   do {                                                                         \
   } while (0)
 
-#define NOP DUMMY
+#define NOP                         DUMMY
 
-#define ARRAYLEN(x) (sizeof(x) / sizeof(x)[0])
-#define ARRAYEND(x) (&(x)[ARRAYLEN(x)])
+#define ARRAYLEN(x)                 (sizeof(x) / sizeof(x)[0])
+#define ARRAYEND(x)                 (&(x)[ARRAYLEN(x)])
 
 #define FORCED_TYPE_CONV(type, var) ((type)(var))
 
-#define __TOSTRING(x) #x
-#define TOSTRING(x) __TOSTRING(x)
+#define __TOSTRING(x)               #x
+#define TOSTRING(x)                 __TOSTRING(x)
 
-#define __CONTACT(x, y) x##y
-#define CONTACT(x, y) __CONTACT(x, y)
-#define CONTACT2(_1, _2) CONTACT(_1, _2)
-#define CONTACT3(_1, _2, _3) CONTACT(CONTACT(_1, _2), _3)
-#define CONTACT4(_1, _2, _3, _4) CONTACT(CONTACT3(_1, _2, _3), _4)
+#define __CONTACT(x, y)             x##y
+#define CONTACT(x, y)               __CONTACT(x, y)
+#define CONTACT2(_1, _2)            CONTACT(_1, _2)
+#define CONTACT3(_1, _2, _3)        CONTACT(CONTACT(_1, _2), _3)
+#define CONTACT4(_1, _2, _3, _4)    CONTACT(CONTACT3(_1, _2, _3), _4)
 
 #if !defined(UNUSED)
 #define UNUSED(x) ((void)(x))
@@ -67,12 +67,12 @@ extern "C" {
 #define WEAKFN __attribute__((weak))
 #endif /* WEAKFN */
 
-#define BIT(x) (1 << (x))
+#define BIT(x)        (1 << (x))
 
 #define COMPVAL(x, y) ((x) - (y))
 
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b)     ((a) > (b) ? (a) : (b))
+#define MIN(a, b)     ((a) < (b) ? (a) : (b))
 
 #define FLOATEQU(f, v)                                                         \
   (((double)(f) - (double)(v)) < 1e-15 && ((double)(f) - (double)(v)) > -1e-15 \
@@ -115,7 +115,7 @@ static inline int16_t swapI16(int16_t x) {
  * Return (v ? floor(log2(v)) : 0) when 0 <= v < 1<<[8, 16, 32, 64].
  * Inefficient algorithm, intended for compile-time constants.
  */
-#define LOG2_8BIT(v) (8 - 90 / (((v) / 4 + 14) | 1) - 2 / ((v) / 2 + 1))
+#define LOG2_8BIT(v)  (8 - 90 / (((v) / 4 + 14) | 1) - 2 / ((v) / 2 + 1))
 #define LOG2_16BIT(v) (8 * ((v) > 255) + LOG2_8BIT((v) >> 8 * ((v) > 255)))
 #define LOG2_32BIT(v)                                                          \
   (16 * ((v) > 65535L) + LOG2_16BIT((v) * 1L >> 16 * ((v) > 65535L)))

@@ -25,8 +25,7 @@
 #include <stdint.h>
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
 // time difference, 32 bits always sufficient
@@ -42,15 +41,11 @@ typedef uint32_t timeUs_t;
 #define TIMEUS_MAX UINT32_MAX
 #endif
 
-static inline timeDelta_t
-cmpTimeUs (timeUs_t a, timeUs_t b)
-{
+static inline timeDelta_t cmpTimeUs(timeUs_t a, timeUs_t b) {
   return (timeDelta_t)(a - b);
 }
 
-static inline int32_t
-cmpTimeCycles (uint32_t a, uint32_t b)
-{
+static inline int32_t cmpTimeCycles(uint32_t a, uint32_t b) {
   return (int32_t)(a - b);
 }
 

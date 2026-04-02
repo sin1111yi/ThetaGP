@@ -22,15 +22,14 @@
 #pragma once
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
-long strtol (const char *str, char **endptr, int base);
+long strtol(const char *str, char **endptr, int base);
 
-unsigned long strtoul (const char *str, char **endptr, int base);
+unsigned long strtoul(const char *str, char **endptr, int base);
 
-int atoi (const char *str);
+int atoi(const char *str);
 
 #ifdef __cplusplus
 }
