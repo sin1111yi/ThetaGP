@@ -8,3 +8,6 @@ board_config.cmake
 
 GP2040-CE
 docs
+
+lib/mbedtls
+lib/tinyusb
