@@ -15,19 +15,10 @@
 
 DEPENDENCIES = {
     {
-        name = "GP2040-CE",
-        type = "git_sparse",
-        url = "https://github.com/OpenStickCommunity/GP2040-CE.git",
-        branch = "main",
-        dest = "GP2040-CE",
-        sparse_paths = { "lib/nanopb", "proto" },
-        optional = false,
-    },
-    {
         name = "tinyusb",
         type = "git",
         url = "https://github.com/hathach/tinyusb.git",
-        tag = "0.15.0",
+        tag = "master",
         dest = "lib/tinyusb",
         optional = false,
     },
@@ -38,5 +29,13 @@ DEPENDENCIES = {
         tag = "v3.6.2",
         dest = "lib/mbedtls",
         optional = false,
-    }
+    },
+    {
+        name = "ArduinoJson",
+        type = "git",
+        url = "https://github.com/bblanchon/ArduinoJson",
+        tag = "v7.4.3",
+        dest = "lib/ArduinoJson",
+        optional = false,
+    },
 }

@@ -30,16 +30,20 @@ M.BoardConfig = {
     necessary = {
         led0 = { pin = "PD8", active_low = true },
         keypad = {
-            drive_mode = "row_scan",
-            active_low = true,
-            row = {
+            drive_mode = "scan_matrix",
+            active_mode = "none",
+            drive_pins = {
                 { pin = "PA0" },
                 { pin = "PA1" },
             },
-            col = {
+            sense_pins = {
                 { pin = "PB0" },
                 { pin = "PB1" },
-            }
+            },
+            key_map = {
+                { 0, 1 },
+                { 2, 3 },
+            },
         },
         usb = {
             hw_periph = "ULPI",

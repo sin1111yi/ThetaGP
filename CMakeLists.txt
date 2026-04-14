@@ -83,8 +83,9 @@ if(NOT DEPS_FETCH_RESULT EQUAL 0)
     message(FATAL_ERROR "Failed to fetch dependencies. Please check the error messages above.")
 endif()
 
+# Generate board configuration
 execute_process(
-    COMMAND ${LUA_EXECUTABLE} ${CMAKE_SOURCE_DIR}/configs/config.lua
+    COMMAND ${LUA_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/generate_config.lua
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
 
@@ -111,12 +112,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-# GP2040-CE path variable (used by compile_proto and src)
-set(GP2040_CE_PATH ${CMAKE_SOURCE_DIR}/GP2040-CE)
-
-include(compile_proto.cmake)
-compile_proto()
 
 add_subdirectory(lib)
 add_subdirectory(platform)

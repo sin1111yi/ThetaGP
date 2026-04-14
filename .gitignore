@@ -1,7 +1,12 @@
 /build/
 
 .vscode
+.trae
 .cache
+
+.clangd
+
+.skills
 
 BoardConfig.h
 board_config.cmake

@@ -49,11 +49,11 @@ include(${TINYUSB_SRC_PATH}/CMakeLists.txt)
 tinyusb_sources_get(TINYUSB_SOURCES)
 
 if(BOARD_MCU_SERIES STREQUAL "STM32H7")
-list(APPEND TINYUSB_SOURCES
-    ${TINYUSB_SRC_PATH}/portable/synopsys/dwc2/dcd_dwc2.c
-    ${TINYUSB_SRC_PATH}/portable/synopsys/dwc2/hcd_dwc2.c
-    ${TINYUSB_SRC_PATH}/portable/synopsys/dwc2/dwc2_common.c
-)
+    list(APPEND TINYUSB_SOURCES
+        ${TINYUSB_SRC_PATH}/portable/synopsys/dwc2/dcd_dwc2.c
+        ${TINYUSB_SRC_PATH}/portable/synopsys/dwc2/hcd_dwc2.c
+        ${TINYUSB_SRC_PATH}/portable/synopsys/dwc2/dwc2_common.c
+    )
 endif()
 
 # =============================================================================
@@ -94,17 +94,6 @@ set(MBEDTLS_DEFS
 # =============================================================================
 add_executable(${CMAKE_PROJECT_NAME})
 
-# GP2040-CE include directories (GP2040_CE_PATH is set in root CMakeLists.txt)
-set(GP2040_CE_INCLUDE_DIRS
-    ${GP2040_CE_PATH}/lib/nanopb
-)
-
-add_dependencies(${CMAKE_PROJECT_NAME} proto_gen)
-
-target_link_libraries(${CMAKE_PROJECT_NAME}
-    CRC32
-)
-
 target_sources(${CMAKE_PROJECT_NAME}
     PRIVATE
     ${SRC_FILES}
@@ -125,6 +114,12 @@ target_include_directories(${CMAKE_PROJECT_NAME}
     ${TINYUSB_SRC_PATH}/../lib/networking
 
     ${MBEDTLS_INC_PATH}
+)
+
+target_link_libraries(${CMAKE_PROJECT_NAME}
+    PRIVATE
+    CRC32
+    ArduinoJson
 )
 
 target_compile_definitions(${CMAKE_PROJECT_NAME}

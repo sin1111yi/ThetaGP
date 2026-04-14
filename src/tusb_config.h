@@ -65,9 +65,9 @@ extern "C" {
 // Default to Highspeed for MCU with internal HighSpeed PHY (can be port
 // specific), otherwise FullSpeed
 #ifndef BOARD_DEVICE_RHPORT_SPEED
-#if (CONF_USB_SPEED == USB_OTG_HIGH_SPEED)
+#if defined(THETAGP_CFG_USB_HS)
 #define BOARD_DEVICE_RHPORT_SPEED OPT_MODE_HIGH_SPEED
-#elif (CONF_USB_SPEED == USB_OTG_FULL_SPEED)
+#elif defined(THETAGP_CFG_USB_FS)
 #define BOARD_DEVICE_RHPORT_SPEED OPT_MODE_FULL_SPEED
 #endif
 #endif
@@ -88,12 +88,6 @@ extern "C" {
 // Enable device stack
 #define CFG_TUD_ENABLED 1
 
-#define CFG_TUH_ENABLED 1
-
-// Enable X-Input host config
-#define CFG_TUH_XINPUT  1
-
-#define TUH_OPT_RHPORT  1
 // CFG_TUSB_DEBUG is defined by compiler in DEBUG build
 // #define CFG_TUSB_DEBUG   0
 
@@ -125,10 +119,6 @@ extern "C" {
 // support with on-chip PHY
 #define CFG_TUD_ENABLED   1
 #define CFG_TUD_MAX_SPEED BOARD_TUD_MAX_SPEED
-// Enable Host stack, Default is max speed that hardware controller could
-// support with on-chip PHY
-#define CFG_TUH_ENABLED   1
-#define CFG_TUH_MAX_SPEED BOARD_TUH_MAX_SPEED
 
 //--------------------------------------------------------------------
 // DEVICE CONFIGURATION
@@ -138,25 +128,14 @@ extern "C" {
 #define CFG_TUD_ENDPOINT0_SIZE 64
 #endif
 
+#define CFG_TUD_CDC_TX_BUFSIZE 512
+#define CFG_TUD_CDC_RX_BUFSIZE 512
+#define CFG_TUD_HID_EP_BUFSIZE 64
+
 //------------- CLASS -------------//
-#define CFG_TUD_CDC                 0
-#define CFG_TUD_ECM_RNDIS           0
-#define CFG_TUD_HID                 2
-
-//--------------------------------------------------------------------
-// HOST CONFIGURATION
-//--------------------------------------------------------------------
-
-// Size of buffer to hold descriptors and other data used for enumeration
-#define CFG_TUH_ENUMERATION_BUFSIZE 512
-
-#define CFG_TUH_HUB                 1
-// max device support (excluding hub device)
-#define CFG_TUH_DEVICE_MAX (CFG_TUH_HUB ? 4 : 1) // hub typically has 4 ports
-
-#define CFG_TUH_HID        4
-#define CFG_TUH_HID_EPIN_BUFSIZE  64
-#define CFG_TUH_HID_EPOUT_BUFSIZE 64
+#define CFG_TUD_ENABLED        1
+#define CFG_TUD_HID            1
+#define CFG_TUD_CDC            2
 
 #ifdef __cplusplus
 }
