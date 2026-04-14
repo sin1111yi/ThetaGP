@@ -36,4 +36,4 @@ public:
   }
 };
 
-}  // namespace ThetaGP::Drivers::Device
+} // namespace ThetaGP::Drivers::Device

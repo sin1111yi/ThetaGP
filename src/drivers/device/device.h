@@ -34,4 +34,4 @@ public:
   void setInstanceId(uint8_t id) { _instanceId = id; }
 };
 
-}  // namespace ThetaGP::Drivers::Device
+} // namespace ThetaGP::Drivers::Device

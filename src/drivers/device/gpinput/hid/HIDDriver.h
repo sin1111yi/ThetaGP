@@ -1,7 +1,7 @@
 #pragma once
 
-#include "drivers/device/gpinput/hid/HIDDescriptors.h"
 #include "drivers/device/gpinput/gpdriver.h"
+#include "drivers/device/gpinput/hid/HIDDescriptors.h"
 
 #include "class/hid/hid.h"
 #include "device/usbd_pvt.h"
@@ -36,4 +36,4 @@ private:
   HIDReport hidReport;
 };
 
-}  // namespace ThetaGP::Drivers::Device
+} // namespace ThetaGP::Drivers::Device

@@ -1,12 +1,11 @@
 #ifndef _DRIVER_HELPER_H_
 #define _DRIVER_HELPER_H_
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 
-extern "C"
-{
+extern "C" {
 
 static inline uint16_t *getStringDescriptor(const char *value, uint8_t index) {
   static uint16_t
@@ -30,7 +29,6 @@ static inline uint16_t *getStringDescriptor(const char *value, uint8_t index) {
   // Cast temp buffer to final result
   return descriptorStringBuffer;
 }
-
 }
 
 #endif // _DRIVER_HELPER_H_

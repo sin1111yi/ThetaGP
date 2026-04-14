@@ -86,6 +86,7 @@ enum class TaskPriority : int8_t {
 enum class TaskId {
   System,
   Main,
+  Initialize,
   Gamepad,
 
   Count,
@@ -167,8 +168,8 @@ struct TaskSlot {
 
 class Scheduler {
 private:
-  static constexpr size_t MAX_STATIC_TASKS = 4;
-  static constexpr size_t MAX_DYNAMIC_TASKS = 4;
+  static constexpr size_t MAX_STATIC_TASKS = 8;
+  static constexpr size_t MAX_DYNAMIC_TASKS = 8;
   static constexpr size_t MAX_TASK_COUNT = MAX_STATIC_TASKS + MAX_DYNAMIC_TASKS;
   static constexpr size_t TASK_POOL_SIZE = 2048;
 
@@ -242,6 +243,8 @@ public:
 
   void run();
 
+  void setupSystem();
+
   void setTaskEnabled(TaskId taskId, bool enabled);
   void rescheduleTask(TaskId taskId, uint32_t newPeriodUs);
   uint32_t getTaskDeltaTimeUs(TaskId taskId);
@@ -268,7 +271,6 @@ public:
   Task *getCurrentTask();
 
   void taskSystemLoad(uint32_t currentTimeUs);
-
   void taskMain(uint32_t currentTimeUs);
   void taskGamepadCore(uint32_t currentTimeUs);
 

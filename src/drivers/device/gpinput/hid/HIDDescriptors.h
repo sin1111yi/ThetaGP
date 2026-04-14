@@ -144,9 +144,9 @@ static const uint8_t hid_configuration_descriptor[] = {
     0,    // iConfiguration
     0x80, // bmAttributes
     50,   // bMaxPower
-        // interface descriptor, USB spec 9.6.5, page 267-269, Table 9-12
-    9,                 // bLength
-    4,                 // bDescriptorType
+          // interface descriptor, USB spec 9.6.5, page 267-269, Table 9-12
+    9,    // bLength
+    4,    // bDescriptorType
     GAMEPAD_INTERFACE, // bInterfaceNumber
     0,                 // bAlternateSetting
     1,                 // bNumEndpoints
@@ -154,13 +154,13 @@ static const uint8_t hid_configuration_descriptor[] = {
     0x00,              // bInterfaceSubClass (0x00 = No Boot)
     0x00,              // bInterfaceProtocol (0x00 = No Protocol)
     0,                 // iInterface
-       // HID interface descriptor, HID 1.11 spec, section 6.2.1
-    9,                             // bLength
-    0x21,                          // bDescriptorType
-    0x11, 0x01,                    // bcdHID
-    0,                             // bCountryCode
-    1,                             // bNumDescriptors
-    0x22,                          // bDescriptorType
+                       // HID interface descriptor, HID 1.11 spec, section 6.2.1
+    9,                 // bLength
+    0x21,              // bDescriptorType
+    0x11, 0x01,        // bcdHID
+    0,                 // bCountryCode
+    1,                 // bNumDescriptors
+    0x22,              // bDescriptorType
     sizeof(hid_report_descriptor), // wDescriptorLength
     0,
     // endpoint descriptor, USB spec 9.6.6, page 269-271, Table 9-13

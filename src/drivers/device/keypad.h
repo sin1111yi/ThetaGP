@@ -62,7 +62,7 @@ private:
   static constexpr size_t DRIVE_PIN_NUM = KEYPAD_DRIVE_PIN_NUM;
   static constexpr size_t SENSE_PIN_NUM = KEYPAD_SENSE_PIN_NUM;
   static constexpr size_t MAX_KEY_INDEX = KEYPAD_MAX_KEY_INDEX;
-  static constexpr size_t MASK_ARRAY_SIZE = 1;  // 32 keys = 1 uint32_t
+  static constexpr size_t MASK_ARRAY_SIZE = 1; // 32 keys = 1 uint32_t
   static constexpr size_t MAX_KEYS = 32;
 
   struct KeySampler {
@@ -101,7 +101,7 @@ private:
   static void timerCallback(void *context);
 
 public:
-  static Keypad& getInstance() {
+  static Keypad &getInstance() {
     static Keypad instance;
     return instance;
   }
@@ -144,4 +144,4 @@ public:
   static constexpr size_t getMaskArraySize() { return MASK_ARRAY_SIZE; }
 };
 
-}  // namespace ThetaGP::Drivers::Device
+} // namespace ThetaGP::Drivers::Device

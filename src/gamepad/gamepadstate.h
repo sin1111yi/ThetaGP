@@ -33,61 +33,61 @@
         +--------+--------+---------+----------+----------+--------+
 */
 
-#define GAMEPAD_MASK_UP       (1U << 0)
-#define GAMEPAD_MASK_DOWN     (1U << 1)
-#define GAMEPAD_MASK_LEFT     (1U << 2)
-#define GAMEPAD_MASK_RIGHT    (1U << 3)
+#define GAMEPAD_MASK_UP    (1U << 0)
+#define GAMEPAD_MASK_DOWN  (1U << 1)
+#define GAMEPAD_MASK_LEFT  (1U << 2)
+#define GAMEPAD_MASK_RIGHT (1U << 3)
 
-#define GAMEPAD_MASK_B1       (1U << 4)
-#define GAMEPAD_MASK_B2       (1U << 5)
-#define GAMEPAD_MASK_B3       (1U << 6)
-#define GAMEPAD_MASK_B4       (1U << 7)
-#define GAMEPAD_MASK_L1       (1U << 8)
-#define GAMEPAD_MASK_R1       (1U << 9)
-#define GAMEPAD_MASK_L2       (1U << 10)
-#define GAMEPAD_MASK_R2       (1U << 11)
-#define GAMEPAD_MASK_S1       (1U << 12)
-#define GAMEPAD_MASK_S2       (1U << 13)
-#define GAMEPAD_MASK_L3       (1U << 14)
-#define GAMEPAD_MASK_R3       (1U << 15)
-#define GAMEPAD_MASK_A1       (1U << 16)
-#define GAMEPAD_MASK_A2       (1U << 17)
-#define GAMEPAD_MASK_A3       (1U << 18)
-#define GAMEPAD_MASK_A4       (1U << 19)
+#define GAMEPAD_MASK_B1    (1U << 4)
+#define GAMEPAD_MASK_B2    (1U << 5)
+#define GAMEPAD_MASK_B3    (1U << 6)
+#define GAMEPAD_MASK_B4    (1U << 7)
+#define GAMEPAD_MASK_L1    (1U << 8)
+#define GAMEPAD_MASK_R1    (1U << 9)
+#define GAMEPAD_MASK_L2    (1U << 10)
+#define GAMEPAD_MASK_R2    (1U << 11)
+#define GAMEPAD_MASK_S1    (1U << 12)
+#define GAMEPAD_MASK_S2    (1U << 13)
+#define GAMEPAD_MASK_L3    (1U << 14)
+#define GAMEPAD_MASK_R3    (1U << 15)
+#define GAMEPAD_MASK_A1    (1U << 16)
+#define GAMEPAD_MASK_A2    (1U << 17)
+#define GAMEPAD_MASK_A3    (1U << 18)
+#define GAMEPAD_MASK_A4    (1U << 19)
 
 // For detecting dpad as buttons
-#define GAMEPAD_MASK_DU       (1UL << 20)
-#define GAMEPAD_MASK_DD       (1UL << 21)
-#define GAMEPAD_MASK_DL       (1UL << 22)
-#define GAMEPAD_MASK_DR       (1UL << 23)
+#define GAMEPAD_MASK_DU    (1UL << 20)
+#define GAMEPAD_MASK_DD    (1UL << 21)
+#define GAMEPAD_MASK_DL    (1UL << 22)
+#define GAMEPAD_MASK_DR    (1UL << 23)
 
 // Extra buttons
-#define GAMEPAD_MASK_E1       (1UL << 24)
-#define GAMEPAD_MASK_E2       (1UL << 25)
-#define GAMEPAD_MASK_E3       (1UL << 26)
-#define GAMEPAD_MASK_E4       (1UL << 27)
-#define GAMEPAD_MASK_E5       (1UL << 28)
-#define GAMEPAD_MASK_E6       (1UL << 29)
-#define GAMEPAD_MASK_E7       (1UL << 30)
-#define GAMEPAD_MASK_E8       (1UL << 31)
+#define GAMEPAD_MASK_E1    (1UL << 24)
+#define GAMEPAD_MASK_E2    (1UL << 25)
+#define GAMEPAD_MASK_E3    (1UL << 26)
+#define GAMEPAD_MASK_E4    (1UL << 27)
+#define GAMEPAD_MASK_E5    (1UL << 28)
+#define GAMEPAD_MASK_E6    (1UL << 29)
+#define GAMEPAD_MASK_E7    (1UL << 30)
+#define GAMEPAD_MASK_E8    (1UL << 31)
 
-#define GAMEPAD_MASK_DPAD (GAMEPAD_MASK_UP | GAMEPAD_MASK_DOWN | \
-                           GAMEPAD_MASK_LEFT | GAMEPAD_MASK_RIGHT)
+#define GAMEPAD_MASK_DPAD                                                      \
+  (GAMEPAD_MASK_UP | GAMEPAD_MASK_DOWN | GAMEPAD_MASK_LEFT | GAMEPAD_MASK_RIGHT)
 
-#define GAMEPAD_JOYSTICK_MIN  0
-#define GAMEPAD_JOYSTICK_MID  0x7FFF
-#define GAMEPAD_JOYSTICK_MAX  0xFFFF
+#define GAMEPAD_JOYSTICK_MIN 0
+#define GAMEPAD_JOYSTICK_MID 0x7FFF
+#define GAMEPAD_JOYSTICK_MAX 0xFFFF
 
-#define GAMEPAD_TRIGGER_MIN   0
-#define GAMEPAD_TRIGGER_MID   0x7F
-#define GAMEPAD_TRIGGER_MAX   0xFF
+#define GAMEPAD_TRIGGER_MIN  0
+#define GAMEPAD_TRIGGER_MID  0x7F
+#define GAMEPAD_TRIGGER_MAX  0xFF
 
 /**
  * @brief AUX defines - gamepad state that doesn't translate to an output
  * button/dpad/etc. If you want to have require the Function button for a hotkey
  * in a board config, use `#define HOTKEY_0X_AUX_MASK 32768`
  */
-#define AUX_MASK_FUNCTION     (1U << 15)
+#define AUX_MASK_FUNCTION    (1U << 15)
 
 namespace ThetaGP {
 namespace Gamepad {
@@ -100,12 +100,12 @@ const uint8_t dpadMasks[] = {
 };
 
 const uint32_t buttonMasks[] = {
-    GAMEPAD_MASK_B1,  GAMEPAD_MASK_B2,  GAMEPAD_MASK_B3, GAMEPAD_MASK_B4,
-    GAMEPAD_MASK_L1,  GAMEPAD_MASK_R1,  GAMEPAD_MASK_L2, GAMEPAD_MASK_R2,
-    GAMEPAD_MASK_S1,  GAMEPAD_MASK_S2,  GAMEPAD_MASK_L3, GAMEPAD_MASK_R3,
-    GAMEPAD_MASK_A1,  GAMEPAD_MASK_A2,  GAMEPAD_MASK_A3, GAMEPAD_MASK_A4,
-    GAMEPAD_MASK_E1,  GAMEPAD_MASK_E2,  GAMEPAD_MASK_E3, GAMEPAD_MASK_E4,
-    GAMEPAD_MASK_E5,  GAMEPAD_MASK_E6,  GAMEPAD_MASK_E7, GAMEPAD_MASK_E8,
+    GAMEPAD_MASK_B1, GAMEPAD_MASK_B2, GAMEPAD_MASK_B3, GAMEPAD_MASK_B4,
+    GAMEPAD_MASK_L1, GAMEPAD_MASK_R1, GAMEPAD_MASK_L2, GAMEPAD_MASK_R2,
+    GAMEPAD_MASK_S1, GAMEPAD_MASK_S2, GAMEPAD_MASK_L3, GAMEPAD_MASK_R3,
+    GAMEPAD_MASK_A1, GAMEPAD_MASK_A2, GAMEPAD_MASK_A3, GAMEPAD_MASK_A4,
+    GAMEPAD_MASK_E1, GAMEPAD_MASK_E2, GAMEPAD_MASK_E3, GAMEPAD_MASK_E4,
+    GAMEPAD_MASK_E5, GAMEPAD_MASK_E6, GAMEPAD_MASK_E7, GAMEPAD_MASK_E8,
 };
 
 struct GamepadState {
@@ -155,5 +155,5 @@ uint8_t filterToFourWayMode(uint8_t dpad);
  */
 uint8_t runSOCDCleaner(Enums::SOCDMode mode, uint8_t dpad);
 
-}  // namespace Gamepad
-}  // namespace ThetaGP
+} // namespace Gamepad
+} // namespace ThetaGP

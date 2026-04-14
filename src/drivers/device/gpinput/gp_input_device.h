@@ -1,8 +1,8 @@
 #ifndef _GP_INPUT_DEVICE_H_
 #define _GP_INPUT_DEVICE_H_
 
-#include "drivers/device/gpinput/gpdriver.h"
 #include "drivers/device/gpinput/gp_input_enums.h"
+#include "drivers/device/gpinput/gpdriver.h"
 
 namespace ThetaGP::Drivers::Device {
 
@@ -27,6 +27,6 @@ private:
   InputMode inputMode;
 };
 
-}  // namespace ThetaGP::Drivers::Device
+} // namespace ThetaGP::Drivers::Device
 
 #endif

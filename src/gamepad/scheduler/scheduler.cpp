@@ -28,6 +28,7 @@
  */
 
 #include "gamepad/scheduler/scheduler.h"
+#include "gamepad/gamepad.h"
 
 #include <algorithm>
 #include <climits>
@@ -98,6 +99,8 @@ float Scheduler::getCycleTimeMultiplier() {
 // Scheduler Initialization
 // ============================================================================
 
+void Scheduler::setupSystem() {}
+
 void Scheduler::init() {
   queueClear();
   queueAdd(getTask(TaskId::System));
@@ -156,6 +159,7 @@ void Scheduler::tasksInit() {
 
   init();
 
+  setTaskEnabled(getStaticTask(0), true);
   setTaskEnabled(getStaticTask(1), true);
   setTaskEnabled(getStaticTask(2), true);
 
@@ -171,24 +175,22 @@ void Scheduler::run() {
   static uint32_t scheduleCount = 0;
   uint32_t currentTimeUs = 0;
   uint32_t nowCycles = 0;
-  Task* selectedTask = nullptr;
+  Task *selectedTask = nullptr;
   uint16_t selectedTaskDynamicPriority = 0;
   uint32_t nextTargetCycles = 0;
   int32_t schedLoopRemainingCycles = 0;
 
-  Task* keypadTask = getTask(TaskId::Gamepad);
+  Task *keypadTask = getTask(TaskId::Gamepad);
   nowCycles = timer.getCycleCounter();
 
   nextTargetCycles = lastTargetCycles + desiredPeriodCycles;
   schedLoopRemainingCycles = cmpTimeCycles(nextTargetCycles, nowCycles);
 
-  if (schedLoopRemainingCycles <
-      -static_cast<int32_t>(desiredPeriodCycles)) {
-    nextTargetCycles +=
-        desiredPeriodCycles *
-        (1u + static_cast<uint32_t>(
-                  schedLoopRemainingCycles /
-                  -static_cast<int32_t>(desiredPeriodCycles)));
+  if (schedLoopRemainingCycles < -static_cast<int32_t>(desiredPeriodCycles)) {
+    nextTargetCycles += desiredPeriodCycles *
+                        (1u + static_cast<uint32_t>(
+                                  schedLoopRemainingCycles /
+                                  -static_cast<int32_t>(desiredPeriodCycles)));
     schedLoopRemainingCycles = cmpTimeCycles(nextTargetCycles, nowCycles);
   }
 
@@ -230,11 +232,10 @@ void Scheduler::run() {
   schedLoopRemainingCycles = cmpTimeCycles(nextTargetCycles, nowCycles);
 
   if (schedLoopRemainingCycles >
-      static_cast<int32_t>(
-          timer.microsToCycles(CHECK_GUARD_MARGIN_US))) {
+      static_cast<int32_t>(timer.microsToCycles(CHECK_GUARD_MARGIN_US))) {
     currentTimeUs = timer.getMicros();
 
-    for (Task* task = queueFirst(); task != nullptr; task = queueNext()) {
+    for (Task *task = queueFirst(); task != nullptr; task = queueNext()) {
       if (task->attribute->staticPriority !=
           static_cast<int8_t>(TaskPriority::Realtime)) {
         if (task->attribute->checkFunc) {
@@ -336,4 +337,4 @@ void Scheduler::run() {
   scheduleCount++;
 }
 
-}  // namespace ThetaGP::Gamepad
+} // namespace ThetaGP::Gamepad

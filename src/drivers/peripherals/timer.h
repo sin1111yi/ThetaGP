@@ -44,7 +44,7 @@ enum class Instance : uint8_t {
 };
 
 // Timer callback type with context parameter
-using TimerCallback = std::function<void(void* context)>;
+using TimerCallback = std::function<void(void *context)>;
 
 class HardwareTimer {
 private:
@@ -56,7 +56,7 @@ private:
   };
 
   TimerState _state;
-  void* _context;
+  void *_context;
 
   void enableClock() const;
 
@@ -67,13 +67,13 @@ public:
   HardwareTimer(Instance instance);
 
   void config(Instance instance, uint32_t frequency);
-  
+
   // Set callback with context
-  void setCallback(TimerCallback cb, void* context = nullptr);
-  
+  void setCallback(TimerCallback cb, void *context = nullptr);
+
   // Set context separately
-  void setContext(void* context) { _context = context; }
-  void* getContext() const { return _context; }
+  void setContext(void *context) { _context = context; }
+  void *getContext() const { return _context; }
 
   void init();
   void start();
@@ -83,8 +83,8 @@ public:
   bool isRunning() const { return _state.running; }
   Instance getInstance() const { return _state.instance; }
 
-  TIM_HandleTypeDef* getHandle() { return &_state.htim; }
-  const TIM_HandleTypeDef* getHandle() const { return &_state.htim; }
+  TIM_HandleTypeDef *getHandle() { return &_state.htim; }
+  const TIM_HandleTypeDef *getHandle() const { return &_state.htim; }
 };
 
 Instance getPreferredBasicTimer();
@@ -93,4 +93,4 @@ Instance getFallbackBasicTimer();
 constexpr Instance Timer6 = Instance::Timer6;
 constexpr Instance Timer7 = Instance::Timer7;
 
-}  // namespace ThetaGP::Drivers::Peripheral::TIMER
+} // namespace ThetaGP::Drivers::Peripheral::TIMER

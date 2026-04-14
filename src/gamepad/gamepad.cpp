@@ -11,7 +11,7 @@ Gamepad::Gamepad() : _inputDevice(nullptr), _initialized(false), _ready(false) {
 
 void Gamepad::setup() {
   _state = GamepadState{};
-  _inputDevice = nullptr;
+  registerKeypadDevice(reinterpret_cast<Device &>(Keypad::getInstance()));
   _initialized = true;
   _ready = false;
 }
@@ -90,12 +90,12 @@ void Gamepad::read() {
     return;
   }
 
-  Keypad *keypad = static_cast<Keypad *>(_inputDevice);
+  Keypad &keypad = reinterpret_cast<Keypad &>(_inputDevice);
 
   _state.buttons = 0;
   _state.dpad = 0;
 
-  uint32_t keypadMask = keypad->getPressedMaskValue();
+  uint32_t keypadMask = keypad.getPressedMaskValue();
 
   // Process all 32 physical keys
   for (uint8_t i = 0; i < 32; i++) {

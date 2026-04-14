@@ -342,10 +342,6 @@ uint32_t Scheduler::executeTask(Task *selectedTask, uint32_t currentTimeUs) {
 
 Task *Scheduler::getCurrentTask() { return currentTask; }
 
-void Scheduler::taskMain(uint32_t currentTimeUs) { (void)currentTimeUs; }
-
-void Scheduler::taskGamepadCore(uint32_t currentTimeUs) { (void)currentTimeUs; }
-
 // ============================================================================
 // Scheduler - Dynamic Task Management
 // ============================================================================

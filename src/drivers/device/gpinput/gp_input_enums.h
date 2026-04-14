@@ -4,10 +4,6 @@
 
 namespace ThetaGP::Drivers::Device {
 
-enum class InputMode : uint8_t {
-  Config = 0,
-  HID,
-  Count
-};
+enum class InputMode : uint8_t { Config = 0, HID, Count };
 
-}  // namespace ThetaGP::Drivers::Device
+} // namespace ThetaGP::Drivers::Device
