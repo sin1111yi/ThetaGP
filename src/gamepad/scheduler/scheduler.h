@@ -71,7 +71,7 @@
 
 #define SCHEDULER_DELAY_LIMIT       10
 
-namespace ThetaGP::Gamepad::Scheduler {
+namespace ThetaGP::Gamepad {
 
 enum class TaskPriority : int8_t {
   Realtime = -1,
@@ -289,4 +289,4 @@ public:
   bool isValidTask(Task *task) const;
 };
 
-} // namespace ThetaGP::Gamepad::Scheduler
+} // namespace ThetaGP::Gamepad

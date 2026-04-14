@@ -21,13 +21,13 @@
 
 #include "BoardConfig.h"
 
-#include "drivers/peripherals/systick.h"
+#include "gamepad/scheduler/scheduler.h"
+
+using namespace ThetaGP;
 
 int main(void) {
-  cycleCounterInit();
+  Gamepad::Scheduler::getInstance().init();
+  Gamepad::Scheduler::getInstance().run();
 
-  while (1) {
-  }
-
-  return 0;
+  return 0; // should never reach
 }
