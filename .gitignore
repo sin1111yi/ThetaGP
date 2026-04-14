@@ -16,3 +16,4 @@ docs
 
 lib/mbedtls
 lib/tinyusb
+lib/ArduinoJson
