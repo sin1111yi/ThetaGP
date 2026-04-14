@@ -17,10 +17,9 @@
 
 #pragma once
 
-#include "Legacy/stm32_hal_legacy.h"
 #include "build_info.h"
 
-#include "drivers/peripherals/bus.h"
+#include "drivers/peripherals/bus/bus.h"
 #include "drivers/peripherals/gpio.h"
 #include <cstddef>
 #include <cstdint>
@@ -28,23 +27,22 @@
 
 namespace ThetaGP {
 namespace Drivers {
-namespace Periph {
-namespace Bus {
+namespace Peripheral {
+namespace BUS {
 
-enum class SPIInstance {
-  BusSpi1,
-  BusSpi2,
-  BusSpi3,
-  BusSpi4,
-  BusSpi5,
-  BusSpi6,
+enum class Instance {
+  Spi1,
+  Spi2,
+  Spi3,
+  Spi4,
+  Spi5,
+  Spi6,
 };
 
-enum class SPINcs { BusSpiNcs1, BusSpiNcs2 };
+enum class SpiNcs { BusSpiNcs1, BusSpiNcs2 };
 
-struct SPIDesc {
-  void *handle;
-  SPIInstance spix;
+struct SpiDesc {
+  Instance spix;
 
   GPIO::PinDesc mosi;
   GPIO::PinDesc miso;
@@ -54,12 +52,9 @@ struct SPIDesc {
   GPIO::Gpio ncs2;
 };
 
-class BusSPI : public Bus {
+class SpiBus : public Bus {
 private:
-  SPIDesc _spiDesc;
-  uint8_t *_pTxBuf;
-  uint8_t *_pRxBuf;
-
+  SpiDesc _spiDesc;
   bool _initialized;
 
   void enableClock() const;
@@ -68,34 +63,33 @@ private:
   void enableTxDMA();
   void enableRxDMA();
 
-  retval_t writePolling(uint8_t *bytes, uint16_t num);
-  retval_t writeDMA(uint8_t *bytes, uint16_t num);
+  RetVal writePolling(uint8_t *bytes, uint16_t num);
+  RetVal writeDMA(uint8_t *bytes, uint16_t num);
 
-  retval_t readPolling(uint8_t *bytes, uint16_t num);
-  retval_t readDMA(uint8_t *bytes, uint16_t num);
-
-  void allocBuf();
+  RetVal readPolling(uint8_t *bytes, uint16_t num);
+  RetVal readDMA(uint8_t *bytes, uint16_t num);
 
 public:
-  BusSPI();
-  BusSPI(const SPIDesc &spiDesc);
-  BusSPI(SPIInstance spix, GPIO::PinDesc mosi, GPIO::PinDesc miso,
+  SpiBus();
+  ~SpiBus();
+  SpiBus(const SpiDesc &spiDesc);
+  SpiBus(Instance spix, GPIO::PinDesc mosi, GPIO::PinDesc miso,
          GPIO::PinDesc sck);
 
-  void setNcs(SPINcs ncsx, GPIO::PinDesc pin);
+  void setNcs(SpiNcs ncsx, GPIO::PinDesc pin);
   void config();
 
   void init() override;
-  void enable() override;
+  void enableClock() override;
 
-  retval_t write(uint8_t byte) override;
-  retval_t write(uint8_t *bytes, uint16_t num) override;
+  RetVal write(uint8_t byte) override;
+  RetVal write(uint8_t *bytes, uint16_t num) override;
 
-  retval_t read(uint8_t *byte) override;
-  retval_t read(uint8_t *bytes, uint16_t num) override;
+  RetVal read(uint8_t *byte) override;
+  RetVal read(uint8_t *bytes, uint16_t num) override;
 };
 
-} // namespace Bus
-} // namespace Periph
+} // namespace BUS
+} // namespace Peripheral
 } // namespace Drivers
 } // namespace ThetaGP

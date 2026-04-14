@@ -17,20 +17,17 @@
 
 #include "build_info.h"
 
-#include "drivers/peripherals/bus.h"
+#include "drivers/peripherals/bus/bus.h"
 #include "drivers/peripherals/bus/bus_spi.h"
 #include "drivers/peripherals/gpio.h"
 
 #include <array>
+#include <cstring>
 
-namespace ThetaGP::Drivers::Periph::Bus {
+using namespace ThetaGP::Drivers::Peripheral::BUS;
+using namespace ThetaGP::Drivers::Peripheral::GPIO;
 
-using namespace GPIO;
-
-constexpr uint16_t busSPITxBufSize = 64;
-constexpr uint16_t busSPIRxBufSize = 192;
-
-void enableBusSPIClock(SPIInstance spix) {
+void enableBusSPIClock(Instance spix) {
   using ClockFunc = void (*)();
   static const std::array<ClockFunc, 6> clockEnableTable = {{
 #if defined(STM32H7)
@@ -51,21 +48,23 @@ void enableBusSPIClock(SPIInstance spix) {
 
 static constexpr uint32_t kSpiAlternate = 0x05;
 
-BusSPI::BusSPI() {
+SpiBus::SpiBus() {
   setType(Type::Spi);
 
+  allocBuf();
   _initialized = false;
 }
 
-BusSPI::BusSPI(const SPIDesc &spiDesc) {
+SpiBus::SpiBus(const SpiDesc &spiDesc) {
   setType(Type::Spi);
 
   _spiDesc = spiDesc;
 
+  allocBuf();
   _initialized = false;
 }
 
-BusSPI::BusSPI(SPIInstance spix, PinDesc mosi, PinDesc miso, PinDesc sck) {
+SpiBus::SpiBus(Instance spix, PinDesc mosi, PinDesc miso, PinDesc sck) {
   setType(Type::Spi);
 
   _spiDesc.spix = spix;
@@ -73,11 +72,16 @@ BusSPI::BusSPI(SPIInstance spix, PinDesc mosi, PinDesc miso, PinDesc sck) {
   _spiDesc.miso = miso;
   _spiDesc.sck = sck;
 
+  allocBuf();
+
+  configPins();
   _initialized = false;
 }
 
-void BusSPI::enableClock() const { enableBusSPIClock(_spiDesc.spix); }
-void BusSPI::configPins() {
+SpiBus::~SpiBus() {}
+
+void SpiBus::enableClock() const { enableBusSPIClock(_spiDesc.spix); }
+void SpiBus::configPins() {
 #if defined(STM32H7)
   GPIO_InitTypeDef gpioInit{
       .Pin = 0x0000,
@@ -106,17 +110,13 @@ void BusSPI::configPins() {
 #endif
 }
 
-void BusSPI::setNcs(SPINcs ncsx, PinDesc pin) {
+void SpiBus::setNcs(SpiNcs ncsx, PinDesc pin) {
 
-  Gpio &ncs = (ncsx == SPINcs::BusSpiNcs1 ? _spiDesc.ncs1 : _spiDesc.ncs2);
+  Gpio &ncs = (ncsx == SpiNcs::BusSpiNcs1 ? _spiDesc.ncs1 : _spiDesc.ncs2);
 
   ncs = GPIO::Gpio(pin);
   ncs.config(GPIO::Mode::OutputPushPull, Pull::NoPull, Speed::High);
   ncs.init();
 }
 
-void BusSPI::init() {
-
-}
-
-} // namespace ThetaGP::Drivers::Periph::Bus
+void SpiBus::init() {}
