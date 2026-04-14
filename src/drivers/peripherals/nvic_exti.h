@@ -41,13 +41,9 @@
 #define EXTI_REG_PR  (EXTI->PR)
 #endif
 
-namespace ThetaGP {
-namespace Drivers {
-namespace Periph {
+namespace ThetaGP::Drivers::Peripheral::NVIC_EXTI {
 
-using namespace GPIO;
-
-namespace NVIC_EXTI {
+using namespace Peripheral::GPIO;
 
 enum class NvicPriority : uint8_t {
   PriorityVeryHigh,
@@ -87,7 +83,4 @@ public:
   void toggle() { _gpio.toggle(); }
 };
 
-} // namespace NVIC_EXTI
-} // namespace Periph
-} // namespace Drivers
-} // namespace ThetaGP
+} // namespace ThetaGP::Drivers::Peripheral::NVIC_EXTI

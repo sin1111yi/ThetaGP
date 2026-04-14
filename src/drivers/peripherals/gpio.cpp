@@ -21,7 +21,7 @@
 #include <array>
 #include <memory>
 
-namespace ThetaGP::Drivers::Periph::GPIO {
+namespace ThetaGP::Drivers::Peripheral::GPIO {
 
 void enableGpioClock(Port port) {
   using ClockFunc = void (*)();

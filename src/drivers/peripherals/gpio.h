@@ -20,10 +20,7 @@
 #include "build_info.h"
 #include <cstdint>
 
-namespace ThetaGP {
-namespace Drivers {
-namespace Periph {
-namespace GPIO {
+namespace ThetaGP::Drivers::Peripheral::GPIO {
 
 enum class Port : uint16_t {
   PortA,
@@ -89,7 +86,7 @@ enum class Pull : uint32_t {
   PullDown = GPIO_PULLDOWN
 };
 
-enum class PinState : uint8_t { Reset = GPIO_PIN_RESET, Set = GPIO_PIN_SET };
+enum class PinState : bool { Reset = GPIO_PIN_RESET, Set = GPIO_PIN_SET };
 
 /**
  * @brief Pin descriptor for board configuration macros
@@ -150,7 +147,4 @@ public:
   const Config &getConfig() const { return _config; }
 };
 
-} // namespace GPIO
-} // namespace Periph
-} // namespace Drivers
-} // namespace ThetaGP
+} // namespace ThetaGP::Drivers::Peripheral::GPIO

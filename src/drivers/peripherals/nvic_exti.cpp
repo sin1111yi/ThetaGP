@@ -19,14 +19,14 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "build_info.h"
+
 #include "drivers/peripherals/nvic_exti.h"
-#include "stm32h743xx.h"
 
 #include <array>
 
-namespace ThetaGP::Drivers::Periph::NVIC_EXTI {
-
-using namespace GPIO;
+using namespace ThetaGP::Drivers::Peripheral::NVIC_EXTI;
+using namespace ThetaGP::Drivers::Peripheral::GPIO;
 
 std::array<NvicExti *, 16> extiInstances = {};
 
@@ -145,8 +145,7 @@ void NvicExti::release() {
   extiInstances[chIdx] = nullptr;
 }
 
-} // namespace ThetaGP::Drivers::Periph::NVIC_EXTI
-
+// C code for ISR vector table
 extern "C" {
 
 #if defined(STM32H7)
@@ -161,8 +160,7 @@ static void EXTI_IRQnHandler(uint32_t mask) {
   while (exti_active) {
     uint32_t idx = 31 - __builtin_clz(exti_active);
     uint32_t bit = 1U << idx;
-    auto *extiInstance =
-        ThetaGP::Drivers::Periph::NVIC_EXTI::extiInstances[idx];
+    auto *extiInstance = extiInstances[idx];
     if (extiInstance && extiInstance->_callback) {
       extiInstance->_callback(extiInstance);
     }
@@ -183,5 +181,4 @@ extiIrqHandler(EXTI9_5_IRQHandler, 0x03e0);
 extiIrqHandler(EXTI15_10_IRQHandler, 0xfc00);
 
 #endif
-
-} // namespace ThetaGP::Drivers::Periph::NVIC_EXTI
+}

@@ -24,6 +24,7 @@
 #include "build_info.h"
 
 #include "build/atomic.h"
+#include "utils/time.h"
 
 #define DWT_LAR_UNLOCK_VALUE 0xC5ACCE55
 
@@ -202,3 +203,5 @@ void delay_ms(uint32_t ms) {
   while (ms--)
     delay_us(1000);
 }
+
+uint32_t time_us_32(void) { return (uint64_t)millis(); }

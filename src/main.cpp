@@ -21,35 +21,13 @@
 
 #include "BoardConfig.h"
 
-#include "tusb.h"
-
-#include "drivers/peripherals/gpio.h"
-#include "drivers/peripherals/nvic_exti.h"
 #include "drivers/peripherals/systick.h"
-#include "drivers/peripherals/usb/usb.h"
-
-using namespace ThetaGP::Drivers::Periph::GPIO;
-using namespace ThetaGP::Drivers::Periph::NVIC_EXTI;
-using namespace ThetaGP::Drivers::Periph::USB;
-
-class Led : protected Gpio {
-public:
-  using Gpio::config;
-  using Gpio::init;
-  using Gpio::toggle;
-  Led(const PinDesc &pinDesc) : Gpio(pinDesc) {}
-};
-
-Led led(LED0_PIN);
-USB usb(USBSpeed::UsbHighSpeedExternalPHY, USBPeripheral::UsbULPI);
 
 int main(void) {
-  led.config(Mode::OutputPushPull, Pull::NoPull, Speed::Low);
-  led.init();
-
   cycleCounterInit();
-  NvicExti::preinit();
 
   while (1) {
   }
+
+  return 0;
 }
