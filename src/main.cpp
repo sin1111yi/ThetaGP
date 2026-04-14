@@ -26,7 +26,8 @@
 using namespace ThetaGP;
 
 int main(void) {
-  Gamepad::Scheduler::getInstance().init();
+  Gamepad::Scheduler::getInstance().setupSystem();
+  Gamepad::Scheduler::getInstance().tasksInit();
   Gamepad::Scheduler::getInstance().run();
 
   return 0; // should never reach
