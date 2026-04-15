@@ -93,8 +93,7 @@ void Keypad::scanCallback() {
   __disable_irq();
   _readBuffer = nextWrite;
   _writeBuffer = 1 - _readBuffer;
-  if (!primask)
-    __enable_irq();
+  __set_PRIMASK(primask);
 }
 
 void Keypad::readInputScanMatrix(uint32_t *mask) {
@@ -168,4 +167,4 @@ bool Keypad::isKeyPressed(uint8_t keyId) const {
   return (_outputBuffer[_readBuffer].pressedMask & (1U << keyId)) != 0;
 }
 
-}  // namespace ThetaGP::Drivers::Device
+} // namespace ThetaGP::Drivers::Device
