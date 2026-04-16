@@ -1,14 +1,14 @@
 #pragma once
 
-#include "drivers/device/gpinput/gpdriver.h"
-#include "drivers/device/gpinput/hid/HIDDescriptors.h"
+#include "drivers/gpdriver/gpdriver.h"
+#include "drivers/gpdriver/hid/HIDDescriptors.h"
 
 #include "class/hid/hid.h"
 #include "device/usbd_pvt.h"
 
 namespace ThetaGP::Drivers::Device {
 
-class HIDDriver : public GPInputUSBDevice {
+class HIDDriver : public GPDriver {
 public:
   HIDDriver();
 

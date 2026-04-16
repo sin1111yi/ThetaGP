@@ -2,7 +2,7 @@
 
 namespace ThetaGP::Drivers::Device {
 
-void GeneralDevice::registerDevice(Device *device) {
+void DeviceManager::registerDevice(Device *device) {
   if (!device || _count >= MAX_DEVICES) {
     return;
   }
@@ -33,7 +33,7 @@ void GeneralDevice::registerDevice(Device *device) {
   _devices[_count++] = device;
 }
 
-void GeneralDevice::initAll() {
+void DeviceManager::initAll() {
   for (size_t i = 0; i < _count; i++) {
     if (_devices[i] && !_devices[i]->isInitialized()) {
       _devices[i]->init();
@@ -41,7 +41,7 @@ void GeneralDevice::initAll() {
   }
 }
 
-void GeneralDevice::initByType(DeviceType type) {
+void DeviceManager::initByType(DeviceType type) {
   for (size_t i = 0; i < _count; i++) {
     if (_devices[i] && _devices[i]->getType() == type) {
       if (!_devices[i]->isInitialized()) {
@@ -51,7 +51,7 @@ void GeneralDevice::initByType(DeviceType type) {
   }
 }
 
-Device *GeneralDevice::findDevice(DeviceType type, uint8_t instanceId) const {
+Device *DeviceManager::findDevice(DeviceType type, uint8_t instanceId) const {
   for (size_t i = 0; i < _count; i++) {
     if (_devices[i] && _devices[i]->getType() == type &&
         _devices[i]->getInstanceId() == instanceId) {
@@ -61,7 +61,7 @@ Device *GeneralDevice::findDevice(DeviceType type, uint8_t instanceId) const {
   return nullptr;
 }
 
-Device *GeneralDevice::getDevice(size_t index) const {
+Device *DeviceManager::getDevice(size_t index) const {
   return (index < _count) ? _devices[index] : nullptr;
 }
 

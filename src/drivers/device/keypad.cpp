@@ -42,6 +42,7 @@ void Keypad::init() {
     }
   }
 
+  _scanTimer.start();
   _initialized = true;
 }
 

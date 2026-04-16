@@ -1,9 +1,9 @@
-#include "drivers/device/gpinput/gp_input_device.h"
-#include "drivers/device/gpinput/hid/HIDDriver.h"
+#include "drivers/gpdriver/gpdrivermanager.h"
+#include "drivers/gpdriver/hid/HIDDriver.h"
 
 namespace ThetaGP::Drivers::Device {
 
-void GPInputDevice::setup(InputMode mode) {
+void GPDriverManager::setup(InputMode mode) {
   switch (mode) {
   case InputMode::Config:
     usbdevice = new HIDDriver();

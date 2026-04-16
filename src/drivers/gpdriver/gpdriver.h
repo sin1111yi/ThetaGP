@@ -8,13 +8,13 @@
 #include "tusb.h"
 #include "tusb_config.h"
 
-#include "drivers/device/gpinput/usblistener.h"
+#include "drivers/gpdriver/usblistener.h"
 
 namespace ThetaGP::Drivers::Device {
 
 using Gamepad = Gamepad::Gamepad;
 
-class GPInputUSBDevice {
+class GPDriver {
 public:
   virtual void initialize() = 0;
   virtual void initializeAux() = 0;

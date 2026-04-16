@@ -35,7 +35,7 @@ uint32_t SystemTimer::getMicros() const { return micros(); }
 
 uint32_t SystemTimer::getMillis() const { return millis(); }
 
-uint32_t SystemTimer::getCycleCounter() const { return getCycleCounter(); }
+uint32_t SystemTimer::getCycleCounter() const { return clockCycleCounter(); }
 
 uint32_t SystemTimer::microsToCycles(uint32_t micros) const {
   return clockMicrosToCycles(micros);

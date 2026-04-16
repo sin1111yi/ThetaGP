@@ -7,17 +7,17 @@
 
 namespace ThetaGP::Drivers::Device {
 
-class GeneralDevice {
+class DeviceManager {
 private:
   static constexpr size_t MAX_DEVICES = 16;
   std::array<Device *, MAX_DEVICES> _devices{};
   size_t _count = 0;
 
 public:
-  GeneralDevice() = default;
+  DeviceManager() = default;
 
-  GeneralDevice &getInstance() {
-    static GeneralDevice instance;
+  DeviceManager &getInstance() {
+    static DeviceManager instance;
     return instance;
   }
 

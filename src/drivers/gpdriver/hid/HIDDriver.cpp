@@ -1,6 +1,6 @@
-#include "drivers/device/gpinput/hid/HIDDriver.h"
-#include "drivers/device/gpinput/hid/HIDDescriptors.h"
-#include "drivers/device/gpinput/shared/driverhelper.h"
+#include "drivers/gpdriver/hid/HIDDriver.h"
+#include "drivers/gpdriver/hid/HIDDescriptors.h"
+#include "drivers/gpdriver/shared/driverhelper.h"
 
 #include "gamepad/gamepad.h"
 
