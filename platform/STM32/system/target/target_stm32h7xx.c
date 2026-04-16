@@ -7,11 +7,13 @@ extern "C" {
 #endif
 
 void SystemInitialize(void) {
-  SCB_EnableDCache();
-  SCB_EnableICache();
+  // SCB_EnableICache();
+  // SCB_EnableDCache();
 
+  // Initialize HAL
   HAL_Init();
 
+  // Configure system clock
   SystemClock_Config();
 }
 
@@ -61,13 +63,6 @@ void SystemClock_Config(void) {
   RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV2;
 
   HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4);
-
-  __HAL_RCC_SYSCFG_CLK_ENABLE();
-  __HAL_RCC_D2SRAM1_CLK_ENABLE();
-  __HAL_RCC_D2SRAM2_CLK_ENABLE();
-  __HAL_RCC_D2SRAM3_CLK_ENABLE();
-
-  __HAL_RCC_GPIOA_CLK_ENABLE(); // enable SWD interface
 }
 
 #ifdef __cplusplus
