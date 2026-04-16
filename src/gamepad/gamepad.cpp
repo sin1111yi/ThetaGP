@@ -11,7 +11,7 @@ Gamepad::Gamepad() : _inputDevice(nullptr), _initialized(false), _ready(false) {
 
 void Gamepad::setup() {
   _state = GamepadState{};
-  registerKeypadDevice(reinterpret_cast<Device &>(Keypad::getInstance()));
+  _inputDevice = nullptr;
   _initialized = true;
   _ready = false;
 }

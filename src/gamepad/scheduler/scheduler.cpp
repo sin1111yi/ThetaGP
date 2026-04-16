@@ -35,6 +35,18 @@
 #include <cstdint>
 #include <cstring>
 
+/**
+ * @brief debug usb
+ * {
+ */
+
+#include "drivers/peripherals/peripheralsmgr.h"
+
+/**
+ * }
+ *
+ */
+
 using namespace ThetaGP::Drivers::Device;
 
 namespace ThetaGP::Gamepad {
@@ -99,7 +111,9 @@ float Scheduler::getCycleTimeMultiplier() {
 // Scheduler Initialization
 // ============================================================================
 
-void Scheduler::setupSystem() {}
+void Scheduler::setupSystem() {
+  Drivers::Peripheral::PeripheralsManager::getInstance().init();
+}
 
 void Scheduler::init() {
   queueClear();
@@ -149,7 +163,9 @@ void Scheduler::tasksInit() {
        TASK_PERIOD_HZ(1000), static_cast<int8_t>(TaskPriority::Realtime)},
   };
 
-  for (size_t i = 0; i < 3 && i < MAX_STATIC_TASKS; i++) {
+  for (size_t i = 0; i < (sizeof(staticAttributes) / sizeof(TaskAttribute)) &&
+                     i < MAX_STATIC_TASKS;
+       i++) {
     staticTasks[i].attribute = &staticAttributes[i];
     allSlots[i].task = &staticTasks[i];
     allSlots[i].enabled = true;

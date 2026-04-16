@@ -21,18 +21,34 @@
 
 #include "BoardConfig.h"
 
+#include "gamepad/gamepad.h"
 #include "gamepad/scheduler/scheduler.h"
+
+#include "drivers/device/keypad.h"
+
+#include "tusb.h"
 
 using namespace ThetaGP;
 
 int main(void) {
   Gamepad::Scheduler &scheduler = Gamepad::Scheduler::getInstance();
   scheduler.setupSystem();
-  scheduler.tasksInit();
 
-  while (1) {
-    scheduler.run();
+  auto &keypad = Drivers::Device::Keypad::getInstance();
+  keypad.init();
+  while (!keypad.isInitialized()) {
   }
 
-  return 0; // should never reach
+  // tusb_init(1);
+
+  // auto &gamepad = Gamepad::Gamepad::getInstance();
+  // gamepad.setup();
+  // gamepad.registerKeypadDevice(keypad);
+  // gamepad.setDefaultMappings();
+
+  // scheduler.tasksInit();
+
+  while (1) {
+    ;
+  }
 }
