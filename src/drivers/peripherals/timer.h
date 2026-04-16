@@ -48,12 +48,24 @@ enum class Instance : uint8_t {
   TimerNone = 0xFF
 };
 
+enum class TriggerEvent {
+  Reset = TIM_TRGO_RESET,
+  Enable = TIM_TRGO_ENABLE, // CNT_EN
+  Update = TIM_TRGO_UPDATE,
+  OC1 = TIM_TRGO_OC1,
+  OC1Ref = TIM_TRGO_OC1REF,
+  OC2Ref = TIM_TRGO_OC2REF,
+  OC3Ref = TIM_TRGO_OC3REF,
+  OC4Ref = TIM_TRGO_OC4REF,
+};
+
 class HardwareTimer {
 private:
   struct TimerState {
     Instance instance;
     TIM_HandleTypeDef htim;
     TimerPriority priority = TimerPriority::PriorityMedium;
+    TriggerEvent triggerEvent = TriggerEvent::Reset;
     bool initialized;
     bool running;
     uint32_t targetFrequency = 0;
@@ -75,6 +87,8 @@ public:
   void config(Instance instance, uint32_t frequency);
   void config(Instance instance, uint32_t frequency,
               NVIC_EXTI::NvicPriority prio);
+  void config(Instance instance, uint32_t frequency,
+              NVIC_EXTI::NvicPriority prio, TriggerEvent triggerEvent);
 
   // Set callback with context
   void setCallback(TimerCallback cb, void *context = nullptr);
@@ -88,7 +102,7 @@ public:
   void start();
   void stop();
 
-  void* getContext() const { return _context; }
+  void *getContext() const { return _context; }
 
   bool isInitialized() const { return _state.initialized; }
   bool isRunning() const { return _state.running; }
