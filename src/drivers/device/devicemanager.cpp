@@ -1,4 +1,4 @@
-#include "drivers/device/general_device.h"
+#include "drivers/device/devicemanager.h"
 
 namespace ThetaGP::Drivers::Device {
 
