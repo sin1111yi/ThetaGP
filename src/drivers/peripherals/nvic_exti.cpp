@@ -25,6 +25,16 @@
 
 #include <array>
 
+#define EXTI_IRQ_GROUPS 7
+
+#if defined(STM32H7)
+#define EXTI_REG_IMR (EXTI_D1->IMR1)
+#define EXTI_REG_PR  (EXTI_D1->PR1)
+#else
+#define EXTI_REG_IMR (EXTI->IMR)
+#define EXTI_REG_PR  (EXTI->PR)
+#endif
+
 using namespace ThetaGP::Drivers::Peripheral::NVIC_EXTI;
 using namespace ThetaGP::Drivers::Peripheral::GPIO;
 
@@ -100,7 +110,10 @@ void NvicExti::init() {
   _initialized = true;
 }
 
-void NvicExti::setCallback(ExtiCallback cb) { _callback = std::move(cb); }
+void NvicExti::setCallback(ExtiCallback cb, void *context) {
+  _callback = std::move(cb);
+  _context = context;
+}
 
 void NvicExti::disable() {
 #if defined(STM32H7)
@@ -160,9 +173,9 @@ static void EXTI_IRQnHandler(uint32_t mask) {
   while (exti_active) {
     uint32_t idx = 31 - __builtin_clz(exti_active);
     uint32_t bit = 1U << idx;
-    auto *extiInstance = extiInstances[idx];
-    if (extiInstance && extiInstance->_callback) {
-      extiInstance->_callback(extiInstance);
+    auto *instance = extiInstances[idx];
+    if (instance) {
+      instance->callback();
     }
     exti_active &= ~bit;
   }

@@ -31,16 +31,6 @@
 #define NVIC_PROIRITY_BASE_WIDTH (2)
 #define NVIC_PROIRITY_SUB_WIDTH  (4 - NVIC_PROIRITY_BASE_WIDTH)
 
-#define EXTI_IRQ_GROUPS          7
-
-#if defined(STM32H7)
-#define EXTI_REG_IMR (EXTI_D1->IMR1)
-#define EXTI_REG_PR  (EXTI_D1->PR1)
-#else
-#define EXTI_REG_IMR (EXTI->IMR)
-#define EXTI_REG_PR  (EXTI->PR)
-#endif
-
 namespace ThetaGP::Drivers::Peripheral::NVIC_EXTI {
 
 using namespace Peripheral::GPIO;
@@ -60,20 +50,29 @@ private:
   NvicPriority _priority;
   bool _initialized;
 
-public:
+  void *_context;
+
   using ExtiCallback = std::function<void(NvicExti *self)>;
   ExtiCallback _callback;
 
+public:
   NvicExti();
   explicit NvicExti(PinDesc pinDesc, Mode triggerSrc, NvicPriority priority);
   explicit NvicExti(Port port, Pin pin, Mode triggerSrc, NvicPriority priority);
 
   static void preinit();
   void init();
-  void setCallback(ExtiCallback cb);
+  void setCallback(ExtiCallback cb, void *context = nullptr);
+  void callback() {
+    if (_callback) {
+      _callback(this);
+    }
+  }
   void release();
   void enable();
   void disable();
+
+  void* getContext() const { return _context; }
 
   bool isInitialized() const { return _initialized; }
   PinState read() const { return _gpio.read(); }
