@@ -58,7 +58,7 @@ extern "C" {
 
 // RHPort number used for device can be defined by board.mk, default to port 0
 #ifndef BOARD_DEVICE_RHPORT_NUM
-#define BOARD_DEVICE_RHPORT_NUM 0
+#define BOARD_DEVICE_RHPORT_NUM 1
 #endif
 
 // RHPort max operational speed can defined by board.mk
@@ -72,14 +72,14 @@ extern "C" {
 #endif
 #endif
 
-// Device mode with rhport and speed defined by board.mk
-#if BOARD_DEVICE_RHPORT_NUM == 0
-#define CFG_TUSB_RHPORT0_MODE (OPT_MODE_DEVICE | BOARD_DEVICE_RHPORT_SPEED)
-#elif BOARD_DEVICE_RHPORT_NUM == 1
+// // Device mode with rhport and speed defined by board.mk
+// #if BOARD_DEVICE_RHPORT_NUM == 0
+// #define CFG_TUSB_RHPORT0_MODE (OPT_MODE_DEVICE | BOARD_DEVICE_RHPORT_SPEED)
+// #elif BOARD_DEVICE_RHPORT_NUM == 1
 #define CFG_TUSB_RHPORT1_MODE (OPT_MODE_DEVICE | BOARD_DEVICE_RHPORT_SPEED)
-#else
-#error "Incorrect RHPort configuration"
-#endif
+// #else
+// #error "Incorrect RHPort configuration"
+// #endif
 
 #ifndef CFG_TUSB_OS
 #define CFG_TUSB_OS OPT_OS_NONE

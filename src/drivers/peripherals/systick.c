@@ -134,7 +134,7 @@ uint32_t micros(void) {
   return (ms * 1000) + (usTicks * 1000 - cycle_cnt) / usTicks;
 }
 
-uint32_t getCycleCounter(void) { return DWT->CYCCNT; }
+uint32_t clockCycleCounter(void) { return DWT->CYCCNT; }
 #else
 // TODO: Implement for other MCUs
 #endif
