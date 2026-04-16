@@ -33,8 +33,8 @@ M.BoardConfig = {
             drive_mode = "scan_matrix",
             active_mode = "none",
             drive_pins = {
-                { pin = "PA0" },
-                { pin = "PA1" },
+                { pin = "PD8" },
+                { pin = "PD9" },
             },
             sense_pins = {
                 { pin = "PB0" },
