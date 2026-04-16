@@ -157,6 +157,13 @@ void HardwareTimer::config(Instance instance, uint32_t frequency,
   _state.priority = prio;
 }
 
+void HardwareTimer::config(Instance instance, uint32_t frequency,
+                           NVIC_EXTI::NvicPriority prio,
+                           TriggerEvent triggerEvent) {
+  config(instance, frequency, prio);
+  _state.triggerEvent = triggerEvent;
+}
+
 /**
  * @brief Get timer clock frequency based on timer instance
  */
@@ -242,14 +249,25 @@ void HardwareTimer::init() {
   }
 
 #if defined(STM32H7)
-  calculatePrescalerAndPeriod(_state.targetFrequency);
+  if (_state.targetFrequency != 0) {
+    calculatePrescalerAndPeriod(_state.targetFrequency);
+  } else {
+    return;
+  }
+
+  TIM_MasterConfigTypeDef sMasterConfig(0);
 
   const auto timerIdx = static_cast<size_t>(_state.instance);
+
   if (timerIdx >= timerInstance.size() || !timerInstance[timerIdx]) {
     return;
   }
 
   _state.htim.Instance = timerInstance[timerIdx];
+
+  if (_state.htim.Instance == nullptr) {
+    return;
+  }
 
   enableClock();
   HAL_NVIC_SetPriority(
@@ -261,6 +279,11 @@ void HardwareTimer::init() {
   if (HAL_TIM_Base_Init(&_state.htim) != HAL_OK) {
     return;
   }
+
+  sMasterConfig.MasterOutputTrigger =
+      static_cast<uint32_t>(_state.triggerEvent);
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  HAL_TIMEx_MasterConfigSynchronization(&_state.htim, &sMasterConfig);
 
   if (timerIdx < hwTimerInstance.size()) {
     hwTimerInstance[timerIdx] = this;
