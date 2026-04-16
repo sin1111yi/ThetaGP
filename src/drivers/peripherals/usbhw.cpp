@@ -34,18 +34,18 @@ using namespace ThetaGP::Drivers::Peripheral::GPIO;
 #if defined(STM32H7)
 // ULPI pin descriptors, index corresponds to ULPI enum value
 static constexpr std::array<PinDesc, 12> kUlpiPinDescs = {{
-    {Port::PortA, Pin::Pin5},  // CLK
-    {Port::PortC, Pin::Pin0},  // STP
-    {Port::PortC, Pin::Pin2},  // DIR
-    {Port::PortC, Pin::Pin3},  // NXT
-    {Port::PortA, Pin::Pin3},  // D0
-    {Port::PortB, Pin::Pin0},  // D1
-    {Port::PortB, Pin::Pin1},  // D2
-    {Port::PortB, Pin::Pin10}, // D3
-    {Port::PortB, Pin::Pin11}, // D4
-    {Port::PortB, Pin::Pin12}, // D5
-    {Port::PortB, Pin::Pin13}, // D6
-    {Port::PortB, Pin::Pin5},  // D7
+    {Port::PortA, Pin::Pin5},  // CLK, PA5
+    {Port::PortC, Pin::Pin0},  // STP, PC0
+    {Port::PortC, Pin::Pin2},  // DIR, PC2_C
+    {Port::PortC, Pin::Pin3},  // NXT, PC3_C
+    {Port::PortA, Pin::Pin3},  // D0, PA3
+    {Port::PortB, Pin::Pin0},  // D1, PB0
+    {Port::PortB, Pin::Pin1},  // D2, PB1
+    {Port::PortB, Pin::Pin10}, // D3, PB10
+    {Port::PortB, Pin::Pin11}, // D4, PB11
+    {Port::PortB, Pin::Pin12}, // D5, PB12
+    {Port::PortB, Pin::Pin13}, // D6, PB13
+    {Port::PortB, Pin::Pin5},  // D7, PB5
 }};
 
 static constexpr uint32_t kUlpiAlternate = GPIO_AF10_OTG2_HS; // 0x0A
@@ -65,7 +65,7 @@ void OTG_HS_IRQHandler(void) { tusb_int_handler(1, true); }
 
 #endif
 
-void Usb::enableClock() const {
+void HardwareUSB::enableClock() const {
 #if defined(STM32H7)
   RCC_PeriphCLKInitTypeDef periphClkInitStruct;
   periphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USB;
@@ -82,11 +82,10 @@ void Usb::enableClock() const {
 #endif
 }
 
-ThetaGP::RetVal Usb::initPCD() {
+ThetaGP::RetVal HardwareUSB::initPCD() {
 #if defined(STM32H7)
   if (_speed == USBSpeed::UsbHighSpeedExternalPHY &&
-      _peripheral == USBPeripheral::UsbULPI) {
-
+      _peripheral == USBPeripheral::ULPI) {
     pcdHandler.Instance = USB_OTG_HS;
     pcdHandler.Init.dev_endpoints = 9;
     pcdHandler.Init.speed = PCD_SPEED_HIGH;
@@ -101,16 +100,20 @@ ThetaGP::RetVal Usb::initPCD() {
     if (HAL_PCD_Init(&pcdHandler) != HAL_OK) {
       return RetVal::Error;
     }
+
+    HAL_PCDEx_SetRxFiFo(&pcdHandler, 0x200);
+    HAL_PCDEx_SetTxFiFo(&pcdHandler, 0, 0x80);
+    HAL_PCDEx_SetTxFiFo(&pcdHandler, 1, 0x174);
 #endif
   }
 
   return RetVal::Ok;
 }
 
-Usb::Usb(USBSpeed speed, USBPeripheral peripheral)
+HardwareUSB::HardwareUSB(USBSpeed speed, USBPeripheral peripheral)
     : _initialized(false), _speed(speed), _peripheral(peripheral) {}
 
-void Usb::initULPIPins() {
+void HardwareUSB::initULPIPins() {
 #if defined(STM32H7)
   HAL_PWREx_EnableUSBVoltageDetector();
   for (const auto &pinDesc : kUlpiPinDescs) {
@@ -122,10 +125,13 @@ void Usb::initULPIPins() {
 
   __HAL_RCC_USB1_OTG_HS_CLK_ENABLE();
   __HAL_RCC_USB1_OTG_HS_ULPI_CLK_ENABLE();
+
+  HAL_NVIC_SetPriority(OTG_HS_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(OTG_HS_IRQn);
 #endif
 }
 
-void Usb::initHighSpeedPins() {
+void HardwareUSB::initHighSpeedPins() {
 #if defined(STM32H7)
   Gpio dp(Port::PortA, Pin::Pin12);
   Gpio dm(Port::PortA, Pin::Pin11);
@@ -142,7 +148,7 @@ void Usb::initHighSpeedPins() {
 #endif
 }
 
-void Usb::initFullSpeedPins() {
+void HardwareUSB::initFullSpeedPins() {
 #if defined(STM32H7) & 0
   Gpio dp(Port::PortA, Pin::Pin12);
   Gpio dm(Port::PortA, Pin::Pin11);
@@ -159,22 +165,23 @@ void Usb::initFullSpeedPins() {
 #endif
 }
 
-ThetaGP::RetVal Usb::init() {
-  if (initPCD() != RetVal::Ok) {
-    return RetVal::Error;
-  }
+ThetaGP::RetVal HardwareUSB::init() {
 
   enableClock();
 
   if (_speed == USBSpeed::UsbHighSpeedExternalPHY &&
-      _peripheral == USBPeripheral::UsbULPI) {
+      _peripheral == USBPeripheral::ULPI) {
     initULPIPins();
   } else if (_speed == USBSpeed::UsbFullSpeed &&
-             _peripheral == USBPeripheral::USBDifferenceLine) {
+             _peripheral == USBPeripheral::DifferenceLine) {
     initFullSpeedPins();
   } else if (_speed == USBSpeed::UsbHighSpeedInternalPHY ||
-             _peripheral == USBPeripheral::USBDifferenceLine) {
+             _peripheral == USBPeripheral::DifferenceLine) {
     initHighSpeedPins();
+  }
+
+  if (initPCD() != RetVal::Ok) {
+    return RetVal::Error;
   }
 
   return RetVal::Ok;

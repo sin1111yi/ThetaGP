@@ -42,8 +42,8 @@ enum class USBSpeed : uint8_t {
 };
 
 enum class USBPeripheral : uint8_t {
-  USBDifferenceLine,
-  UsbULPI,
+  DifferenceLine,
+  ULPI,
 };
 
 enum class ULPI : uint8_t {
@@ -61,7 +61,7 @@ enum class ULPI : uint8_t {
   D7,  // ULPI data bit 7
 };
 
-class Usb {
+class HardwareUSB {
 private:
   bool _initialized;
   USBSpeed _speed;
@@ -74,7 +74,7 @@ private:
   void initFullSpeedPins();
 
 public:
-  Usb(USBSpeed speed, USBPeripheral peripheral);
+  HardwareUSB(USBSpeed speed, USBPeripheral peripheral);
 
   RetVal init();
   bool isInitialized() const { return _initialized; }
