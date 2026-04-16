@@ -18,10 +18,15 @@
 #pragma once
 
 #include "build_info.h"
+#include "drivers/peripherals/nvic.h"
+#include "drivers/peripherals/nvic_exti.h"
+
 #include <cstdint>
 #include <functional>
 
 namespace ThetaGP::Drivers::Peripheral::TIMER {
+
+using TimerPriority = NVIC_EXTI::NvicPriority;
 
 enum class Instance : uint8_t {
 #if defined(STM32H7)
@@ -43,41 +48,47 @@ enum class Instance : uint8_t {
   TimerNone = 0xFF
 };
 
-// Timer callback type with context parameter
-using TimerCallback = std::function<void(void *context)>;
-
 class HardwareTimer {
 private:
   struct TimerState {
     Instance instance;
     TIM_HandleTypeDef htim;
+    TimerPriority priority = TimerPriority::PriorityMedium;
     bool initialized;
     bool running;
-  };
+    uint32_t targetFrequency = 0;
+  } _state;
 
-  TimerState _state;
   void *_context;
 
+  using TimerCallback = std::function<void(HardwareTimer *self)>;
+  TimerCallback _callback;
+
   void enableClock() const;
+  uint32_t getTimerClock() const;
+  void calculatePrescalerAndPeriod(uint32_t frequency);
 
 public:
-  TimerCallback callback;
-
   HardwareTimer();
   HardwareTimer(Instance instance);
 
   void config(Instance instance, uint32_t frequency);
+  void config(Instance instance, uint32_t frequency,
+              NVIC_EXTI::NvicPriority prio);
 
   // Set callback with context
   void setCallback(TimerCallback cb, void *context = nullptr);
-
-  // Set context separately
-  void setContext(void *context) { _context = context; }
-  void *getContext() const { return _context; }
+  void callback() {
+    if (_callback) {
+      _callback(this);
+    }
+  }
 
   void init();
   void start();
   void stop();
+
+  void* getContext() const { return _context; }
 
   bool isInitialized() const { return _state.initialized; }
   bool isRunning() const { return _state.running; }
