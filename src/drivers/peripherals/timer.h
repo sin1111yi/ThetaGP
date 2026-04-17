@@ -61,7 +61,7 @@ private:
 
   void *_context;
 
-  using TimerCallback = std::function<void(HardwareTimer *self)>;
+  using TimerCallback = std::function<void(void *context)>;
   TimerCallback _callback;
 
   void enableClock() const;
@@ -80,7 +80,7 @@ public:
   void setCallback(TimerCallback cb, void *context = nullptr);
   void callback() {
     if (_callback) {
-      _callback(this);
+      _callback(_context);
     }
   }
 

@@ -26,8 +26,8 @@ void Keypad::init() {
                            Peripheral::TIMER::Instance instance) {
     timer.config(instance, KeypadConfig::DEFAULT_SCAN_FREQ);
     timer.setCallback(
-        [](void *ctx) {
-          auto *keypad = static_cast<Keypad *>(ctx);
+        [](void *self) {
+          auto *keypad = static_cast<Keypad *>(self);
           if (keypad)
             keypad->scanCallback();
         },
