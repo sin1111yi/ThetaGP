@@ -315,7 +315,7 @@ static void TIMx_IRQHandler(uint32_t timMask) {
   uint32_t tim_active = (TIM_REG_DIER & TIM_REG_SR) & TIM_EVENT_MASK;
 
   auto *instance = hwTimerInstance[timerIdx];
-  TIM_REG_SR = tim_active; // Clear the interrupt flags
+  TIM_REG_SR = ~tim_active; // Clear the interrupt flags
 
   if (instance) {
     instance->callback();
