@@ -7,8 +7,8 @@ extern "C" {
 #endif
 
 void SystemInitialize(void) {
-  // SCB_EnableICache();
-  // SCB_EnableDCache();
+  SCB_EnableICache();
+  SCB_EnableDCache();
 
   // Initialize HAL
   HAL_Init();
