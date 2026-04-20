@@ -115,7 +115,4 @@ public:
 Instance getPreferredBasicTimer();
 Instance getFallbackBasicTimer();
 
-constexpr Instance Timer6 = Instance::Timer6;
-constexpr Instance Timer7 = Instance::Timer7;
-
 } // namespace ThetaGP::Drivers::Peripheral::TIMER
