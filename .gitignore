@@ -17,3 +17,6 @@ docs
 lib/mbedtls
 lib/tinyusb
 lib/ArduinoJson
+
+/agent/
+*.jsonl

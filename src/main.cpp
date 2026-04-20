@@ -24,7 +24,9 @@
 #include "gamepad/gamepad.h"
 #include "gamepad/scheduler/scheduler.h"
 
+#include "drivers/device/device.h"
 #include "drivers/device/keypad.h"
+#include "drivers/gpdriver/gpdrivermanager.h"
 
 #include "tusb.h"
 
@@ -36,19 +38,21 @@ int main(void) {
 
   auto &keypad = Drivers::Device::Keypad::getInstance();
   keypad.init();
-  while (!keypad.isInitialized()) {
+
+  Drivers::Device::GPDriverManager::getInstance().setup(
+      ThetaGP::Drivers::Device::InputMode::HID);
+  Drivers::Device::GPDriverManager::getInstance()
+      .getgpdriverDevice()
+      ->initialize();
+
+  auto &gamepad = Gamepad::Gamepad::getInstance();
+  gamepad.setup();
+  gamepad.registerKeypadDevice(
+      reinterpret_cast<Drivers::Device::Device &>(keypad));
+  gamepad.setDefaultMappings();
+
+  tusb_init();
+
+  while (1) {
   }
-
-  // tusb_init(1);
-
-  // auto &gamepad = Gamepad::Gamepad::getInstance();
-  // gamepad.setup();
-  // gamepad.registerKeypadDevice(keypad);
-  // gamepad.setDefaultMappings();
-
-  // scheduler.tasksInit();
-
-  // while (1) {
-  //   scheduler.run();
-  // }
 }

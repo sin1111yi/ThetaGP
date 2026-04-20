@@ -21,6 +21,8 @@
 
 #include "utils/types.h"
 
+#include "drivers/peripherals/nvic.h"
+#include "drivers/peripherals/nvic_exti.h"
 #include "drivers/peripherals/systick.h"
 #include "drivers/peripherals/usbhw.h"
 
@@ -33,7 +35,7 @@ using namespace ThetaGP::Drivers::Peripheral::GPIO;
 
 #if defined(STM32H7)
 // ULPI pin descriptors, index corresponds to ULPI enum value
-static constexpr std::array<PinDesc, 12> kUlpiPinDescs = {{
+static constexpr std::array<PinDesc, 12> ULPIPinDescs = {{
     {Port::PortA, Pin::Pin5},  // CLK, PA5
     {Port::PortC, Pin::Pin0},  // STP, PC0
     {Port::PortC, Pin::Pin2},  // DIR, PC2_C
@@ -48,9 +50,7 @@ static constexpr std::array<PinDesc, 12> kUlpiPinDescs = {{
     {Port::PortB, Pin::Pin5},  // D7, PB5
 }};
 
-static constexpr uint32_t kUlpiAlternate = GPIO_AF10_OTG2_HS; // 0x0A
-
-static PCD_HandleTypeDef pcdHandler;
+static constexpr uint32_t GpioAlternateULPI = GPIO_AF10_OTG2_HS; // 0x0A
 
 extern "C" {
 
@@ -60,7 +60,7 @@ void OTG_FS_IRQHandler(void) { tusb_int_handler(0, true); }
 
 // Despite being call USB1_OTG_HS on some MCUs
 // OTG_HS is marked as RHPort1 by TinyUSB to be consistent across stm32 port
-void OTG_HS_IRQHandler(void) { tusb_int_handler(1, true); }
+void OTG_HS_IRQHandler(void) { tusb_int_handler(0, true); }
 }
 
 #endif
@@ -82,33 +82,7 @@ void HardwareUSB::enableClock() const {
 #endif
 }
 
-ThetaGP::RetVal HardwareUSB::initPCD() {
-#if defined(STM32H7)
-  if (_speed == USBSpeed::UsbHighSpeedExternalPHY &&
-      _peripheral == USBPeripheral::ULPI) {
-    pcdHandler.Instance = USB_OTG_HS;
-    pcdHandler.Init.dev_endpoints = 9;
-    pcdHandler.Init.speed = PCD_SPEED_HIGH;
-    pcdHandler.Init.dma_enable = DISABLE;
-    pcdHandler.Init.phy_itface = USB_OTG_ULPI_PHY;
-    pcdHandler.Init.Sof_enable = DISABLE;
-    pcdHandler.Init.low_power_enable = DISABLE;
-    pcdHandler.Init.lpm_enable = DISABLE;
-    pcdHandler.Init.vbus_sensing_enable = DISABLE;
-    pcdHandler.Init.use_dedicated_ep1 = DISABLE;
-    pcdHandler.Init.use_external_vbus = DISABLE;
-    if (HAL_PCD_Init(&pcdHandler) != HAL_OK) {
-      return RetVal::Error;
-    }
-
-    HAL_PCDEx_SetRxFiFo(&pcdHandler, 0x200);
-    HAL_PCDEx_SetTxFiFo(&pcdHandler, 0, 0x80);
-    HAL_PCDEx_SetTxFiFo(&pcdHandler, 1, 0x174);
-#endif
-  }
-
-  return RetVal::Ok;
-}
+ThetaGP::RetVal HardwareUSB::initPCD() { return RetVal::Ok; }
 
 HardwareUSB::HardwareUSB(USBSpeed speed, USBPeripheral peripheral)
     : _initialized(false), _speed(speed), _peripheral(peripheral) {}
@@ -116,18 +90,25 @@ HardwareUSB::HardwareUSB(USBSpeed speed, USBPeripheral peripheral)
 void HardwareUSB::initULPIPins() {
 #if defined(STM32H7)
   HAL_PWREx_EnableUSBVoltageDetector();
-  for (const auto &pinDesc : kUlpiPinDescs) {
+  for (const auto &pinDesc : ULPIPinDescs) {
     Gpio gpio(pinDesc);
     gpio.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,
-                kUlpiAlternate);
+                GpioAlternateULPI);
     gpio.init();
   }
 
   __HAL_RCC_USB1_OTG_HS_CLK_ENABLE();
   __HAL_RCC_USB1_OTG_HS_ULPI_CLK_ENABLE();
 
-  HAL_NVIC_SetPriority(OTG_HS_IRQn, 0, 0);
+  using Priority = NVIC_EXTI::NvicPriority;
+#define PRIORITY(prio) static_cast<uint32_t>(Priority::prio)
+
+  HAL_NVIC_SetPriority(OTG_HS_IRQn,
+                       NVIC_PRIORITY_BASE(PRIORITY(PriorityVeryHigh)),
+                       NVIC_PRIORITY_SUB(PRIORITY(PriorityVeryHigh)));
   HAL_NVIC_EnableIRQ(OTG_HS_IRQn);
+
+#undef PRIORITY
 #endif
 }
 
@@ -137,9 +118,9 @@ void HardwareUSB::initHighSpeedPins() {
   Gpio dm(Port::PortA, Pin::Pin11);
 
   dp.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,
-            kUlpiAlternate);
+            GpioAlternateULPI);
   dm.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,
-            kUlpiAlternate);
+            GpioAlternateULPI);
 
   dp.init();
   dm.init();

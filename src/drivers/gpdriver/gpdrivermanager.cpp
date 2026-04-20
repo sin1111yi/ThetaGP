@@ -5,7 +5,7 @@ namespace ThetaGP::Drivers::Device {
 
 void GPDriverManager::setup(InputMode mode) {
   switch (mode) {
-  case InputMode::Config:
+  case InputMode::HID:
     usbdevice = new HIDDriver();
     break;
   default:
