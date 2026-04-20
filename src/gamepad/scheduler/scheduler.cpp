@@ -114,7 +114,6 @@ float Scheduler::getCycleTimeMultiplier() {
 
 void Scheduler::setupSystem() {
   Drivers::Peripheral::NVIC_EXTI::NvicExti::preinit();
-  Drivers::Peripheral::PeripheralsManager::getInstance().init();
 }
 
 void Scheduler::init() {

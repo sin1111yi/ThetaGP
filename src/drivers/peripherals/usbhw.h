@@ -68,7 +68,6 @@ private:
   USBPeripheral _peripheral;
 
   void enableClock() const;
-  RetVal initPCD();
   void initULPIPins();
   void initHighSpeedPins();
   void initFullSpeedPins();
