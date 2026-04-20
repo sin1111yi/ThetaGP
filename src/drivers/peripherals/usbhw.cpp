@@ -60,7 +60,7 @@ void OTG_FS_IRQHandler(void) { tusb_int_handler(0, true); }
 
 // Despite being call USB1_OTG_HS on some MCUs
 // OTG_HS is marked as RHPort1 by TinyUSB to be consistent across stm32 port
-void OTG_HS_IRQHandler(void) { tusb_int_handler(0, true); }
+void OTG_HS_IRQHandler(void) { tusb_int_handler(1, true); }
 }
 
 #endif
@@ -81,8 +81,6 @@ void HardwareUSB::enableClock() const {
   HAL_RCCEx_PeriphCLKConfig(&periphClkInitStruct);
 #endif
 }
-
-ThetaGP::RetVal HardwareUSB::initPCD() { return RetVal::Ok; }
 
 HardwareUSB::HardwareUSB(USBSpeed speed, USBPeripheral peripheral)
     : _initialized(false), _speed(speed), _peripheral(peripheral) {}
@@ -161,9 +159,7 @@ ThetaGP::RetVal HardwareUSB::init() {
     initHighSpeedPins();
   }
 
-  if (initPCD() != RetVal::Ok) {
-    return RetVal::Error;
-  }
+  tusb_init(1);
 
   return RetVal::Ok;
 }

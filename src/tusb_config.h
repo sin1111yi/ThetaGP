@@ -41,15 +41,11 @@ extern "C" {
 #endif
 // RHPort max operational speed can defined by board.mk
 #ifndef BOARD_TUD_MAX_SPEED
-#define BOARD_TUD_MAX_SPEED OPT_MODE_DEFAULT_SPEED
+#if defined(THETAGP_CFG_USB_HS)
+#define BOARD_TUD_MAX_SPEED OPT_MODE_HIGH_SPEED
+#elif defined(THETAGP_CFG_USB_FS)
+#define BOARD_TUD_MAX_SPEED OPT_MODE_FULL_SPEED
 #endif
-// RHPort number used for host can be defined by board.mk, default to port 1
-#ifndef BOARD_TUH_RHPORT
-#define BOARD_TUH_RHPORT 1
-#endif
-// RHPort max operational speed can defined by board.mk
-#ifndef BOARD_TUH_MAX_SPEED
-#define BOARD_TUH_MAX_SPEED OPT_MODE_DEFAULT_SPEED
 #endif
 
 //--------------------------------------------------------------------
@@ -72,14 +68,14 @@ extern "C" {
 #endif
 #endif
 
-// // Device mode with rhport and speed defined by board.mk
-// #if BOARD_DEVICE_RHPORT_NUM == 0
-// #define CFG_TUSB_RHPORT0_MODE (OPT_MODE_DEVICE | BOARD_DEVICE_RHPORT_SPEED)
-// #elif BOARD_DEVICE_RHPORT_NUM == 1
+// Device mode with rhport and speed defined by board.mk
+#if BOARD_DEVICE_RHPORT_NUM == 0
+#define CFG_TUSB_RHPORT0_MODE (OPT_MODE_DEVICE | BOARD_DEVICE_RHPORT_SPEED)
+#elif BOARD_DEVICE_RHPORT_NUM == 1
 #define CFG_TUSB_RHPORT1_MODE  (OPT_MODE_DEVICE | BOARD_DEVICE_RHPORT_SPEED)
-// #else
-// #error "Incorrect RHPort configuration"
-// #endif
+#else
+#error "Incorrect RHPort configuration"
+#endif
 
 #ifndef CFG_TUSB_OS
 #define CFG_TUSB_OS OPT_OS_NONE

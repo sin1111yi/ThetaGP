@@ -26,6 +26,7 @@
 
 #include "drivers/device/device.h"
 #include "drivers/device/keypad.h"
+#include "drivers/peripherals/peripheralsmgr.h"
 #include "drivers/gpdriver/gpdrivermanager.h"
 
 #include "tusb.h"
@@ -33,6 +34,8 @@
 using namespace ThetaGP;
 
 int main(void) {
+  Drivers::Device::SystemTimer::getInstance().init();
+
   Gamepad::Scheduler &scheduler = Gamepad::Scheduler::getInstance();
   scheduler.setupSystem();
 
@@ -45,13 +48,13 @@ int main(void) {
       .getgpdriverDevice()
       ->initialize();
 
+  Drivers::Peripheral::PeripheralsManager::getInstance().init();
+
   auto &gamepad = Gamepad::Gamepad::getInstance();
   gamepad.setup();
   gamepad.registerKeypadDevice(
       reinterpret_cast<Drivers::Device::Device &>(keypad));
   gamepad.setDefaultMappings();
-
-  tusb_init();
 
   while (1) {
   }
