@@ -36,8 +36,8 @@ void Keypad::init() {
     return timer.isInitialized();
   };
 
-  if (!setupTimer(_scanTimer, Timer6)) {
-    if (!setupTimer(_scanTimer, Timer7)) {
+  if (!setupTimer(_scanTimer, Peripheral::TIMER::Instance::Timer6)) {
+    if (!setupTimer(_scanTimer, Peripheral::TIMER::Instance::Timer7)) {
       return;
     }
   }
