@@ -26,7 +26,7 @@ public:
   void delayMilliseconds(uint32_t ms) const;
 
 private:
-  SystemTimer() : Device(DeviceType::SystemTimer, 0) {}
+  SystemTimer();
 };
 
 } // namespace ThetaGP::Drivers::Device

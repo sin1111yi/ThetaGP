@@ -2,7 +2,7 @@
 
 #include "drivers/gpdriver/gpdriver.h"
 
-namespace ThetaGP::Drivers::Device {
+namespace ThetaGP::Drivers::GPDriver {
 
 enum class InputMode : uint8_t { Config = 0, HID, Count };
 
@@ -27,4 +27,4 @@ private:
   InputMode inputMode;
 };
 
-} // namespace ThetaGP::Drivers::Device
+} // namespace ThetaGP::Drivers::GPDriver

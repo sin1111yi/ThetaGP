@@ -3,6 +3,8 @@
 
 #include <cstdint>
 
+namespace ThetaGP::Drivers::GPDriver {
+
 class USBListener {
 public:
   virtual void setup() = 0;
@@ -22,5 +24,7 @@ public:
                                    uint8_t report_id, uint8_t report_type,
                                    uint16_t len) = 0;
 };
+
+} // namespace ThetaGP::Drivers::GPDriver
 
 #endif

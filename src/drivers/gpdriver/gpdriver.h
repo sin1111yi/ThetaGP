@@ -10,7 +10,7 @@
 
 #include "drivers/gpdriver/usblistener.h"
 
-namespace ThetaGP::Drivers::Device {
+namespace ThetaGP::Drivers::GPDriver {
 
 using Gamepad = Gamepad::Gamepad;
 
@@ -41,6 +41,6 @@ protected:
   usbd_class_driver_t class_driver;
 };
 
-} // namespace ThetaGP::Drivers::Device
+} // namespace ThetaGP::Drivers::GPDriver
 
 #endif

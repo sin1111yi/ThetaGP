@@ -1,7 +1,7 @@
 #include "drivers/gpdriver/gpdrivermanager.h"
 #include "drivers/gpdriver/hid/HIDDriver.h"
 
-namespace ThetaGP::Drivers::Device {
+namespace ThetaGP::Drivers::GPDriver {
 
 void GPDriverManager::setup(InputMode mode) {
   switch (mode) {
@@ -16,4 +16,4 @@ void GPDriverManager::setup(InputMode mode) {
   inputMode = mode;
 }
 
-}  // namespace ThetaGP::Drivers::Device
+} // namespace ThetaGP::Drivers::GPDriver

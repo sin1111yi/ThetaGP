@@ -6,7 +6,7 @@
 #include "class/hid/hid.h"
 #include "device/usbd_pvt.h"
 
-namespace ThetaGP::Drivers::Device {
+namespace ThetaGP::Drivers::GPDriver {
 
 class HIDDriver : public GPDriver {
 public:
@@ -36,4 +36,4 @@ private:
   HIDReport hidReport;
 };
 
-} // namespace ThetaGP::Drivers::Device
+} // namespace ThetaGP::Drivers::GPDriver

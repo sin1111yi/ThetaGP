@@ -239,10 +239,7 @@ public:
   }
 
   void init();
-
   void run();
-
-  void setupSystem();
 
   void setTaskEnabled(TaskId taskId, bool enabled);
   void rescheduleTask(TaskId taskId, uint32_t newPeriodUs);

@@ -6,7 +6,7 @@
 
 #include "tusb.h"
 
-namespace ThetaGP::Drivers::Device {
+namespace ThetaGP::Drivers::GPDriver {
 
 HIDDriver::HIDDriver() {}
 
@@ -172,4 +172,4 @@ const uint8_t *HIDDriver::get_descriptor_device_qualifier_cb() {
 
 uint16_t HIDDriver::GetJoystickMidValue() { return HID_JOYSTICK_MID << 8; }
 
-} // namespace ThetaGP::Drivers::Device
+} // namespace ThetaGP::Drivers::GPDriver
