@@ -159,8 +159,6 @@ ThetaGP::RetVal HardwareUSB::init() {
     initHighSpeedPins();
   }
 
-  tusb_init(1);
-
   return RetVal::Ok;
 }
 

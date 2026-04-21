@@ -1,6 +1,8 @@
-#include "drivers/device/devicemanager.h"
+#include "drivers/device/devicemgr.h"
 
 namespace ThetaGP::Drivers::Device {
+
+DeviceManager::DeviceManager() {}
 
 void DeviceManager::registerDevice(Device *device) {
   if (!device || _count >= MAX_DEVICES) {
@@ -33,20 +35,10 @@ void DeviceManager::registerDevice(Device *device) {
   _devices[_count++] = device;
 }
 
-void DeviceManager::initAll() {
+void DeviceManager::initDevices() {
   for (size_t i = 0; i < _count; i++) {
     if (_devices[i] && !_devices[i]->isInitialized()) {
       _devices[i]->init();
-    }
-  }
-}
-
-void DeviceManager::initByType(DeviceType type) {
-  for (size_t i = 0; i < _count; i++) {
-    if (_devices[i] && _devices[i]->getType() == type) {
-      if (!_devices[i]->isInitialized()) {
-        _devices[i]->init();
-      }
     }
   }
 }
@@ -65,4 +57,4 @@ Device *DeviceManager::getDevice(size_t index) const {
   return (index < _count) ? _devices[index] : nullptr;
 }
 
-}  // namespace ThetaGP::Drivers::Device
+} // namespace ThetaGP::Drivers::Device

@@ -3,7 +3,7 @@
 
 #include "tusb.h"
 
-using namespace ThetaGP::Drivers::Device;
+using namespace ThetaGP::Drivers::GPDriver;
 
 extern "C" {
 
@@ -63,8 +63,9 @@ void tud_resume_cb(void) { usb_suspended = false; }
 // Vendor Controlled XFER occured
 bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage,
                                 tusb_control_request_t const *request) {
-  return GPDriverManager::getInstance().getgpdriverDevice()->vendor_control_xfer_cb(
-      rhport, stage, request);
+  return GPDriverManager::getInstance()
+      .getgpdriverDevice()
+      ->vendor_control_xfer_cb(rhport, stage, request);
 }
 
 // Invoked when received GET STRING DESCRIPTOR request

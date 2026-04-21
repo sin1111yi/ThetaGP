@@ -14,16 +14,15 @@ private:
   size_t _count = 0;
 
 public:
-  DeviceManager() = default;
+  DeviceManager();
 
-  DeviceManager &getInstance() {
+  static DeviceManager &getInstance() {
     static DeviceManager instance;
     return instance;
   }
 
   void registerDevice(Device *device);
-  void initAll();
-  void initByType(DeviceType type);
+  void initDevices();
 
   Device *findDevice(DeviceType type, uint8_t instanceId = 0) const;
   Device *getDevice(size_t index) const;

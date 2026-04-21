@@ -8,8 +8,7 @@ using namespace ThetaGP::Drivers::Peripheral;
 
 PeripheralsManager::PeripheralsManager() {}
 
-TIMER::Instance PeripheralsManager::reservedTimer(void)
-{
+TIMER::Instance PeripheralsManager::reservedTimer(void) {
 #if defined(STM32H7)
   return TIMER::Instance::Timer5;
 #else
@@ -17,8 +16,12 @@ TIMER::Instance PeripheralsManager::reservedTimer(void)
 #endif
 }
 
-void PeripheralsManager::init() {
+void PeripheralsManager::initPeripherals() {
+  // set NVIC priority grouping
+  Drivers::Peripheral::NVIC_EXTI::NvicExti::preinit();
+
   USB::HardwareUSB usb(USB::USBSpeed::UsbHighSpeedExternalPHY,
                        USB::USBPeripheral::ULPI);
+
   usb.init();
 }

@@ -112,10 +112,6 @@ float Scheduler::getCycleTimeMultiplier() {
 // Scheduler Initialization
 // ============================================================================
 
-void Scheduler::setupSystem() {
-  Drivers::Peripheral::NVIC_EXTI::NvicExti::preinit();
-}
-
 void Scheduler::init() {
   queueClear();
   queueAdd(getTask(TaskId::System));

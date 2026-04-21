@@ -13,7 +13,7 @@ public:
     return instance;
   }
 
-  void init();
+  void initPeripherals();
 
   TIMER::Instance reservedTimer(void);
 };
