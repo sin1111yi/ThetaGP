@@ -116,22 +116,6 @@ void HardwareTimer::enableClock() const {
   }
 }
 
-Instance getPreferredBasicTimer() {
-#if defined(STM32H7)
-  return Instance::Timer6;
-#else
-  return Instance::TimerNone;
-#endif
-}
-
-Instance getFallbackBasicTimer() {
-#if defined(STM32H7)
-  return Instance::Timer7;
-#else
-  return Instance::TimerNone;
-#endif
-}
-
 HardwareTimer::HardwareTimer() : _state{}, _context(nullptr) {
   _state.instance = Instance::TimerNone;
   _state.targetFrequency = 0;

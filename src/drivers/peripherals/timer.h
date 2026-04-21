@@ -112,7 +112,4 @@ public:
   const TIM_HandleTypeDef *getHandle() const { return &_state.htim; }
 };
 
-Instance getPreferredBasicTimer();
-Instance getFallbackBasicTimer();
-
 } // namespace ThetaGP::Drivers::Peripheral::TIMER

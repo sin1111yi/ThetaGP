@@ -1,6 +1,9 @@
-#include "drivers/device/keypad.h"
 #include "BoardConfig.h"
+
+#include "drivers/device/keypad.h"
+
 #include "drivers/peripherals/gpio.h"
+#include "drivers/peripherals/peripheralsmgr.h"
 
 namespace ThetaGP::Drivers::Device {
 
@@ -36,21 +39,10 @@ void Keypad::init() {
     return timer.isInitialized();
   };
 
-  if (!setupTimer(_scanTimer, Peripheral::TIMER::Instance::Timer6)) {
-    if (!setupTimer(_scanTimer, Peripheral::TIMER::Instance::Timer7)) {
-      return;
-    }
-  }
+  setupTimer(_scanTimer, Peripheral::PeripheralsManager::getInstance().reservedTimer());
 
   _scanTimer.start();
   _initialized = true;
-}
-
-void Keypad::timerCallback(void *context) {
-  auto *keypad = static_cast<Keypad *>(context);
-  if (keypad) {
-    keypad->scanCallback();
-  }
 }
 
 void Keypad::scanCallback() {
