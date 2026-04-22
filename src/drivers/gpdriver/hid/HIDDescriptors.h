@@ -14,7 +14,7 @@
 // INF file is needed to load the driver.  These numbers need to
 // match the INF file.
 #define VENDOR_ID         0x0483
-#define PRODUCT_ID        0x1000
+#define PRODUCT_ID        0x5710
 
 /**************************************************************************
  *
