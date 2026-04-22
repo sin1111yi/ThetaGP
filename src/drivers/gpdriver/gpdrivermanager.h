@@ -23,7 +23,7 @@ public:
 
 private:
   GPDriverManager() {}
-  GPDriver *usbdevice;
+  GPDriver *usbdevice = nullptr;
   InputMode inputMode;
 };
 
