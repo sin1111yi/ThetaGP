@@ -96,8 +96,8 @@ void HardwareUSB::initULPIPins() {
     gpio.init();
   }
 
-  __HAL_RCC_USB1_OTG_HS_CLK_ENABLE();
-  __HAL_RCC_USB1_OTG_HS_ULPI_CLK_ENABLE();
+  __HAL_RCC_USB_OTG_HS_CLK_ENABLE();
+  __HAL_RCC_USB_OTG_HS_ULPI_CLK_ENABLE();
 
   using Priority = NVIC_EXTI::NvicPriority;
 #define PRIORITY(prio) static_cast<uint32_t>(Priority::prio)
@@ -124,7 +124,7 @@ void HardwareUSB::initHighSpeedPins() {
   dp.init();
   dm.init();
 
-  __HAL_RCC_USB1_OTG_HS_CLK_ENABLE();
+  __HAL_RCC_USB_OTG_HS_CLK_ENABLE();
 #endif
 }
 
@@ -141,7 +141,7 @@ void HardwareUSB::initFullSpeedPins() {
   dp.init();
   dm.init();
 
-  __HAL_RCC_USB2_OTG_FS_CLK_ENABLE();
+  __HAL_RCC_USB_OTG_FS_CLK_ENABLE();
 #endif
 }
 
