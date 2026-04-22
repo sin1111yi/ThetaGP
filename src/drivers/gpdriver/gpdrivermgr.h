@@ -4,7 +4,7 @@
 
 namespace ThetaGP::Drivers::GPDriver {
 
-enum class InputMode : uint8_t { Config = 0, HID, Count };
+enum class InputMode : uint8_t { None = 0, Config, HID, Count };
 
 class GPDriverManager {
 public:
@@ -22,8 +22,8 @@ public:
   bool isConfigMode() { return (inputMode == InputMode::Config); }
 
 private:
-  GPDriverManager() {}
-  GPDriver *usbdevice = nullptr;
+  GPDriverManager();
+  GPDriver *usbdevice;
   InputMode inputMode;
 };
 

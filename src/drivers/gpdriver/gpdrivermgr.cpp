@@ -3,6 +3,9 @@
 
 namespace ThetaGP::Drivers::GPDriver {
 
+GPDriverManager::GPDriverManager()
+    : usbdevice(nullptr), inputMode(InputMode::None) {}
+
 void GPDriverManager::setup(InputMode mode) {
   switch (mode) {
   case InputMode::HID:
