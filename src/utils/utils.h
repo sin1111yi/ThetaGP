@@ -59,13 +59,13 @@ extern "C" {
 #define MAYBE_UNUSE(x) UNUSED(x)
 #endif /* MAYBE_UNUSED */
 
-#if !defined(DEFAULT_NONE_INTERFACE)
-#define DEFAULT_NONE_INTERFACE NULL
-#endif /* DISCARD_INTERFACE */
-
 #if !defined(WEAKFN)
 #define WEAKFN __attribute__((weak))
 #endif /* WEAKFN */
+
+#if !defined(MAYBE_UNUSED)
+#define MAYBE_UNUSED __attribute__((unused))
+#endif /* MAYBE_UNUSED */
 
 #define BIT(x)        (1 << (x))
 

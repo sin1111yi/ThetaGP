@@ -14,6 +14,8 @@
 
 using namespace ThetaGP;
 
+using Device = Drivers::Device::Device;
+
 Core::Core()
     : gamepad(Gamepad::Gamepad::getInstance()),
       scheduler(Gamepad::Scheduler::getInstance()),
@@ -28,20 +30,21 @@ void Core::Setup() {
 
   // setup GP drivers
   gpDriverManager.setup(Drivers::GPDriver::InputMode::HID);
-  gpDriverManager.getgpdriverDevice()->initialize();
 
   // TinyUSB initialize
   tusb_init(1);
 
   // setup devices' driver
-  deviceManager.registerDevice(&Drivers::Device::Keypad::getInstance());
-  deviceManager.registerDevice(&Drivers::Device::SystemTimer::getInstance());
+  deviceManager.registerDevice(
+      reinterpret_cast<Device *>(&Drivers::Device::Keypad::getInstance()));
+  deviceManager.registerDevice(
+      reinterpret_cast<Device *>(&Drivers::Device::SystemTimer::getInstance()));
   deviceManager.initDevices();
 
   // setup gamepad
   gamepad.setup();
-  gamepad.registerKeypadDevice(reinterpret_cast<Drivers::Device::Device &>(
-      Drivers::Device::Keypad::getInstance()));
+  gamepad.registerKeypadDevice(
+      reinterpret_cast<Device &>(Drivers::Device::Keypad::getInstance()));
   gamepad.setDefaultMappings();
 }
 

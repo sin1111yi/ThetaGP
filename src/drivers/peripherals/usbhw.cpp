@@ -20,6 +20,7 @@
  */
 
 #include "utils/types.h"
+#include "utils/utils.h"
 
 #include "drivers/peripherals/nvic.h"
 #include "drivers/peripherals/nvic_exti.h"
@@ -50,7 +51,7 @@ static constexpr std::array<PinDesc, 12> ULPIPinDescs = {{
     {Port::PortB, Pin::Pin5},  // D7, PB5
 }};
 
-static constexpr uint32_t GpioAlternateULPI = GPIO_AF10_OTG2_HS; // 0x0A
+static constexpr uint32_t GpioAlternateUSB = 0x0A;
 
 extern "C" {
 
@@ -91,7 +92,7 @@ void HardwareUSB::initULPIPins() {
   for (const auto &pinDesc : ULPIPinDescs) {
     Gpio gpio(pinDesc);
     gpio.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,
-                GpioAlternateULPI);
+                GpioAlternateUSB);
     gpio.init();
   }
 
@@ -116,9 +117,9 @@ void HardwareUSB::initHighSpeedPins() {
   Gpio dm(Port::PortA, Pin::Pin11);
 
   dp.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,
-            GpioAlternateULPI);
+            GpioAlternateUSB);
   dm.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,
-            GpioAlternateULPI);
+            GpioAlternateUSB);
 
   dp.init();
   dm.init();
