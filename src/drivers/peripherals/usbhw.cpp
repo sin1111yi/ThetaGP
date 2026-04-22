@@ -146,7 +146,6 @@ void HardwareUSB::initFullSpeedPins() {
 }
 
 ThetaGP::RetVal HardwareUSB::init() {
-
   enableClock();
 
   if (_speed == USBSpeed::UsbHighSpeedExternalPHY &&

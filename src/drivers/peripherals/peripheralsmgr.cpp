@@ -1,9 +1,9 @@
 #include "BoardConfig.h"
 
 #include "drivers/peripherals/peripheralsmgr.h"
+#include "drivers/peripherals/systick.h"
 #include "drivers/peripherals/timer.h"
 #include "drivers/peripherals/usbhw.h"
-#include "drivers/peripherals/systick.h"
 
 using namespace ThetaGP::Drivers::Peripheral;
 
@@ -18,13 +18,13 @@ TIMER::Instance PeripheralsManager::reservedTimer(void) {
 }
 
 void PeripheralsManager::initPeripherals() {
+  cycleCounterInit();
+
   // set NVIC priority grouping
   Drivers::Peripheral::NVIC_EXTI::NvicExti::preinit();
 
-  cycleCounterInit();
-
-  USB::HardwareUSB usb(USB::USBSpeed::UsbHighSpeedExternalPHY,
+  USB::HardwareUSB hwusb(USB::USBSpeed::UsbHighSpeedExternalPHY,
                        USB::USBPeripheral::ULPI);
 
-  usb.init();
+  hwusb.init();
 }
