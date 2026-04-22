@@ -1,7 +1,7 @@
 #pragma once
 
 #include "drivers/device/devicemgr.h"
-#include "drivers/gpdriver/gpdrivermanager.h"
+#include "drivers/gpdriver/gpdrivermgr.h"
 #include "drivers/peripherals/peripheralsmgr.h"
 
 #include "gamepad/gamepad.h"

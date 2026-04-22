@@ -8,7 +8,7 @@
 #include "drivers/device/devicemgr.h"
 #include "drivers/device/keypad.h"
 #include "drivers/device/system_timer.h"
-#include "drivers/gpdriver/gpdrivermanager.h"
+#include "drivers/gpdriver/gpdrivermgr.h"
 
 #include "tusb.h"
 

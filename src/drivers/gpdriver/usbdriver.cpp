@@ -1,5 +1,5 @@
 #include "drivers/gpdriver/usbdriver.h"
-#include "drivers/gpdriver/gpdrivermanager.h"
+#include "drivers/gpdriver/gpdrivermgr.h"
 
 #include "tusb.h"
 
