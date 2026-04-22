@@ -1,4 +1,4 @@
-#include "drivers/gpdriver/gpdrivermanager.h"
+#include "drivers/gpdriver/gpdrivermgr.h"
 #include "drivers/gpdriver/hid/HIDDriver.h"
 
 namespace ThetaGP::Drivers::GPDriver {
@@ -12,7 +12,9 @@ void GPDriverManager::setup(InputMode mode) {
     return;
   }
 
-  usbdevice->initialize();
+  if (usbdevice != nullptr) {
+    usbdevice->initialize();
+  }
   inputMode = mode;
 }
 
