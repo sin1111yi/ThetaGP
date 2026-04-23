@@ -52,9 +52,13 @@ extern "C" {
 // COMMON CONFIGURATION
 //--------------------------------------------------------------------
 
-// RHPort number used for device can be defined by board.mk, default to port 0
+// RHPort number used for device
 #ifndef BOARD_DEVICE_RHPORT_NUM
+#if defined(THETAGP_CFG_USB_HS)
 #define BOARD_DEVICE_RHPORT_NUM 1
+#else
+#define BOARD_DEVICE_RHPORT_NUM 0
+#endif
 #endif
 
 // RHPort max operational speed can defined by board.mk
