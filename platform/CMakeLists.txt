@@ -141,24 +141,23 @@ list(APPEND INCLUDE_DIRS "${SYSTEM_PATH}")
 # =============================================================================
 # Link Script Configuration
 # =============================================================================
-set(THETAGP_LINK_SCRIPT "${LINKSCRIPT_FILE}" CACHE INTERNAL "Linker script path")
+set(PLATFORM_LINK_SCRIPT "${LINKSCRIPT_FILE}" CACHE INTERNAL "Linker script path")
 
 # =============================================================================
-# Export Variables
+# Add Platform Library
 # =============================================================================
-set(PLATFORM_SOURCES
+add_library(PlatformBase INTERFACE)
+target_include_directories(PlatformBase INTERFACE ${INCLUDE_DIRS})
+target_compile_definitions(PlatformBase INTERFACE ${COMPILE_DEFS})
+
+add_library(HalDriver OBJECT)
+target_sources(HalDriver
+    PRIVATE
     ${DRIVER_SOURCES}
     ${SYSTEM_SOURCES}
     ${STARTUP_FILE}
-    CACHE INTERNAL "All platform source files"
 )
-
-set(PLATFORM_INCLUDE_DIRS
-    ${INCLUDE_DIRS}
-    CACHE INTERNAL "Platform include directories"
-)
-
-set(PLATFORM_COMPILE_DEFS
-    ${COMPILE_DEFS}
-    CACHE INTERNAL "Platform compile definitions"
+target_link_libraries(HalDriver
+    PUBLIC
+    PlatformBase
 )
