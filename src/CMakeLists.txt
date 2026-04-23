@@ -99,8 +99,6 @@ add_executable(${CMAKE_PROJECT_NAME})
 target_sources(${CMAKE_PROJECT_NAME}
     PRIVATE
     ${SRC_FILES}
-    ${PROTO_SOURCES}
-    ${PLATFORM_SOURCES}
     ${TINYUSB_SOURCES}
     # ${MBEDTLS_SOURCES}
 )
@@ -108,10 +106,6 @@ target_sources(${CMAKE_PROJECT_NAME}
 target_include_directories(${CMAKE_PROJECT_NAME}
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${PROTO_INCLUDE_DIR}
-    ${GP2040_CE_INCLUDE_DIRS}
-    ${PLATFORM_INCLUDE_DIRS}
-
     ${TINYUSB_SRC_PATH}
     # ${TINYUSB_SRC_PATH}/../lib/networking
 
@@ -120,6 +114,7 @@ target_include_directories(${CMAKE_PROJECT_NAME}
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
     PRIVATE
+    HalDriver
     CRC32
     ArduinoJson
 )
@@ -139,6 +134,6 @@ target_compile_definitions(${CMAKE_PROJECT_NAME}
 # Set link script
 set_target_properties(${CMAKE_PROJECT_NAME}
     PROPERTIES
-    LINK_DEPENDS ${THETAGP_LINK_SCRIPT}
-    LINK_FLAGS "-T${THETAGP_LINK_SCRIPT}"
+    LINK_DEPENDS ${PLATFORM_LINK_SCRIPT}
+    LINK_FLAGS "-T${PLATFORM_LINK_SCRIPT}"
 )
