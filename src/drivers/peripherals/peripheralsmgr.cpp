@@ -4,6 +4,7 @@
 #include "drivers/peripherals/systick.h"
 #include "drivers/peripherals/timer.h"
 #include "drivers/peripherals/usbhw.h"
+#include "drivers/peripherals/bus/bus.h"
 
 using namespace ThetaGP::Drivers::Peripheral;
 
@@ -22,6 +23,7 @@ void PeripheralsManager::initPeripherals() {
 
   // set NVIC priority grouping
   Drivers::Peripheral::NVIC_EXTI::NvicExti::preinit();
+  Drivers::Peripheral::BUS::BusMem::getInstance().init();
 
   USB::HardwareUSB hwusb(USB::USBSpeed::UsbHighSpeedExternalPHY,
                        USB::USBPeripheral::ULPI);
