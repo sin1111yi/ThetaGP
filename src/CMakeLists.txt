@@ -56,6 +56,8 @@ if(BOARD_MCU_SERIES STREQUAL "STM32H7")
     )
 endif()
 
+set(TINYUSB_CONFIG_FILE "build/tusb_config.h")
+
 # =============================================================================
 # MbedTLS Configuration
 # =============================================================================
@@ -82,7 +84,7 @@ list(FILTER MBEDTLS_SOURCES EXCLUDE REGEX ".*bignum_core\\.c")
 list(FILTER MBEDTLS_SOURCES EXCLUDE REGEX ".*constant_time\\.c")
 list(FILTER MBEDTLS_SOURCES EXCLUDE REGEX ".*x509_crt\\.c")
 
-set(MBEDTLS_CONFIG_FILE "mbedtls_config.h")
+set(MBEDTLS_CONFIG_FILE "build/mbedtls_config.h")
 set(MBEDTLS_DEFS
     MBEDTLS_ARCH_IS_ARM32
     MBEDTLS_CT_NO_ASM
@@ -100,7 +102,7 @@ target_sources(${CMAKE_PROJECT_NAME}
     ${PROTO_SOURCES}
     ${PLATFORM_SOURCES}
     ${TINYUSB_SOURCES}
-    ${MBEDTLS_SOURCES}
+    # ${MBEDTLS_SOURCES}
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME}
@@ -111,9 +113,9 @@ target_include_directories(${CMAKE_PROJECT_NAME}
     ${PLATFORM_INCLUDE_DIRS}
 
     ${TINYUSB_SRC_PATH}
-    ${TINYUSB_SRC_PATH}/../lib/networking
+    # ${TINYUSB_SRC_PATH}/../lib/networking
 
-    ${MBEDTLS_INC_PATH}
+    # ${MBEDTLS_INC_PATH}
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
@@ -129,8 +131,9 @@ target_compile_definitions(${CMAKE_PROJECT_NAME}
     CFG_TUSB_MCU=OPT_MCU_${BOARD_MCU_SERIES}
     CFG_TUSB_DEBUG=${TINYUSB_DEBUG_LEVEL}
 
-    MBEDTLS_CONFIG_FILE="${MBEDTLS_CONFIG_FILE}"
-    ${MBEDTLS_DEFS}
+    CFG_TUSB_CONFIG_FILE="${TINYUSB_CONFIG_FILE}"
+    # MBEDTLS_CONFIG_FILE="${MBEDTLS_CONFIG_FILE}"
+    # ${MBEDTLS_DEFS}
 )
 
 # Set link script

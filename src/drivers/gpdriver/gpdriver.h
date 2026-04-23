@@ -5,8 +5,8 @@
 
 #include "class/hid/hid.h"
 #include "device/usbd_pvt.h"
+
 #include "tusb.h"
-#include "tusb_config.h"
 
 #include "drivers/gpdriver/usblistener.h"
 
