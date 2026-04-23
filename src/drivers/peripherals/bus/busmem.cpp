@@ -3,6 +3,8 @@
  * @brief BUS memory pool manager implementation
  */
 
+#include "build_info.h"
+
 #include "drivers/peripherals/bus/busmem.h"
 
 #include <cstring>
@@ -10,23 +12,34 @@
 using namespace ThetaGP::Drivers::Peripheral::BUS;
 using namespace ThetaGP::Mempool;
 
-bool BusMem::_initialized = false;
+#define BUS_TX_POOL_SIZE 2048
+#define BUS_RX_POOL_SIZE 2048
 
-bool BusMem::init(void *txMemory, size_t txSize, void *rxMemory,
-                  size_t rxSize) {
+COMMON_CODE static uint8_t BusMemPool[BUS_TX_POOL_SIZE + BUS_RX_POOL_SIZE + 16];
+
+BusMem::BusMem()
+    : _initialized(false), _mem(static_cast<uint8_t *>(BusMemPool)) {}
+
+bool BusMem::init() {
+  return initPool(_mem, BUS_TX_POOL_SIZE, _mem + BUS_TX_POOL_SIZE,
+                  BUS_RX_POOL_SIZE);
+}
+
+bool BusMem::initPool(void *txMemory, uint32_t txSize, void *rxMemory,
+                      uint32_t rxSize) {
 
   MempoolManager &manager = MempoolManager::getInstance();
 
   // Add TX buffer pool
   PoolError txErr = manager.addPool(static_cast<uint16_t>(PoolId::TxBuffer),
-                                    txMemory, txSize, TX_POOL_NAME);
+                                    txMemory, txSize, "BusTxPool");
   if (txErr != PoolError::OK) {
     return false;
   }
 
   // Add RX buffer pool
   PoolError rxErr = manager.addPool(static_cast<uint16_t>(PoolId::RxBuffer),
-                                    rxMemory, rxSize, RX_POOL_NAME);
+                                    rxMemory, rxSize, "BusRxPool");
   if (rxErr != PoolError::OK) {
     manager.removePool(static_cast<uint16_t>(PoolId::TxBuffer));
     return false;
@@ -34,16 +47,6 @@ bool BusMem::init(void *txMemory, size_t txSize, void *rxMemory,
 
   _initialized = true;
   return true;
-}
-
-bool BusMem::initDefault(void *memory, size_t totalSize) {
-  if (memory == nullptr || totalSize < TX_DEFAULT_SIZE + RX_DEFAULT_SIZE) {
-    return false;
-  }
-
-  auto *mem = static_cast<uint8_t *>(memory);
-
-  return init(mem, TX_DEFAULT_SIZE, mem + TX_DEFAULT_SIZE, RX_DEFAULT_SIZE);
 }
 
 void BusMem::deinit() {
@@ -61,7 +64,7 @@ void BusMem::deinit() {
 
 bool BusMem::isInitialized() { return _initialized; }
 
-void *BusMem::allocTxBuffer(size_t size) {
+void *BusMem::allocTxBuffer(uint32_t size) {
   if (!_initialized) {
     return nullptr;
   }
@@ -77,7 +80,7 @@ void BusMem::freeTxBuffer(void *ptr) {
                                      ptr);
 }
 
-void *BusMem::allocRxBuffer(size_t size) {
+void *BusMem::allocRxBuffer(uint32_t size) {
   if (!_initialized) {
     return nullptr;
   }
@@ -103,8 +106,10 @@ PoolStats BusMem::rxStats() {
       static_cast<uint16_t>(PoolId::RxBuffer));
 }
 
-size_t BusMem::totalAllocated() {
+uint32_t BusMem::totalAllocated() {
   return MempoolManager::getInstance().totalAllocated();
 }
 
-size_t BusMem::totalFree() { return MempoolManager::getInstance().totalFree(); }
+uint32_t BusMem::totalFree() {
+  return MempoolManager::getInstance().totalFree();
+}

@@ -10,6 +10,7 @@
 #pragma once
 
 #include "utils/mempool/mempoolmanager.h"
+
 #include <cstddef>
 #include <cstdint>
 
@@ -26,6 +27,11 @@ namespace BUS {
  */
 class BusMem {
 public:
+  BusMem();
+  static BusMem &getInstance() {
+    static BusMem instance;
+    return instance;
+  }
   /**
    * @brief Pool identifiers for BUS memory pools
    */
@@ -34,18 +40,31 @@ public:
     RxBuffer,          // RX buffer pool
   };
 
-  /**
-   * @brief Pool names for identification
-   */
-  static constexpr const char *TX_POOL_NAME = "BUS_TX";
-  static constexpr const char *RX_POOL_NAME = "BUS_RX";
+  bool init();
 
   /**
-   * @brief Default pool sizes
+   * @brief Check if pools are initialized
    */
-  static constexpr size_t TX_DEFAULT_SIZE = 1024;
-  static constexpr size_t RX_DEFAULT_SIZE = 1024;
+  bool isInitialized();
 
+  // TX Buffer operations
+  void *allocTxBuffer(uint32_t size);
+  void freeTxBuffer(void *ptr);
+
+  // RX Buffer operations
+  void *allocRxBuffer(uint32_t size);
+  void freeRxBuffer(void *ptr);
+
+  // Statistics
+  Mempool::PoolStats txStats();
+  Mempool::PoolStats rxStats();
+
+  uint32_t totalAllocated();
+  uint32_t totalFree();
+
+private:
+  bool _initialized;
+  uint8_t* _mem;
   /**
    * @brief Initialize BUS memory pools
    *
@@ -59,47 +78,11 @@ public:
    * @param rxSize Size of RX memory region
    * @return true if all pools created successfully
    */
-  static bool init(void *txMemory, size_t txSize, void *rxMemory,
-                   size_t rxSize);
-
-  /**
-   * @brief Initialize with default sizes from single memory region
-   *
-   * Partitions a single memory region into two pools with default sizes.
-   *
-   * @param memory Pointer to memory region
-   * @param totalSize Total size of memory region
-   * @return true if initialization successful
-   */
-  static bool initDefault(void *memory, size_t totalSize);
-
+  bool initPool(void *txMemory, uint32_t txSize, void *rxMemory, uint32_t rxSize);
   /**
    * @brief Deinitialize all BUS pools
    */
-  static void deinit();
-
-  /**
-   * @brief Check if pools are initialized
-   */
-  static bool isInitialized();
-
-  // TX Buffer operations
-  static void *allocTxBuffer(size_t size);
-  static void freeTxBuffer(void *ptr);
-
-  // RX Buffer operations
-  static void *allocRxBuffer(size_t size);
-  static void freeRxBuffer(void *ptr);
-
-  // Statistics
-  static Mempool::PoolStats txStats();
-  static Mempool::PoolStats rxStats();
-
-  static size_t totalAllocated();
-  static size_t totalFree();
-
-private:
-  static bool _initialized;
+  void deinit();
 };
 
 } // namespace BUS

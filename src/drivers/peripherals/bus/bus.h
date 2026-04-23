@@ -9,8 +9,11 @@
 #pragma once
 
 #include "build_info.h"
-#include "utils/mempool/mempoolmanager.h"
+
 #include "utils/types.h"
+#include "utils/mempool/mempoolmanager.h"
+
+#include "drivers/peripherals/bus/busmem.h"
 
 namespace ThetaGP {
 namespace Drivers {
@@ -30,8 +33,14 @@ protected:
   Type _type;
   Mode _mode = Mode::Polling;
 
+  /**
+   * @note For MCUs like STM32H7, DTCMRAM cannot be accessed by DMA.
+   *       So I use two buffer pointers which will point to two memory regions
+   *       after initialzed, these memory regions will be managed by busmem.
+   */
   uint8_t *_pTxBuf;
   uint8_t *_pRxBuf;
+  BusMem& _busMem;
 
   static constexpr size_t DEFAULT_TX_SIZE = 512;
   static constexpr size_t DEFAULT_RX_SIZE = 512;
@@ -45,10 +54,6 @@ protected:
 
 public:
   virtual ~Bus();
-  static bool initMemoryPool(void *memory, size_t totalSize);
-
-  static Mempool::PoolStats getPoolStats();
-
   void setType(Type type) { _type = type; }
   void setMode(Mode mode) { _mode = mode; }
   Type type() const { return _type; }
