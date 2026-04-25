@@ -86,7 +86,7 @@ enum class TaskPriority : int8_t {
 enum class TaskId {
   System,
   Main,
-  Gamepad,
+  GPCore,
 
   Count,
 

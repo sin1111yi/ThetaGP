@@ -104,7 +104,7 @@ uint16_t Scheduler::getAverageSystemLoadPercent() {
 
 float Scheduler::getCycleTimeMultiplier() {
   return static_cast<float>(timer.microsToCycles(
-             getTask(TaskId::Gamepad)->attribute->desiredPeriodUs)) /
+             getTask(TaskId::GPCore)->attribute->desiredPeriodUs)) /
          desiredPeriodCycles;
 }
 
@@ -134,7 +134,7 @@ void Scheduler::init() {
       static_cast<int32_t>(timer.microsToCycles(1)) / TASK_GUARD_MARGIN_UP_STEP;
 
   desiredPeriodCycles = timer.microsToCycles(
-      getTask(TaskId::Gamepad)->attribute->desiredPeriodUs);
+      getTask(TaskId::GPCore)->attribute->desiredPeriodUs);
   lastTargetCycles = timer.getCycleCounter();
 
   for (uint8_t i = 0; i < static_cast<uint8_t>(TaskId::Count); i++) {
@@ -176,7 +176,7 @@ void Scheduler::tasksInit() {
   setTaskEnabled(getStaticTask(1), true);
   setTaskEnabled(getStaticTask(2), true);
 
-  rescheduleTask(TaskId::Gamepad, TASK_PERIOD_HZ(1000));
+  rescheduleTask(TaskId::GPCore, TASK_PERIOD_HZ(1000));
 }
 
 // ============================================================================
@@ -193,7 +193,7 @@ void Scheduler::run() {
   uint32_t nextTargetCycles = 0;
   int32_t schedLoopRemainingCycles = 0;
 
-  Task *keypadTask = getTask(TaskId::Gamepad);
+  Task *keypadTask = getTask(TaskId::GPCore);
   nowCycles = timer.getCycleCounter();
 
   nextTargetCycles = lastTargetCycles + desiredPeriodCycles;
