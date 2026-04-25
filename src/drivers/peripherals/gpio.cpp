@@ -83,7 +83,7 @@ void *Gpio::getPortAddress() const {
   return nullptr;
 }
 
-void *getPortAddress(const PinDesc &pinDesc) {
+void *Gpio::getPortAddress(const PinDesc &pinDesc) {
 #if defined(STM32H7)
   constexpr uint32_t GPIO_PORT_BASE = GPIOA_BASE;
   constexpr uint32_t GPIO_PORT_OFFSET = 0x400;

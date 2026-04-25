@@ -1,5 +1,6 @@
 #pragma once
 
+#include "drivers/peripherals/bus/bus_uart.h"
 #include "drivers/peripherals/timer.h"
 
 namespace ThetaGP::Drivers::Peripheral {
@@ -15,7 +16,8 @@ public:
 
   void initPeripherals();
 
-  TIMER::Instance reservedTimer(void);
+  TIMER::Instance reservedTimer();
+  BUS::DebugUartBus& debugUart();
 };
 
 } // namespace ThetaGP::Drivers::Peripheral
