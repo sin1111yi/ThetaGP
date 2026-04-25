@@ -48,7 +48,18 @@ M.BoardConfig = {
         usb = {
             hw_periph = "ULPI",
             speed = "high_speed",
-        }
+        },
+        bus = {
+            uart = {
+                {
+                    bind = "debug",
+                    peripheral = "UART1",
+                    tx = "PB14",
+                    rx = "PB15",
+                    baud = 115200,
+                }
+            }
+        },
     },
 }
 

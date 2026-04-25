@@ -10,8 +10,8 @@
 
 #include "build_info.h"
 
-#include "utils/types.h"
 #include "utils/mempool/mempoolmanager.h"
+#include "utils/types.h"
 
 #include "drivers/peripherals/bus/busmem.h"
 
@@ -32,6 +32,7 @@ class Bus {
 protected:
   Type _type;
   Mode _mode = Mode::Polling;
+  bool _initialized;
 
   /**
    * @note For MCUs like STM32H7, DTCMRAM cannot be accessed by DMA.
@@ -40,7 +41,7 @@ protected:
    */
   uint8_t *_pTxBuf;
   uint8_t *_pRxBuf;
-  BusMem& _busMem;
+  BusMem &_busMem;
 
   static constexpr size_t DEFAULT_TX_SIZE = 512;
   static constexpr size_t DEFAULT_RX_SIZE = 512;
@@ -67,6 +68,8 @@ public:
 
   virtual RetVal read(uint8_t *byte) = 0;
   virtual RetVal read(uint8_t *bytes, uint16_t num) = 0;
+
+  bool isInitialized() { return _initialized; }
 };
 
 } // namespace BUS

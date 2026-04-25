@@ -96,6 +96,9 @@ local keypad_lines = generators.keypad.generate(necessary_config.keypad)
 -- Generate USB macros
 local usb_lines = generators.usb.generate(necessary_config.usb)
 
+-- Generate UART macros
+local uart_lines = generators.uart.generate(necessary_config.bus)
+
 -- =============================================================================
 -- Generate output files
 -- =============================================================================
@@ -109,7 +112,8 @@ local header_content = generators.header.generate_content(
     board_info,
     pin_lines,
     keypad_lines,
-    usb_lines
+    usb_lines,
+    uart_lines
 )
 
 -- Generate CMake content

@@ -6,11 +6,13 @@ local M = {}
 M.board_info = require("validators.board_info")
 M.keypad = require("validators.keypad")
 M.usb = require("validators.usb")
+M.uart = require("validators.uart")
 
 -- Export validation functions
 M.validate_board_info = M.board_info.validate
 M.validate_keypad = M.keypad.validate
 M.validate_usb = M.usb.validate
+M.validate_uart = M.uart.validate
 
 -- Main validation entry point
 function M.validate_config(board_config)
@@ -41,6 +43,14 @@ function M.validate_config(board_config)
             local valid, err = M.validate_usb(necessary.usb)
             if not valid then
                 table.insert(errors, "USB: " .. err)
+            end
+        end
+        
+        -- UART configuration is optional
+        if necessary.bus then
+            local valid, err = M.validate_uart(necessary.bus)
+            if not valid then
+                table.insert(errors, "Bus: " .. err)
             end
         end
     else

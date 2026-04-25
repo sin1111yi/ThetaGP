@@ -24,9 +24,7 @@
 #include <array>
 
 #if defined(STM32H7)
-
 #define TIM_IRQ_GROUPS 17
-
 #endif
 
 using namespace ThetaGP::Drivers::Peripheral;
@@ -68,8 +66,8 @@ constexpr std::array<IRQn_Type, TIM_IRQ_GROUPS> timerGroupIRQn = {
 void HardwareTimer::enableClock() const {
   using ClockFunc = void (*)();
 
-#if defined(STM32H7)
   constinit static const std::array<ClockFunc, 17> clockEnableTable = {{
+#if defined(STM32H7)
       []() { __HAL_RCC_TIM1_CLK_ENABLE(); },
       []() { __HAL_RCC_TIM2_CLK_ENABLE(); },
       []() { __HAL_RCC_TIM3_CLK_ENABLE(); },
@@ -87,9 +85,8 @@ void HardwareTimer::enableClock() const {
       []() {},
       []() {},
       []() {},
-  }};
 #else
-  constinit static const std::array<ClockFunc, 17> clockEnableTable = {{
+      /* clang-format off */
       []() {},
       []() {},
       []() {},
@@ -107,8 +104,9 @@ void HardwareTimer::enableClock() const {
       []() {},
       []() {},
       []() {},
-  }};
+      /* clang-format on */
 #endif
+  }};
 
   const auto index = static_cast<size_t>(_state.instance);
   if (index < clockEnableTable.size()) {
