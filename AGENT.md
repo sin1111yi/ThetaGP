@@ -4,8 +4,17 @@ This document standardizes AI agent behavior. Read the corresponding section onl
 
 ## Table of Contents
 
-1. [Commit Specification](#1-commit-specification)
-2. [Query Priority](#2-query-priority)
+1. [Behavior](#0-behavior)
+2. [Commit Specification](#1-commit-specification)
+3. [Thinking](#2-thinking)
+4. [Query Priority](#3-query-priority)
+
+---
+
+## 0. Behavior
+
+- **Never commit without explicit permission**
+- **Never modify library files or third-party dependencies**
 
 ---
 
@@ -49,10 +58,6 @@ Agent: <agent-name> <agent-email>
 - Explain WHY and HOW, not WHAT
 - Use `-` bullet points for details
 
-### Behavior
-
-- **Never commit without explicit permission**
-
 ### Example
 
 Proposed commit:
@@ -72,7 +77,13 @@ Should I commit this change?
 
 ---
 
-## 2. Query Priority
+## 2. Thinking
+
+The agent's thinking and output language should match the host machine's current locale. Check locale with `locale` or `echo $LANG` command.
+
+---
+
+## 3. Query Priority
 
 Before any operation, query files in this order:
 
