@@ -71,6 +71,7 @@ void ThetaGPManger::Setup() {
 
 void ThetaGPManger::Bootup() {
   scheduler.tasksInit();
+  scheduler.init();
 
   while (1) {
     scheduler.run();

@@ -192,7 +192,7 @@ void Scheduler::rescheduleTask(TaskId taskId, uint32_t newPeriodUs) {
   task->attribute->desiredPeriodUs =
       std::max(static_cast<uint32_t>(SCHEDULER_DELAY_LIMIT), newPeriodUs);
 
-  if (taskId == TaskId::Gamepad) {
+  if (taskId == TaskId::GPCore) {
     desiredPeriodCycles =
         timer.microsToCycles(task->attribute->desiredPeriodUs);
   }
