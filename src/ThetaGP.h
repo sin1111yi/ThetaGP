@@ -9,7 +9,7 @@
 
 namespace ThetaGP {
 
-class Core {
+class ThetaGPManger {
 private:
   Gamepad::Gamepad &gamepad;
   Gamepad::Scheduler &scheduler;
@@ -18,7 +18,7 @@ private:
   Drivers::Device::DeviceManager &deviceManager;
 
 public:
-  Core();
+  ThetaGPManger();
 
   void Setup();
   void Bootup();
