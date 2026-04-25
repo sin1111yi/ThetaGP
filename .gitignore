@@ -20,3 +20,5 @@ lib/ArduinoJson
 
 /agent/
 *.jsonl
+
+example
