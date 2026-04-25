@@ -1,8 +1,22 @@
-# Agent 行为规范
+# Agent Behavior Specification
 
-## Commit 规范
+This document standardizes AI agent behavior. Read the corresponding section only when you need to perform the relevant action.
 
-### Commit 格式
+## Table of Contents
+
+1. [Commit Specification](#1-commit-specification)
+2. [Query Priority](#2-query-priority)
+
+---
+
+## 1. Commit Specification
+
+### Language
+
+- **Allowed**: English
+
+### Format
+
 ```
 <type>(<scope>): <subject>
 
@@ -12,29 +26,37 @@ Model: <model-name> <model-provider>
 Agent: <agent-name> <agent-email>
 ```
 
-### Type 类型
-- `feat`: 新功能
-- `fix`: 错误修复
-- `refactor`: 重构（非功能性修改）
-- `docs`: 文档变更
-- `test`: 测试相关
-- `chore`: 构建/工具变更
-- **自定义类型**: 可根据实际场景添加，如 `perf`, `ci`, `build` 等
+### Type
 
-### Subject 规范
+- `feat`: new feature
+- `fix`: bug fix
+- `refactor`: code refactoring (non-functional change)
+- `docs`: documentation
+- `test`: testing
+- `chore`: build/tooling
+- **Custom types**: permitted (e.g., `perf`, `ci`, `build`)
 
-- 使用祈使语气（如 "add" 而非 "added"）
-- 不要大写开头
-- 不使用句号结尾
-- 控制在 50 字符以内
+### Subject
 
-### Body 规范
+- Use imperative mood ("add" not "added")
+- No leading capital letter
+- No trailing period
+- Keep under 50 characters
 
-- 每行不超过 72 字符
-- 说明变更原因和方式，而非做了什么
-- 可用 "-" 列表形式详细说明
+### Body
 
-### 示例
+- Each line ≤ 72 characters
+- Explain WHY and HOW, not WHAT
+- Use `-` bullet points for details
+
+### Behavior
+
+- **Never commit without explicit permission**
+
+### Example
+
+Proposed commit:
+
 ```
 fix(usb): correct clock macros and port configuration
 
@@ -46,12 +68,16 @@ Model: MiniMax-M2.7 MiniMax
 Agent: opencode opencode@anomaly.co
 ```
 
-## 查询优先级
+Should I commit this change?
 
-在执行任何操作前，必须按以下顺序查询相关文件：
+---
 
-1. **AGENT.md** - 本文件，包含行为规范
-2. **README.md** - 项目概述和构建说明
-3. **项目目录结构** - 了解代码组织
-4. **相关头文件** - 理解接口和类型定义
-5. **相近功能的实现** - 参考现有代码模式
+## 2. Query Priority
+
+Before any operation, query files in this order:
+
+1. **AGENT.md** - this file
+2. **README.md** - project overview and build instructions
+3. **Project structure** - understand code organization
+4. **Relevant headers** - understand interfaces and types
+5. **Similar implementations** - reference existing code patterns
