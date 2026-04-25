@@ -19,6 +19,8 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "build_info.h"
+
 #include "utils/types.h"
 #include "utils/utils.h"
 
@@ -30,6 +32,7 @@
 #include "tusb.h"
 
 #include <array>
+#include <cstring>
 
 using namespace ThetaGP::Drivers::Peripheral::USB;
 using namespace ThetaGP::Drivers::Peripheral::GPIO;
@@ -69,6 +72,9 @@ void OTG_HS_IRQHandler(void) { tusb_int_handler(1, true); }
 void HardwareUSB::enableClock() const {
 #if defined(STM32H7)
   RCC_PeriphCLKInitTypeDef periphClkInitStruct;
+
+  std::memset(&periphClkInitStruct, 0, sizeof(RCC_PeriphCLKInitTypeDef));
+
   periphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USB;
 
   if (_speed == USBSpeed::UsbFullSpeed) {
@@ -147,6 +153,8 @@ void HardwareUSB::initFullSpeedPins() {
 
 ThetaGP::RetVal HardwareUSB::init() {
   enableClock();
+
+  delay_ms(5);
 
   if (_speed == USBSpeed::UsbHighSpeedExternalPHY &&
       _peripheral == USBPeripheral::ULPI) {

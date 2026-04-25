@@ -29,6 +29,8 @@
 #include "drivers/device/system_timer.h"
 #include "drivers/gpdriver/gpdrivermgr.h"
 
+#include "drivers/peripherals/systick.h"
+
 #include "tusb.h"
 
 #include "ThetaGP.h"
@@ -70,11 +72,19 @@ void ThetaGPManger::Setup() {
 }
 
 void ThetaGPManger::Bootup() {
-  scheduler.tasksInit();
-  scheduler.init();
+  // scheduler.tasksInit();
+
+  // while (1) {
+  //   scheduler.run();
+  // }
 
   while (1) {
-    scheduler.run();
+    gamepad.process();
+    Drivers::GPDriver::GPDriverManager::getInstance()
+        .getgpdriverDevice()
+        ->process(&gamepad);
+    tud_task();
+    delay_ms(10);
   }
 }
 
