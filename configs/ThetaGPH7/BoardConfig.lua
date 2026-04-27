@@ -39,8 +39,8 @@ M.BoardConfig = {
                 { pin = "PD9" },
             },
             sense_pins = {
-                { pin = "PB0" },
-                { pin = "PB1" },
+                { pin = "PC4" },
+                { pin = "PC5" },
             },
             key_map = {
                 { 0, 1 },
