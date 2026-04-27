@@ -6,6 +6,8 @@
 #include "drivers/peripherals/timer.h"
 #include "drivers/peripherals/usbhw.h"
 
+#include "utils/log/log.h"
+
 using namespace ThetaGP::Drivers::Peripheral;
 
 PeripheralsManager::PeripheralsManager() {}
@@ -22,6 +24,11 @@ BUS::DebugUartBus &PeripheralsManager::debugUart() {
   return BUS::DebugUartBus::getInstance();
 }
 
+static void print(uint8_t *data, uint16_t num) {
+  if (PeripheralsManager::getInstance().debugUart().isInitialized())
+    PeripheralsManager::getInstance().debugUart().write(data, num);
+}
+
 void PeripheralsManager::initPeripherals() {
   cycleCounterInit();
 
@@ -32,6 +39,7 @@ void PeripheralsManager::initPeripherals() {
                          USB::USBPeripheral::ULPI);
   hwusb.init();
 
+  // TODO: debugging code, a way for initializing is needed.
   debugUart().init();
-  debugUart().write((uint8_t *)"Hello world!\r\n", 15);
+  LogInit(print);
 }

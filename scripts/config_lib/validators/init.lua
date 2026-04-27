@@ -7,12 +7,14 @@ M.board_info = require("validators.board_info")
 M.keypad = require("validators.keypad")
 M.usb = require("validators.usb")
 M.uart = require("validators.uart")
+M.log = require("validators.log")
 
 -- Export validation functions
 M.validate_board_info = M.board_info.validate
 M.validate_keypad = M.keypad.validate
 M.validate_usb = M.usb.validate
 M.validate_uart = M.uart.validate
+M.validate_log = M.log.validate
 
 -- Main validation entry point
 function M.validate_config(board_config)
@@ -57,6 +59,19 @@ function M.validate_config(board_config)
         table.insert(errors, "BoardConfig.necessary is required")
     end
     
+    -- Validate log configuration
+    if board_config.BoardConfig and board_config.BoardConfig.enable_log ~= nil then
+        local valid, err = M.validate_log(board_config.BoardConfig)
+        if not valid then
+            table.insert(errors, "Log: " .. err)
+        end
+    elseif board_config.BoardConfig and board_config.BoardConfig.log_level ~= nil then
+        local valid, err = M.validate_log(board_config.BoardConfig)
+        if not valid then
+            table.insert(errors, "Log: " .. err)
+        end
+    end
+
     -- Throw error if validation failed
     if #errors > 0 then
         local error_msg = "Configuration validation failed:\n"

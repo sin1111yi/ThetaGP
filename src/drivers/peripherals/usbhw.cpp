@@ -57,7 +57,6 @@ static constexpr std::array<PinDesc, 12> ULPIPinDescs = {{
 static constexpr uint32_t GpioAlternateUSB = 0x0A;
 
 extern "C" {
-
 // Despite being call USB2_OTG_FS on some MCUs
 // OTG_FS is marked as RHPort0 by TinyUSB to be consistent across stm32 port
 void OTG_FS_IRQHandler(void) { tusb_int_handler(0, true); }
@@ -111,7 +110,7 @@ void HardwareUSB::initULPIPins() {
   HAL_NVIC_SetPriority(OTG_HS_IRQn,
                        NVIC_PRIORITY_BASE(PRIORITY(PriorityVeryHigh)),
                        NVIC_PRIORITY_SUB(PRIORITY(PriorityVeryHigh)));
-  HAL_NVIC_EnableIRQ(OTG_HS_IRQn);
+  //   HAL_NVIC_EnableIRQ(OTG_HS_IRQn);
 
 #undef PRIORITY
 #endif

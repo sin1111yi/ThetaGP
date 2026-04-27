@@ -85,7 +85,7 @@ void UartBus::enableClock() {
     break;
   default:
     periphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USART234578;
-    periphClkInitStruct.Usart16ClockSelection = RCC_USART16CLKSOURCE_D2PCLK2;
+    periphClkInitStruct.Usart234578ClockSelection = RCC_USART234578CLKSOURCE_D2PCLK1;
     break;
   }
 

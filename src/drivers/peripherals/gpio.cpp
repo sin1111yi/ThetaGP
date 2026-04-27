@@ -135,8 +135,6 @@ void Gpio::init() {
 
   HAL_GPIO_Init(reinterpret_cast<GPIO_TypeDef *>(getPortAddress()), &gpioInit);
 #endif
-  reset();
-
   _initialized = true;
 }
 
