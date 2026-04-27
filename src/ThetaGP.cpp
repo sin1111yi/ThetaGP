@@ -21,6 +21,8 @@
 
 #include "BoardConfig.h"
 
+#include "utils/log/log.h"
+
 #include "gamepad/gamepad.h"
 #include "gamepad/scheduler/scheduler.h"
 
@@ -55,13 +57,18 @@ void ThetaGPManger::Setup() {
   gpDriverManager.setup(Drivers::GPDriver::InputMode::HID);
 
   // TinyUSB initialize
-  tusb_init(1);
+  tusb_rhport_init_t dev_init = {
+    .role = TUSB_ROLE_DEVICE,
+    .speed = TUSB_SPEED_HIGH
+  };
+  tusb_init(1, &dev_init);
 
   // setup devices' driver
   deviceManager.registerDevice(
       reinterpret_cast<Device *>(&Drivers::Device::Keypad::getInstance()));
   deviceManager.registerDevice(
-      reinterpret_cast<Device *>(&Drivers::Device::SystemTimer::getInstance()));
+      reinterpret_cast<Device
+      *>(&Drivers::Device::SystemTimer::getInstance()));
   deviceManager.initDevices();
 
   // setup gamepad

@@ -78,14 +78,14 @@ public:
   using UartBus::enableClock;
   using UartBus::init;
 
-  RetVal write(uint8_t byte) override { UartBus::write(byte); };
+  RetVal write(uint8_t byte) override { return UartBus::write(byte); };
   RetVal write(uint8_t *bytes, uint16_t num) override {
-    UartBus::write(bytes, num);
+    return UartBus::write(bytes, num);
   };
 
-  RetVal read(uint8_t *byte) override { UartBus::read(byte); };
+  RetVal read(uint8_t *byte) override { return UartBus::read(byte); };
   RetVal read(uint8_t *bytes, uint16_t num) override {
-    UartBus::read(bytes, num);
+    return UartBus::read(bytes, num);
   };
 
 #else

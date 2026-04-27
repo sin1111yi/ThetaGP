@@ -20,10 +20,10 @@ function M.generate_mcu_header(mcu_series)
     return MCU_HEADER_MAP[mcu_series] or ""
 end
 
-function M.generate_content(mcu_series, board_info, pin_lines, keypad_lines, usb_lines, uart_lines)
+function M.generate_content(mcu_series, board_info, pin_lines, keypad_lines, usb_lines, uart_lines, log_lines)
     local mcu_header = M.generate_mcu_header(mcu_series)
     local board_info_lines = M.generate_board_info(board_info)
-    
+
     local content = [[
 /*
  * This file is a part of ThetaGP.
@@ -47,11 +47,11 @@ function M.generate_content(mcu_series, board_info, pin_lines, keypad_lines, usb
 #pragma once
 
 ]]
-    
+
     if mcu_header ~= "" then
         content = content .. mcu_header .. "\n\n"
     end
-    
+
     -- Board Information
     content = content .. [[// =============================================================================
 // Board Information
@@ -60,7 +60,7 @@ function M.generate_content(mcu_series, board_info, pin_lines, keypad_lines, usb
     for _, line in ipairs(board_info_lines) do
         content = content .. line .. "\n"
     end
-    
+
     -- Pin Definitions
     content = content .. [[
 
@@ -72,7 +72,7 @@ function M.generate_content(mcu_series, board_info, pin_lines, keypad_lines, usb
     for _, line in ipairs(pin_lines) do
         content = content .. line .. "\n"
     end
-    
+
     -- Keypad Configuration
     if #keypad_lines > 0 then
         content = content .. [[
@@ -85,7 +85,7 @@ function M.generate_content(mcu_series, board_info, pin_lines, keypad_lines, usb
             content = content .. line .. "\n"
         end
     end
-    
+
     -- USB Configuration
     if #usb_lines > 0 then
         content = content .. [[
@@ -98,7 +98,7 @@ function M.generate_content(mcu_series, board_info, pin_lines, keypad_lines, usb
             content = content .. line .. "\n"
         end
     end
-    
+
     -- UART Configuration
     if #uart_lines > 0 then
         content = content .. [[
@@ -111,7 +111,14 @@ function M.generate_content(mcu_series, board_info, pin_lines, keypad_lines, usb
             content = content .. line .. "\n"
         end
     end
-    
+
+    -- Log Configuration
+    if log_lines and #log_lines > 0 then
+        for _, line in ipairs(log_lines) do
+            content = content .. line .. "\n"
+        end
+    end
+
     return content
 end
 

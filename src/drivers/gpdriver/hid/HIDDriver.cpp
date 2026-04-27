@@ -115,7 +115,7 @@ bool HIDDriver::process(Gamepad *gamepad) {
   uint16_t report_size = sizeof(hidReport);
   if (memcmp(last_report, report, report_size) != 0) {
     // HID ready + report sent, copy previous report
-    if (tud_hid_ready() && tud_hid_report(1, report, report_size) == true) {
+    if (tud_hid_ready() && tud_hid_report(0, report, report_size) == true) {
       memcpy(last_report, report, report_size);
       return true;
     }
@@ -126,6 +126,9 @@ bool HIDDriver::process(Gamepad *gamepad) {
 
 uint16_t HIDDriver::get_report(uint8_t report_id, hid_report_type_t report_type,
                                uint8_t *buffer, uint16_t reqlen) {
+  UNUSED(report_id);
+  UNUSED(report_type);
+  UNUSED(reqlen);
   memcpy(buffer, &hidReport, sizeof(HIDReport));
   return sizeof(HIDReport);
 }

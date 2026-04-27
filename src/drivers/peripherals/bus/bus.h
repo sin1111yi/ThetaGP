@@ -32,7 +32,7 @@ class Bus {
 protected:
   Type _type;
   Mode _mode = Mode::Polling;
-  bool _initialized;
+  bool _initialized = false;
 
   /**
    * @note For MCUs like STM32H7, DTCMRAM cannot be accessed by DMA.

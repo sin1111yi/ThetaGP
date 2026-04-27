@@ -27,6 +27,8 @@ M.BoardInfo = {
 }
 
 M.BoardConfig = {
+    enable_log = true,
+    log_level = "Warn",
     necessary = {
         led0 = { pin = "PD8", active_low = true },
         keypad = {

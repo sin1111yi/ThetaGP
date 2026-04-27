@@ -33,10 +33,9 @@ file(GLOB_RECURSE SRC_FILES
 # =============================================================================
 # TinyUSB Configuration
 # =============================================================================
-
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Compiling TinyUSB with CFG_TUSB_DEBUG=1")
-    set(TINYUSB_DEBUG_LEVEL 1)
+    set(TINYUSB_DEBUG_LEVEL 3)
 else()
     set(TINYUSB_DEBUG_LEVEL 0)
 endif()
@@ -56,12 +55,11 @@ if(BOARD_MCU_SERIES STREQUAL "STM32H7")
     )
 endif()
 
-set(TINYUSB_CONFIG_FILE "build/tusb_config.h")
+set(TINYUSB_CONFIG_FILE "conf/tusb_config.h")
 
 # =============================================================================
 # MbedTLS Configuration
 # =============================================================================
-
 set(MBEDTLS_PATH "${CMAKE_SOURCE_DIR}/lib/mbedtls")
 set(MBEDTLS_SRC_PATH "${MBEDTLS_PATH}/library")
 set(MBEDTLS_INC_PATH "${MBEDTLS_PATH}/include")
@@ -100,6 +98,7 @@ target_sources(${CMAKE_PROJECT_NAME}
     PRIVATE
     ${SRC_FILES}
     ${TINYUSB_SOURCES}
+
     # ${MBEDTLS_SOURCES}
 )
 
@@ -107,6 +106,7 @@ target_include_directories(${CMAKE_PROJECT_NAME}
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${TINYUSB_SRC_PATH}
+
     # ${TINYUSB_SRC_PATH}/../lib/networking
 
     # ${MBEDTLS_INC_PATH}
@@ -125,10 +125,11 @@ target_compile_definitions(${CMAKE_PROJECT_NAME}
 
     CFG_TUSB_MCU=OPT_MCU_${BOARD_MCU_SERIES}
     CFG_TUSB_DEBUG=${TINYUSB_DEBUG_LEVEL}
-
     CFG_TUSB_CONFIG_FILE="${TINYUSB_CONFIG_FILE}"
+
     # MBEDTLS_CONFIG_FILE="${MBEDTLS_CONFIG_FILE}"
     # ${MBEDTLS_DEFS}
+    THETAGP_SRC_PATH="${CMAKE_SOURCE_DIR}"
 )
 
 # Set link script

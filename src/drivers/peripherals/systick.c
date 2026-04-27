@@ -23,7 +23,7 @@
 
 #include "build_info.h"
 
-#include "build/atomic.h"
+#include "utils/atomic.h"
 #include "utils/time.h"
 
 #define DWT_LAR_UNLOCK_VALUE 0xC5ACCE55
