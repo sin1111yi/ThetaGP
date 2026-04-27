@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "BoardConfig.h"
 #include <stdint.h>
 
 #define HID_ENDPOINT_SIZE 64
@@ -13,8 +14,8 @@
 // Windows, even though the driver is supplied by Microsoft, an
 // INF file is needed to load the driver.  These numbers need to
 // match the INF file.
-#define VENDOR_ID         0x0483
-#define PRODUCT_ID        0x5710
+#define VENDOR_ID         0x0100
+#define PRODUCT_ID        0x0100
 
 /**************************************************************************
  *
@@ -64,8 +65,8 @@ typedef struct __attribute((packed, aligned(1))) {
 } HIDReport;
 
 static const uint8_t hid_string_language[] = {0x09, 0x04};
-static const uint8_t hid_string_manufacturer[] = "Theta Gamepad Project";
-static const uint8_t hid_string_product[] = "ThetaGP (Generic HID)";
+static const uint8_t hid_string_manufacturer[] = "ThetaGamepad";
+static const uint8_t hid_string_product[] = BOARD_NAME;
 static const uint8_t hid_string_version[] = "1.0";
 
 static const uint8_t *hid_string_descriptors[]

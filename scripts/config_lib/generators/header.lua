@@ -9,20 +9,12 @@ local MCU_HEADER_MAP = {
     STM32F1 = '#include "stm32f1xx.h"',
 }
 
-function M.generate_board_info(board_info)
-    local lines = {}
-    table.insert(lines, string.format('#define BOARD_IDENTIFIER    "%s"', board_info.identifier or ""))
-    table.insert(lines, string.format('#define BOARD_NAME          "%s"', board_info.name or ""))
-    return lines
-end
-
 function M.generate_mcu_header(mcu_series)
     return MCU_HEADER_MAP[mcu_series] or ""
 end
 
 function M.generate_content(mcu_series, board_info, pin_lines, keypad_lines, usb_lines, uart_lines, log_lines)
     local mcu_header = M.generate_mcu_header(mcu_series)
-    local board_info_lines = M.generate_board_info(board_info)
 
     local content = [[
 /*
