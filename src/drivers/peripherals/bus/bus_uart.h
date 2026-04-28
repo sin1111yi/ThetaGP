@@ -36,6 +36,7 @@ struct UartDesc {
 
 class UartBus : public Bus {
 private:
+  static constexpr uint32_t _bufSize = 256;
   UartDesc _desc;
   UART_HandleTypeDef _handle;
   void configTxRxPins();
@@ -58,6 +59,7 @@ public:
   RetVal read(uint8_t *bytes, uint16_t num) override;
 };
 
+// singleton debug uart
 class DebugUartBus : public UartBus {
 public:
 #if defined(DEBUG_UART)

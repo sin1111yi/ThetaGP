@@ -15,10 +15,10 @@ using namespace ThetaGP::Mempool;
 #define BUS_TX_POOL_SIZE 2048
 #define BUS_RX_POOL_SIZE 2048
 
-COMMON_CODE static uint8_t BusMemPool[BUS_TX_POOL_SIZE + BUS_RX_POOL_SIZE + 16];
+COMMON_CODE static uint8_t s_BusMempool[BUS_TX_POOL_SIZE + BUS_RX_POOL_SIZE + 16];
 
 BusMem::BusMem()
-    : _initialized(false), _mem(static_cast<uint8_t *>(BusMemPool)) {}
+    : _initialized(false), _mem(static_cast<uint8_t *>(s_BusMempool)) {}
 
 bool BusMem::init() {
   return initPool(_mem, BUS_TX_POOL_SIZE, _mem + BUS_TX_POOL_SIZE,
@@ -65,9 +65,6 @@ void BusMem::deinit() {
 bool BusMem::isInitialized() { return _initialized; }
 
 void *BusMem::allocTxBuffer(uint32_t size) {
-  if (!_initialized) {
-    return nullptr;
-  }
   return MempoolManager::getInstance().alloc(
       static_cast<uint16_t>(PoolId::TxBuffer), size);
 }
@@ -81,9 +78,6 @@ void BusMem::freeTxBuffer(void *ptr) {
 }
 
 void *BusMem::allocRxBuffer(uint32_t size) {
-  if (!_initialized) {
-    return nullptr;
-  }
   return MempoolManager::getInstance().alloc(
       static_cast<uint16_t>(PoolId::RxBuffer), size);
 }

@@ -42,4 +42,6 @@ void PeripheralsManager::initPeripherals() {
   // TODO: debugging code, a way for initializing is needed.
   debugUart().init();
   LogInit(print);
+
+  LOG_DEBUG("Peripherals Init Done!");
 }
