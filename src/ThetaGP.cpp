@@ -22,6 +22,7 @@
 #include "BoardConfig.h"
 
 #include "utils/log/log.h"
+#include "utils/mempool/mempoolmanager.h"
 
 #include "gamepad/gamepad.h"
 #include "gamepad/scheduler/scheduler.h"
@@ -41,15 +42,19 @@ using namespace ThetaGP;
 
 using Device = Drivers::Device::Device;
 
-ThetaGPManger::ThetaGPManger()
+ThetaGamepad::ThetaGamepad()
     : gamepad(Gamepad::Gamepad::getInstance()),
       scheduler(Gamepad::Scheduler::getInstance()),
       peripheralsManager(
           Drivers::Peripheral::PeripheralsManager::getInstance()),
       gpDriverManager(Drivers::GPDriver::GPDriverManager::getInstance()),
-      deviceManager(Drivers::Device::DeviceManager::getInstance()) {}
+      deviceManager(Drivers::Device::DeviceManager::getInstance()),
+      mempoolManager(Mempool::MempoolManager::getInstance()) {}
 
-void ThetaGPManger::Setup() {
+void ThetaGamepad::Setup() {
+  // initialize Mempool Manager
+  mempoolManager.init();
+
   // setup peripherals' driver
   peripheralsManager.initPeripherals();
 
@@ -60,8 +65,7 @@ void ThetaGPManger::Setup() {
   deviceManager.registerDevice(
       reinterpret_cast<Device *>(&Drivers::Device::Keypad::getInstance()));
   deviceManager.registerDevice(
-      reinterpret_cast<Device
-      *>(&Drivers::Device::SystemTimer::getInstance()));
+      reinterpret_cast<Device *>(&Drivers::Device::SystemTimer::getInstance()));
   deviceManager.initDevices();
 
   // setup gamepad
@@ -71,26 +75,15 @@ void ThetaGPManger::Setup() {
   gamepad.setDefaultMappings();
 }
 
-void ThetaGPManger::Bootup() {
-  // scheduler.tasksInit();
-
-  // while (1) {
-  //   scheduler.run();
-  // }
+void ThetaGamepad::Bootup() {
+  scheduler.tasksInit();
 
   while (1) {
-    gamepad.process();
-    Drivers::GPDriver::GPDriverManager::getInstance()
-        .getgpdriverDevice()
-        ->process(&gamepad);
-    tud_task();
-    delay_ms(10);
+    scheduler.run();
   }
 }
 
 int main(void) {
-  ThetaGP::ThetaGPManger thetaGPMgr;
-
-  thetaGPMgr.Setup();
-  thetaGPMgr.Bootup();
+  ThetaGP::ThetaGamepad::getInstance().Setup();
+  ThetaGP::ThetaGamepad::getInstance().Bootup();
 }

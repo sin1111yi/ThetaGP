@@ -6,19 +6,18 @@
 
 #include "tusb.h"
 
-using namespace ThetaGP::Gamepad;
+#include "ThetaGP.h"
 
-void Scheduler::taskMain(uint32_t currentTimeUs) {
+using namespace ThetaGP;
+
+#define ThetaGP ThetaGPManger::getInstance()
+
+void Gamepad::Scheduler::taskMain(uint32_t currentTimeUs) {
   (void)currentTimeUs;
   return;
 }
 
-void taskThetaGPInit(uint32_t currentTimeUs) {
-  (void)currentTimeUs;
-  return;
-}
-
-void Scheduler::taskGamepadCore(uint32_t currentTimeUs) {
+void Gamepad::Scheduler::taskGamepadCore(uint32_t currentTimeUs) {
   (void)currentTimeUs;
 
   Gamepad::getInstance().process();

@@ -35,19 +35,6 @@
 #include <cstdint>
 #include <cstring>
 
-#include "drivers/peripherals/nvic_exti.h"
-/**
- * @brief debug usb
- * {
- */
-
-#include "drivers/peripherals/peripheralsmgr.h"
-
-/**
- * }
- *
- */
-
 using namespace ThetaGP::Drivers::Device;
 
 namespace ThetaGP::Gamepad {

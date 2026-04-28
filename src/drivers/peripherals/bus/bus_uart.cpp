@@ -52,7 +52,6 @@ void enableBusUartClock(UartInstance uartx) {
 
 UartBus::UartBus(UartInstance uartx, PinDesc tx, PinDesc rx, uint32_t baud) {
   setType(Type::Uart);
-  allocBuf();
 
   _desc.uartx = uartx;
   _desc.tx = tx;
@@ -60,12 +59,23 @@ UartBus::UartBus(UartInstance uartx, PinDesc tx, PinDesc rx, uint32_t baud) {
   _desc.baudrate = baud;
   _initialized = false;
 
+  _pTxBufSize = _bufSize;
+  _pRxBufSize = _bufSize;
+  allocBuf(_bufSize, _bufSize);
+  std::memset(_pRxBuf, 0, _pTxBufSize);
+  std::memset(_pTxBuf, 0, _pRxBufSize);
+
   std::memset(&_handle, 0, sizeof(UART_HandleTypeDef));
 }
 
 UartBus::UartBus(const UartDesc &desc) {
   setType(Type::Uart);
-  allocBuf();
+
+  _pTxBufSize = _bufSize;
+  _pRxBufSize = _bufSize;
+  allocBuf(_bufSize, _bufSize);
+  std::memset(_pRxBuf, 0, _pTxBufSize * sizeof(uint8_t));
+  std::memset(_pTxBuf, 0, _pRxBufSize * sizeof(uint8_t));
 
   _desc = desc;
   _initialized = false;
@@ -85,7 +95,8 @@ void UartBus::enableClock() {
     break;
   default:
     periphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USART234578;
-    periphClkInitStruct.Usart234578ClockSelection = RCC_USART234578CLKSOURCE_D2PCLK1;
+    periphClkInitStruct.Usart234578ClockSelection =
+        RCC_USART234578CLKSOURCE_D2PCLK1;
     break;
   }
 
@@ -154,9 +165,12 @@ void UartBus::init() {
 
 RetVal UartBus::write(uint8_t byte) {
 #if defined(STM32H7)
-  if (_initialized)
-    HAL_UART_Transmit(&_handle, &byte, 1, 0x1000);
-  else
+  if (_initialized) {
+    if (_pTxBuf != NULL && 1 <= _pTxBufSize) {
+      _pTxBuf[0] = byte;
+      HAL_UART_Transmit(&_handle, _pTxBuf, 1, 0x1000);
+    }
+  } else
     ;
 #endif
   return RetVal::Ok;
@@ -164,9 +178,12 @@ RetVal UartBus::write(uint8_t byte) {
 
 RetVal UartBus::write(uint8_t *bytes, uint16_t num) {
 #if defined(STM32H7)
-  if (_initialized)
-    HAL_UART_Transmit(&_handle, bytes, num, 0x1000);
-  else
+  if (_initialized) {
+    if (_pTxBuf != NULL && num <= _pTxBufSize) {
+      std::memcpy(_pTxBuf, bytes, num * sizeof(uint8_t));
+      HAL_UART_Transmit(&_handle, _pTxBuf, num, 0x1000);
+    }
+  } else
     ;
 #endif
   return RetVal::Ok;

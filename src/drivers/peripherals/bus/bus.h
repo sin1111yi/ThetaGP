@@ -42,12 +42,10 @@ protected:
   uint8_t *_pTxBuf;
   uint8_t *_pRxBuf;
   BusMem &_busMem;
+  uint32_t _pTxBufSize;
+  uint32_t _pRxBufSize;
 
-  static constexpr size_t DEFAULT_TX_SIZE = 512;
-  static constexpr size_t DEFAULT_RX_SIZE = 512;
-
-  void allocBuf(size_t txSize = DEFAULT_TX_SIZE,
-                size_t rxSize = DEFAULT_RX_SIZE);
+  void allocBuf(uint32_t txSize, uint32_t rxSize);
 
   void freeBuf();
 

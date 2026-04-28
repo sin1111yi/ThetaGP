@@ -20,7 +20,7 @@ Bus::Bus()
 
 Bus::~Bus() { freeBuf(); }
 
-void Bus::allocBuf(size_t txSize, size_t rxSize) {
+void Bus::allocBuf(uint32_t txSize, uint32_t rxSize) {
   if (_pTxBuf == nullptr) {
     _pTxBuf = static_cast<uint8_t *>(_busMem.allocTxBuffer(txSize));
     if (_pTxBuf != nullptr) {
