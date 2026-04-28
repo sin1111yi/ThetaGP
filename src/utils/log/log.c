@@ -53,8 +53,6 @@ static const char *LogRelativePath(const char *file) {
 
 static const char *LogLevelHint(LogLevel level) {
   switch (level) {
-  case LOG_LV(Debug):
-    return "DEBUG";
   case LOG_LV(Info):
     return "INFO ";
   case LOG_LV(Warn):
@@ -63,6 +61,8 @@ static const char *LogLevelHint(LogLevel level) {
     return "ERROR";
   case LOG_LV(Interface):
     return "LOGIF";
+  case LOG_LV(Debug):
+    return "DEBUG";
   default:
     return "     ";
   }
@@ -77,34 +77,40 @@ static void LogSetRootPath(void) {
 #endif
 }
 
-void LogPrint(LogLevel level, const char *file, const char *format,
-              va_list args) {
-  if (level > g_LogLevel && level != LOG_LV(Interface))
+void LogPrint(LogLevel level, const char *file, uint16_t line,
+              const char *format, va_list args) {
+  if (!(level & LOG_LV_ALWAYS) && level < g_LogLevel)
     return;
 
   const char *level_str = LogLevelHint(level);
   const char *relative_file = LogRelativePath(file);
-  uint16_t prefix_len = 0;
 
   static char buffer[LOG_BUFFER_SIZE];
   memset(buffer, 0, sizeof(buffer));
 
+  int prefix_len = 0;
+
   if (level == LOG_LV(Interface)) {
-    UNUSED(level_str);
-    prefix_len = snprintf(buffer, sizeof(buffer), "[%s]: ", level_str);
+    prefix_len = snprintf(buffer, sizeof(buffer), "[%s:%u]: ",
+                          relative_file, line);
   } else {
-    prefix_len = snprintf(buffer, sizeof(buffer), "[%s][%s]: ", level_str,
-                          relative_file);
+    prefix_len = snprintf(buffer, sizeof(buffer), "[%s][%s:%u]: ",
+                          level_str, relative_file, line);
   }
 
   if (prefix_len > 0 && prefix_len < (int)sizeof(buffer)) {
     vsnprintf(buffer + prefix_len, sizeof(buffer) - prefix_len, format, args);
   }
 
-  buffer[sizeof(buffer) - 1] = '\0';
+  size_t len = strlen(buffer);
+  if (len + 2 < sizeof(buffer)) {
+    buffer[len++] = '\r';
+    buffer[len++] = '\n';
+    buffer[len] = '\0';
+  }
 
   if (g_PrintCallback != NULL)
-    g_PrintCallback((uint8_t *)buffer, strlen(buffer));
+    g_PrintCallback((uint8_t *)buffer, len);
 }
 
 void LogInit(LogPrintFunc func) {

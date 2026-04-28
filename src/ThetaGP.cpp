@@ -56,13 +56,6 @@ void ThetaGPManger::Setup() {
   // setup GP drivers
   gpDriverManager.setup(Drivers::GPDriver::InputMode::HID);
 
-  // TinyUSB initialize
-  tusb_rhport_init_t dev_init = {
-    .role = TUSB_ROLE_DEVICE,
-    .speed = TUSB_SPEED_HIGH
-  };
-  tusb_init(1, &dev_init);
-
   // setup devices' driver
   deviceManager.registerDevice(
       reinterpret_cast<Device *>(&Drivers::Device::Keypad::getInstance()));

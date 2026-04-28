@@ -17,7 +17,7 @@ DEPENDENCIES = {
     {
         name = "tinyusb",
         type = "git",
-        url = "https://github.com/hathach/tinyusb.git",
+        url = "https://github.com/sin1111yi/tinyusb.git",
         tag = "master",
         dest = "lib/tinyusb",
         optional = false,

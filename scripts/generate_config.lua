@@ -99,10 +99,6 @@ local usb_lines = generators.usb.generate(necessary_config.usb)
 -- Generate UART macros
 local uart_lines = generators.uart.generate(necessary_config.bus)
 
--- Generate Log configuration
-local log_config = board_config.BoardConfig or {}
-local log_lines = generators.log.generate(log_config)
-
 -- =============================================================================
 -- Generate output files
 -- =============================================================================

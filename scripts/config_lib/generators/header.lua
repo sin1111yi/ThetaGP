@@ -44,15 +44,6 @@ function M.generate_content(mcu_series, board_info, pin_lines, keypad_lines, usb
         content = content .. mcu_header .. "\n\n"
     end
 
-    -- Board Information
-    content = content .. [[// =============================================================================
-// Board Information
-// =============================================================================
-]]
-    for _, line in ipairs(board_info_lines) do
-        content = content .. line .. "\n"
-    end
-
     -- Pin Definitions
     content = content .. [[
 
