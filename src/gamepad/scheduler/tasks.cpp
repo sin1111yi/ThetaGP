@@ -10,7 +10,7 @@
 
 using namespace ThetaGP;
 
-#define ThetaGP ThetaGPManger::getInstance()
+#define ThetaGP ThetaGamepad::getInstance()
 
 void Gamepad::Scheduler::taskMain(uint32_t currentTimeUs) {
   (void)currentTimeUs;
