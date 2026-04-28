@@ -30,6 +30,17 @@ if(NOT DEFINED CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
     set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type (e.g. Debug, Release, RelWithDebInfo)" FORCE)
 endif()
 
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(THETAGP_CFG_LOG_ENABLE 1)
+
+    if(NOT DEFINED THETAGP_CFG_LOG_LEVEL)
+        message(STATUS "Set ThetaGP Log Level to Debug.")
+        set(THETAGP_CFG_LOG_LEVEL "Debug")
+    endif()
+else()
+    set(THETAGP_CFG_LOG_ENABLE 0)
+endif()
+
 # Get version from git
 find_package(Git)
 

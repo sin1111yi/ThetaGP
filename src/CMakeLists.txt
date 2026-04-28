@@ -33,8 +33,7 @@ file(GLOB_RECURSE SRC_FILES
 # =============================================================================
 # TinyUSB Configuration
 # =============================================================================
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    message(STATUS "Compiling TinyUSB with CFG_TUSB_DEBUG=1")
+if(${THETAGP_CFG_LOG_LEVEL} STREQUAL "Debug")
     set(TINYUSB_DEBUG_LEVEL 3)
 else()
     set(TINYUSB_DEBUG_LEVEL 0)
@@ -129,7 +128,10 @@ target_compile_definitions(${CMAKE_PROJECT_NAME}
 
     # MBEDTLS_CONFIG_FILE="${MBEDTLS_CONFIG_FILE}"
     # ${MBEDTLS_DEFS}
+    THETAGP_CFG_LOG_ENABLE=${THETAGP_CFG_LOG_ENABLE}
+    THETAGP_CFG_LOG_LEVEL=${THETAGP_CFG_LOG_LEVEL}
     THETAGP_SRC_PATH="${CMAKE_SOURCE_DIR}"
+
     BOARD_IDENTIFIER="${BOARD_IDENTIFIER}"
     BOARD_NAME="${BOARD_NAME}"
 )

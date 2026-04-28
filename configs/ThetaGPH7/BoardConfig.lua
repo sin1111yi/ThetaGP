@@ -20,15 +20,13 @@
 local M = {}
 
 M.BoardInfo = {
-    identifier = "ThetaGPH7",
-    name = "ThetaGP_Ver.Ultra",
+    identifier = "ThetaGPH743",
+    name = "ThetaGP-H743_Ver.Ultra",
     mcu = "STM32H743xx",
     mcu_series = "STM32H7",
 }
 
 M.BoardConfig = {
-    enable_log = true,
-    log_level = "Warn",
     necessary = {
         led0 = { pin = "PD8", active_low = true },
         keypad = {
