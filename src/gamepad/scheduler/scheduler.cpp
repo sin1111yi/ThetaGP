@@ -1,41 +1,9 @@
-/**
- * This file is a part of ThetaGP.
- *
- * ThetaGP is free software: you can redistribute it
- * and/or modify it under the terms of the GNU General
- * Public License as published by the Free Software
- * Foundation, either version 3 of the License, or (at your
- * option) any later version.
- *
- * ThetaGP is distributed in the hope that it will be
- * useful, but WITHOUT ANY WARRANTY; without even the
- * implied warranty of MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE. See the GNU General Public License
- * for more details.
- *
- * You should have received a copy of the GNU General Public
- * License along with this program.
- *
- * If not, see <https://www.gnu.org/licenses/>.
- */
-
-/**
- * @file scheduler.cpp
- * @brief Task scheduler implementation
- *
- * @note Based on Betaflight 4.3-maintenance scheduler
- * @see https://github.com/betaflight/betaflight/tree/4.3-maintenance
- */
-
 #include "gamepad/scheduler/scheduler.h"
-#include "gamepad/gamepad.h"
 
 #include <algorithm>
 #include <climits>
 #include <cstdint>
 #include <cstring>
-
-using namespace ThetaGP::Drivers::Device;
 
 namespace ThetaGP::Gamepad {
 
@@ -43,127 +11,37 @@ namespace ThetaGP::Gamepad {
 // Scheduler Constructor
 // ============================================================================
 
-/* clang-format off */
-Scheduler::Scheduler()
-    : timer(SystemTimer::getInstance()),
-      taskPool(),
-      taskCount(0),
-      currentTask(nullptr),
-      ignoreCurrentTaskExecRate(false),
-      ignoreCurrentTaskExecTime(false),
-      taskQueuePos(0), taskQueueSize(0),
-      desiredPeriodCycles(0),
-      lastTargetCycles(0),
-      schedLoopStartCycles(0),
-      schedLoopStartMinCycles(0),
-      schedLoopStartMaxCycles(0),
-      schedLoopStartDeltaDownCycles(0),
-      schedLoopStartDeltaUpCycles(0),
-      taskGuardCycles(0),
-      taskGuardMinCycles(0),
-      taskGuardMaxCycles(0),
-      taskGuardDeltaDownCycles(0),
-      taskGuardDeltaUpCycles(0),
-      taskTotalExecutionTimeUs(0),
-      averageSystemLoadPercent(0),
-      checkFuncMaxExecutionTimeUs(0),
-      checkFuncTotalExecutionTimeUs(0),
-      checkFuncMovingSumExecutionTimeUs(0),
-      checkFuncMovingSumDeltaTimeUs(0),
-      lateTaskCount(0),
-      lateTaskTotal(0),
-      nextTimingCycles(0),
-      taskNextStateTimeUs(0),
-      scheduleCount(0)
-/* clang-format on */
-{
-  std::memset(taskPoolMemory, 0, sizeof(taskPoolMemory));
-  std::memset(taskQueueArray, 0, sizeof(taskQueueArray));
-}
-
-// ============================================================================
-// Scheduler Statistics
-// ============================================================================
-
-uint16_t Scheduler::getAverageSystemLoadPercent() {
-  return averageSystemLoadPercent;
-}
-
-float Scheduler::getCycleTimeMultiplier() {
-  return static_cast<float>(timer.microsToCycles(
-             getTask(TaskId::GPCore)->attribute->desiredPeriodUs)) /
-         desiredPeriodCycles;
-}
+Scheduler::Scheduler() = default;
 
 // ============================================================================
 // Scheduler Initialization
 // ============================================================================
 
 void Scheduler::init() {
-  queueClear();
-  queueAdd(getTask(TaskId::System));
-
-  schedLoopStartMinCycles = timer.microsToCycles(SCHED_START_LOOP_MIN_US);
-  schedLoopStartMaxCycles = timer.microsToCycles(SCHED_START_LOOP_MAX_US);
+  schedLoopStartMinCycles = timer->microsToCycles(SCHED_START_LOOP_MIN_US);
+  schedLoopStartMaxCycles = timer->microsToCycles(SCHED_START_LOOP_MAX_US);
   schedLoopStartCycles = schedLoopStartMinCycles;
   schedLoopStartDeltaDownCycles =
-      static_cast<int32_t>(timer.microsToCycles(1)) /
+      static_cast<int32_t>(timer->microsToCycles(1)) /
       SCHED_START_LOOP_DOWN_STEP;
   schedLoopStartDeltaUpCycles =
-      static_cast<int32_t>(timer.microsToCycles(1)) / SCHED_START_LOOP_UP_STEP;
+      static_cast<int32_t>(timer->microsToCycles(1)) / SCHED_START_LOOP_UP_STEP;
 
-  taskGuardMinCycles = timer.microsToCycles(TASK_GUARD_MARGIN_MIN_US);
-  taskGuardMaxCycles = timer.microsToCycles(TASK_GUARD_MARGIN_MAX_US);
+  taskGuardMinCycles = timer->microsToCycles(TASK_GUARD_MARGIN_MIN_US);
+  taskGuardMaxCycles = timer->microsToCycles(TASK_GUARD_MARGIN_MAX_US);
   taskGuardCycles = taskGuardMinCycles;
-  taskGuardDeltaDownCycles = static_cast<int32_t>(timer.microsToCycles(1)) /
+  taskGuardDeltaDownCycles = static_cast<int32_t>(timer->microsToCycles(1)) /
                              TASK_GUARD_MARGIN_DOWN_STEP;
-  taskGuardDeltaUpCycles =
-      static_cast<int32_t>(timer.microsToCycles(1)) / TASK_GUARD_MARGIN_UP_STEP;
+  taskGuardDeltaUpCycles = static_cast<int32_t>(timer->microsToCycles(1)) /
+                           TASK_GUARD_MARGIN_UP_STEP;
 
-  desiredPeriodCycles = timer.microsToCycles(
-      getTask(TaskId::GPCore)->attribute->desiredPeriodUs);
-  lastTargetCycles = timer.getCycleCounter();
-
-  for (uint8_t i = 0; i < static_cast<uint8_t>(TaskId::Count); i++) {
-    resetTaskStatistics(static_cast<TaskId>(i));
+  if (realtimeTask && realtimeTask->attribute) {
+    desiredPeriodCycles =
+        timer->microsToCycles(realtimeTask->attribute->desiredPeriodUs);
+  } else {
+    desiredPeriodCycles = timer->microsToCycles(TASK_PERIOD_HZ(1000));
   }
-
-  timer.init();
-}
-
-void Scheduler::tasksInit() {
-  taskPool.init(taskPoolMemory, TASK_POOL_SIZE);
-  taskCount = 0;
-
-  static TaskAttribute staticAttributes[] = {
-      {"SYSTEM", "LOAD", nullptr,
-       [](uint32_t t) { Scheduler::getInstance().taskSystemLoad(t); },
-       TASK_PERIOD_HZ(10), static_cast<int8_t>(TaskPriority::High)},
-      {"SYSTEM", "UPDATE", nullptr,
-       [](uint32_t t) { Scheduler::getInstance().taskMain(t); },
-       TASK_PERIOD_HZ(1000), static_cast<int8_t>(TaskPriority::High)},
-      {"GAMEPAD", "CORE", nullptr,
-       [](uint32_t t) { Scheduler::getInstance().taskGamepadCore(t); },
-       TASK_PERIOD_HZ(1000), static_cast<int8_t>(TaskPriority::Realtime)},
-  };
-
-  for (size_t i = 0; i < (sizeof(staticAttributes) / sizeof(TaskAttribute)) &&
-                     i < MAX_STATIC_TASKS;
-       i++) {
-    staticTasks[i].attribute = &staticAttributes[i];
-    allSlots[i].task = &staticTasks[i];
-    allSlots[i].enabled = true;
-    allSlots[i].isStatic = true;
-    taskCount++;
-  }
-
-  init();
-
-  setTaskEnabled(getStaticTask(0), true);
-  setTaskEnabled(getStaticTask(1), true);
-  setTaskEnabled(getStaticTask(2), true);
-
-  rescheduleTask(TaskId::GPCore, TASK_PERIOD_HZ(1000));
+  lastTargetCycles = timer->getCycleCounter();
 }
 
 // ============================================================================
@@ -171,8 +49,6 @@ void Scheduler::tasksInit() {
 // ============================================================================
 
 void Scheduler::run() {
-  static uint32_t checkCycles = 0;
-  static uint32_t scheduleCount = 0;
   uint32_t currentTimeUs = 0;
   uint32_t nowCycles = 0;
   Task *selectedTask = nullptr;
@@ -180,8 +56,7 @@ void Scheduler::run() {
   uint32_t nextTargetCycles = 0;
   int32_t schedLoopRemainingCycles = 0;
 
-  Task *keypadTask = getTask(TaskId::GPCore);
-  nowCycles = timer.getCycleCounter();
+  nowCycles = timer->getCycleCounter();
 
   nextTargetCycles = lastTargetCycles + desiredPeriodCycles;
   schedLoopRemainingCycles = cmpTimeCycles(nextTargetCycles, nowCycles);
@@ -211,29 +86,31 @@ void Scheduler::run() {
     }
 
     while (schedLoopRemainingCycles > 0) {
-      nowCycles = timer.getCycleCounter();
+      nowCycles = timer->getCycleCounter();
       schedLoopRemainingCycles = cmpTimeCycles(nextTargetCycles, nowCycles);
     }
 
-    currentTimeUs = timer.getMicros();
-    executeTask(keypadTask, currentTimeUs);
+    currentTimeUs = timer->getMicros();
+    if (realtimeTask) {
+      executeTask(realtimeTask, currentTimeUs);
+    }
 
     if (cmpTimeCycles(nextTimingCycles, nowCycles) < 0) {
-      nextTimingCycles += timer.microsToCycles(1000000);
+      nextTimingCycles += timer->microsToCycles(1000000);
       lateTaskCount = 0;
       lateTaskTotal = 0;
-      taskCount = 0;
+      tasksExecutedThisCycle = 0;
     }
 
     lastTargetCycles = nextTargetCycles;
   }
 
-  nowCycles = timer.getCycleCounter();
+  nowCycles = timer->getCycleCounter();
   schedLoopRemainingCycles = cmpTimeCycles(nextTargetCycles, nowCycles);
 
   if (schedLoopRemainingCycles >
-      static_cast<int32_t>(timer.microsToCycles(CHECK_GUARD_MARGIN_US))) {
-    currentTimeUs = timer.getMicros();
+      static_cast<int32_t>(timer->microsToCycles(CHECK_GUARD_MARGIN_US))) {
+    currentTimeUs = timer->getMicros();
 
     for (Task *task = queueFirst(); task != nullptr; task = queueNext()) {
       if (task->attribute->staticPriority !=
@@ -249,7 +126,7 @@ void Scheduler::run() {
                          currentTimeUs,
                          cmpTimeUs(currentTimeUs, task->lastExecutedAtUs))) {
             const uint32_t checkFuncExecutionTimeUs =
-                cmpTimeUs(timer.getMicros(), currentTimeUs);
+                cmpTimeUs(timer->getMicros(), currentTimeUs);
             checkFuncMovingSumExecutionTimeUs +=
                 checkFuncExecutionTimeUs -
                 checkFuncMovingSumExecutionTimeUs / TASK_STATS_MOVING_SUM_COUNT;
@@ -279,7 +156,7 @@ void Scheduler::run() {
           const uint32_t taskRequiredTimeUs =
               task->anticipatedExecutionTime >> TASK_EXEC_TIME_SHIFT;
           int32_t taskRequiredTimeCycles =
-              static_cast<int32_t>(timer.microsToCycles(taskRequiredTimeUs));
+              static_cast<int32_t>(timer->microsToCycles(taskRequiredTimeUs));
           taskRequiredTimeCycles +=
               static_cast<int32_t>(checkCycles + taskGuardCycles);
 
@@ -292,16 +169,16 @@ void Scheduler::run() {
       }
     }
 
-    checkCycles = cmpTimeCycles(timer.getCycleCounter(), nowCycles);
+    checkCycles = cmpTimeCycles(timer->getCycleCounter(), nowCycles);
 
     if (selectedTask) {
       const uint32_t taskRequiredTimeUs =
           selectedTask->anticipatedExecutionTime >> TASK_EXEC_TIME_SHIFT;
       selectedTask->execTime = taskRequiredTimeUs;
       int32_t taskRequiredTimeCycles =
-          static_cast<int32_t>(timer.microsToCycles(taskRequiredTimeUs));
+          static_cast<int32_t>(timer->microsToCycles(taskRequiredTimeUs));
 
-      nowCycles = timer.getCycleCounter();
+      nowCycles = timer->getCycleCounter();
       schedLoopRemainingCycles = cmpTimeCycles(nextTargetCycles, nowCycles);
 
       taskRequiredTimeCycles += taskGuardCycles;
@@ -309,7 +186,7 @@ void Scheduler::run() {
       if (taskRequiredTimeCycles < schedLoopRemainingCycles) {
         uint32_t anticipatedEndCycles = nowCycles + taskRequiredTimeCycles;
         executeTask(selectedTask, currentTimeUs);
-        nowCycles = timer.getCycleCounter();
+        nowCycles = timer->getCycleCounter();
         int32_t cyclesOverdue = cmpTimeCycles(nowCycles, anticipatedEndCycles);
 
         if (cyclesOverdue > 0) {
@@ -326,7 +203,7 @@ void Scheduler::run() {
           taskGuardCycles -= taskGuardDeltaDownCycles;
         }
 
-        taskCount++;
+        tasksExecutedThisCycle++;
       } else if ((selectedTask->taskAgePeriods > TASK_AGE_EXPEDITE_COUNT)) {
         selectedTask->anticipatedExecutionTime = static_cast<uint32_t>(
             selectedTask->anticipatedExecutionTime * TASK_AGE_EXPEDITE_SCALE);
@@ -335,6 +212,222 @@ void Scheduler::run() {
   }
 
   scheduleCount++;
+}
+
+uint32_t Scheduler::getAndResetTotalExecutionTime() {
+  uint32_t temp = taskTotalExecutionTimeUs;
+  taskTotalExecutionTimeUs = 0;
+  return temp;
+}
+
+// ============================================================================
+// Time Comparison
+// ============================================================================
+
+int32_t Scheduler::cmpTimeCycles(uint32_t t1, uint32_t t2) {
+  return static_cast<int32_t>(t1 - t2);
+}
+
+uint32_t Scheduler::cmpTimeUs(uint32_t t1, uint32_t t2) { return t1 - t2; }
+
+// ============================================================================
+// Task Queue Management
+// ============================================================================
+
+void Scheduler::queueClear() {
+  std::memset(taskQueueArray, 0, sizeof(taskQueueArray));
+  taskQueuePos = 0;
+  taskQueueSize = 0;
+}
+
+bool Scheduler::queueContains(Task *task) {
+  for (size_t ii = 0; ii < taskQueueSize; ++ii) {
+    if (taskQueueArray[ii] == task) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool Scheduler::queueAdd(Task *task) {
+  if ((taskQueueSize >= MAX_TASK_COUNT) || queueContains(task)) {
+    return false;
+  }
+
+  if (task->attribute && task->attribute->staticPriority ==
+                             static_cast<int8_t>(TaskPriority::Realtime)) {
+    if (realtimeTask) {
+      return false;
+    }
+    realtimeTask = task;
+  }
+
+  for (size_t ii = 0; ii <= static_cast<size_t>(taskQueueSize); ++ii) {
+    if (taskQueueArray[ii] == nullptr ||
+        taskQueueArray[ii]->attribute->staticPriority <
+            task->attribute->staticPriority) {
+      std::memmove(&taskQueueArray[ii + 1], &taskQueueArray[ii],
+                   sizeof(Task *) * (taskQueueSize - ii));
+      taskQueueArray[ii] = task;
+      ++taskQueueSize;
+      return true;
+    }
+  }
+  return false;
+}
+
+bool Scheduler::queueRemove(Task *task) {
+  if (task == realtimeTask) {
+    realtimeTask = nullptr;
+  }
+
+  for (size_t ii = 0; ii < taskQueueSize; ++ii) {
+    if (taskQueueArray[ii] == task) {
+      std::memmove(&taskQueueArray[ii], &taskQueueArray[ii + 1],
+                   sizeof(Task *) * (taskQueueSize - ii));
+      --taskQueueSize;
+      return true;
+    }
+  }
+  return false;
+}
+
+Task *Scheduler::queueFirst() {
+  taskQueuePos = 0;
+  return taskQueueArray[0];
+}
+
+Task *Scheduler::queueNext() { return taskQueueArray[++taskQueuePos]; }
+
+// ============================================================================
+// Task State Management
+// ============================================================================
+
+void Scheduler::ignoreTaskStateTime() {
+  ignoreCurrentTaskExecRate = true;
+  ignoreCurrentTaskExecTime = true;
+}
+
+void Scheduler::ignoreTaskExecRate() { ignoreCurrentTaskExecRate = true; }
+
+void Scheduler::ignoreTaskExecTime() { ignoreCurrentTaskExecTime = true; }
+
+bool Scheduler::getIgnoreTaskExecTime() { return ignoreCurrentTaskExecTime; }
+
+void Scheduler::setNextStateTime(uint32_t nextStateTimeUs) {
+  taskNextStateTimeUs = nextStateTimeUs;
+}
+
+uint32_t Scheduler::getNextStateTime() {
+  return currentTask
+             ? (currentTask->anticipatedExecutionTime >> TASK_EXEC_TIME_SHIFT)
+             : 0;
+}
+
+// ============================================================================
+// Task Execution
+// ============================================================================
+
+uint32_t Scheduler::executeTask(Task *selectedTask, uint32_t currentTimeUs) {
+  uint32_t taskExecutionTimeUs = 0;
+
+  if (selectedTask) {
+    currentTask = selectedTask;
+    ignoreCurrentTaskExecRate = false;
+    ignoreCurrentTaskExecTime = false;
+    taskNextStateTimeUs = UINT32_MAX;
+
+    const float period =
+        static_cast<float>(currentTimeUs - selectedTask->lastExecutedAtUs);
+    selectedTask->lastExecutedAtUs = currentTimeUs;
+    selectedTask->lastDesiredAtUs += selectedTask->attribute->desiredPeriodUs;
+    selectedTask->dynamicPriority = 0;
+
+    const uint32_t currentTimeBeforeTaskCallUs = timer->getMicros();
+    selectedTask->attribute->taskFunc(currentTimeBeforeTaskCallUs);
+    taskExecutionTimeUs = timer->getMicros() - currentTimeBeforeTaskCallUs;
+    taskTotalExecutionTimeUs += taskExecutionTimeUs;
+
+    selectedTask->movingSumExecutionTime10thUs +=
+        (taskExecutionTimeUs * 10) -
+        selectedTask->movingSumExecutionTime10thUs /
+            TASK_STATS_MOVING_SUM_COUNT;
+
+    if (!ignoreCurrentTaskExecRate) {
+      selectedTask->taskLatestDeltaTimeUs =
+          cmpTimeUs(currentTimeUs, selectedTask->lastStatsAtUs);
+      selectedTask->movingSumDeltaTime10thUs +=
+          (selectedTask->taskLatestDeltaTimeUs * 10) -
+          selectedTask->movingSumDeltaTime10thUs / TASK_STATS_MOVING_SUM_COUNT;
+      selectedTask->lastStatsAtUs = currentTimeUs;
+    }
+
+    if (taskNextStateTimeUs != UINT32_MAX) {
+      selectedTask->anticipatedExecutionTime = taskNextStateTimeUs
+                                               << TASK_EXEC_TIME_SHIFT;
+    } else if (!ignoreCurrentTaskExecTime) {
+      if (taskExecutionTimeUs >
+          (selectedTask->anticipatedExecutionTime >> TASK_EXEC_TIME_SHIFT)) {
+        selectedTask->anticipatedExecutionTime = taskExecutionTimeUs
+                                                 << TASK_EXEC_TIME_SHIFT;
+      } else if (selectedTask->anticipatedExecutionTime > 1) {
+        selectedTask->anticipatedExecutionTime--;
+      }
+    }
+
+    if (!ignoreCurrentTaskExecTime) {
+      selectedTask->maxExecutionTimeUs =
+          std::max(selectedTask->maxExecutionTimeUs, taskExecutionTimeUs);
+    }
+
+    selectedTask->totalExecutionTimeUs += taskExecutionTimeUs;
+    selectedTask->movingAverageCycleTimeUs +=
+        0.05f * (period - selectedTask->movingAverageCycleTimeUs);
+    selectedTask->runCount++;
+  }
+
+  return taskExecutionTimeUs;
+}
+
+Task *Scheduler::getCurrentTask() { return currentTask; }
+
+void Scheduler::bindTimeBase(Drivers::Device::SystemTimer &t) {
+  if (t.isInitialized())
+    timer = &t;
+}
+
+// ============================================================================
+// Check Function Statistics
+// ============================================================================
+
+void Scheduler::getCheckFuncInfo(CheckFuncInfo *checkFuncInfo) {
+  checkFuncInfo->maxExecutionTimeUs = checkFuncMaxExecutionTimeUs;
+  checkFuncInfo->totalExecutionTimeUs = checkFuncTotalExecutionTimeUs;
+  checkFuncInfo->averageExecutionTimeUs =
+      checkFuncMovingSumExecutionTimeUs / TASK_STATS_MOVING_SUM_COUNT;
+  checkFuncInfo->averageDeltaTimeUs =
+      checkFuncMovingSumDeltaTimeUs / TASK_STATS_MOVING_SUM_COUNT;
+}
+
+void Scheduler::resetCheckFunctionMaxExecutionTime() {
+  checkFuncMaxExecutionTimeUs = 0;
+}
+
+// ============================================================================
+// Task Methods
+// ============================================================================
+
+void Task::resetStatistics() {
+  anticipatedExecutionTime = 0;
+  movingSumDeltaTime10thUs = 0;
+  totalExecutionTimeUs = 0;
+  maxExecutionTimeUs = 0;
+}
+
+void Task::resetMaxExecutionTime() {
+  maxExecutionTimeUs = 0;
+  lateCount = 0;
+  runCount = 0;
 }
 
 } // namespace ThetaGP::Gamepad

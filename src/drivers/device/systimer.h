@@ -22,8 +22,8 @@ public:
   int32_t cyclesToMicros(int32_t cycles) const;
   float cyclesToMicrosf(int32_t cycles) const;
 
-  void delayMicroseconds(uint32_t us) const;
-  void delayMilliseconds(uint32_t ms) const;
+  void sleepMicros(uint32_t us) const;
+  void sleepMillis(uint32_t ms) const;
 
 private:
   SystemTimer();
