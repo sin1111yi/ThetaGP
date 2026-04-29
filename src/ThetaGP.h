@@ -6,14 +6,16 @@
 #include "utils/mempool/mempoolmanager.h"
 
 #include "gamepad/gamepad.h"
-#include "gamepad/scheduler/scheduler.h"
+#include "taskmanager.h"
 
 namespace ThetaGP {
 
 class ThetaGamepad {
 private:
+  friend class Gamepad::TaskManager;
+
   Gamepad::Gamepad &gamepad;
-  Gamepad::Scheduler &scheduler;
+  Gamepad::TaskManager &taskManager;
   Drivers::Peripheral::PeripheralsManager &peripheralsManager;
   Drivers::GPDriver::GPDriverManager &gpDriverManager;
   Drivers::Device::DeviceManager &deviceManager;

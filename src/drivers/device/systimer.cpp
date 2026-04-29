@@ -19,7 +19,7 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "drivers/device/system_timer.h"
+#include "drivers/device/systimer.h"
 #include "drivers/peripherals/systick.h"
 
 namespace ThetaGP::Drivers::Device {
@@ -48,8 +48,8 @@ float SystemTimer::cyclesToMicrosf(int32_t cycles) const {
   return clockCyclesToMicrosf(cycles);
 }
 
-void SystemTimer::delayMicroseconds(uint32_t us) const { delay_us(us); }
+void SystemTimer::sleepMicros(uint32_t us) const { delay_us(us); }
 
-void SystemTimer::delayMilliseconds(uint32_t ms) const { delay_ms(ms); }
+void SystemTimer::sleepMillis(uint32_t ms) const { delay_ms(ms); }
 
 } // namespace ThetaGP::Drivers::Device

@@ -25,11 +25,11 @@
 #include "utils/mempool/mempoolmanager.h"
 
 #include "gamepad/gamepad.h"
-#include "gamepad/scheduler/scheduler.h"
+#include "taskmanager.h"
 
 #include "drivers/device/devicemgr.h"
 #include "drivers/device/keypad.h"
-#include "drivers/device/system_timer.h"
+#include "drivers/device/systimer.h"
 #include "drivers/gpdriver/gpdrivermgr.h"
 
 #include "drivers/peripherals/systick.h"
@@ -44,7 +44,7 @@ using Device = Drivers::Device::Device;
 
 ThetaGamepad::ThetaGamepad()
     : gamepad(Gamepad::Gamepad::getInstance()),
-      scheduler(Gamepad::Scheduler::getInstance()),
+      taskManager(Gamepad::TaskManager::getInstance()),
       peripheralsManager(
           Drivers::Peripheral::PeripheralsManager::getInstance()),
       gpDriverManager(Drivers::GPDriver::GPDriverManager::getInstance()),
@@ -76,10 +76,10 @@ void ThetaGamepad::Setup() {
 }
 
 void ThetaGamepad::Bootup() {
-  scheduler.tasksInit();
+  taskManager.init();
 
   while (1) {
-    scheduler.run();
+    taskManager.run();
   }
 }
 
