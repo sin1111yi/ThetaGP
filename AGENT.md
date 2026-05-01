@@ -6,8 +6,9 @@ This document standardizes AI agent behavior. Read the corresponding section onl
 
 1. [Behavior](#0-behavior)
 2. [Commit Specification](#1-commit-specification)
-3. [Thinking](#2-thinking)
-4. [Query Priority](#3-query-priority)
+3. [Coding Style](#3-coding-style)
+4. [Thinking](#2-thinking)
+5. [Query Priority](#4-query-priority)
 
 ---
 
@@ -83,7 +84,48 @@ The agent's thinking and output language should match the host machine's current
 
 ---
 
-## 3. Query Priority
+## 3. Coding Style
+
+### Member Initialization
+
+Use C++11 inline member initializers instead of constructor initializer
+lists. Reserve `: member(value)` syntax only for base class constructors
+and reference members.
+
+```cpp
+// Good
+class Foo {
+  int _count = 0;
+  Bar *_bar = nullptr;
+  bool _ready = false;
+  Foo() = default;
+};
+
+// Bad
+class Foo {
+  int _count;
+  Bar *_bar;
+  bool _ready;
+  Foo() : _count(0), _bar(nullptr), _ready(false) {}
+};
+```
+
+```cpp
+// Good: base class ctor (required)
+class Derived : public Base {
+  Derived() : Base(someArg) {}
+};
+
+// Good: reference member (required)
+class Holder {
+  Dep &_dep;
+  Holder() : _dep(Dep::getInstance()) {}
+};
+```
+
+---
+
+## 4. Query Priority
 
 Before any operation, query files in this order:
 
