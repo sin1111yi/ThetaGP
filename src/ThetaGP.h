@@ -3,7 +3,6 @@
 #include "drivers/device/devicemgr.h"
 #include "drivers/gpdriver/gpdrivermgr.h"
 #include "drivers/peripherals/peripheralsmgr.h"
-#include "utils/mempool/mempoolmanager.h"
 
 #include "gamepad/gamepad.h"
 #include "taskmanager.h"
@@ -11,15 +10,13 @@
 namespace ThetaGP {
 
 class ThetaGamepad {
-private:
   friend class Gamepad::TaskManager;
 
-  Gamepad::Gamepad &gamepad;
-  Gamepad::TaskManager &taskManager;
-  Drivers::Peripheral::PeripheralsManager &peripheralsManager;
-  Drivers::GPDriver::GPDriverManager &gpDriverManager;
-  Drivers::Device::DeviceManager &deviceManager;
-  Mempool::MempoolManager& mempoolManager;
+private:
+  Gamepad::Gamepad *gamepad = nullptr;
+  Drivers::Peripheral::PeripheralsManager *peripheralsManager = nullptr;
+  Drivers::GPDriver::GPDriverManager *gpDriverManager = nullptr;
+  Drivers::Device::DeviceManager *deviceManager = nullptr;
 
 public:
   ThetaGamepad();

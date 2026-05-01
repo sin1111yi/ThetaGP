@@ -1,111 +1,47 @@
 #pragma once
 
 #include "utils/mempool/mempool.h"
-#include <array>
+#include <cstdint>
+#include <cstring>
 
-namespace ThetaGP {
-namespace Mempool {
+namespace ThetaGP::Mempool {
+
+using PoolID = uint8_t;
+constexpr PoolID INVALID_POOL_ID = 0;
 
 struct MempoolEntry {
-  Mempool pool;       // Memory pool instance
-  uint16_t id;        // Pool identifier
-  bool inUse;         // Entry usage status
-  MempoolEntry *next; // Next entry in linked list
-  MempoolEntry *prev; // Previous entry in linked list
-  char name[16];      // Pool name (max 15 chars + null)
+  Mempool pool;
+  bool inUse = false;
+  char name[16]{};
 };
 
 class MempoolManager {
 public:
   static constexpr uint16_t MAX_POOLS = 8;
 
-  static MempoolManager &getInstance();
+  MempoolManager() = delete;
 
-  // Iterator for traversing managed pools
-  class Iterator {
-  public:
-    Iterator() : _manager(nullptr), _entry(nullptr), _version(0) {}
-    Iterator(const MempoolManager *manager, MempoolEntry *entry,
-             uint16_t version);
+  static void init();
 
-    Mempool &operator*() const;  // Dereference to get pool
-    Mempool *operator->() const; // Arrow operator for pool access
-    uint16_t poolId() const;     // Get pool ID
+  static PoolID createPool(void *memory, size_t size, const char *name);
+  static PoolError destroyPool(PoolID poolId);
 
-    Iterator &operator++();   // Pre-increment
-    Iterator operator++(int); // Post-increment
-    Iterator &operator--();   // Pre-decrement
+  static Mempool *pool(PoolID poolId);
+  static const char *poolName(PoolID poolId);
 
-    bool operator==(const Iterator &other) const;
-    bool operator!=(const Iterator &other) const;
+  static void *alloc(PoolID poolId, size_t size);
+  static PoolError free(PoolID poolId, void *ptr);
 
-    bool isExpired() const; // Check if iterator is expired
-    bool isValid() const;   // Check if entry is valid
-
-  private:
-    const MempoolManager *_manager;
-    MempoolEntry *_entry;
-    uint16_t _version;
-  };
-
-  MempoolManager();
-  ~MempoolManager();
-
-  MempoolManager(const MempoolManager &) = delete;
-  MempoolManager &operator=(const MempoolManager &) = delete;
-
-  void init();
-  void deinit();
-
-  bool isInitialized() const { return _initialized; }
-
-  PoolError addPool(uint16_t poolId, void *memory, size_t size,
-                    const char *name);
-  PoolError addPool(void *memory, size_t size, const char *name);
-  PoolError removePool(uint16_t poolId);
-
-  Mempool *pool(uint16_t poolId);
-  const Mempool *pool(uint16_t poolId) const;
-  Mempool *pool(const char *name);
-  const Mempool *pool(const char *name) const;
-
-  const char *poolName(uint16_t poolId) const;
-
-  void *alloc(uint16_t poolId, size_t size);
-  void *alloc(const char *name, size_t size);
-  PoolError free(uint16_t poolId, void *ptr);
-  PoolError free(const char *name, void *ptr);
-
-  PoolStats poolStats(uint16_t poolId) const;
-  void allStats(PoolStats *stats, uint16_t maxCount) const;
-
-  uint16_t poolCount() const { return _poolCount; }
-  uint16_t version() const { return _version; }
-  size_t totalAllocated() const;
-  size_t totalFree() const;
-
-  Iterator begin();
-  Iterator end();
-  Iterator rbegin();
-  Iterator rend();
-  Iterator cbegin() const;
-  Iterator cend() const;
-  Iterator crbegin() const;
-  Iterator crend() const;
+  static PoolStats poolStats(PoolID poolId);
+  static size_t totalAllocated();
+  static size_t totalFree();
+  static uint16_t poolCount();
 
 private:
-  MempoolEntry *_pools; // Array of pool entries
-  MempoolEntry *_head;  // First used entry
-  MempoolEntry *_tail;  // Last used entry
-  uint16_t _poolCount;  // Number of active pools
-  uint16_t _version;    // Version for iterator invalidation
-  bool _initialized;    // Manager initialization status
+  static MempoolEntry _entries[MAX_POOLS];
+  static bool _initialized;
 
-  MempoolEntry *findEntry(uint16_t poolId);
-  const MempoolEntry *findEntry(uint16_t poolId) const;
-  MempoolEntry *findFreeEntry();
-  void updateListPointers();
+  static MempoolEntry *findFreeEntry();
 };
 
-} // namespace Mempool
-} // namespace ThetaGP
+} // namespace ThetaGP::Mempool
