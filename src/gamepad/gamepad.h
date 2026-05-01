@@ -66,10 +66,7 @@ public:
    */
   void setMapping(uint8_t physicalKeyId, uint8_t gamepadButtonIndex);
 
-  /**
-   * @brief Set default mappings
-   */
-  void setDefaultMappings();
+  void setButtonMappings();
 
   /* clang-format off */
   // GP2040-CE style button query methods (forced inline for performance)

@@ -137,6 +137,24 @@ function M.generate(keypad_config)
         end
     end
 
+    if keypad_config.button_map and #keypad_config.button_map > 0 then
+        table.insert(lines, "")
+        table.insert(lines, "// Physical key to gamepad button mapping")
+        table.insert(lines, "#define KEYPAD_BUTTON_MAP \\")
+
+        local count = #keypad_config.button_map
+        for i, v in ipairs(keypad_config.button_map) do
+            local mask_name = "GAMEPAD_MASK_" .. v:upper()
+            if i < count then
+                table.insert(lines, string.format("    %-20s, \\", mask_name))
+            else
+                table.insert(lines, string.format("    %-20s", mask_name))
+            end
+        end
+
+        table.insert(lines, "")
+    end
+
     return lines
 end
 

@@ -40,46 +40,20 @@ void Gamepad::setMapping(uint8_t physicalKeyId, uint8_t gamepadButtonIndex) {
   }
 }
 
-/**
- * @brief Set default mappings
- *
- * Default layout:
- * Keys 0-3   → B1, B2, B3, B4 (face buttons)
- * Keys 4-5   → L1, R1 (shoulder buttons)
- * Keys 6-7   → S1, S2 (Select, Start)
- * Keys 8-9   → L3, R3 (stick press)
- * Keys 10-11 → A1, A2 (Guide, Capture)
- * Keys 12-15 → Up, Down, Left, Right (D-pad)
- */
-void Gamepad::setDefaultMappings() {
+void Gamepad::setButtonMappings() {
   // Clear all mappings (0xFF = unmapped)
   _mappings.fill(0xFF);
 
-  // Face buttons
-  setMapping(0, 4); // B1
-  setMapping(1, 5); // B2
-  setMapping(2, 6); // B3
-  setMapping(3, 7); // B4
-
-  // Shoulder buttons
-  setMapping(4, 8); // L1
-  setMapping(5, 9); // R1
-
-  // Special buttons
-  setMapping(6, 12); // S1 (Select)
-  setMapping(7, 13); // S2 (Start)
-  setMapping(8, 14); // L3
-  setMapping(9, 15); // R3
-
-  // Extra buttons
-  setMapping(10, 16); // A1 (Guide/Home)
-  setMapping(11, 17); // A2 (Capture)
-
-  // D-pad (if using physical D-pad buttons)
-  setMapping(12, 0); // Up
-  setMapping(13, 1); // Down
-  setMapping(14, 2); // Left
-  setMapping(15, 3); // Right
+#ifdef KEYPAD_BUTTON_MAP
+  constexpr uint32_t masks[] = { KEYPAD_BUTTON_MAP };
+  for (uint8_t i = 0; i < sizeof(masks) / sizeof(masks[0]); i++) {
+    if (masks[i] != 0) {
+      setMapping(i, __builtin_ctz(masks[i]));
+    }
+  }
+#else
+#error "necessary.keypad.button_map must be defined in BoardConfig.lua"
+#endif
 }
 
 /**

@@ -16,6 +16,20 @@ local VALID_ACTIVE_MODES = {
     "high"
 }
 
+local VALID_BUTTON_SUFFIXES = {}
+local BUTTON_SUFFIX_LIST = {
+    "UP", "DOWN", "LEFT", "RIGHT",
+    "B1", "B2", "B3", "B4",
+    "L1", "R1", "L2", "R2",
+    "S1", "S2", "L3", "R3",
+    "A1", "A2", "A3", "A4",
+    "DU", "DD", "DL", "DR",
+    "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8",
+}
+for _, v in ipairs(BUTTON_SUFFIX_LIST) do
+    VALID_BUTTON_SUFFIXES[v] = true
+end
+
 local MODE_REQUIREMENTS = {
     scan_matrix = {
         required = { "drive_pins", "sense_pins" },
@@ -116,6 +130,39 @@ function M.validate_key_map(key_map, drive_num, sense_num)
     return true, nil
 end
 
+function M.validate_button_map(button_map)
+    if type(button_map) ~= "table" then
+        return false, "button_map must be an array"
+    end
+
+    if #button_map == 0 then
+        return false, "button_map must have at least 1 entry"
+    end
+
+    if #button_map > 32 then
+        return false, "button_map cannot exceed 32 entries"
+    end
+
+    for i, v in ipairs(button_map) do
+        if type(v) ~= "string" then
+            return false, string.format(
+                "button_map[%d] must be a string (e.g. 'B1'), got %s",
+                i, type(v)
+            )
+        end
+
+        local suffix = v:upper()
+        if not VALID_BUTTON_SUFFIXES[suffix] then
+            return false, string.format(
+                "button_map[%d] '%s' is not a valid button. Valid examples: B1, L1, S1, UP",
+                i, v
+            )
+        end
+    end
+
+    return true, nil
+end
+
 function M.validate_cross_fields(keypad_config, drive_mode)
     if drive_mode == "scan_matrix" then
         local drive_num = keypad_config.drive_pins and #keypad_config.drive_pins or 0
@@ -192,6 +239,13 @@ function M.validate(keypad_config)
     local valid, err = M.validate_cross_fields(keypad_config, drive_mode)
     if not valid then
         return false, err
+    end
+
+    if keypad_config.button_map then
+        local valid, err = M.validate_button_map(keypad_config.button_map)
+        if not valid then
+            return false, err
+        end
     end
 
     return true, nil
