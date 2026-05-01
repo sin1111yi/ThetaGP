@@ -7,41 +7,18 @@
 
 #include "drivers/peripherals/bus/busmem.h"
 
-#include <cstring>
-
 using namespace ThetaGP::Drivers::Peripheral::BUS;
-using namespace ThetaGP::Mempool;
 
-#define BUS_TX_POOL_SIZE 2048
-#define BUS_RX_POOL_SIZE 2048
+#define BUS_MEMPOOL_SIZE (2048 + 2048 + 16)
 
-COMMON_CODE static uint8_t s_BusMempool[BUS_TX_POOL_SIZE + BUS_RX_POOL_SIZE + 16];
+COMMON_CODE static uint8_t s_BusMempool[BUS_MEMPOOL_SIZE];
 
-BusMem::BusMem()
-    : _initialized(false), _mem(static_cast<uint8_t *>(s_BusMempool)) {}
+BusMem::BusMem() {}
 
 bool BusMem::init() {
-  return initPool(_mem, BUS_TX_POOL_SIZE, _mem + BUS_TX_POOL_SIZE,
-                  BUS_RX_POOL_SIZE);
-}
-
-bool BusMem::initPool(void *txMemory, uint32_t txSize, void *rxMemory,
-                      uint32_t rxSize) {
-
-  MempoolManager &manager = MempoolManager::getInstance();
-
-  // Add TX buffer pool
-  PoolError txErr = manager.addPool(static_cast<uint16_t>(PoolId::TxBuffer),
-                                    txMemory, txSize, "BusTxPool");
-  if (txErr != PoolError::OK) {
-    return false;
-  }
-
-  // Add RX buffer pool
-  PoolError rxErr = manager.addPool(static_cast<uint16_t>(PoolId::RxBuffer),
-                                    rxMemory, rxSize, "BusRxPool");
-  if (rxErr != PoolError::OK) {
-    manager.removePool(static_cast<uint16_t>(PoolId::TxBuffer));
+  _poolId = ThetaGP::Mempool::MempoolManager::createPool(
+      s_BusMempool, BUS_MEMPOOL_SIZE, "BusPool");
+  if (_poolId == ThetaGP::Mempool::INVALID_POOL_ID) {
     return false;
   }
 
@@ -49,61 +26,42 @@ bool BusMem::initPool(void *txMemory, uint32_t txSize, void *rxMemory,
   return true;
 }
 
-void BusMem::deinit() {
-  if (!_initialized) {
-    return;
-  }
-
-  MempoolManager &manager = MempoolManager::getInstance();
-
-  manager.removePool(static_cast<uint16_t>(PoolId::TxBuffer));
-  manager.removePool(static_cast<uint16_t>(PoolId::RxBuffer));
-
-  _initialized = false;
-}
-
-bool BusMem::isInitialized() { return _initialized; }
-
 void *BusMem::allocTxBuffer(uint32_t size) {
-  return MempoolManager::getInstance().alloc(
-      static_cast<uint16_t>(PoolId::TxBuffer), size);
+  return ThetaGP::Mempool::MempoolManager::alloc(_poolId, size);
 }
 
 void BusMem::freeTxBuffer(void *ptr) {
-  if (!_initialized || ptr == nullptr) {
+  if (ptr == nullptr) {
     return;
   }
-  MempoolManager::getInstance().free(static_cast<uint16_t>(PoolId::TxBuffer),
-                                     ptr);
+  ThetaGP::Mempool::MempoolManager::free(_poolId, ptr);
 }
 
 void *BusMem::allocRxBuffer(uint32_t size) {
-  return MempoolManager::getInstance().alloc(
-      static_cast<uint16_t>(PoolId::RxBuffer), size);
+  return ThetaGP::Mempool::MempoolManager::alloc(_poolId, size);
 }
 
 void BusMem::freeRxBuffer(void *ptr) {
-  if (!_initialized || ptr == nullptr) {
+  if (ptr == nullptr) {
     return;
   }
-  MempoolManager::getInstance().free(static_cast<uint16_t>(PoolId::RxBuffer),
-                                     ptr);
+  ThetaGP::Mempool::MempoolManager::free(_poolId, ptr);
 }
 
-PoolStats BusMem::txStats() {
-  return MempoolManager::getInstance().poolStats(
-      static_cast<uint16_t>(PoolId::TxBuffer));
+ThetaGP::Mempool::PoolStats BusMem::txStats() {
+  return ThetaGP::Mempool::MempoolManager::poolStats(_poolId);
 }
 
-PoolStats BusMem::rxStats() {
-  return MempoolManager::getInstance().poolStats(
-      static_cast<uint16_t>(PoolId::RxBuffer));
+ThetaGP::Mempool::PoolStats BusMem::rxStats() {
+  return ThetaGP::Mempool::MempoolManager::poolStats(_poolId);
 }
 
 uint32_t BusMem::totalAllocated() {
-  return MempoolManager::getInstance().totalAllocated();
+  ThetaGP::Mempool::PoolStats s = ThetaGP::Mempool::MempoolManager::poolStats(_poolId);
+  return s.usedSize;
 }
 
 uint32_t BusMem::totalFree() {
-  return MempoolManager::getInstance().totalFree();
+  ThetaGP::Mempool::PoolStats s = ThetaGP::Mempool::MempoolManager::poolStats(_poolId);
+  return s.freeSize;
 }

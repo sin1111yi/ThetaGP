@@ -42,44 +42,42 @@ using namespace ThetaGP;
 
 using Device = Drivers::Device::Device;
 
-ThetaGamepad::ThetaGamepad()
-    : gamepad(Gamepad::Gamepad::getInstance()),
-      taskManager(Gamepad::TaskManager::getInstance()),
-      peripheralsManager(
-          Drivers::Peripheral::PeripheralsManager::getInstance()),
-      gpDriverManager(Drivers::GPDriver::GPDriverManager::getInstance()),
-      deviceManager(Drivers::Device::DeviceManager::getInstance()),
-      mempoolManager(Mempool::MempoolManager::getInstance()) {}
+ThetaGamepad::ThetaGamepad() {
+  gamepad = &Gamepad::Gamepad::getInstance();
+  peripheralsManager = &Drivers::Peripheral::PeripheralsManager::getInstance();
+  gpDriverManager = &Drivers::GPDriver::GPDriverManager::getInstance();
+  deviceManager = &Drivers::Device::DeviceManager::getInstance();
+}
 
 void ThetaGamepad::Setup() {
   // initialize Mempool Manager
-  mempoolManager.init();
+  Mempool::MempoolManager::init();
 
   // setup peripherals' driver
-  peripheralsManager.initPeripherals();
+  peripheralsManager->initPeripherals();
 
   // setup GP drivers
-  gpDriverManager.setup(Drivers::GPDriver::InputMode::HID);
+  gpDriverManager->setup(Drivers::GPDriver::InputMode::HID);
 
   // setup devices' driver
-  deviceManager.registerDevice(
+  deviceManager->registerDevice(
       reinterpret_cast<Device *>(&Drivers::Device::Keypad::getInstance()));
-  deviceManager.registerDevice(
+  deviceManager->registerDevice(
       reinterpret_cast<Device *>(&Drivers::Device::SystemTimer::getInstance()));
-  deviceManager.initDevices();
+  deviceManager->initDevices();
 
   // setup gamepad
-  gamepad.setup();
-  gamepad.registerKeypadDevice(
+  gamepad->setup();
+  gamepad->registerKeypadDevice(
       reinterpret_cast<Device &>(Drivers::Device::Keypad::getInstance()));
-  gamepad.setDefaultMappings();
+  gamepad->setDefaultMappings();
 }
 
 void ThetaGamepad::Bootup() {
-  taskManager.init();
+  Gamepad::TaskManager::init();
 
   while (1) {
-    taskManager.run();
+    Gamepad::TaskManager::run();
   }
 }
 

@@ -9,20 +9,25 @@
 
 namespace ThetaGP::Gamepad {
 
-TaskManager::TaskManager() {
-  scheduler = &Scheduler::getInstance();
-  mempoolManager = &Mempool::MempoolManager::getInstance();
-}
+Scheduler *TaskManager::scheduler = nullptr;
+Mempool::PoolID TaskManager::taskPoolId = Mempool::INVALID_POOL_ID;
+uint8_t TaskManager::taskPoolMemory[TASK_POOL_SIZE]{};
+TaskManager::TaskRecord TaskManager::records[MAX_TASKS]{};
+size_t TaskManager::taskCount = 0;
+uint16_t TaskManager::averageSystemLoadPercent = 0;
 
 void TaskManager::init() {
-  std::memset(taskPoolMemory, 0, sizeof(taskPoolMemory));
-  mempoolManager->addPool(taskPoolMemory, TASK_POOL_SIZE, "task");
+  scheduler = &Scheduler::getInstance();
 
-  TID loadTid = createTask("SYSTEM", "LOAD", taskSystemLoadStatic,
+  std::memset(taskPoolMemory, 0, sizeof(taskPoolMemory));
+  taskPoolId =
+      Mempool::MempoolManager::createPool(taskPoolMemory, TASK_POOL_SIZE, "task");
+
+  TID loadTid = createTask("SYSTEM", "LOAD", taskSystemLoad,
                            TASK_PERIOD_HZ(10), TaskPriority::High);
-  TID updateTid = createTask("SYSTEM", "UPDATE", taskMainStatic,
+  TID updateTid = createTask("SYSTEM", "UPDATE", taskMain,
                              TASK_PERIOD_HZ(1000), TaskPriority::High);
-  TID coreTid = createTask("GAMEPAD", "CORE", taskGamepadCoreStatic,
+  TID coreTid = createTask("GAMEPAD", "CORE", taskGamepadCore,
                            TASK_PERIOD_HZ(1000), TaskPriority::Realtime);
 
   if (isValidTID(loadTid))
@@ -46,15 +51,15 @@ TID TaskManager::createTask(const char *name, const char *subName,
     return -1;
   }
 
-  Task *task = static_cast<Task *>(mempoolManager->alloc("task", sizeof(Task)));
+  Task *task = static_cast<Task *>(Mempool::MempoolManager::alloc(taskPoolId, sizeof(Task)));
   if (!task) {
     return -1;
   }
 
   TaskAttribute *attr =
-      static_cast<TaskAttribute *>(mempoolManager->alloc("task", sizeof(TaskAttribute)));
+      static_cast<TaskAttribute *>(Mempool::MempoolManager::alloc(taskPoolId, sizeof(TaskAttribute)));
   if (!attr) {
-    mempoolManager->free("task", task);
+    Mempool::MempoolManager::free(taskPoolId, task);
     return -1;
   }
 
@@ -86,8 +91,8 @@ void TaskManager::destroyTask(TID tid) {
 
   TaskRecord &rec = records[tid];
   scheduler->queueRemove(rec.task);
-  mempoolManager->free("task", rec.attribute);
-  mempoolManager->free("task", rec.task);
+  Mempool::MempoolManager::free(taskPoolId, rec.attribute);
+  Mempool::MempoolManager::free(taskPoolId, rec.task);
 
   rec.task = nullptr;
   rec.attribute = nullptr;
@@ -100,32 +105,31 @@ void TaskManager::destroyTask(TID tid) {
   taskCount--;
 }
 
-bool TaskManager::isValidTID(TID tid) const {
+bool TaskManager::isValidTID(TID tid) {
   return tid >= 0 && static_cast<size_t>(tid) < taskCount && records[tid].inUse;
 }
 
-void TaskManager::taskSystemLoadStatic(uint32_t currentTimeUs) {
+void TaskManager::taskSystemLoad(uint32_t currentTimeUs) {
   static uint32_t lastExecutedAtUs = 0;
-  TaskManager &self = getInstance();
   uint32_t deltaTime = currentTimeUs - lastExecutedAtUs;
   if (deltaTime) {
-    uint32_t totalExecTime = self.scheduler->getAndResetTotalExecutionTime();
-    self.averageSystemLoadPercent = 100 * totalExecTime / deltaTime;
+    uint32_t totalExecTime = scheduler->getAndResetTotalExecutionTime();
+    averageSystemLoadPercent = 100 * totalExecTime / deltaTime;
     lastExecutedAtUs = currentTimeUs;
   } else {
-    self.scheduler->ignoreTaskExecTime();
+    scheduler->ignoreTaskExecTime();
   }
 }
 
-void TaskManager::taskMainStatic(uint32_t currentTimeUs) {
+void TaskManager::taskMain(uint32_t currentTimeUs) {
   (void)currentTimeUs;
 }
 
-void TaskManager::taskGamepadCoreStatic(uint32_t currentTimeUs) {
+void TaskManager::taskGamepadCore(uint32_t currentTimeUs) {
   (void)currentTimeUs;
   ThetaGamepad &theta = ThetaGamepad::getInstance();
-  theta.gamepad.process();
-  theta.gpDriverManager.getgpdriverDevice()->process(&theta.gamepad);
+  theta.gamepad->process();
+  theta.gpDriverManager->getgpdriverDevice()->process(theta.gamepad);
   tud_task();
 }
 
