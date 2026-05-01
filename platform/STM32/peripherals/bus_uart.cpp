@@ -20,6 +20,42 @@ struct HalUart {
 
 #define HANDLE (static_cast<HalUart*>(_halHandle)->handle)
 
+static constexpr struct {
+  UartInstance uart;
+  Port port;
+  Pin pin;
+  uint8_t af;
+} uartPinAfTable[] = {
+    { UartInstance::Uart1, Port::PortA, Pin::Pin9,  7 },
+    { UartInstance::Uart1, Port::PortA, Pin::Pin10, 7 },
+    { UartInstance::Uart1, Port::PortB, Pin::Pin14, 4 },
+    { UartInstance::Uart1, Port::PortB, Pin::Pin15, 4 },
+    { UartInstance::Uart2, Port::PortA, Pin::Pin2,  7 },
+    { UartInstance::Uart2, Port::PortA, Pin::Pin3,  7 },
+    { UartInstance::Uart3, Port::PortB, Pin::Pin10, 7 },
+    { UartInstance::Uart3, Port::PortB, Pin::Pin11, 7 },
+    { UartInstance::Uart4, Port::PortA, Pin::Pin0,  8 },
+    { UartInstance::Uart4, Port::PortA, Pin::Pin1,  8 },
+    { UartInstance::Uart4, Port::PortB, Pin::Pin8,  8 },
+    { UartInstance::Uart4, Port::PortB, Pin::Pin9,  8 },
+    { UartInstance::Uart5, Port::PortB, Pin::Pin5,  8 },
+    { UartInstance::Uart5, Port::PortB, Pin::Pin6,  8 },
+    { UartInstance::Uart6, Port::PortC, Pin::Pin6,  7 },
+    { UartInstance::Uart6, Port::PortC, Pin::Pin7,  7 },
+    { UartInstance::Uart7, Port::PortF, Pin::Pin7,  7 },
+    { UartInstance::Uart7, Port::PortF, Pin::Pin8,  7 },
+    { UartInstance::Uart8, Port::PortJ, Pin::Pin8,  8 },
+    { UartInstance::Uart8, Port::PortJ, Pin::Pin9,  8 },
+};
+
+static uint8_t lookupUartAf(UartInstance uart, Port port, Pin pin) {
+  for (auto &entry : uartPinAfTable) {
+    if (entry.uart == uart && entry.port == port && entry.pin == pin)
+      return entry.af;
+  }
+  return 0;
+}
+
 #if defined(STM32H7)
 static std::array<UartBus *, UART_IRQ_GROUPS> uartBusInstance = {};
 
@@ -113,19 +149,7 @@ void UartBus::enableClock() {
 
 void UartBus::configTxRxPins() {
 #if defined(STM32H7)
-  uint32_t alternate = 0;
-
-  // TODO: fix alternate
-  switch (_desc.uartx) {
-  case UartInstance::Uart4:
-  case UartInstance::Uart5:
-  case UartInstance::Uart8:
-    alternate = 8;
-    break;
-  default:
-    alternate = 4;
-    break;
-  }
+  uint32_t alternate = lookupUartAf(_desc.uartx, _desc.tx.port, _desc.tx.pin);
 
   Gpio tx(_desc.tx);
   Gpio rx(_desc.rx);
