@@ -44,6 +44,7 @@ M.BoardConfig = {
                 { 0, 1 },
                 { 2, 3 },
             },
+            button_map = { "B1", "B2", "B3", "B4" },
         },
         usb = {
             hw_periph = "ULPI",
