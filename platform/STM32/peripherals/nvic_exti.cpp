@@ -93,11 +93,11 @@ void NvicExti::init() {
 
 #if defined(STM32H7)
   GPIO_InitTypeDef gpioInit{.Pin = _gpio.getPinMask(),
-                            .Mode = static_cast<uint32_t>(_triggerSrc) |
-                                    static_cast<uint32_t>(Mode::Input) |
-                                    static_cast<uint32_t>(cfg.mode),
-                            .Pull = static_cast<uint32_t>(cfg.pull),
-                            .Speed = static_cast<uint32_t>(cfg.speed),
+                            .Mode = Gpio::toHalMode(_triggerSrc) |
+                                    Gpio::toHalMode(Mode::Input) |
+                                    Gpio::toHalMode(cfg.mode),
+                            .Pull = Gpio::toHalPull(cfg.pull),
+                            .Speed = Gpio::toHalSpeed(cfg.speed),
                             .Alternate = cfg.alternate};
 
   HAL_GPIO_Init(reinterpret_cast<GPIO_TypeDef *>(_gpio.getPortAddress()),

@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include "build_info.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

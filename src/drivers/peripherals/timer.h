@@ -17,8 +17,6 @@
 
 #pragma once
 
-#include "build_info.h"
-#include "drivers/peripherals/nvic.h"
 #include "drivers/peripherals/nvic_exti.h"
 
 #include <cstdint>
@@ -29,7 +27,6 @@ namespace ThetaGP::Drivers::Peripheral::TIMER {
 using TimerPriority = NVIC_EXTI::NvicPriority;
 
 enum class Instance : uint8_t {
-#if defined(STM32H7)
   Timer1,
   Timer2,
   Timer3,
@@ -44,26 +41,24 @@ enum class Instance : uint8_t {
   Timer15,
   Timer16,
   Timer17,
-#endif
   TimerNone = 0xFF
 };
 
 enum class TriggerEvent {
-  Reset = TIM_TRGO_RESET,
-  Enable = TIM_TRGO_ENABLE, // CNT_EN
-  Update = TIM_TRGO_UPDATE,
-  OC1 = TIM_TRGO_OC1,
-  OC1Ref = TIM_TRGO_OC1REF,
-  OC2Ref = TIM_TRGO_OC2REF,
-  OC3Ref = TIM_TRGO_OC3REF,
-  OC4Ref = TIM_TRGO_OC4REF,
+  Reset,
+  Enable,
+  Update,
+  OC1,
+  OC1Ref,
+  OC2Ref,
+  OC3Ref,
+  OC4Ref,
 };
 
 class HardwareTimer {
 private:
   struct TimerState {
     Instance instance = Instance::TimerNone;
-    TIM_HandleTypeDef htim;
     TimerPriority priority = TimerPriority::PriorityMedium;
     TriggerEvent triggerEvent = TriggerEvent::Reset;
     bool initialized = false;
@@ -71,6 +66,7 @@ private:
     uint32_t targetFrequency = 0;
   } _state;
 
+  void *_halHandle = nullptr;
   void *_context = nullptr;
 
   using TimerCallback = std::function<void(void *context)>;
@@ -90,6 +86,8 @@ public:
   void config(Instance instance, uint32_t frequency,
               NVIC_EXTI::NvicPriority prio, TriggerEvent triggerEvent);
 
+  static uint32_t toHalTriggerEvent(TriggerEvent evt);
+
   // Set callback with context
   void setCallback(TimerCallback cb, void *context = nullptr);
   void callback() {
@@ -108,8 +106,7 @@ public:
   bool isRunning() const { return _state.running; }
   Instance getInstance() const { return _state.instance; }
 
-  TIM_HandleTypeDef *getHandle() { return &_state.htim; }
-  const TIM_HandleTypeDef *getHandle() const { return &_state.htim; }
+  void *getHandle() { return _halHandle; }
 };
 
 } // namespace ThetaGP::Drivers::Peripheral::TIMER
