@@ -27,5 +27,4 @@ static void taskGamepadCore(uint32_t currentTimeUs) {
 void ThetaGP::ThetaGamepad::registerTasks(void) {
   TaskManager::registerTask("GAMEPAD", "CORE", taskGamepadCore,
                             TASK_PERIOD_HZ(1000), TaskPriority::Realtime);
-  tud_task();
 }
