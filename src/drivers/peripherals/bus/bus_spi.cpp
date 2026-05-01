@@ -50,32 +50,23 @@ static constexpr uint32_t kSpiAlternate = 0x05;
 
 SpiBus::SpiBus() {
   setType(Type::Spi);
-
-  allocBuf(16,16);
-  _initialized = false;
+  allocBuf(16, 16);
 }
 
 SpiBus::SpiBus(const SpiDesc &spiDesc) {
   setType(Type::Spi);
-
   _spiDesc = spiDesc;
-
-  allocBuf(16,16);
-  _initialized = false;
+  allocBuf(16, 16);
 }
 
 SpiBus::SpiBus(Instance spix, PinDesc mosi, PinDesc miso, PinDesc sck) {
   setType(Type::Spi);
-
   _spiDesc.spix = spix;
   _spiDesc.mosi = mosi;
   _spiDesc.miso = miso;
   _spiDesc.sck = sck;
-
-  allocBuf(16,16);
-
+  allocBuf(16, 16);
   configPins();
-  _initialized = false;
 }
 
 SpiBus::~SpiBus() {}

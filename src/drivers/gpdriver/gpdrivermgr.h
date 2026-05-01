@@ -22,9 +22,9 @@ public:
   bool isConfigMode() { return (inputMode == InputMode::Config); }
 
 private:
-  GPDriverManager();
-  GPDriver *usbdevice;
-  InputMode inputMode;
+  GPDriverManager() = default;
+  GPDriver *usbdevice = nullptr;
+  InputMode inputMode = InputMode::None;
 };
 
 } // namespace ThetaGP::Drivers::GPDriver

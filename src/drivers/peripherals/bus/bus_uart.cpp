@@ -57,7 +57,6 @@ UartBus::UartBus(UartInstance uartx, PinDesc tx, PinDesc rx, uint32_t baud) {
   _desc.tx = tx;
   _desc.rx = rx;
   _desc.baudrate = baud;
-  _initialized = false;
 
   _pTxBufSize = _bufSize;
   _pRxBufSize = _bufSize;
@@ -78,7 +77,6 @@ UartBus::UartBus(const UartDesc &desc) {
   std::memset(_pTxBuf, 0, _pRxBufSize * sizeof(uint8_t));
 
   _desc = desc;
-  _initialized = false;
   std::memset(&_handle, 0, sizeof(UART_HandleTypeDef));
 }
 

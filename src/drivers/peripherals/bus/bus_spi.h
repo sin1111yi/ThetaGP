@@ -55,7 +55,7 @@ struct SpiDesc {
 class SpiBus : public Bus {
 private:
   SpiDesc _spiDesc;
-  bool _initialized;
+  bool _initialized = false;
 
   void enableClock() const;
   void configPins();

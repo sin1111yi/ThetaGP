@@ -114,12 +114,9 @@ void HardwareTimer::enableClock() const {
   }
 }
 
-HardwareTimer::HardwareTimer() : _state{}, _context(nullptr) {
-  _state.instance = Instance::TimerNone;
-  _state.targetFrequency = 0;
-}
+HardwareTimer::HardwareTimer() {}
 
-HardwareTimer::HardwareTimer(Instance instance) : HardwareTimer() {
+HardwareTimer::HardwareTimer(Instance instance) {
   _state.instance = instance;
 }
 

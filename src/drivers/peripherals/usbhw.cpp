@@ -88,8 +88,10 @@ void HardwareUSB::enableClock() const {
 #endif
 }
 
-HardwareUSB::HardwareUSB(USBSpeed speed, USBPeripheral peripheral)
-    : _initialized(false), _speed(speed), _peripheral(peripheral) {}
+HardwareUSB::HardwareUSB(USBSpeed speed, USBPeripheral peripheral) {
+  _speed = speed;
+  _peripheral = peripheral;
+}
 
 void HardwareUSB::initULPIPins() {
 #if defined(STM32H7)

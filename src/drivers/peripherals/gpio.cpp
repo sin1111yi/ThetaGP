@@ -51,25 +51,16 @@ void enableGpioClock(Port port) {
   }
 }
 
-Gpio::Gpio() : _initialized(false) {
-  _config.port = Port::PortNone;
-  _config.pin = Pin::PinNone;
-  _config.mode = Mode::Input;
-  _config.pull = Pull::NoPull;
-  _config.speed = Speed::Low;
-  _config.alternate = 0;
-}
+Gpio::Gpio() {}
 
-Gpio::Gpio(const PinDesc &pinDesc) : Gpio() {
+Gpio::Gpio(const PinDesc &pinDesc) {
   _config.port = pinDesc.port;
   _config.pin = pinDesc.pin;
-  _initialized = false;
 }
 
-Gpio::Gpio(Port port, Pin pin) : Gpio() {
+Gpio::Gpio(Port port, Pin pin) {
   _config.port = port;
   _config.pin = pin;
-  _initialized = false;
 }
 
 void *Gpio::getPortAddress() const {

@@ -53,17 +53,22 @@ constexpr std::array<IRQn_Type, EXTI_IRQ_GROUPS> extiGroupIRQn = {
 #warning "Unknown CPU"
 #endif
 
-NvicExti::NvicExti()
-    : _gpio(), _triggerSrc(Mode::Input), _priority(NvicPriority::PriorityLow),
-      _initialized(false) {}
+NvicExti::NvicExti() {
+  _triggerSrc = Mode::Input;
+  _priority = NvicPriority::PriorityLow;
+}
 
-NvicExti::NvicExti(PinDesc pinDesc, Mode triggerSrc, NvicPriority priority)
-    : _gpio(pinDesc), _triggerSrc(triggerSrc), _priority(priority),
-      _initialized(false) {}
+NvicExti::NvicExti(PinDesc pinDesc, Mode triggerSrc, NvicPriority priority) {
+  _gpio = Gpio(pinDesc);
+  _triggerSrc = triggerSrc;
+  _priority = priority;
+}
 
-NvicExti::NvicExti(Port port, Pin pin, Mode triggerSrc, NvicPriority priority)
-    : _gpio(port, pin), _triggerSrc(triggerSrc), _priority(priority),
-      _initialized(false) {}
+NvicExti::NvicExti(Port port, Pin pin, Mode triggerSrc, NvicPriority priority) {
+  _gpio = Gpio(port, pin);
+  _triggerSrc = triggerSrc;
+  _priority = priority;
+}
 
 void NvicExti::preinit() {
 #if defined(STM32H7)

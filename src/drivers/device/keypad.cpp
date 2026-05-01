@@ -10,12 +10,7 @@ namespace ThetaGP::Drivers::Device {
 using namespace Peripheral::GPIO;
 using namespace Peripheral::TIMER;
 
-Keypad::Keypad() : Device(DeviceType::Keypad, 0), _readInput(nullptr) {
-  for (auto &sampler : _samplers) {
-    sampler.history = 0;
-    sampler.stableState = KeyState::Released;
-  }
-}
+Keypad::Keypad() : Device(DeviceType::Keypad, 0) {}
 
 void Keypad::init() {
   if (_initialized)
