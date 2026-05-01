@@ -1,8 +1,12 @@
+#include "gamepad/scheduler/scheduler.h"
+#include "utils/utils.h"
+
 #include "taskmanager.h"
 
 #include "ThetaGP.h"
 
 #include "drivers/device/systimer.h"
+
 #include "tusb.h"
 
 #include <cstring>
@@ -20,51 +24,51 @@ void TaskManager::init() {
   scheduler = &Scheduler::getInstance();
 
   std::memset(taskPoolMemory, 0, sizeof(taskPoolMemory));
-  taskPoolId =
-      Mempool::MempoolManager::createPool(taskPoolMemory, TASK_POOL_SIZE, "task");
+  taskPoolId = Mempool::MempoolManager::createPool(taskPoolMemory,
+                                                   TASK_POOL_SIZE, "task");
+}
 
-  TID loadTid = createTask("SYSTEM", "LOAD", taskSystemLoad,
-                           TASK_PERIOD_HZ(10), TaskPriority::High);
-  TID updateTid = createTask("SYSTEM", "UPDATE", taskMain,
-                             TASK_PERIOD_HZ(1000), TaskPriority::High);
-  TID coreTid = createTask("GAMEPAD", "CORE", taskGamepadCore,
-                           TASK_PERIOD_HZ(1000), TaskPriority::Realtime);
+void TaskManager::setupSysTasks() {
+  TID loadTid = createTask("SYSTEM", "LOAD", taskSystemLoad, TASK_PERIOD_HZ(10),
+                           TaskPriority::High);
+  TID updateTid = createTask("SYSTEM", "UPDATE", taskMain, TASK_PERIOD_HZ(1000),
+                             TaskPriority::High);
 
   if (isValidTID(loadTid))
     scheduler->queueAdd(records[loadTid].task);
   if (isValidTID(updateTid))
     scheduler->queueAdd(records[updateTid].task);
-  if (isValidTID(coreTid))
-    scheduler->queueAdd(records[coreTid].task);
+}
 
+void TaskManager::setupScheduler() {
   scheduler->bindTimeBase(Drivers::Device::SystemTimer::getInstance());
-
   scheduler->init();
 }
 
 void TaskManager::run() { scheduler->run(); }
 
 TID TaskManager::createTask(const char *name, const char *subName,
-                             TaskFunc func, uint32_t periodUs,
-                             TaskPriority priority) {
+                            TaskFunc func, uint32_t periodUs,
+                            TaskPriority priority) {
   if (taskCount >= MAX_TASKS) {
     return -1;
   }
 
-  Task *task = static_cast<Task *>(Mempool::MempoolManager::alloc(taskPoolId, sizeof(Task)));
+  Task *task = static_cast<Task *>(
+      Mempool::MempoolManager::alloc(taskPoolId, sizeof(Task)));
   if (!task) {
     return -1;
   }
 
-  TaskAttribute *attr =
-      static_cast<TaskAttribute *>(Mempool::MempoolManager::alloc(taskPoolId, sizeof(TaskAttribute)));
+  TaskAttribute *attr = static_cast<TaskAttribute *>(
+      Mempool::MempoolManager::alloc(taskPoolId, sizeof(TaskAttribute)));
   if (!attr) {
     Mempool::MempoolManager::free(taskPoolId, task);
     return -1;
   }
 
-  std::memset(task, 0, sizeof(Task));
-  std::memset(attr, 0, sizeof(TaskAttribute));
+  *task = Task{};
+  *attr = TaskAttribute{};
 
   attr->taskName = name;
   attr->subTaskName = subName;
@@ -82,6 +86,14 @@ TID TaskManager::createTask(const char *name, const char *subName,
   taskCount++;
 
   return tid;
+}
+
+void TaskManager::registerTask(const char *name, const char *subName,
+                               TaskFunc func, uint32_t periodUs,
+                               TaskPriority priority) {
+  TID taskId = createTask(name, subName, func, periodUs, priority);
+  if (isValidTID(taskId))
+    scheduler->queueAdd(records[taskId].task);
 }
 
 void TaskManager::destroyTask(TID tid) {
@@ -121,16 +133,6 @@ void TaskManager::taskSystemLoad(uint32_t currentTimeUs) {
   }
 }
 
-void TaskManager::taskMain(uint32_t currentTimeUs) {
-  (void)currentTimeUs;
-}
-
-void TaskManager::taskGamepadCore(uint32_t currentTimeUs) {
-  (void)currentTimeUs;
-  ThetaGamepad &theta = ThetaGamepad::getInstance();
-  theta.gamepad->process();
-  theta.gpDriverManager->getgpdriverDevice()->process(theta.gamepad);
-  tud_task();
-}
+void TaskManager::taskMain(uint32_t currentTimeUs) { UNUSED(currentTimeUs); }
 
 } // namespace ThetaGP::Gamepad
