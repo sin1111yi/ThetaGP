@@ -22,6 +22,13 @@ cmake_minimum_required(VERSION 3.22)
 # =============================================================================
 # Project Configuration
 # =============================================================================
+
+# Project version
+set(THETAGP_VERSION_MAJOR 0)
+set(THETAGP_VERSION_MINOR 1)
+set(THETAGP_VERSION_PATCH 0)
+set(THETAGP_VERSION "${THETAGP_VERSION_MAJOR}.${THETAGP_VERSION_MINOR}.${THETAGP_VERSION_PATCH}")
+
 if(NOT DEFINED TARGET)
     message(FATAL_ERROR "TARGET is not defined, please specify the target platform (e.g. -DTARGET=...)")
 endif()
@@ -41,34 +48,8 @@ else()
     set(THETAGP_CFG_LOG_ENABLE 0)
 endif()
 
-# Get version from git
-find_package(Git)
-
-if(GIT_FOUND)
-    execute_process(COMMAND ${GIT_EXECUTABLE} describe --tags --always --dirty --abbrev=7
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        OUTPUT_VARIABLE GIT_REPO_VERSION
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
-    execute_process(COMMAND ${GIT_EXECUTABLE} describe --always --abbrev=7
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        OUTPUT_VARIABLE GIT_REPO_BUILD_ID
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
-    string(REGEX REPLACE "v([0-9]+\\.[0-9]+\\.[0-9]+).*" "\\1" CMAKE_GIT_REPO_VERSION ${GIT_REPO_VERSION})
-
-    if(CMAKE_GIT_REPO_VERSION STREQUAL GIT_REPO_VERSION)
-        set(CMAKE_GIT_REPO_VERSION "0.0.0")
-    endif()
-
-    message(STATUS "GIT_REPO_VERSION: ${GIT_REPO_VERSION}")
-    message(STATUS "CMAKE_GIT_REPO_VERSION: ${CMAKE_GIT_REPO_VERSION}")
-    message(STATUS "GIT_REPO_BUILD_ID: ${GIT_REPO_BUILD_ID}")
-else()
-    set(CMAKE_GIT_REPO_VERSION "0.0.0")
-    message(WARNING "Git not found, using default version 0.0.0")
-endif()
-
 # Project name with version
-set(THETAGP_PROJECT_NAME "ThetaGP_${TARGET}_${CMAKE_GIT_REPO_VERSION}_${CMAKE_BUILD_TYPE}")
+set(THETAGP_PROJECT_NAME "ThetaGP_${TARGET}_${THETAGP_VERSION}_${CMAKE_BUILD_TYPE}")
 
 set(ENV{TARGET} "${TARGET}")
 set(ENV{THETAGP_SOURCE_DIR} "${CMAKE_SOURCE_DIR}")
@@ -111,7 +92,7 @@ endif()
 
 project(${THETAGP_PROJECT_NAME}
     LANGUAGES C CXX ASM
-    VERSION ${CMAKE_GIT_REPO_VERSION}
+    VERSION ${THETAGP_VERSION}
 )
 
 set(CMAKE_C_STANDARD 23)
