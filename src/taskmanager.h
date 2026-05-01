@@ -35,16 +35,19 @@ private:
 
   static void taskSystemLoad(uint32_t currentTimeUs);
   static void taskMain(uint32_t currentTimeUs);
-  static void taskGamepadCore(uint32_t currentTimeUs);
 
 public:
   static Mempool::PoolID getTaskPoolId() { return taskPoolId; }
 
   static void init();
+  static void setupSysTasks();
+  static void setupScheduler();
   static void run();
 
   static TID createTask(const char *name, const char *subName, TaskFunc func,
                         uint32_t periodUs, TaskPriority priority);
+  static void registerTask(const char *name, const char *subName, TaskFunc func,
+                           uint32_t periodUs, TaskPriority priority);
   static void destroyTask(TID tid);
 
   static bool isValidTID(TID tid);

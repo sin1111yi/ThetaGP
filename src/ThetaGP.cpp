@@ -21,6 +21,8 @@
 
 #include "BoardConfig.h"
 
+#include "drivers/peripherals/peripheralsmgr.h"
+#include "gamepad/scheduler/scheduler.h"
 #include "utils/log/log.h"
 #include "utils/mempool/mempoolmanager.h"
 
@@ -42,39 +44,38 @@ using namespace ThetaGP;
 
 using Device = Drivers::Device::Device;
 
-ThetaGamepad::ThetaGamepad() {
-  gamepad = &Gamepad::Gamepad::getInstance();
-  peripheralsManager = &Drivers::Peripheral::PeripheralsManager::getInstance();
-  gpDriverManager = &Drivers::GPDriver::GPDriverManager::getInstance();
-  deviceManager = &Drivers::Device::DeviceManager::getInstance();
-}
+ThetaGamepad::ThetaGamepad() {}
 
-void ThetaGamepad::Setup() {
+void ThetaGamepad::setup() {
   // initialize Mempool Manager
   Mempool::MempoolManager::init();
 
   // setup peripherals' driver
-  peripheralsManager->initPeripherals();
+  Drivers::Peripheral::PeripheralsManager::getInstance().initPeripherals();
 
   // setup GP drivers
-  gpDriverManager->setup(Drivers::GPDriver::InputMode::HID);
+  Drivers::GPDriver::GPDriverManager::getInstance().setup(
+      Drivers::GPDriver::InputMode::HID);
 
   // setup devices' driver
-  deviceManager->registerDevice(
+  Drivers::Device::DeviceManager::getInstance().registerDevice(
       reinterpret_cast<Device *>(&Drivers::Device::Keypad::getInstance()));
-  deviceManager->registerDevice(
+  Drivers::Device::DeviceManager::getInstance().registerDevice(
       reinterpret_cast<Device *>(&Drivers::Device::SystemTimer::getInstance()));
-  deviceManager->initDevices();
+  Drivers::Device::DeviceManager::getInstance().initDevices();
 
   // setup gamepad
-  gamepad->setup();
-  gamepad->registerKeypadDevice(
+  Gamepad::Gamepad::getInstance().setup();
+  Gamepad::Gamepad::getInstance().registerKeypadDevice(
       reinterpret_cast<Device &>(Drivers::Device::Keypad::getInstance()));
-  gamepad->setDefaultMappings();
+  Gamepad::Gamepad::getInstance().setDefaultMappings();
 }
 
-void ThetaGamepad::Bootup() {
+void ThetaGamepad::bootup() {
   Gamepad::TaskManager::init();
+  Gamepad::TaskManager::setupSysTasks();
+  registerTasks();
+  Gamepad::TaskManager::setupScheduler();
 
   while (1) {
     Gamepad::TaskManager::run();
@@ -82,6 +83,6 @@ void ThetaGamepad::Bootup() {
 }
 
 int main(void) {
-  ThetaGP::ThetaGamepad::getInstance().Setup();
-  ThetaGP::ThetaGamepad::getInstance().Bootup();
+  ThetaGP::ThetaGamepad::getInstance().setup();
+  ThetaGP::ThetaGamepad::getInstance().bootup();
 }
