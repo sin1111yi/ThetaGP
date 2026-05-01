@@ -39,8 +39,8 @@ protected:
    *       So I use two buffer pointers which will point to two memory regions
    *       after initialzed, these memory regions will be managed by busmem.
    */
-  uint8_t *_pTxBuf;
-  uint8_t *_pRxBuf;
+  uint8_t *_pTxBuf = nullptr;
+  uint8_t *_pRxBuf = nullptr;
   BusMem &_busMem;
   uint32_t _pTxBufSize;
   uint32_t _pRxBufSize;

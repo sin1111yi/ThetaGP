@@ -99,16 +99,16 @@ struct PinDesc {
 class Gpio {
 private:
   struct Config {
-    Port port;
-    Pin pin;
-    Mode mode;
-    Pull pull;
-    Speed speed;
-    uint32_t alternate;
+    Port port = Port::PortNone;
+    Pin pin = Pin::PinNone;
+    Mode mode = Mode::Input;
+    Pull pull = Pull::NoPull;
+    Speed speed = Speed::Low;
+    uint32_t alternate = 0;
   };
 
   Config _config;
-  bool _initialized;
+  bool _initialized = false;
 
 public:
   Gpio();

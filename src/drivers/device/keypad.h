@@ -66,21 +66,21 @@ private:
   static constexpr size_t MAX_KEYS = 32;
 
   struct KeySampler {
-    uint16_t history;
-    KeyState stableState;
+    uint16_t history = 0;
+    KeyState stableState = KeyState::Released;
   };
 
   std::array<KeySampler, MAX_KEYS> _samplers;
-  uint8_t _scanCount;
+  uint8_t _scanCount = 0;
 
   struct OutputBuffer {
-    uint32_t pressedMask;
-    uint32_t sequenceNum;
+    uint32_t pressedMask = 0;
+    uint32_t sequenceNum = 0;
   };
 
-  OutputBuffer _outputBuffer[2];
-  volatile uint8_t _writeBuffer;
-  volatile uint8_t _readBuffer;
+  OutputBuffer _outputBuffer[2]{};
+  volatile uint8_t _writeBuffer = 0;
+  volatile uint8_t _readBuffer = 0;
   HardwareTimer _scanTimer;
 
   static constexpr KeypadConfig::Mode _mode = KEYPAD_DRIVE_MODE;
@@ -90,7 +90,7 @@ private:
   std::array<PinDesc, KEYPAD_SENSE_PIN_NUM> _sensePins;
 
   using InputReader = void (Keypad::*)(uint32_t *);
-  InputReader _readInput;
+  InputReader _readInput = nullptr;
 
   [[maybe_unused]] void readInputScanMatrix(uint32_t *mask);
   [[maybe_unused]] void readInputIODirect(uint32_t *mask);

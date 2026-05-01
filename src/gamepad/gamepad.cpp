@@ -5,7 +5,7 @@ namespace ThetaGP::Gamepad {
 
 using Keypad = ThetaGP::Drivers::Device::Keypad;
 
-Gamepad::Gamepad() : _inputDevice(nullptr), _initialized(false), _ready(false) {
+Gamepad::Gamepad() {
   setup();
 }
 

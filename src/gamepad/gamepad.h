@@ -24,7 +24,7 @@ private:
   GamepadState _state;
   std::array<uint8_t, 32>
       _mappings; // Physical key → Gamepad button (0xFF = unmapped)
-  Device *_inputDevice;
+  Device *_inputDevice = nullptr;
   bool _initialized = false;
   bool _ready = false;
 

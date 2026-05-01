@@ -48,9 +48,9 @@ private:
   Gpio _gpio;
   Mode _triggerSrc;
   NvicPriority _priority;
-  bool _initialized;
+  bool _initialized = false;
 
-  void *_context;
+  void *_context = nullptr;
 
   using ExtiCallback = std::function<void(NvicExti *self)>;
   ExtiCallback _callback;

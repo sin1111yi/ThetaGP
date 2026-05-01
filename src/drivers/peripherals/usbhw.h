@@ -63,7 +63,7 @@ enum class ULPI : uint8_t {
 
 class HardwareUSB {
 private:
-  bool _initialized;
+  bool _initialized = false;
   USBSpeed _speed;
   USBPeripheral _peripheral;
 

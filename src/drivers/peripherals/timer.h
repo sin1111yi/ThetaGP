@@ -62,16 +62,16 @@ enum class TriggerEvent {
 class HardwareTimer {
 private:
   struct TimerState {
-    Instance instance;
+    Instance instance = Instance::TimerNone;
     TIM_HandleTypeDef htim;
     TimerPriority priority = TimerPriority::PriorityMedium;
     TriggerEvent triggerEvent = TriggerEvent::Reset;
-    bool initialized;
-    bool running;
+    bool initialized = false;
+    bool running = false;
     uint32_t targetFrequency = 0;
   } _state;
 
-  void *_context;
+  void *_context = nullptr;
 
   using TimerCallback = std::function<void(void *context)>;
   TimerCallback _callback;

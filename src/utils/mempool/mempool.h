@@ -38,14 +38,14 @@ private:
   static constexpr size_t ALIGNMENT = 4;
   static constexpr size_t MIN_BLOCK_SIZE = sizeof(MemBlock) + ALIGNMENT;
 
-  uint8_t *_memory;
-  size_t _totalSize;
-  size_t _usedSize;
-  uint16_t _allocCount;
-  uint16_t _peakUsage;
-  bool _initialized;
+  uint8_t *_memory = nullptr;
+  size_t _totalSize = 0;
+  size_t _usedSize = 0;
+  uint16_t _allocCount = 0;
+  uint16_t _peakUsage = 0;
+  bool _initialized = false;
 
-  MemBlock *_head;
+  MemBlock *_head = nullptr;
 
   size_t alignSize(size_t size) const;
   MemBlock *findFreeBlock(size_t size);
@@ -53,7 +53,7 @@ private:
   void mergeFreeBlocks();
 
 public:
-  Mempool();
+  Mempool() = default;
   ~Mempool();
 
   Mempool(const Mempool &) = delete;

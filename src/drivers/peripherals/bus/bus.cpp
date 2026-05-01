@@ -15,8 +15,7 @@ namespace Drivers {
 namespace Peripheral {
 namespace BUS {
 
-Bus::Bus()
-    : _pTxBuf(nullptr), _pRxBuf(nullptr), _busMem(BusMem::getInstance()) {}
+Bus::Bus() : _busMem(BusMem::getInstance()) {}
 
 Bus::~Bus() { freeBuf(); }
 

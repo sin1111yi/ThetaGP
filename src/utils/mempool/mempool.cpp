@@ -3,10 +3,6 @@
 
 using namespace ThetaGP::Mempool;
 
-Mempool::Mempool()
-    : _memory(nullptr), _totalSize(0), _usedSize(0), _allocCount(0),
-      _peakUsage(0), _initialized(false), _head(nullptr) {}
-
 Mempool::~Mempool() { deinit(); }
 
 size_t Mempool::alignSize(size_t size) const {
