@@ -136,9 +136,10 @@ target_compile_definitions(${CMAKE_PROJECT_NAME}
     BOARD_NAME="${BOARD_NAME}"
 )
 
-# Set link script
+# Set output directory and link script
 set_target_properties(${CMAKE_PROJECT_NAME}
     PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     LINK_DEPENDS ${PLATFORM_LINK_SCRIPT}
     LINK_FLAGS "-T${PLATFORM_LINK_SCRIPT}"
 )
