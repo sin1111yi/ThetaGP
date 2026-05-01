@@ -15,8 +15,9 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "build_info.h"
+
 #include "drivers/peripherals/gpio.h"
-#include "stm32h743xx.h"
 
 #include <array>
 #include <memory>
@@ -61,6 +62,33 @@ Gpio::Gpio(const PinDesc &pinDesc) {
 Gpio::Gpio(Port port, Pin pin) {
   _config.port = port;
   _config.pin = pin;
+}
+
+uint32_t Gpio::toHalMode(Mode mode) {
+  static constexpr uint32_t map[] = {
+    GPIO_MODE_INPUT, GPIO_MODE_OUTPUT_PP, GPIO_MODE_OUTPUT_OD,
+    GPIO_MODE_AF_PP, GPIO_MODE_AF_OD, GPIO_MODE_ANALOG,
+    GPIO_MODE_IT_RISING, GPIO_MODE_IT_FALLING, GPIO_MODE_IT_RISING_FALLING,
+  };
+  return map[static_cast<size_t>(mode)];
+}
+
+uint32_t Gpio::toHalPull(Pull pull) {
+  static constexpr uint32_t map[] = {GPIO_NOPULL, GPIO_PULLUP, GPIO_PULLDOWN};
+  return map[static_cast<size_t>(pull)];
+}
+
+uint32_t Gpio::toHalSpeed(Speed speed) {
+  static constexpr uint32_t map[] = {
+    GPIO_SPEED_FREQ_LOW, GPIO_SPEED_FREQ_MEDIUM,
+    GPIO_SPEED_FREQ_HIGH, GPIO_SPEED_FREQ_VERY_HIGH,
+  };
+  return map[static_cast<size_t>(speed)];
+}
+
+uint32_t Gpio::toHalPinState(PinState state) {
+  static constexpr GPIO_PinState map[] = {GPIO_PIN_RESET, GPIO_PIN_SET};
+  return map[static_cast<size_t>(state)];
 }
 
 void *Gpio::getPortAddress() const {
@@ -119,9 +147,9 @@ void Gpio::init() {
 
 #if defined(STM32H7)
   GPIO_InitTypeDef gpioInit{.Pin = getPinMask(),
-                            .Mode = static_cast<uint32_t>(_config.mode),
-                            .Pull = static_cast<uint32_t>(_config.pull),
-                            .Speed = static_cast<uint32_t>(_config.speed),
+                            .Mode = toHalMode(_config.mode),
+                            .Pull = toHalPull(_config.pull),
+                            .Speed = toHalSpeed(_config.speed),
                             .Alternate = _config.alternate};
 
   HAL_GPIO_Init(reinterpret_cast<GPIO_TypeDef *>(getPortAddress()), &gpioInit);
@@ -132,7 +160,7 @@ void Gpio::init() {
 void Gpio::write(PinState state) {
 #if defined(STM32H7)
   HAL_GPIO_WritePin(reinterpret_cast<GPIO_TypeDef *>(getPortAddress()),
-                    getPinMask(), static_cast<GPIO_PinState>(state));
+                    getPinMask(), static_cast<GPIO_PinState>(toHalPinState(state)));
 #endif
 }
 

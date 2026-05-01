@@ -30,6 +30,12 @@
 using namespace ThetaGP::Drivers::Peripheral;
 using namespace ThetaGP::Drivers::Peripheral::TIMER;
 
+struct HalTimer {
+  TIM_HandleTypeDef htim;
+};
+
+#define HANDLE (static_cast<HalTimer *>(_halHandle)->htim)
+
 #if defined(STM32H7)
 
 // Static registry for ISR dispatch
@@ -104,7 +110,7 @@ void HardwareTimer::enableClock() const {
       []() {},
       []() {},
       []() {},
-      /* clang-format on */
+  /* clang-format on */
 #endif
   }};
 
@@ -114,20 +120,28 @@ void HardwareTimer::enableClock() const {
   }
 }
 
-HardwareTimer::HardwareTimer() {}
+HardwareTimer::HardwareTimer() { _halHandle = new HalTimer(); }
 
-HardwareTimer::HardwareTimer(Instance instance) {
+HardwareTimer::HardwareTimer(Instance instance) : HardwareTimer() {
   _state.instance = instance;
+}
+
+uint32_t HardwareTimer::toHalTriggerEvent(TriggerEvent evt) {
+  static constexpr uint32_t map[] = {
+      TIM_TRGO_RESET,  TIM_TRGO_ENABLE, TIM_TRGO_UPDATE, TIM_TRGO_OC1,
+      TIM_TRGO_OC1REF, TIM_TRGO_OC2REF, TIM_TRGO_OC3REF, TIM_TRGO_OC4REF,
+  };
+  return map[static_cast<size_t>(evt)];
 }
 
 void HardwareTimer::config(Instance instance, uint32_t frequency) {
   _state.instance = instance;
   _state.targetFrequency = frequency;
 
-  _state.htim.Init.CounterMode = TIM_COUNTERMODE_UP;
-  _state.htim.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-  _state.htim.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  _state.htim.Init.RepetitionCounter = 0;
+  HANDLE.Init.CounterMode = TIM_COUNTERMODE_UP;
+  HANDLE.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  HANDLE.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  HANDLE.Init.RepetitionCounter = 0;
 }
 
 void HardwareTimer::config(Instance instance, uint32_t frequency,
@@ -213,8 +227,8 @@ void HardwareTimer::calculatePrescalerAndPeriod(uint32_t frequency) {
     period = 1; // Minimum period
   }
 
-  _state.htim.Init.Prescaler = prescaler;
-  _state.htim.Init.Period = period;
+  HANDLE.Init.Prescaler = prescaler;
+  HANDLE.Init.Period = period;
 }
 
 void HardwareTimer::setCallback(TimerCallback cb, void *context) {
@@ -234,7 +248,7 @@ void HardwareTimer::init() {
     return;
   }
 
-  TIM_MasterConfigTypeDef sMasterConfig(0);
+  TIM_MasterConfigTypeDef sMasterConfig = TIM_MasterConfigTypeDef{};
 
   const auto timerIdx = static_cast<size_t>(_state.instance);
 
@@ -242,9 +256,9 @@ void HardwareTimer::init() {
     return;
   }
 
-  _state.htim.Instance = timerInstance[timerIdx];
+  HANDLE.Instance = timerInstance[timerIdx];
 
-  if (_state.htim.Instance == nullptr) {
+  if (HANDLE.Instance == nullptr) {
     return;
   }
 
@@ -255,14 +269,14 @@ void HardwareTimer::init() {
       NVIC_PRIORITY_SUB(static_cast<uint32_t>(_state.priority)));
   HAL_NVIC_EnableIRQ(timerGroupIRQn[timerIdx]);
 
-  if (HAL_TIM_Base_Init(&_state.htim) != HAL_OK) {
+  if (HAL_TIM_Base_Init(&HANDLE) != HAL_OK) {
     return;
   }
 
   sMasterConfig.MasterOutputTrigger =
-      static_cast<uint32_t>(_state.triggerEvent);
+      HardwareTimer::toHalTriggerEvent(_state.triggerEvent);
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  HAL_TIMEx_MasterConfigSynchronization(&_state.htim, &sMasterConfig);
+  HAL_TIMEx_MasterConfigSynchronization(&HANDLE, &sMasterConfig);
 
   if (timerIdx < hwTimerInstance.size()) {
     hwTimerInstance[timerIdx] = this;
@@ -282,7 +296,7 @@ void HardwareTimer::start() {
     return;
   }
 
-  if (HAL_TIM_Base_Start_IT(&_state.htim) == HAL_OK) {
+  if (HAL_TIM_Base_Start_IT(&HANDLE) == HAL_OK) {
     _state.running = true;
   }
 }
@@ -292,7 +306,7 @@ void HardwareTimer::stop() {
     return;
   }
 
-  HAL_TIM_Base_Stop_IT(&_state.htim);
+  HAL_TIM_Base_Stop_IT(&HANDLE);
   _state.running = false;
 }
 

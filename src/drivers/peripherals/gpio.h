@@ -17,7 +17,6 @@
 
 #pragma once
 
-#include "build_info.h"
 #include <cstdint>
 
 namespace ThetaGP::Drivers::Peripheral::GPIO {
@@ -31,9 +30,7 @@ enum class Port : uint16_t {
   PortF,
   PortG,
   PortH,
-#if defined(GPIOI)
   PortI,
-#endif
   PortJ,
   PortK,
 
@@ -62,31 +59,31 @@ enum class Pin : uint16_t {
 };
 
 enum class Speed : uint32_t {
-  Low = GPIO_SPEED_FREQ_LOW,
-  Medium = GPIO_SPEED_FREQ_MEDIUM,
-  High = GPIO_SPEED_FREQ_HIGH,
-  VeryHigh = GPIO_SPEED_FREQ_VERY_HIGH
+  Low,
+  Medium,
+  High,
+  VeryHigh
 };
 
 enum class Mode : uint32_t {
-  Input = GPIO_MODE_INPUT,
-  OutputPushPull = GPIO_MODE_OUTPUT_PP,
-  OutputOpenDrain = GPIO_MODE_OUTPUT_OD,
-  AlternateFunctionPushPull = GPIO_MODE_AF_PP,
-  AlternateFunctionOpenDrain = GPIO_MODE_AF_OD,
-  Analog = GPIO_MODE_ANALOG,
-  InterruptRising = GPIO_MODE_IT_RISING,
-  InterruptFalling = GPIO_MODE_IT_FALLING,
-  InterruptRisingFalling = GPIO_MODE_IT_RISING_FALLING,
+  Input,
+  OutputPushPull,
+  OutputOpenDrain,
+  AlternateFunctionPushPull,
+  AlternateFunctionOpenDrain,
+  Analog,
+  InterruptRising,
+  InterruptFalling,
+  InterruptRisingFalling,
 };
 
 enum class Pull : uint32_t {
-  NoPull = GPIO_NOPULL,
-  PullUp = GPIO_PULLUP,
-  PullDown = GPIO_PULLDOWN
+  NoPull,
+  PullUp,
+  PullDown
 };
 
-enum class PinState : bool { Reset = GPIO_PIN_RESET, Set = GPIO_PIN_SET };
+enum class PinState : bool { Reset = false, Set = true };
 
 /**
  * @brief Pin descriptor for board configuration macros
@@ -120,6 +117,11 @@ public:
   void config(Mode mode, Pull pull, Speed speed, uint32_t alternate);
 
   void init();
+
+  static uint32_t toHalMode(Mode mode);
+  static uint32_t toHalPull(Pull pull);
+  static uint32_t toHalSpeed(Speed speed);
+  static uint32_t toHalPinState(PinState state);
 
   void enableClock() const;
   static void enableClock(const PinDesc &pinDesc);

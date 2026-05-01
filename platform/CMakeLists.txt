@@ -114,6 +114,9 @@ set(TARGET_PATH "${SYSTEM_PATH}/target")
 file(GLOB TARGET_SOURCES "${TARGET_PATH}/*${PLATFORM_MCU_PREFIX}*")
 list(APPEND SYSTEM_SOURCES ${TARGET_SOURCES})
 
+# Platform peripheral implementations
+file(GLOB_RECURSE PLATFORM_PERIPHERAL_SOURCES "${PLATFORM_PATH}/peripherals/*.cpp" "${PLATFORM_PATH}/peripherals/*.c")
+
 # =============================================================================
 # Include Directories
 # =============================================================================
@@ -127,6 +130,7 @@ set(INCLUDE_DIRS
     "${CMSIS_PATH}/Device/${PLATFORM_VENDOR}/${BOARD_MCU_SERIES}/Include"
     "${SYSTEM_PATH}"
     "${BOARD_CONFIG_PATH}"
+    "${CMAKE_SOURCE_DIR}/src"
 )
 
 # Vendor-specific middleware include directories
@@ -161,3 +165,6 @@ target_link_libraries(HalDriver
     PUBLIC
     PlatformBase
 )
+
+# Platform peripheral implementations (added to main executable in src/CMakeLists.txt)
+set(PLATFORM_PERIPHERAL_SOURCES ${PLATFORM_PERIPHERAL_SOURCES} PARENT_SCOPE)

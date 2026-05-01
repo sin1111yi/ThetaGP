@@ -76,9 +76,9 @@ void SpiBus::configPins() {
 #if defined(STM32H7)
   GPIO_InitTypeDef gpioInit{
       .Pin = 0x0000,
-      .Mode = static_cast<uint32_t>(GPIO::Mode::AlternateFunctionPushPull),
-      .Pull = static_cast<uint32_t>(Pull::NoPull),
-      .Speed = static_cast<uint32_t>(Speed::High),
+      .Mode = Gpio::toHalMode(GPIO::Mode::AlternateFunctionPushPull),
+      .Pull = Gpio::toHalPull(Pull::NoPull),
+      .Speed = Gpio::toHalSpeed(Speed::High),
       .Alternate = kSpiAlternate};
 
   Gpio::enableClock(_spiDesc.mosi);

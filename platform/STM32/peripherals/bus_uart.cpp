@@ -14,6 +14,12 @@ using namespace ThetaGP::Drivers::Peripheral::BUS;
 using namespace ThetaGP::Drivers::Peripheral::GPIO;
 using ThetaGP::RetVal;
 
+struct HalUart {
+  UART_HandleTypeDef handle;
+};
+
+#define HANDLE (static_cast<HalUart*>(_halHandle)->handle)
+
 #if defined(STM32H7)
 static std::array<UartBus *, UART_IRQ_GROUPS> uartBusInstance = {};
 
@@ -51,6 +57,7 @@ void enableBusUartClock(UartInstance uartx) {
 }
 
 UartBus::UartBus(UartInstance uartx, PinDesc tx, PinDesc rx, uint32_t baud) {
+  _halHandle = new HalUart();
   setType(Type::Uart);
 
   _desc.uartx = uartx;
@@ -64,10 +71,11 @@ UartBus::UartBus(UartInstance uartx, PinDesc tx, PinDesc rx, uint32_t baud) {
   std::memset(_pRxBuf, 0, _pTxBufSize);
   std::memset(_pTxBuf, 0, _pRxBufSize);
 
-  std::memset(&_handle, 0, sizeof(UART_HandleTypeDef));
+  std::memset(&HANDLE, 0, sizeof(UART_HandleTypeDef));
 }
 
 UartBus::UartBus(const UartDesc &desc) {
+  _halHandle = new HalUart();
   setType(Type::Uart);
 
   _pTxBufSize = _bufSize;
@@ -77,7 +85,7 @@ UartBus::UartBus(const UartDesc &desc) {
   std::memset(_pTxBuf, 0, _pRxBufSize * sizeof(uint8_t));
 
   _desc = desc;
-  std::memset(&_handle, 0, sizeof(UART_HandleTypeDef));
+  std::memset(&HANDLE, 0, sizeof(UART_HandleTypeDef));
 }
 
 void UartBus::enableClock() {
@@ -139,22 +147,21 @@ void UartBus::init() {
 
 #if defined(STM32H7)
   const auto uartIdx = static_cast<uint32_t>(_desc.uartx);
-  _handle.Instance = uartInstance[uartIdx];
-  _handle.Init.BaudRate = _desc.baudrate;
-  _handle.Init.WordLength = UART_WORDLENGTH_8B;
-  _handle.Init.StopBits = UART_STOPBITS_1;
-  _handle.Init.Parity = UART_PARITY_NONE;
-  _handle.Init.Mode = UART_MODE_TX_RX;
-  _handle.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  _handle.Init.OverSampling = UART_OVERSAMPLING_16;
-  _handle.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  _handle.Init.ClockPrescaler = UART_PRESCALER_DIV1;
-  _handle.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  HAL_UART_Init(&_handle);
-
-  HAL_UARTEx_SetTxFifoThreshold(&_handle, UART_TXFIFO_THRESHOLD_1_8);
-  HAL_UARTEx_SetRxFifoThreshold(&_handle, UART_RXFIFO_THRESHOLD_1_8);
-  HAL_UARTEx_DisableFifoMode(&_handle);
+  HANDLE.Instance = uartInstance[uartIdx];
+  HANDLE.Init.BaudRate = _desc.baudrate;
+  HANDLE.Init.WordLength = UART_WORDLENGTH_8B;
+  HANDLE.Init.StopBits = UART_STOPBITS_1;
+  HANDLE.Init.Parity = UART_PARITY_NONE;
+  HANDLE.Init.Mode = UART_MODE_TX_RX;
+  HANDLE.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  HANDLE.Init.OverSampling = UART_OVERSAMPLING_16;
+  HANDLE.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  HANDLE.Init.ClockPrescaler = UART_PRESCALER_DIV1;
+  HANDLE.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  HAL_UART_Init(&HANDLE);
+  HAL_UARTEx_SetTxFifoThreshold(&HANDLE, UART_TXFIFO_THRESHOLD_1_8);
+  HAL_UARTEx_SetRxFifoThreshold(&HANDLE, UART_RXFIFO_THRESHOLD_1_8);
+  HAL_UARTEx_DisableFifoMode(&HANDLE);
 
 #endif
 
@@ -166,7 +173,7 @@ RetVal UartBus::write(uint8_t byte) {
   if (_initialized) {
     if (_pTxBuf != NULL && 1 <= _pTxBufSize) {
       _pTxBuf[0] = byte;
-      HAL_UART_Transmit(&_handle, _pTxBuf, 1, 0x1000);
+      HAL_UART_Transmit(&HANDLE, _pTxBuf, 1, 0x1000);
     }
   } else
     ;
@@ -179,7 +186,7 @@ RetVal UartBus::write(uint8_t *bytes, uint16_t num) {
   if (_initialized) {
     if (_pTxBuf != NULL && num <= _pTxBufSize) {
       std::memcpy(_pTxBuf, bytes, num * sizeof(uint8_t));
-      HAL_UART_Transmit(&_handle, _pTxBuf, num, 0x1000);
+      HAL_UART_Transmit(&HANDLE, _pTxBuf, num, 0x1000);
     }
   } else
     ;

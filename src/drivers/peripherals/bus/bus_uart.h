@@ -38,7 +38,7 @@ class UartBus : public Bus {
 private:
   static constexpr uint32_t _bufSize = 256;
   UartDesc _desc;
-  UART_HandleTypeDef _handle;
+  void *_halHandle = nullptr;
   void configTxRxPins();
   uint8_t getGpioAlternate();
 
