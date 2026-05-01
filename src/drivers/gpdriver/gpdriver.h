@@ -10,6 +10,8 @@
 
 #include "drivers/gpdriver/usblistener.h"
 
+#include <cstdint>
+
 namespace ThetaGP::Drivers::GPDriver {
 
 using Gamepad = Gamepad::Gamepad;
@@ -36,6 +38,15 @@ public:
   virtual USBListener *get_usb_auth_listener() = 0;
 
   const usbd_class_driver_t *get_class_driver() { return &class_driver; }
+
+  static uint32_t get_string_hash_u32(const char *str) {
+    uint32_t h = 2166136261u;
+    while (*str) {
+      h ^= static_cast<uint8_t>(*str++);
+      h *= 16777619u;
+    }
+    return h;
+  }
 
 protected:
   usbd_class_driver_t class_driver;
