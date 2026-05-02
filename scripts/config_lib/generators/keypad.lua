@@ -152,17 +152,23 @@ function M.generate(keypad_config)
         end
     end
 
-    if keypad_config.button_map and #keypad_config.button_map > 0 then
+    if keypad_config.button_map and next(keypad_config.button_map) then
+        local keys = {}
+        for k in pairs(keypad_config.button_map) do
+            table.insert(keys, k)
+        end
+        table.sort(keys)
+
         table.insert(lines, "")
         table.insert(lines, "#define KEYPAD_BUTTON_MAP \\")
 
-        local count = #keypad_config.button_map
-        for i, v in ipairs(keypad_config.button_map) do
+        for i, k in ipairs(keys) do
+            local v = keypad_config.button_map[k]
             local mask_name = "GAMEPAD_MASK_" .. v:upper()
-            if i < count then
-                table.insert(lines, string.format("    %-20s, \\", mask_name))
+            if i < #keys then
+                table.insert(lines, string.format("    {%d, %-20s}, \\", k, mask_name))
             else
-                table.insert(lines, string.format("    %-20s", mask_name))
+                table.insert(lines, string.format("    {%d, %-20s}", k, mask_name))
             end
         end
 

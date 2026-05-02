@@ -149,22 +149,22 @@ end
 
 function M.validate_button_map(button_map)
     if type(button_map) ~= "table" then
-        return false, "button_map must be an array"
+        return false, "button_map must be a table"
     end
 
-    if #button_map == 0 then
-        return false, "button_map must have at least 1 entry"
-    end
+    local count = 0
+    for k, v in pairs(button_map) do
+        count = count + 1
+        if type(k) ~= "number" or k < 0 or k > 31 then
+            return false, string.format(
+                "button_map key %s must be a number 0-31 (physical key index)", tostring(k)
+            )
+        end
 
-    if #button_map > 32 then
-        return false, "button_map cannot exceed 32 entries"
-    end
-
-    for i, v in ipairs(button_map) do
         if type(v) ~= "string" then
             return false, string.format(
                 "button_map[%d] must be a string (e.g. 'B1'), got %s",
-                i, type(v)
+                k, type(v)
             )
         end
 
@@ -172,9 +172,17 @@ function M.validate_button_map(button_map)
         if not VALID_BUTTON_SUFFIXES[suffix] then
             return false, string.format(
                 "button_map[%d] '%s' is not a valid button. Valid examples: B1, L1, S1, UP",
-                i, v
+                k, v
             )
         end
+    end
+
+    if count == 0 then
+        return false, "button_map must have at least 1 entry"
+    end
+
+    if count > 32 then
+        return false, "button_map cannot exceed 32 entries"
     end
 
     return true, nil

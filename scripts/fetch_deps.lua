@@ -32,7 +32,10 @@ local project_root = script_dir .. "../"
 dofile(project_root .. "deps_config.lua")
 
 -- Load shared utilities
-package.path = script_dir .. "config_lib/?.lua;" .. package.path
+package.path = script_dir .. "config_lib/?.lua;" ..
+               script_dir .. "config_lib/?/?.lua;" ..
+               script_dir .. "config_lib/?/init.lua;" ..
+               package.path
 local log = require("utils.log")
 
 -- =============================================================================
@@ -40,7 +43,7 @@ local log = require("utils.log")
 -- =============================================================================
 
 local function is_git_repo(path)
-    return log.log.file_exists(path .. "/.git")
+    return log.file_exists(path .. "/.git")
 end
 
 local function clone_or_pull(repo)
