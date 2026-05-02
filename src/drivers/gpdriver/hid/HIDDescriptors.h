@@ -35,7 +35,7 @@
 // Windows, even though the driver is supplied by Microsoft, an
 // INF file is needed to load the driver.  These numbers need to
 // match the INF file.
-#define VENDOR_ID         0x0100
+#define VENDOR_ID         0xcafe
 #define PRODUCT_ID        0x0100
 
 /**************************************************************************
@@ -47,6 +47,12 @@
 #define GAMEPAD_INTERFACE 0
 #define GAMEPAD_ENDPOINT  1
 #define GAMEPAD_SIZE      64
+
+#define CDC_COM_INTERFACE 1
+#define CDC_DATA_INTERFACE 2
+#define CDC_NOTIFICATION_ENDPOINT 2
+#define CDC_DATA_IN_ENDPOINT   3
+#define CDC_DATA_OUT_ENDPOINT  4
 
 #define LSB(n)            (n & 255)
 #define MSB(n)            ((n >> 8) & 255)
@@ -89,10 +95,12 @@ static const uint8_t hid_string_language[] = {0x09, 0x04};
 static const uint8_t hid_string_manufacturer[] = "ThetaGamepad";
 static const uint8_t hid_string_product[] = BOARD_NAME;
 static const uint8_t hid_string_version[] = "1.0";
+static const uint8_t hid_string_cdc[] = "ThetaGamepad Virtual Com Port";
 
 static const uint8_t *hid_string_descriptors[]
     __attribute__((unused)) = {hid_string_language, hid_string_manufacturer,
-                               hid_string_product, hid_string_version};
+                               hid_string_product, hid_string_version,
+                               hid_string_cdc};
 
 static const uint8_t hid_device_descriptor[] = {
     18, // bLength
@@ -154,29 +162,29 @@ static const uint8_t hid_report_descriptor[] = {
     0xc0 // END_COLLECTION
 };
 
-#define CONFIG1_DESC_SIZE (9 + 9 + 9 + 7)
+#define CONFIG1_DESC_SIZE (9 + 9 + 9 + 7 + 9 + 5 + 7 + 9 + 7 + 7)
 static const uint8_t hid_configuration_descriptor[] = {
-    // configuration descriptor, USB spec 9.6.3, page 264-266, Table 9-10
+    // configuration descriptor
     9,                      // bLength;
     2,                      // bDescriptorType;
     LSB(CONFIG1_DESC_SIZE), // wTotalLength
     MSB(CONFIG1_DESC_SIZE),
-    1,    // bNumInterfaces
+    3,    // bNumInterfaces
     1,    // bConfigurationValue
     0,    // iConfiguration
     0x80, // bmAttributes
     50,   // bMaxPower
-          // interface descriptor, USB spec 9.6.5, page 267-269, Table 9-12
+    // HID interface
     9,    // bLength
     4,    // bDescriptorType
     GAMEPAD_INTERFACE, // bInterfaceNumber
     0,                 // bAlternateSetting
     1,                 // bNumEndpoints
-    0x03,              // bInterfaceClass (0x03 = HID)
-    0x00,              // bInterfaceSubClass (0x00 = No Boot)
-    0x00,              // bInterfaceProtocol (0x00 = No Protocol)
+    0x03,              // bInterfaceClass (HID)
+    0x00,              // bInterfaceSubClass
+    0x00,              // bInterfaceProtocol
     0,                 // iInterface
-                       // HID interface descriptor, HID 1.11 spec, section 6.2.1
+    // HID descriptor
     9,                 // bLength
     0x21,              // bDescriptorType
     0x11, 0x01,        // bcdHID
@@ -185,11 +193,57 @@ static const uint8_t hid_configuration_descriptor[] = {
     0x22,              // bDescriptorType
     sizeof(hid_report_descriptor), // wDescriptorLength
     0,
-    // endpoint descriptor, USB spec 9.6.6, page 269-271, Table 9-13
+    // HID endpoint IN (interrupt)
     7,                       // bLength
     5,                       // bDescriptorType
     GAMEPAD_ENDPOINT | 0x80, // bEndpointAddress
-    0x03,                    // bmAttributes (0x03=intr)
+    0x03,                    // bmAttributes (intr)
     GAMEPAD_SIZE, 0,         // wMaxPacketSize
-    1                        // bInterval (1 ms)
+    1,                       // bInterval (1 ms)
+    // CDC Communication Control interface
+    9,                       // bLength
+    4,                       // bDescriptorType
+    CDC_COM_INTERFACE,       // bInterfaceNumber
+    0,                       // bAlternateSetting
+    1,                       // bNumEndpoints
+    0x02,                    // bInterfaceClass (CDC)
+    0x02,                    // bInterfaceSubClass (Abstract Control Model)
+    0x01,                    // bInterfaceProtocol (AT commands V.250)
+    4,                       // iInterface
+    // CDC functional descriptor (Header Functional)
+    5,                       // bLength
+    0x24,                    // bDescriptorType (CS_INTERFACE)
+    0x00,                    // bDescriptorSubtype (Header Functional)
+    0x10, 0x01,              // bcdCDC (1.10)
+    // CDC notification endpoint IN (interrupt)
+    7,                            // bLength
+    5,                            // bDescriptorType
+    CDC_NOTIFICATION_ENDPOINT | 0x80, // bEndpointAddress
+    0x03,                         // bmAttributes (intr)
+    8, 0,                         // wMaxPacketSize
+    16,                          // bInterval
+    // CDC Data interface
+    9,                       // bLength
+    4,                       // bDescriptorType
+    CDC_DATA_INTERFACE,      // bInterfaceNumber
+    0,                       // bAlternateSetting
+    2,                       // bNumEndpoints
+    0x0A,                    // bInterfaceClass (CDC Data)
+    0x00,                    // bInterfaceSubClass
+    0x00,                    // bInterfaceProtocol
+    0,                       // iInterface
+    // CDC data endpoint OUT (bulk)
+    7,                          // bLength
+    5,                          // bDescriptorType
+    CDC_DATA_OUT_ENDPOINT,      // bEndpointAddress (OUT)
+    0x02,                       // bmAttributes (bulk)
+    0x00, 0x02,                     // wMaxPacketSize (512)
+    0,                          // bInterval
+    // CDC data endpoint IN (bulk)
+    7,                         // bLength
+    5,                         // bDescriptorType
+    CDC_DATA_IN_ENDPOINT | 0x80, // bEndpointAddress (IN)
+    0x02,                      // bmAttributes (bulk)
+    0x00, 0x02,                     // wMaxPacketSize (512)
+    0,                         // bInterval
 };
