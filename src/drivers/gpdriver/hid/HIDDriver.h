@@ -47,7 +47,8 @@ public:
                                            uint16_t langid) override;
   const uint8_t *get_descriptor_device_cb() override;
   const uint8_t *get_hid_descriptor_report_cb(uint8_t itf) override;
-  const uint8_t *get_descriptor_configuration_cb(uint8_t index) override;
+  const uint8_t *get_interface_descriptor() override;
+  uint16_t get_interface_descriptor_size() override;
   const uint8_t *get_descriptor_device_qualifier_cb() override;
   uint16_t GetJoystickMidValue() override;
   USBListener *get_usb_auth_listener() override { return nullptr; }
