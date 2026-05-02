@@ -41,6 +41,9 @@ M.BoardConfig = {
                 { pin = "PC5" },
             },
             key_map = {
+                --         PC4  PC5
+                --   PD8   0    1
+                --   PD9   2    3
                 { 0, 1 },
                 { 2, 3 },
             },
