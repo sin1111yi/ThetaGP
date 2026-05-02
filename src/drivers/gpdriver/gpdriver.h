@@ -53,7 +53,8 @@ public:
                                                    uint16_t langid) = 0;
   virtual const uint8_t *get_descriptor_device_cb() = 0;
   virtual const uint8_t *get_hid_descriptor_report_cb(uint8_t itf) = 0;
-  virtual const uint8_t *get_descriptor_configuration_cb(uint8_t index) = 0;
+  virtual const uint8_t *get_interface_descriptor() = 0;
+  virtual uint16_t get_interface_descriptor_size() = 0;
   virtual const uint8_t *get_descriptor_device_qualifier_cb() = 0;
   virtual uint16_t GetJoystickMidValue() = 0;
   virtual USBListener *get_usb_auth_listener() = 0;

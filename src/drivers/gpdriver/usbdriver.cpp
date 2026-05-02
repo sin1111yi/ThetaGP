@@ -21,10 +21,11 @@
 
 #include "drivers/gpdriver/usbdriver.h"
 #include "drivers/gpdriver/gpdrivermgr.h"
+#include "drivers/gpdriver/usbcore.h"
 
-#include "class/cdc/cdc_device.h"
 #include "tusb.h"
 
+using namespace ThetaGP::USB;
 using namespace ThetaGP::Drivers::GPDriver;
 
 extern "C" {
@@ -37,39 +38,11 @@ bool get_usb_mounted(void) { return usb_mounted; }
 bool get_usb_suspended(void) { return usb_suspended; }
 
 const usbd_class_driver_t *usbd_app_driver_get_cb(uint8_t *driver_count) {
-  static usbd_class_driver_t const cdc_driver = {
-#if CFG_TUSB_DEBUG >= 2
-    .name = "CDC",
-#endif
-    .init = cdcd_init,
-    .deinit = NULL,
-    .reset = cdcd_reset,
-    .open = cdcd_open,
-    .control_xfer_cb = cdcd_control_xfer_cb,
-    .xfer_cb = cdcd_xfer_cb,
-    .xfer_isr = NULL,
-    .sof = NULL,
-  };
-
-  static struct {
-    usbd_class_driver_t hid;
-    usbd_class_driver_t cdc;
-  } drivers = {
-      .hid = *GPDriverManager::getInstance().getgpdriverDevice()->get_class_driver(),
-      .cdc = cdc_driver,
-  };
-  *driver_count = 2;
-  return &drivers.hid;
+  return USBCore::getInstance().getDrivers(driver_count);
 }
 
 void tud_cdc_rx_cb(uint8_t itf) {
-  (void)itf;
-  while (tud_cdc_available()) {
-    uint8_t buf[64];
-    uint32_t len = tud_cdc_read(buf, sizeof(buf));
-    tud_cdc_write(buf, len);
-    tud_cdc_write_flush();
-  }
+  USBCore::getInstance().cdcRx(itf);
 }
 
 uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id,
@@ -80,8 +53,6 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id,
       report_id, report_type, buffer, reqlen);
 }
 
-// Invoked when received SET_REPORT control request or
-// received data on OUT endpoint ( Report ID = 0, Type = 0 )
 void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id,
                            hid_report_type_t report_type, uint8_t const *buffer,
                            uint16_t bufsize) {
@@ -90,30 +61,23 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id,
       report_id, report_type, buffer, bufsize);
 }
 
-// Invoked when device is mounted
 void tud_mount_cb(void) {
   usb_mounted = true;
   usb_suspended = false;
 }
 
-// Invoked when device is unmounted
 void tud_umount_cb(void) {
   usb_mounted = false;
   usb_suspended = false;
 }
 
-// Invoked when usb bus is suspended
-// remote_wakeup_en : if host allow us  to perform remote wakeup
-// Within 7ms, device must draw an average of current less than 2.5 mA from bus
 void tud_suspend_cb(bool remote_wakeup_en) {
   (void)remote_wakeup_en;
   usb_suspended = true;
 }
 
-// Invoked when usb bus is resumed
 void tud_resume_cb(void) { usb_suspended = false; }
 
-// Vendor Controlled XFER occured
 bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage,
                                 tusb_control_request_t const *request) {
   return GPDriverManager::getInstance()
@@ -121,39 +85,26 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage,
       ->vendor_control_xfer_cb(rhport, stage, request);
 }
 
-// Invoked when received GET STRING DESCRIPTOR request
-// Application return pointer to descriptor, whose contents must exist long
-// enough for transfer to complete
 uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
   return GPDriverManager::getInstance()
       .getgpdriverDevice()
       ->get_descriptor_string_cb(index, langid);
 }
 
-// Invoked when received GET DEVICE DESCRIPTOR
-// Application return pointer to descriptor
 uint8_t const *tud_descriptor_device_cb() {
   return GPDriverManager::getInstance()
       .getgpdriverDevice()
       ->get_descriptor_device_cb();
 }
 
-// Invoked when received GET HID REPORT DESCRIPTOR
-// Application return pointer to descriptor
-// Descriptor contents must exist long enough for transfer to complete
 uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf) {
   return GPDriverManager::getInstance()
       .getgpdriverDevice()
       ->get_hid_descriptor_report_cb(itf);
 }
 
-// Invoked when received GET CONFIGURATION DESCRIPTOR
-// Application return pointer to descriptor
-// Descriptor contents must exist long enough for transfer to complete
 uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
-  return GPDriverManager::getInstance()
-      .getgpdriverDevice()
-      ->get_descriptor_configuration_cb(index);
+  return USBCore::getInstance().getConfigurationDescriptor(index);
 }
 
 uint8_t const *tud_descriptor_device_qualifier_cb() {

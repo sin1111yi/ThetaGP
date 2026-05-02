@@ -185,9 +185,12 @@ const uint8_t *HIDDriver::get_hid_descriptor_report_cb(uint8_t itf) {
   return hid_report_descriptor;
 }
 
-const uint8_t *HIDDriver::get_descriptor_configuration_cb(uint8_t index) {
-  (void)index;
-  return hid_configuration_descriptor;
+const uint8_t *HIDDriver::get_interface_descriptor() {
+  return hid_interface_descriptor;
+}
+
+uint16_t HIDDriver::get_interface_descriptor_size() {
+  return sizeof(hid_interface_descriptor);
 }
 
 const uint8_t *HIDDriver::get_descriptor_device_qualifier_cb() {

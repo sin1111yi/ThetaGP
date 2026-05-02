@@ -47,6 +47,7 @@
 #ifndef _TUSB_CONFIG_H_
 #define _TUSB_CONFIG_H_
 
+#include "build_info.h"
 #include "BoardConfig.h"
 #include "utils/log/log.h"
 
@@ -104,7 +105,7 @@ extern "C" {
  * - CFG_TUSB_MEM_ALIGN   : __attribute__ ((aligned(4)))
  */
 #ifndef CFG_TUSB_MEM_SECTION
-#define CFG_TUSB_MEM_SECTION
+#define CFG_TUSB_MEM_SECTION COMMON_CODE
 #endif
 
 #ifndef CFG_TUSB_MEM_ALIGN

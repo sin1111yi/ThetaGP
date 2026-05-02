@@ -162,18 +162,9 @@ static const uint8_t hid_report_descriptor[] = {
     0xc0 // END_COLLECTION
 };
 
-#define CONFIG1_DESC_SIZE (9 + 9 + 9 + 7 + 9 + 5 + 5 + 4 + 5 + 7 + 9 + 7 + 7)
-static const uint8_t hid_configuration_descriptor[] = {
-    // configuration descriptor
-    9,                      // bLength;
-    2,                      // bDescriptorType;
-    LSB(CONFIG1_DESC_SIZE), // wTotalLength
-    MSB(CONFIG1_DESC_SIZE),
-    3,    // bNumInterfaces
-    1,    // bConfigurationValue
-    0,    // iConfiguration
-    0x80, // bmAttributes
-    50,   // bMaxPower
+// HID interface descriptor block (interface + HID desc + endpoint)
+#define HID_IFACE_SIZE (9 + 9 + 7)
+static const uint8_t hid_interface_descriptor[] = {
     // HID interface
     9,    // bLength
     4,    // bDescriptorType
@@ -200,67 +191,4 @@ static const uint8_t hid_configuration_descriptor[] = {
     0x03,                    // bmAttributes (intr)
     GAMEPAD_SIZE, 0,         // wMaxPacketSize
     1,                       // bInterval (1 ms)
-    // CDC Communication Control interface
-    9,                       // bLength
-    4,                       // bDescriptorType
-    CDC_COM_INTERFACE,       // bInterfaceNumber
-    0,                       // bAlternateSetting
-    1,                       // bNumEndpoints
-    0x02,                    // bInterfaceClass (CDC)
-    0x02,                    // bInterfaceSubClass (Abstract Control Model)
-    0x01,                    // bInterfaceProtocol (AT commands V.250)
-    4,                       // iInterface
-    // CDC functional descriptor (Header Functional)
-    5,                       // bLength
-    0x24,                    // bDescriptorType (CS_INTERFACE)
-    0x00,                    // bDescriptorSubtype (Header Functional)
-    0x10, 0x01,              // bcdCDC (1.10)
-    // CDC Call Management Functional Descriptor
-    5,                       // bLength
-    0x24,                    // bDescriptorType (CS_INTERFACE)
-    0x01,                    // bDescriptorSubtype (Call Management)
-    0x03,                    // bmCapabilities (device handles call management)
-    1,                       // bDataInterface (CDC Data interface number)
-    // CDC Abstract Control Management Functional Descriptor
-    4,                       // bLength
-    0x24,                    // bDescriptorType (CS_INTERFACE)
-    0x02,                    // bDescriptorSubtype (Abstract Control Management)
-    0x02,                    // bmCapabilities (SET_LINE_CODING, etc.)
-    // CDC Union Functional Descriptor
-    5,                       // bLength
-    0x24,                    // bDescriptorType (CS_INTERFACE)
-    0x06,                    // bDescriptorSubtype (Union)
-    CDC_COM_INTERFACE,       // bMasterInterface (CDC Communication)
-    CDC_DATA_INTERFACE,      // bSlaveInterface (CDC Data)
-    // CDC notification endpoint IN (interrupt)
-    7,                            // bLength
-    5,                            // bDescriptorType
-    CDC_NOTIFICATION_ENDPOINT | 0x80, // bEndpointAddress
-    0x03,                         // bmAttributes (intr)
-    8, 0,                         // wMaxPacketSize
-    16,                          // bInterval
-    // CDC Data interface
-    9,                       // bLength
-    4,                       // bDescriptorType
-    CDC_DATA_INTERFACE,      // bInterfaceNumber
-    0,                       // bAlternateSetting
-    2,                       // bNumEndpoints
-    0x0A,                    // bInterfaceClass (CDC Data)
-    0x00,                    // bInterfaceSubClass
-    0x00,                    // bInterfaceProtocol
-    0,                       // iInterface
-    // CDC data endpoint OUT (bulk)
-    7,                          // bLength
-    5,                          // bDescriptorType
-    CDC_DATA_OUT_ENDPOINT,      // bEndpointAddress (OUT)
-    0x02,                       // bmAttributes (bulk)
-    0x00, 0x02,                     // wMaxPacketSize (512)
-    0,                          // bInterval
-    // CDC data endpoint IN (bulk)
-    7,                         // bLength
-    5,                         // bDescriptorType
-    CDC_DATA_IN_ENDPOINT | 0x80, // bEndpointAddress (IN)
-    0x02,                      // bmAttributes (bulk)
-    0x00, 0x02,                     // wMaxPacketSize (512)
-    0,                         // bInterval
 };
