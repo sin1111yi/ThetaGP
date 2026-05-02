@@ -66,10 +66,10 @@ void Gamepad::setButtonMappings() {
   _mappings.fill(0xFF);
 
 #ifdef KEYPAD_BUTTON_MAP
-  constexpr uint32_t masks[] = { KEYPAD_BUTTON_MAP };
-  for (uint8_t i = 0; i < sizeof(masks) / sizeof(masks[0]); i++) {
-    if (masks[i] != 0) {
-      setMapping(i, __builtin_ctz(masks[i]));
+  constexpr struct { uint8_t key; uint32_t mask; } map[] = { KEYPAD_BUTTON_MAP };
+  for (auto &entry : map) {
+    if (entry.mask != 0) {
+      setMapping(entry.key, __builtin_ctz(entry.mask));
     }
   }
 #else
