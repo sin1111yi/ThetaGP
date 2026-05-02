@@ -80,8 +80,6 @@ function M.generate(keypad_config)
             local total_keys = drive_num * sense_num
 
             table.insert(lines, "")
-            table.insert(lines, "// Drive-Sense to Key Index mapping")
-            table.insert(lines, "// Value = key index (0-63), KEYPAD_NO_KEY = no key")
             table.insert(lines, "#define KEYPAD_KEY_MAP \\")
 
             local max_index = 0
@@ -139,7 +137,6 @@ function M.generate(keypad_config)
 
     if keypad_config.button_map and #keypad_config.button_map > 0 then
         table.insert(lines, "")
-        table.insert(lines, "// Physical key to gamepad button mapping")
         table.insert(lines, "#define KEYPAD_BUTTON_MAP \\")
 
         local count = #keypad_config.button_map

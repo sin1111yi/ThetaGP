@@ -44,52 +44,26 @@ function M.generate_content(mcu_series, board_info, pin_lines, keypad_lines, usb
         content = content .. mcu_header .. "\n\n"
     end
 
-    -- Pin Definitions
-    content = content .. [[
-
-// =============================================================================
-// Pin Definitions
-// =============================================================================
-
-]]
     for _, line in ipairs(pin_lines) do
         content = content .. line .. "\n"
     end
 
-    -- Keypad Configuration
     if #keypad_lines > 0 then
-        content = content .. [[
-// =============================================================================
-// Keypad Configuration
-// =============================================================================
-
-]]
+        content = content .. "\n"
         for _, line in ipairs(keypad_lines) do
             content = content .. line .. "\n"
         end
     end
 
-    -- USB Configuration
     if #usb_lines > 0 then
-        content = content .. [[
-// =============================================================================
-// USB Configuration
-// =============================================================================
-
-]]
+        content = content .. "\n"
         for _, line in ipairs(usb_lines) do
             content = content .. line .. "\n"
         end
     end
 
-    -- UART Configuration
     if #uart_lines > 0 then
-        content = content .. [[
-// =============================================================================
-// UART Configuration
-// =============================================================================
-
-]]
+        content = content .. "\n"
         for _, line in ipairs(uart_lines) do
             content = content .. line .. "\n"
         end
