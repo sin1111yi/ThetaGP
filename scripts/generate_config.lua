@@ -43,6 +43,7 @@ package.path = thetagp_source_dir .. "/scripts/config_lib/?.lua;" ..
 -- Load modules
 -- =============================================================================
 
+local log = require("utils.log")
 local validators = require("validators")
 local generators = require("generators")
 local utils = require("utils")
@@ -55,13 +56,29 @@ package.path = thetagp_source_dir .. "/configs/?.lua;" ..
                thetagp_source_dir .. "/configs/?/init.lua;" .. 
                package.path
 
-local board_config = require(target .. ".BoardConfig")
+local ok, board_config = pcall(require, target .. ".BoardConfig")
+if not ok then
+    log.print_error("Failed to load BoardConfig.lua for target '", target, "'")
+    log.print_error("Check that configs/", target, "/BoardConfig.lua exists and is valid Lua")
+    os.exit(1)
+end
+
+log.print_info("Loaded configuration for target: ", target)
 
 -- =============================================================================
 -- Validate configuration
 -- =============================================================================
 
-validators.validate_config(board_config)
+local ok, err = pcall(validators.validate_config, board_config)
+if not ok then
+    log.print_error("Configuration validation failed:")
+    for line in err:gmatch("[^\n]+") do
+        log.print_error("  ", line)
+    end
+    os.exit(1)
+end
+
+log.print_info("Configuration validation passed")
 
 -- =============================================================================
 -- Extract configuration data
@@ -74,6 +91,8 @@ local mcu_series = board_info.mcu_series or ""
 -- =============================================================================
 -- Generate macro definitions
 -- =============================================================================
+
+log.print_info("Generating pin macros...")
 
 -- Generate other pin configurations (LED, etc.)
 local pin_lines = {}
@@ -91,13 +110,19 @@ for k, v in pairs(necessary_config) do
 end
 
 -- Generate Keypad macros
+log.print_info("Generating keypad macros...")
 local keypad_lines = generators.keypad.generate(necessary_config.keypad)
+log.print_info("  Keypad: ", #keypad_lines, " macros generated")
 
 -- Generate USB macros
+log.print_info("Generating USB macros...")
 local usb_lines = generators.usb.generate(necessary_config.usb)
+log.print_info("  USB: ", #usb_lines, " macros generated")
 
 -- Generate UART macros
+log.print_info("Generating UART macros...")
 local uart_lines = generators.uart.generate(necessary_config.bus)
+log.print_info("  UART: ", #uart_lines, " macros generated")
 
 -- =============================================================================
 -- Generate output files
@@ -113,8 +138,7 @@ local header_content = generators.header.generate_content(
     pin_lines,
     keypad_lines,
     usb_lines,
-    uart_lines,
-    log_lines
+    uart_lines
 )
 
 -- Generate CMake content
@@ -127,13 +151,19 @@ local cmake_content = generators.cmake.generate_content(board_info, target)
 local function write_file_safe(filepath, content)
     local file = io.open(filepath, "w")
     if not file then
-        error("Failed to open file for writing: " .. filepath)
+        log.print_error("Failed to open file for writing: ", filepath)
+        os.exit(1)
     end
     file:write(content)
     file:close()
 end
 
+log.print_info("Writing ", header_output_file, " ...")
 write_file_safe(header_output_file, header_content)
-write_file_safe(cmake_output_file, cmake_content)
+log.print_info("  Done (", #header_content, " bytes)")
 
-print("Configuration generated successfully for target: " .. target)
+log.print_info("Writing ", cmake_output_file, " ...")
+write_file_safe(cmake_output_file, cmake_content)
+log.print_info("  Done (", #cmake_content, " bytes)")
+
+log.print_info("Configuration generated successfully for target: ", target)
