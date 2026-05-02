@@ -20,13 +20,92 @@
  */
 
 #include "drivers/gpdriver/usbdriver.h"
+#include "build_info.h"
 #include "drivers/gpdriver/gpdrivermgr.h"
-#include "drivers/gpdriver/usbcore.h"
+#include "drivers/gpdriver/hid/HIDDescriptors.h"
 
+#include "class/cdc/cdc_device.h"
 #include "tusb.h"
+
+#include <cstring>
 
 using namespace ThetaGP::USB;
 using namespace ThetaGP::Drivers::GPDriver;
+
+COMMON_CODE static uint8_t s_config_descriptor[1024];
+static uint16_t s_config_size;
+
+static constexpr uint8_t CDC_IFACE[] = {
+    9, 4, CDC_COM_INTERFACE, 0, 1, 0x02, 0x02, 0x01, 4,
+    5, 0x24, 0x00, 0x10, 0x01,
+    5, 0x24, 0x01, 0x03, CDC_DATA_INTERFACE,
+    4, 0x24, 0x02, 0x02,
+    5, 0x24, 0x06, CDC_COM_INTERFACE, CDC_DATA_INTERFACE,
+    7, 5, CDC_NOTIFICATION_ENDPOINT | 0x80, 0x03, 8, 0, 16,
+    9, 4, CDC_DATA_INTERFACE, 0, 2, 0x0A, 0x00, 0x00, 0,
+    7, 5, CDC_DATA_OUT_ENDPOINT, 0x02, 0x00, 0x02, 0,
+    7, 5, CDC_DATA_IN_ENDPOINT | 0x80, 0x02, 0x00, 0x02, 0,
+};
+
+constexpr uint16_t CDC_IFACE_SIZE = sizeof(CDC_IFACE);
+
+void USBDriver::init() {
+  uint8_t *p = s_config_descriptor;
+
+  p[0] = 9;  p[1] = 2;  p[2] = 0;  p[3] = 0;
+  p[4] = 3;  p[5] = 1;  p[6] = 0;  p[7] = 0x80;  p[8] = 50;
+  p += 9;
+
+  auto *driver = GPDriverManager::getInstance().getgpdriverDevice();
+  uint16_t mode_size = driver->get_interface_descriptor_size();
+  std::memcpy(p, driver->get_interface_descriptor(), mode_size);
+  p += mode_size;
+
+  std::memcpy(p, CDC_IFACE, CDC_IFACE_SIZE);
+  p += CDC_IFACE_SIZE;
+
+  s_config_size = static_cast<uint16_t>(p - s_config_descriptor);
+  s_config_descriptor[2] = LSB(s_config_size);
+  s_config_descriptor[3] = MSB(s_config_size);
+
+  _mode_driver = *driver->get_class_driver();
+
+  _cdc_driver = {
+#if CFG_TUSB_DEBUG >= 2
+    .name = "CDC",
+#endif
+    .init = cdcd_init,
+    .deinit = NULL,
+    .reset = cdcd_reset,
+    .open = cdcd_open,
+    .control_xfer_cb = cdcd_control_xfer_cb,
+    .xfer_cb = cdcd_xfer_cb,
+    .xfer_isr = NULL,
+    .sof = NULL,
+  };
+}
+
+const usbd_class_driver_t *USBDriver::getDrivers(uint8_t *count) {
+  *count = 2;
+  return &_mode_driver;
+}
+
+const uint8_t *USBDriver::getConfigurationDescriptor(uint8_t index) {
+  (void)index;
+  return s_config_descriptor;
+}
+
+void USBDriver::cdcRx(uint8_t itf) {
+  (void)itf;
+  while (tud_cdc_available()) {
+    uint8_t buf[64];
+    uint32_t len = tud_cdc_read(buf, sizeof(buf));
+    tud_cdc_write(buf, len);
+    tud_cdc_write_flush();
+  }
+}
+
+// ------------------------------------------------------------------- //
 
 extern "C" {
 
@@ -38,11 +117,11 @@ bool get_usb_mounted(void) { return usb_mounted; }
 bool get_usb_suspended(void) { return usb_suspended; }
 
 const usbd_class_driver_t *usbd_app_driver_get_cb(uint8_t *driver_count) {
-  return USBCore::getInstance().getDrivers(driver_count);
+  return USBDriver::getInstance().getDrivers(driver_count);
 }
 
 void tud_cdc_rx_cb(uint8_t itf) {
-  USBCore::getInstance().cdcRx(itf);
+  USBDriver::getInstance().cdcRx(itf);
 }
 
 uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id,
@@ -104,7 +183,7 @@ uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf) {
 }
 
 uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
-  return USBCore::getInstance().getConfigurationDescriptor(index);
+  return USBDriver::getInstance().getConfigurationDescriptor(index);
 }
 
 uint8_t const *tud_descriptor_device_qualifier_cb() {
@@ -112,4 +191,5 @@ uint8_t const *tud_descriptor_device_qualifier_cb() {
       .getgpdriverDevice()
       ->get_descriptor_device_qualifier_cb();
 }
+
 }

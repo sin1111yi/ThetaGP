@@ -21,7 +21,7 @@
 
 #include "drivers/gpdriver/gpdrivermgr.h"
 #include "drivers/gpdriver/hid/HIDDriver.h"
-#include "drivers/gpdriver/usbcore.h"
+#include "drivers/gpdriver/usbdriver.h"
 
 #include "tusb.h"
 
@@ -41,7 +41,7 @@ void GPDriverManager::setup(InputMode mode) {
   }
   inputMode = mode;
 
-  USB::USBCore::getInstance().init();
+  USB::USBDriver::getInstance().init();
 
   // TinyUSB initialize
   tusb_rhport_init_t dev_init = {.role = TUSB_ROLE_DEVICE,
