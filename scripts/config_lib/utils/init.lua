@@ -2,7 +2,7 @@
 
 local M = {}
 
--- Load all utility modules
+M.log = require("utils.log")
 M.table_utils = require("utils.table_utils")
 M.pin_parser = require("utils.pin_parser")
 

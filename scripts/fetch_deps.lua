@@ -31,76 +31,16 @@ local project_root = script_dir .. "../"
 -- Load dependencies configuration
 dofile(project_root .. "deps_config.lua")
 
+-- Load shared utilities
+package.path = script_dir .. "config_lib/?.lua;" .. package.path
+local log = require("utils.log")
+
 -- =============================================================================
 -- Utility Functions
 -- =============================================================================
 
-local function print_info(...)
-    local args = {}
-    for _, v in ipairs({ ... }) do
-        table.insert(args, tostring(v))
-    end
-    print("[INFO] " .. table.concat(args, " "))
-end
-
-local function print_warning(...)
-    local args = {}
-    for _, v in ipairs({ ... }) do
-        table.insert(args, tostring(v))
-    end
-    print("[WARNING] " .. table.concat(args, " "))
-end
-
-local function print_error(...)
-    local args = {}
-    for _, v in ipairs({ ... }) do
-        table.insert(args, tostring(v))
-    end
-    print("[ERROR] " .. table.concat(args, " "))
-end
-
-local function file_exists(path)
-    local f = io.open(path, "r")
-    if f then
-        io.close(f)
-        return true
-    end
-    return false
-end
-
 local function is_git_repo(path)
-    return file_exists(path .. "/.git")
-end
-
-local function execute_command(cmd, ignore_error)
-    print_info("Executing:", cmd)
-    local ret = os.execute(cmd)
-    -- os.execute returns true (success) or false/exit code (failure)
-    local success = (ret == true) or (ret == 0)
-    if not success and not ignore_error then
-        print_error("Command failed with exit code:", ret)
-        return false
-    end
-    return success
-end
-
-local function ensure_directory(path)
-    os.execute("mkdir -p " .. path)
-end
-
--- =============================================================================
--- Git Operations
--- =============================================================================
-
--- Get git reference string (tag takes precedence over branch)
-local function get_git_ref(repo)
-    if repo.tag and repo.tag ~= "" then
-        return repo.tag
-    elseif repo.branch and repo.branch ~= "" then
-        return repo.branch
-    else
-        return "main"
-    end
+    return log.log.file_exists(path .. "/.git")
 end
 
 local function clone_or_pull(repo)
@@ -117,7 +57,7 @@ local function clone_or_pull(repo)
 
         for _, path in ipairs(sparse_paths) do
             local full_path = dest_path .. "/" .. path
-            if not file_exists(full_path) then
+            if not log.file_exists(full_path) then
                 all_paths_exist = false
                 table.insert(missing_paths, path)
             end
@@ -125,20 +65,20 @@ local function clone_or_pull(repo)
 
         -- Only skip if all paths exist AND it's a git repo
         if all_paths_exist and is_git_repo(dest_path) then
-            print_info("Dependency already exists:", repo.dest)
+            log.print_info("Dependency already exists:", repo.dest)
             return true
         end
 
         -- Fetch the repository
-        print_info("Fetching directory (sparse clone):", repo.name, "->", repo.dest)
-        print_info("Sparse paths:", table.concat(sparse_paths, ", "))
+        log.print_info("Fetching directory (sparse clone):", repo.name, "->", repo.dest)
+        log.print_info("Sparse paths:", table.concat(sparse_paths, ", "))
 
         if not all_paths_exist then
-            print_info("Missing paths:", table.concat(missing_paths, ", "), "- re-fetching...")
+            log.print_info("Missing paths:", table.concat(missing_paths, ", "), "- re-fetching...")
         end
 
         -- Remove existing directory if it exists (partial or incomplete)
-        if file_exists(dest_path) then
+        if log.file_exists(dest_path) then
             local rm_cmd = string.format("rm -rf '%s'", dest_path)
             os.execute(rm_cmd)
         end
@@ -147,12 +87,12 @@ local function clone_or_pull(repo)
         local clone_cmd = string.format("git clone --sparse --filter=blob:none --depth 1 %s %s",
             repo.url, dest_path)
 
-        if not execute_command(clone_cmd, repo.optional) then
+        if not log.execute_command(clone_cmd, repo.optional) then
             if not repo.optional then
-                print_error("Failed to clone repository (sparse):", repo.name)
+                log.print_error("Failed to clone repository (sparse):", repo.name)
                 return false
             else
-                print_warning("Skipping optional dependency:", repo.name)
+                log.print_warning("Skipping optional dependency:", repo.name)
                 return true
             end
         end
@@ -162,12 +102,12 @@ local function clone_or_pull(repo)
         local set_sparse_cmd = string.format("cd %s && git sparse-checkout set %s",
             dest_path, sparse_checkout_args)
 
-        if not execute_command(set_sparse_cmd, repo.optional) then
+        if not log.execute_command(set_sparse_cmd, repo.optional) then
             if not repo.optional then
-                print_error("Failed to set sparse checkout:", repo.name)
+                log.print_error("Failed to set sparse checkout:", repo.name)
                 return false
             else
-                print_warning("Skipping optional dependency:", repo.name)
+                log.print_warning("Skipping optional dependency:", repo.name)
                 return true
             end
         end
@@ -175,12 +115,12 @@ local function clone_or_pull(repo)
         -- Step 3: Checkout the specified reference (tag or branch)
         local checkout_cmd = string.format("cd %s && git checkout %s", dest_path, ref)
 
-        if not execute_command(checkout_cmd, repo.optional) then
+        if not log.execute_command(checkout_cmd, repo.optional) then
             if not repo.optional then
-                print_error("Failed to checkout branch:", repo.name)
+                log.print_error("Failed to checkout branch:", repo.name)
                 return false
             else
-                print_warning("Skipping optional dependency:", repo.name)
+                log.print_warning("Skipping optional dependency:", repo.name)
                 return true
             end
         end
@@ -189,20 +129,20 @@ local function clone_or_pull(repo)
     else
         -- Standard full clone
         if is_git_repo(dest_path) then
-            print_info("Updating existing repository:", repo.dest)
+            log.print_info("Updating existing repository:", repo.dest)
             local cmd = string.format("cd %s && git fetch --all && git checkout %s", dest_path, ref)
-            if not execute_command(cmd, repo.optional) then
+            if not log.execute_command(cmd, repo.optional) then
                 if not repo.optional then
-                    print_error("Failed to update repository:", repo.name)
+                    log.print_error("Failed to update repository:", repo.name)
                     return false
                 else
-                    print_warning("Skipping optional dependency:", repo.name)
+                    log.print_warning("Skipping optional dependency:", repo.name)
                     return true
                 end
             end
         else
             -- Check if directory exists and is not empty
-            local dir_exists = file_exists(dest_path)
+            local dir_exists = log.file_exists(dest_path)
             if dir_exists then
                 -- Check if directory is empty
                 local handle = io.popen("ls -A '" .. dest_path .. "' 2>/dev/null")
@@ -213,22 +153,22 @@ local function clone_or_pull(repo)
                 end
 
                 if result and result ~= "" then
-                    print_warning("Directory exists but is not a git repo, skipping:", repo.dest)
+                    log.print_warning("Directory exists but is not a git repo, skipping:", repo.dest)
                     return true
                 end
             end
 
             -- Standard full clone
-            print_info("Cloning repository:", repo.name, "to", repo.dest)
+            log.print_info("Cloning repository:", repo.name, "to", repo.dest)
             ensure_directory(dest_path)
             local cmd = string.format("git clone --branch %s --depth 1 %s %s",
                 ref, repo.url, dest_path)
-            if not execute_command(cmd, repo.optional) then
+            if not log.execute_command(cmd, repo.optional) then
                 if not repo.optional then
-                    print_error("Failed to clone repository:", repo.name)
+                    log.print_error("Failed to clone repository:", repo.name)
                     return false
                 else
-                    print_warning("Skipping optional dependency:", repo.name)
+                    log.print_warning("Skipping optional dependency:", repo.name)
                     return true
                 end
             end
@@ -243,19 +183,19 @@ end
 -- =============================================================================
 
 local function main()
-    print_info("===========================================")
-    print_info("ThetaGP Dependency Fetcher")
-    print_info("===========================================")
-    print_info("Project root:", project_root)
-    print_info("")
+    log.print_info("===========================================")
+    log.print_info("ThetaGP Dependency Fetcher")
+    log.print_info("===========================================")
+    log.print_info("Project root:", project_root)
+    log.print_info("")
 
     local success = true
     local fetched_count = 0
     local skipped_count = 0
 
     for _, dep in ipairs(DEPENDENCIES) do
-        print_info("-------------------------------------------")
-        print_info("Processing dependency:", dep.name)
+        log.print_info("-------------------------------------------")
+        log.print_info("Processing dependency:", dep.name)
 
         local dest_path = project_root .. dep.dest
 
@@ -267,17 +207,17 @@ local function main()
 
             for _, path in ipairs(sparse_paths) do
                 local full_path = dest_path .. "/" .. path
-                if not file_exists(full_path) then
+                if not log.file_exists(full_path) then
                     all_paths_exist = false
                     table.insert(missing_paths, path)
                 end
             end
 
             if all_paths_exist then
-                print_info("Dependency already exists:", dep.dest)
+                log.print_info("Dependency already exists:", dep.dest)
                 skipped_count = skipped_count + 1
             else
-                print_info("Sparse paths missing:", table.concat(missing_paths, ", "), "- re-fetching...")
+                log.print_info("Sparse paths missing:", table.concat(missing_paths, ", "), "- re-fetching...")
                 if clone_or_pull(dep) then
                     fetched_count = fetched_count + 1
                 else
@@ -285,7 +225,7 @@ local function main()
                 end
             end
         elseif is_git_repo(dest_path) then
-            print_info("Dependency already exists:", dep.dest)
+            log.print_info("Dependency already exists:", dep.dest)
             skipped_count = skipped_count + 1
         else
             if clone_or_pull(dep) then
@@ -296,15 +236,15 @@ local function main()
         end
     end
 
-    print_info("")
-    print_info("===========================================")
-    print_info("Dependency fetch completed!")
-    print_info("  Fetched:", fetched_count)
-    print_info("  Skipped (already exists):", skipped_count)
-    print_info("===========================================")
+    log.print_info("")
+    log.print_info("===========================================")
+    log.print_info("Dependency fetch completed!")
+    log.print_info("  Fetched:", fetched_count)
+    log.print_info("  Skipped (already exists):", skipped_count)
+    log.print_info("===========================================")
 
     if not success then
-        print_error("Some dependencies failed to fetch!")
+        log.print_error("Some dependencies failed to fetch!")
         os.exit(1)
     end
 
