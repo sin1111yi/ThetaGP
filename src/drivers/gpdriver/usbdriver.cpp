@@ -22,6 +22,7 @@
 #include "drivers/gpdriver/usbdriver.h"
 #include "drivers/gpdriver/gpdrivermgr.h"
 
+#include "class/cdc/cdc_device.h"
 #include "tusb.h"
 
 using namespace ThetaGP::Drivers::GPDriver;
@@ -36,8 +37,39 @@ bool get_usb_mounted(void) { return usb_mounted; }
 bool get_usb_suspended(void) { return usb_suspended; }
 
 const usbd_class_driver_t *usbd_app_driver_get_cb(uint8_t *driver_count) {
-  *driver_count = 1;
-  return GPDriverManager::getInstance().getgpdriverDevice()->get_class_driver();
+  static usbd_class_driver_t const cdc_driver = {
+#if CFG_TUSB_DEBUG >= 2
+    .name = "CDC",
+#endif
+    .init = cdcd_init,
+    .deinit = NULL,
+    .reset = cdcd_reset,
+    .open = cdcd_open,
+    .control_xfer_cb = cdcd_control_xfer_cb,
+    .xfer_cb = cdcd_xfer_cb,
+    .xfer_isr = NULL,
+    .sof = NULL,
+  };
+
+  static struct {
+    usbd_class_driver_t hid;
+    usbd_class_driver_t cdc;
+  } drivers = {
+      .hid = *GPDriverManager::getInstance().getgpdriverDevice()->get_class_driver(),
+      .cdc = cdc_driver,
+  };
+  *driver_count = 2;
+  return &drivers.hid;
+}
+
+void tud_cdc_rx_cb(uint8_t itf) {
+  (void)itf;
+  while (tud_cdc_available()) {
+    uint8_t buf[64];
+    uint32_t len = tud_cdc_read(buf, sizeof(buf));
+    tud_cdc_write(buf, len);
+    tud_cdc_write_flush();
+  }
 }
 
 uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id,
