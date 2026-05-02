@@ -19,12 +19,39 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef _USB_DRIVER_H_
-#define _USB_DRIVER_H_
+#pragma once
+
+#include "device/usbd_pvt.h"
+#include "tusb.h"
+
+#include <cstdint>
+
+namespace ThetaGP::USB {
+
+class USBDriver {
+public:
+  static USBDriver &getInstance() {
+    static USBDriver instance;
+    return instance;
+  }
+
+  void init();
+
+  const usbd_class_driver_t *getDrivers(uint8_t *count);
+  const uint8_t *getConfigurationDescriptor(uint8_t index);
+
+  void cdcRx(uint8_t itf);
+
+private:
+  USBDriver() = default;
+
+  usbd_class_driver_t _mode_driver;
+  usbd_class_driver_t _cdc_driver;
+};
+
+} // namespace ThetaGP::USB
 
 extern "C" {
 bool get_usb_mounted(void);
 bool get_usb_suspended(void);
 }
-
-#endif // #ifndef _USB_DRIVER_H_
