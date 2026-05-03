@@ -61,11 +61,10 @@ M.BoardConfig = {
         bus = {
             uart = {
                 {
-                    bind = "debug",
+                    bind = "logger",
                     peripheral = "UART1",
                     tx = "PB14",
                     rx = "PB15",
-                    baud = 115200,
                 }
             }
         },

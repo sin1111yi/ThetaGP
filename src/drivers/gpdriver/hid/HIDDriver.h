@@ -34,7 +34,7 @@ public:
   HIDDriver();
 
   void initialize() override;
-  bool process(Gamepad *gamepad) override;
+  bool process(void *gamepad) override;
   void initializeAux() override {}
 
   uint16_t get_report(uint8_t report_id, hid_report_type_t report_type,

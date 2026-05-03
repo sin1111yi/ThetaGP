@@ -66,7 +66,7 @@ private:
 public:
   UartBus() {}
   UartBus(UartInstance uartx, GPIO::PinDesc tx, GPIO::PinDesc rx,
-          uint32_t baud);
+          uint32_t baud = 115200);
   explicit UartBus(const UartDesc &desc);
   ~UartBus() = default;
 
@@ -78,47 +78,6 @@ public:
 
   RetVal read(uint8_t *byte) override;
   RetVal read(uint8_t *bytes, uint16_t num) override;
-};
-
-// singleton debug uart
-class DebugUartBus : public UartBus {
-public:
-#if defined(DEBUG_UART)
-  DebugUartBus(UartInstance uartx, GPIO::PinDesc tx, GPIO::PinDesc rx,
-               uint32_t baud)
-      : UartBus(uartx, tx, rx, baud) {}
-
-  static DebugUartBus &getInstance() {
-    using Port = GPIO::Port;
-    using Pin = GPIO::Pin;
-    static DebugUartBus instance(UartInstance::CONTACT(DEBUG_UART, _PERIPHERAL),
-                                 CONTACT(DEBUG_UART, _TX_PIN),
-                                 CONTACT(DEBUG_UART, _RX_PIN),
-                                 CONTACT(DEBUG_UART, _BAUDRATE));
-    return instance;
-  }
-
-  using UartBus::enableClock;
-  using UartBus::init;
-
-  RetVal write(uint8_t byte) override { return UartBus::write(byte); };
-  RetVal write(uint8_t *bytes, uint16_t num) override {
-    return UartBus::write(bytes, num);
-  };
-
-  RetVal read(uint8_t *byte) override { return UartBus::read(byte); };
-  RetVal read(uint8_t *bytes, uint16_t num) override {
-    return UartBus::read(bytes, num);
-  };
-
-#else
-  static DebugUartBus &getInstance() {
-    static DebugUartBus instance;
-    return instance;
-  }
-
-  void init() { _initialized = false; };
-#endif
 };
 
 } // namespace BUS

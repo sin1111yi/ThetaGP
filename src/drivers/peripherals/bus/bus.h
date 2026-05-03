@@ -67,7 +67,6 @@ protected:
   uint32_t _pRxBufSize;
 
   void allocBuf(uint32_t txSize, uint32_t rxSize);
-
   void freeBuf();
 
   Bus();

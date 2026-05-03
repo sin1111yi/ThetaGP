@@ -22,26 +22,21 @@
 #ifndef _GPDRIVER_H_
 #define _GPDRIVER_H_
 
-#include "gamepad/gamepad.h"
+#include "drivers/gpdriver/usblistener.h"
 
 #include "class/hid/hid.h"
 #include "device/usbd_pvt.h"
-
 #include "tusb.h"
-
-#include "drivers/gpdriver/usblistener.h"
 
 #include <cstdint>
 
 namespace ThetaGP::Drivers::GPDriver {
 
-using Gamepad = Gamepad::Gamepad;
-
 class GPDriver {
 public:
   virtual void initialize() = 0;
   virtual void initializeAux() = 0;
-  virtual bool process(Gamepad *gamepad) = 0;
+  virtual bool process(void *gamepad) = 0;
   virtual uint16_t get_report(uint8_t report_id, hid_report_type_t report_type,
                               uint8_t *buffer, uint16_t reqlen) = 0;
   virtual void set_report(uint8_t report_id, hid_report_type_t report_type,
