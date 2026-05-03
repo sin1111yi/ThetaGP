@@ -22,6 +22,7 @@
 #pragma once
 
 #include "BoardConfig.h"
+
 #include "drivers/device/device.h"
 #include "drivers/peripherals/gpio.h"
 #include "drivers/peripherals/timer.h"

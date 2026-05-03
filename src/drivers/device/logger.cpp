@@ -19,41 +19,30 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
-
+#include "drivers/device/logger.h"
+#include "drivers/device/device.h"
+#include "drivers/peripherals/bus/bus.h"
+#include "drivers/peripherals/bus/bus_uart.h"
 #include <cstdint>
 
 namespace ThetaGP::Drivers::Device {
 
-enum class DeviceType : uint8_t {
-  None = 0,
-  Keypad,
-  SystemTimer,
-  Led,
-  Logger,
-  Custom,
-};
+Logger::Logger() : Device(DeviceType::Logger, 0) {}
 
-class Device {
-protected:
-  bool _initialized = false;
-  DeviceType _type;
-  uint8_t _instanceId;
+void Logger::init() {
+#if defined(LOGGER_UART)
+  _uart.init();
+#endif
+  _initialized = true;
+}
 
-  Device(DeviceType type, uint8_t instanceId = 0)
-      : _type(type), _instanceId(instanceId) {}
+void Logger::LoggerTransmitBytes(uint8_t *data, uint16_t n) {
+  auto &self = getInstance();
 
-public:
-  virtual ~Device() = default;
-
-  virtual void init() = 0;
-
-  [[nodiscard]] bool isInitialized() const { return _initialized; }
-  [[nodiscard]] DeviceType getType() const { return _type; }
-  [[nodiscard]] uint8_t getInstanceId() const { return _instanceId; }
-
-  void setInitialized(bool initialized) { _initialized = initialized; }
-  void setInstanceId(uint8_t id) { _instanceId = id; }
-};
+  if (self.isInitialized())
+#if defined(LOGGER_UART)
+    self._uart.write(data, n);
+#endif
+}
 
 } // namespace ThetaGP::Drivers::Device

@@ -20,21 +20,26 @@
  */
 
 #include "gamepad/gamepad.h"
+
+#include "utils/log/log.h"
+
 #include "drivers/device/keypad.h"
+#include "drivers/gpdriver/gpdrivermgr.h"
+#include <cstdint>
 
 namespace ThetaGP::Gamepad {
 
 using Keypad = ThetaGP::Drivers::Device::Keypad;
 
-Gamepad::Gamepad() {
-  setup();
-}
+Gamepad::Gamepad() { setup(); }
 
 void Gamepad::setup() {
   _state = GamepadState{};
   _inputDevice = nullptr;
   _initialized = true;
   _ready = false;
+
+  _gpDriverMgr = &Drivers::GPDriver::GPDriverManager::getInstance();
 }
 
 void Gamepad::reinit() { setup(); }
@@ -66,7 +71,10 @@ void Gamepad::setButtonMappings() {
   _mappings.fill(0xFF);
 
 #ifdef KEYPAD_BUTTON_MAP
-  constexpr struct { uint8_t key; uint32_t mask; } map[] = { KEYPAD_BUTTON_MAP };
+  constexpr struct {
+    uint8_t key;
+    uint32_t mask;
+  } map[] = {KEYPAD_BUTTON_MAP};
   for (auto &entry : map) {
     if (entry.mask != 0) {
       setMapping(entry.key, __builtin_ctz(entry.mask));
@@ -116,6 +124,7 @@ void Gamepad::process() {
     return;
   }
   read();
+  _gpDriverMgr->getgpdriverDevice()->process(this);
 }
 
 } // namespace ThetaGP::Gamepad

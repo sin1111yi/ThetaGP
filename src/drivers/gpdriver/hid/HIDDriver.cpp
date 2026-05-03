@@ -26,6 +26,7 @@
 #include "gamepad/gamepad.h"
 
 #include "tusb.h"
+#include <cstddef>
 
 namespace ThetaGP::Drivers::GPDriver {
 
@@ -52,15 +53,20 @@ void HIDDriver::initialize() {
       .name = "HID",
 #endif
       .init = hidd_init,
+      .deinit = nullptr,
       .reset = hidd_reset,
       .open = hidd_open,
       .control_xfer_cb = hid_control_xfer_cb,
       .xfer_cb = hidd_xfer_cb,
+      .xfer_isr = nullptr,
       .sof = NULL};
 }
 
-bool HIDDriver::process(Gamepad *gamepad) {
-  switch (gamepad->getState().dpad & GAMEPAD_MASK_DPAD) {
+bool HIDDriver::process(void *gamepad) {
+  ThetaGP::Gamepad::Gamepad *gp =
+      reinterpret_cast<ThetaGP::Gamepad::Gamepad *>(gamepad);
+
+  switch (gp->getState().dpad & GAMEPAD_MASK_DPAD) {
   case GAMEPAD_MASK_UP:
     hidReport.direction = HID_HAT_UP;
     break;
@@ -90,43 +96,43 @@ bool HIDDriver::process(Gamepad *gamepad) {
     break;
   }
 
-  hidReport.l_x_axis = static_cast<uint8_t>(gamepad->getState().lx >> 8);
-  hidReport.l_y_axis = static_cast<uint8_t>(gamepad->getState().ly >> 8);
-  hidReport.r_x_axis = static_cast<uint8_t>(gamepad->getState().rx >> 8);
-  hidReport.r_y_axis = static_cast<uint8_t>(gamepad->getState().ry >> 8);
+  hidReport.l_x_axis = static_cast<uint8_t>(gp->getState().lx >> 8);
+  hidReport.l_y_axis = static_cast<uint8_t>(gp->getState().ly >> 8);
+  hidReport.r_x_axis = static_cast<uint8_t>(gp->getState().rx >> 8);
+  hidReport.r_y_axis = static_cast<uint8_t>(gp->getState().ry >> 8);
 
   // these first three buttons are in this unintuitive order to be compatible
   // with expectations, e.g. both PS3/4/5 modes and Switch modes map to HID as
   // B3 B4  ==  1 4
   // B1 B2  ==  2 3
-  hidReport.buttons = 0 | (gamepad->pressedB1() ? GAMEPAD_MASK_B2 : 0) |
-                      (gamepad->pressedB2() ? GAMEPAD_MASK_B3 : 0) |
-                      (gamepad->pressedB3() ? GAMEPAD_MASK_B1 : 0) |
-                      (gamepad->pressedB4() ? GAMEPAD_MASK_B4 : 0) |
-                      (gamepad->pressedL1() ? GAMEPAD_MASK_L1 : 0) |
-                      (gamepad->pressedR1() ? GAMEPAD_MASK_R1 : 0) |
-                      (gamepad->pressedL2() ? GAMEPAD_MASK_L2 : 0) |
-                      (gamepad->pressedR2() ? GAMEPAD_MASK_R2 : 0) |
-                      (gamepad->pressedS1() ? GAMEPAD_MASK_S1 : 0) |
-                      (gamepad->pressedS2() ? GAMEPAD_MASK_S2 : 0) |
-                      (gamepad->pressedL3() ? GAMEPAD_MASK_L3 : 0) |
-                      (gamepad->pressedR3() ? GAMEPAD_MASK_R3 : 0) |
-                      (gamepad->pressedA1() ? GAMEPAD_MASK_A1 : 0) |
-                      (gamepad->pressedA2() ? GAMEPAD_MASK_A2 : 0) |
-                      (gamepad->pressedA3() ? GAMEPAD_MASK_A3 : 0) |
-                      (gamepad->pressedA4() ? GAMEPAD_MASK_A4 : 0) |
-                      (gamepad->pressedUp() ? GAMEPAD_MASK_DU : 0) |
-                      (gamepad->pressedDown() ? GAMEPAD_MASK_DD : 0) |
-                      (gamepad->pressedLeft() ? GAMEPAD_MASK_DL : 0) |
-                      (gamepad->pressedRight() ? GAMEPAD_MASK_DR : 0) |
-                      (gamepad->pressedE1() ? GAMEPAD_MASK_E1 : 0) |
-                      (gamepad->pressedE2() ? GAMEPAD_MASK_E2 : 0) |
-                      (gamepad->pressedE3() ? GAMEPAD_MASK_E3 : 0) |
-                      (gamepad->pressedE4() ? GAMEPAD_MASK_E4 : 0) |
-                      (gamepad->pressedE5() ? GAMEPAD_MASK_E5 : 0) |
-                      (gamepad->pressedE6() ? GAMEPAD_MASK_E6 : 0) |
-                      (gamepad->pressedE7() ? GAMEPAD_MASK_E7 : 0) |
-                      (gamepad->pressedE8() ? GAMEPAD_MASK_E8 : 0);
+  hidReport.buttons = 0 | (gp->pressedB1() ? GAMEPAD_MASK_B2 : 0) |
+                      (gp->pressedB2() ? GAMEPAD_MASK_B3 : 0) |
+                      (gp->pressedB3() ? GAMEPAD_MASK_B1 : 0) |
+                      (gp->pressedB4() ? GAMEPAD_MASK_B4 : 0) |
+                      (gp->pressedL1() ? GAMEPAD_MASK_L1 : 0) |
+                      (gp->pressedR1() ? GAMEPAD_MASK_R1 : 0) |
+                      (gp->pressedL2() ? GAMEPAD_MASK_L2 : 0) |
+                      (gp->pressedR2() ? GAMEPAD_MASK_R2 : 0) |
+                      (gp->pressedS1() ? GAMEPAD_MASK_S1 : 0) |
+                      (gp->pressedS2() ? GAMEPAD_MASK_S2 : 0) |
+                      (gp->pressedL3() ? GAMEPAD_MASK_L3 : 0) |
+                      (gp->pressedR3() ? GAMEPAD_MASK_R3 : 0) |
+                      (gp->pressedA1() ? GAMEPAD_MASK_A1 : 0) |
+                      (gp->pressedA2() ? GAMEPAD_MASK_A2 : 0) |
+                      (gp->pressedA3() ? GAMEPAD_MASK_A3 : 0) |
+                      (gp->pressedA4() ? GAMEPAD_MASK_A4 : 0) |
+                      (gp->pressedUp() ? GAMEPAD_MASK_DU : 0) |
+                      (gp->pressedDown() ? GAMEPAD_MASK_DD : 0) |
+                      (gp->pressedLeft() ? GAMEPAD_MASK_DL : 0) |
+                      (gp->pressedRight() ? GAMEPAD_MASK_DR : 0) |
+                      (gp->pressedE1() ? GAMEPAD_MASK_E1 : 0) |
+                      (gp->pressedE2() ? GAMEPAD_MASK_E2 : 0) |
+                      (gp->pressedE3() ? GAMEPAD_MASK_E3 : 0) |
+                      (gp->pressedE4() ? GAMEPAD_MASK_E4 : 0) |
+                      (gp->pressedE5() ? GAMEPAD_MASK_E5 : 0) |
+                      (gp->pressedE6() ? GAMEPAD_MASK_E6 : 0) |
+                      (gp->pressedE7() ? GAMEPAD_MASK_E7 : 0) |
+                      (gp->pressedE8() ? GAMEPAD_MASK_E8 : 0);
 
   // Wake up TinyUSB device
   if (tud_suspended())

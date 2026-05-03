@@ -21,6 +21,7 @@
 
 #include "BoardConfig.h"
 
+#include "drivers/device/logger.h"
 #include "drivers/peripherals/peripheralsmgr.h"
 #include "gamepad/scheduler/scheduler.h"
 #include "utils/log/log.h"
@@ -53,16 +54,21 @@ void ThetaGamepad::setup() {
   // setup peripherals' driver
   Drivers::Peripheral::PeripheralsManager::getInstance().initPeripherals();
 
-  // setup GP drivers
-  Drivers::GPDriver::GPDriverManager::getInstance().setup(
-      Drivers::GPDriver::InputMode::HID);
-
   // setup devices' driver
   Drivers::Device::DeviceManager::getInstance().registerDevice(
       reinterpret_cast<Device *>(&Drivers::Device::Keypad::getInstance()));
   Drivers::Device::DeviceManager::getInstance().registerDevice(
       reinterpret_cast<Device *>(&Drivers::Device::SystemTimer::getInstance()));
+  Drivers::Device::DeviceManager::getInstance().registerDevice(
+      reinterpret_cast<Device *>(&Drivers::Device::Logger::getInstance()));
+
   Drivers::Device::DeviceManager::getInstance().initDevices();
+
+  LogInit(Drivers::Device::Logger::LoggerTransmitBytes);
+
+  // setup GP drivers
+  Drivers::GPDriver::GPDriverManager::getInstance().setup(
+      Drivers::GPDriver::InputMode::HID);
 
   // setup gamepad
   Gamepad::Gamepad::getInstance().setup();

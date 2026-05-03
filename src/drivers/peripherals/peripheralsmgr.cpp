@@ -41,15 +41,6 @@ TIMER::Instance PeripheralsManager::reservedTimer(void) {
 #endif
 }
 
-BUS::DebugUartBus &PeripheralsManager::debugUart() {
-  return BUS::DebugUartBus::getInstance();
-}
-
-static void print(uint8_t *data, uint16_t num) {
-  if (PeripheralsManager::getInstance().debugUart().isInitialized())
-    PeripheralsManager::getInstance().debugUart().write(data, num);
-}
-
 void PeripheralsManager::initPeripherals() {
   cycleCounterInit();
 
@@ -59,10 +50,4 @@ void PeripheralsManager::initPeripherals() {
   USB::HardwareUSB hwusb(USB::USBSpeed::UsbHighSpeedExternalPHY,
                          USB::USBPeripheral::ULPI);
   hwusb.init();
-
-  // TODO: debugging code, a way for initializing is needed.
-  debugUart().init();
-  LogInit(print);
-
-  LOG_DEBUG("Peripherals Init Done!");
 }

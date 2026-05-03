@@ -19,10 +19,10 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-
 #include "device/usbd.h"
 #include "drivers/gpdriver/gpdrivermgr.h"
 #include "gamepad/gamepad.h"
+#include "utils/log/log.h"
 #include "utils/utils.h"
 
 #include "taskmanager.h"
@@ -37,11 +37,7 @@ using namespace ThetaGP::Gamepad;
 static void taskGamepadCore(uint32_t currentTimeUs) {
   UNUSED(currentTimeUs);
 
-  static Gamepad::Gamepad &gamepad = Gamepad::Gamepad::getInstance();
-  gamepad.process();
-  Drivers::GPDriver::GPDriverManager::getInstance()
-      .getgpdriverDevice()
-      ->process(&gamepad);
+  Gamepad::Gamepad::getInstance().process();
   tud_task();
 }
 

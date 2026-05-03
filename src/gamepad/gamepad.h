@@ -22,9 +22,13 @@
 #pragma once
 
 #include "BoardConfig.h"
-#include "drivers/device/device.h"
+
 #include "utils/time.h"
 #include "utils/types.h"
+
+#include "drivers/device/device.h"
+#include "drivers/gpdriver/gpdriver.h"
+#include "drivers/gpdriver/gpdrivermgr.h"
 
 #include "gamepad/gamepadstate.h"
 
@@ -34,6 +38,7 @@ namespace ThetaGP::Gamepad {
 
 using Device = ThetaGP::Drivers::Device::Device;
 using DeviceType = ThetaGP::Drivers::Device::DeviceType;
+using GPDriverManager = ThetaGP::Drivers::GPDriver::GPDriverManager;
 
 /**
  * @brief Gamepad class - handles input mapping and state management
@@ -48,6 +53,7 @@ private:
   Device *_inputDevice = nullptr;
   bool _initialized = false;
   bool _ready = false;
+  GPDriverManager *_gpDriverMgr = nullptr;
 
   void read();
 

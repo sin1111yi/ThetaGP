@@ -38,7 +38,6 @@ public:
   void initPeripherals();
 
   TIMER::Instance reservedTimer();
-  BUS::DebugUartBus& debugUart();
 };
 
 } // namespace ThetaGP::Drivers::Peripheral
