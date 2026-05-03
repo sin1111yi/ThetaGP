@@ -231,7 +231,7 @@ void HardwareTimer::calculatePrescalerAndPeriod(uint32_t frequency) {
   HANDLE.Init.Period = period;
 }
 
-void HardwareTimer::setCallback(TimerCallback cb, void *context) {
+void HardwareTimer::setCallback(TimerCallbackFunc cb, void *context) {
   _callback = std::move(cb);
   _context = context;
 }

@@ -122,16 +122,6 @@ const uint8_t *USBDriver::getConfigurationDescriptor(uint8_t index) {
   return s_config_descriptor;
 }
 
-void USBDriver::cdcRx(uint8_t itf) {
-  (void)itf;
-  while (tud_cdc_available()) {
-    uint8_t buf[64];
-    uint32_t len = tud_cdc_read(buf, sizeof(buf));
-    tud_cdc_write(buf, len);
-    tud_cdc_write_flush();
-  }
-}
-
 // ------------------------------------------------------------------- //
 
 extern "C" {
@@ -148,7 +138,7 @@ const usbd_class_driver_t *usbd_app_driver_get_cb(uint8_t *driver_count) {
 }
 
 void tud_cdc_rx_cb(uint8_t itf) {
-  USBDriver::getInstance().cdcRx(itf);
+  USBDriver::getInstance().cdcRxCallback(itf);
 }
 
 uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id,

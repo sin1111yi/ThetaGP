@@ -21,14 +21,28 @@
 
 #pragma once
 
+#include "class/cdc/cdc_device.h"
+#include "utils/utils.h"
+
 #include "device/usbd_pvt.h"
 #include "tusb.h"
 
 #include <cstdint>
+#include <functional>
 
 namespace ThetaGP::USB {
 
 class USBDriver {
+private:
+  static constexpr uint16_t CDC_BUFFER_SIZE = 256;
+  USBDriver() = default;
+
+  usbd_class_driver_t _mode_driver;
+  usbd_class_driver_t _cdc_driver;
+
+  using CDCRxCallbackFunc = std::function<void(void *buffer, uint16_t len)>;
+  CDCRxCallbackFunc _cdcRxCallback;
+
 public:
   static USBDriver &getInstance() {
     static USBDriver instance;
@@ -40,13 +54,22 @@ public:
   const usbd_class_driver_t *getDrivers(uint8_t *count);
   const uint8_t *getConfigurationDescriptor(uint8_t index);
 
-  void cdcRx(uint8_t itf);
+  void setCDCRxCallback(CDCRxCallbackFunc cb);
+  void cdcRxCallback(uint8_t itf) {
+    UNUSED(itf);
 
-private:
-  USBDriver() = default;
-
-  usbd_class_driver_t _mode_driver;
-  usbd_class_driver_t _cdc_driver;
+    while (tud_cdc_available()) {
+      static uint8_t buffer[CDC_BUFFER_SIZE];
+      uint32_t len = tud_cdc_read(buffer, sizeof(buffer));
+#if 0
+      tud_cdc_write(buffer, len);
+      tud_cdc_write_flush();
+#endif
+      if (_cdcRxCallback) {
+        _cdcRxCallback(buffer, len);
+      }
+    }
+  }
 };
 
 } // namespace ThetaGP::USB
