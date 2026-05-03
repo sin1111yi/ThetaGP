@@ -69,8 +69,8 @@ private:
   void *_halHandle = nullptr;
   void *_context = nullptr;
 
-  using TimerCallback = std::function<void(void *context)>;
-  TimerCallback _callback;
+  using TimerCallbackFunc = std::function<void(void *context)>;
+  TimerCallbackFunc _callback;
 
   void enableClock() const;
   uint32_t getTimerClock() const;
@@ -89,7 +89,7 @@ public:
   static uint32_t toHalTriggerEvent(TriggerEvent evt);
 
   // Set callback with context
-  void setCallback(TimerCallback cb, void *context = nullptr);
+  void setCallback(TimerCallbackFunc cb, void *context = nullptr);
   void callback() {
     if (_callback) {
       _callback(_context);
