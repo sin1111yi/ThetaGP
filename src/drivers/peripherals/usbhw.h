@@ -37,12 +37,12 @@ namespace USB {
 
 enum class USBSpeed : uint8_t {
   UsbFullSpeed,
-  UsbHighSpeedInternalPHY,
-  UsbHighSpeedExternalPHY,
+  UsbHighSpeed,
 };
 
 enum class USBPeripheral : uint8_t {
-  DifferenceLine,
+  OTG1,
+  OTG2,
   ULPI,
 };
 
