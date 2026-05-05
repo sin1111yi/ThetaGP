@@ -47,7 +47,22 @@ void PeripheralsManager::initPeripherals() {
   Drivers::Peripheral::NVIC_EXTI::NvicExti::preinit();
   Drivers::Peripheral::BUS::BusMem::getInstance().init();
 
-  USB::HardwareUSB hwusb(USB::USBSpeed::UsbHighSpeedExternalPHY,
-                         USB::USBPeripheral::ULPI);
+  USB::USBSpeed usbSpeed =
+#if defined(USBHW_SPEED_HS)
+      USB::USBSpeed::UsbHighSpeed;
+#else
+      USB::USBSpeed::UsbFullSpeed;
+#endif
+
+  USB::USBPeripheral usbPeriph =
+#if defined(USBHW_IF_OTG1)
+      USB::USBPeripheral::OTG1;
+#elif defined(USBHW_IF_OTG2)
+      USB::USBPeripheral::OTG2;
+#elif defined(USBHW_IF_ULPI)
+          USB::USBPeripheral::ULPI;
+#endif
+
+  USB::HardwareUSB hwusb(usbSpeed, usbPeriph);
   hwusb.init();
 }

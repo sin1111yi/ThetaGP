@@ -136,14 +136,14 @@ void HardwareUSB::initHighSpeedPins() {
 }
 
 void HardwareUSB::initFullSpeedPins() {
-#if defined(STM32H7) & 0
+#if defined(STM32H7)
   Gpio dp(Port::PortA, Pin::Pin12);
   Gpio dm(Port::PortA, Pin::Pin11);
 
   dp.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,
-            kUlpiAlternate);
+            GpioAlternateUSB);
   dm.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,
-            kUlpiAlternate);
+            GpioAlternateUSB);
 
   dp.init();
   dm.init();
@@ -157,16 +157,18 @@ ThetaGP::RetVal HardwareUSB::init() {
 
   delay_ms(5);
 
-  if (_speed == USBSpeed::UsbHighSpeedExternalPHY &&
-      _peripheral == USBPeripheral::ULPI) {
+  /* clang-format off */
+  if (_peripheral == USBPeripheral::ULPI && 
+      _speed == USBSpeed::UsbHighSpeed) {
     initULPIPins();
-  } else if (_speed == USBSpeed::UsbFullSpeed &&
-             _peripheral == USBPeripheral::DifferenceLine) {
-    initFullSpeedPins();
-  } else if (_speed == USBSpeed::UsbHighSpeedInternalPHY ||
-             _peripheral == USBPeripheral::DifferenceLine) {
+  } else if (_peripheral == USBPeripheral::OTG1 &&
+             _speed == USBSpeed::UsbHighSpeed) {
     initHighSpeedPins();
+  } else if (_peripheral == USBPeripheral::OTG2 &&
+             _speed == USBSpeed::UsbFullSpeed) {
+    initFullSpeedPins();
   }
+  /* clang-format on */
 
   return RetVal::Ok;
 }
