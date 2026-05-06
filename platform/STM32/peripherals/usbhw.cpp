@@ -96,6 +96,9 @@ HardwareUSB::HardwareUSB(USBSpeed speed, USBPeripheral peripheral) {
 void HardwareUSB::initULPIPins() {
 #if defined(STM32H7)
   HAL_PWREx_EnableUSBVoltageDetector();
+  // Enable SYSCFG IO compensation cell for ULPI 60MHz signal integrity
+  HAL_EnableCompensationCell();
+
   for (const auto &pinDesc : ULPIPinDescs) {
     Gpio gpio(pinDesc);
     gpio.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,

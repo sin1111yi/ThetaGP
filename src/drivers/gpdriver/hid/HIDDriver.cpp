@@ -134,16 +134,16 @@ bool HIDDriver::process(void *gamepad) {
                       (gp->pressedE7() ? GAMEPAD_MASK_E7 : 0) |
                       (gp->pressedE8() ? GAMEPAD_MASK_E8 : 0);
 
-  // Wake up TinyUSB device
-  if (tud_suspended())
-    tud_remote_wakeup();
+  // Wake up TinyUSB device only when state changes while suspended
+  if (tud_suspended()) {
+    if (memcmp(last_report, &hidReport, sizeof(hidReport)) != 0) {
+      tud_remote_wakeup();
+    }
+  }
 
-  void *report = &hidReport;
-  uint16_t report_size = sizeof(hidReport);
-  if (memcmp(last_report, report, report_size) != 0) {
-    // HID ready + report sent, copy previous report
-    if (tud_hid_ready() && tud_hid_report(0, report, report_size) == true) {
-      memcpy(last_report, report, report_size);
+  if (memcmp(last_report, &hidReport, sizeof(hidReport)) != 0) {
+    if (tud_hid_ready() && tud_hid_report(0, &hidReport, sizeof(hidReport))) {
+      memcpy(last_report, &hidReport, sizeof(hidReport));
       return true;
     }
   }
