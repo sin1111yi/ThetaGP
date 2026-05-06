@@ -29,6 +29,7 @@
 
 #include "ThetaGP.h"
 
+#include <ArduinoJson.h>
 #include <cstdint>
 
 using namespace ThetaGP;

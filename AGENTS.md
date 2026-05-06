@@ -129,7 +129,7 @@ class Holder {
 
 Before any operation, query files in this order:
 
-1. **AGENT.md** - this file
+1. **AGENTS.md** - this file
 2. **README.md** - project overview and build instructions
 3. **Project structure** - understand code organization
 4. **Relevant headers** - understand interfaces and types

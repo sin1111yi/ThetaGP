@@ -37,8 +37,7 @@ private:
   static constexpr uint16_t CDC_BUFFER_SIZE = 256;
   USBDriver() = default;
 
-  usbd_class_driver_t _mode_driver;
-  usbd_class_driver_t _cdc_driver;
+  usbd_class_driver_t _drivers[2];
 
   using CDCRxCallbackFunc = std::function<void(void *buffer, uint16_t len)>;
   CDCRxCallbackFunc _cdcRxCallback;

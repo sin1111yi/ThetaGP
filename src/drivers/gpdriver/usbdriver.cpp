@@ -43,7 +43,7 @@ static constexpr uint8_t CDC_IFACE[] = {
     0x02, 0x02,
     0x01, 0x04,
     0x05, 0x24,
-   0x00, 0x10,
+   0x10, 0x01,
    0x01, 0x05,
    0x24, 0x01,
    0x03,
@@ -95,9 +95,9 @@ void USBDriver::init() {
   s_config_descriptor[2] = LSB(s_config_size);
   s_config_descriptor[3] = MSB(s_config_size);
 
-  _mode_driver = *driver->get_class_driver();
+  _drivers[0] = *driver->get_class_driver();
 
-  _cdc_driver = {
+  _drivers[1] = {
 #if CFG_TUSB_DEBUG >= 2
     .name = "CDC",
 #endif
@@ -114,7 +114,7 @@ void USBDriver::init() {
 
 const usbd_class_driver_t *USBDriver::getDrivers(uint8_t *count) {
   *count = 2;
-  return &_mode_driver;
+  return _drivers;
 }
 
 const uint8_t *USBDriver::getConfigurationDescriptor(uint8_t index) {

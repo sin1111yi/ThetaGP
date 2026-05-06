@@ -60,7 +60,9 @@ void PeripheralsManager::initPeripherals() {
 #elif defined(USBHW_IF_OTG2)
       USB::USBPeripheral::OTG2;
 #elif defined(USBHW_IF_ULPI)
-          USB::USBPeripheral::ULPI;
+      USB::USBPeripheral::ULPI;
+#else
+#error "USB peripheral type not defined (USBHW_IF_OTG1, USBHW_IF_OTG2, or USBHW_IF_ULPI)"
 #endif
 
   USB::HardwareUSB hwusb(usbSpeed, usbPeriph);

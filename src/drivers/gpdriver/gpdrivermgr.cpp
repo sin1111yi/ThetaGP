@@ -45,7 +45,7 @@ void GPDriverManager::setup(InputMode mode) {
 
   // TinyUSB initialize
   tusb_rhport_init_t dev_init = {.role = TUSB_ROLE_DEVICE,
-#if defined(THETAGP_CFG_USB_HS)
+#if defined(USBHW_SPEED_HS)
                                  .speed = TUSB_SPEED_HIGH
 #else
                                  .speed = TUSB_SPEED_FULL
