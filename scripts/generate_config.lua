@@ -111,17 +111,29 @@ end
 
 -- Generate Keypad macros
 log.print_info("Generating keypad macros...")
-local keypad_lines = generators.keypad.generate(necessary_config.keypad)
+local ok, keypad_lines = pcall(generators.keypad.generate, necessary_config.keypad)
+if not ok then
+    log.print_error("Keypad generation failed: ", keypad_lines)
+    os.exit(1)
+end
 log.print_info("  Keypad: ", #keypad_lines, " macros generated")
 
 -- Generate USB macros
 log.print_info("Generating USB macros...")
-local usb_lines = generators.usb.generate(necessary_config.usb)
+local ok, usb_lines = pcall(generators.usb.generate, necessary_config.usb)
+if not ok then
+    log.print_error("USB generation failed: ", usb_lines)
+    os.exit(1)
+end
 log.print_info("  USB: ", #usb_lines, " macros generated")
 
 -- Generate UART macros
 log.print_info("Generating UART macros...")
-local uart_lines = generators.uart.generate(necessary_config.bus)
+local ok, uart_lines = pcall(generators.uart.generate, necessary_config.bus)
+if not ok then
+    log.print_error("UART generation failed: ", uart_lines)
+    os.exit(1)
+end
 log.print_info("  UART: ", #uart_lines, " macros generated")
 
 -- =============================================================================
