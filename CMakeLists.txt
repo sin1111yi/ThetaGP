@@ -79,7 +79,12 @@ endif()
 execute_process(
     COMMAND ${LUA_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/generate_config.lua
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    RESULT_VARIABLE CONFIG_GEN_RESULT
 )
+
+if(NOT CONFIG_GEN_RESULT EQUAL 0)
+    message(FATAL_ERROR "Failed to generate board configuration. Check the error messages above.")
+endif()
 
 include(${CMAKE_SOURCE_DIR}/configs/${TARGET}/board_config.cmake)
 
