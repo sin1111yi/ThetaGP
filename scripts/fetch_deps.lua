@@ -46,6 +46,15 @@ local function is_git_repo(path)
     return log.file_exists(path .. "/.git")
 end
 
+local function get_git_ref(repo)
+    return repo.tag or repo.branch or "master"
+end
+
+local function ensure_directory(path)
+    local cmd = string.format("mkdir -p '%s'", path)
+    os.execute(cmd)
+end
+
 local function clone_or_pull(repo)
     local dest_path = project_root .. repo.dest
     local ref = get_git_ref(repo)
