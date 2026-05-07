@@ -45,13 +45,19 @@ void GPDriverManager::setup(InputMode mode) {
 
   // TinyUSB initialize
   tusb_rhport_init_t dev_init = {.role = TUSB_ROLE_DEVICE,
-#if defined(USBHW_SPEED_HS)
+#if THETAGP_USB_HIGH_SPEED
                                  .speed = TUSB_SPEED_HIGH
 #else
                                  .speed = TUSB_SPEED_FULL
 #endif
   };
-  tusb_init(1, &dev_init);
+
+#if THETAGP_USB_RHPORT == 0
+  tud_configure_dwc2_t cfg = CFG_TUD_CONFIGURE_DWC2_DEFAULT;
+  tud_configure(0, TUD_CFGID_DWC2, &cfg);
+#endif
+
+  tusb_init(THETAGP_USB_RHPORT, &dev_init);
 }
 
 } // namespace ThetaGP::Drivers::GPDriver

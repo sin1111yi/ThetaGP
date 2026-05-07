@@ -54,7 +54,7 @@ public:
   USBListener *get_usb_auth_listener() override { return nullptr; }
 
 private:
-  uint8_t last_report[CFG_TUD_ENDPOINT0_SIZE] = {};
+  uint8_t last_report[THETAGP_USB_EP0_SIZE] = {};
   HIDReport hidReport;
 };
 

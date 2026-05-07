@@ -35,6 +35,10 @@ using namespace ThetaGP::Drivers::GPDriver;
 COMMON_CODE static uint8_t s_config_descriptor[1024];
 static uint16_t s_config_size;
 
+// Bulk endpoint max packet size: 512 for HS, 64 for FS
+static constexpr uint8_t CDC_BULK_EPSIZE_LO = THETAGP_USB_HIGH_SPEED ? 0x00 : 0x40;
+static constexpr uint8_t CDC_BULK_EPSIZE_HI = THETAGP_USB_HIGH_SPEED ? 0x02 : 0x00;
+
 /* clang-format off */
 static constexpr uint8_t CDC_IFACE[] = {
     0x09, 0x04,
@@ -65,12 +69,12 @@ static constexpr uint8_t CDC_IFACE[] = {
    0x00, 0x00,
    0x07, 0x05,
    CDC_DATA_OUT_ENDPOINT,
-   0x02, 0x00,
-   0x02, 0x00,
+   0x02, CDC_BULK_EPSIZE_LO,
+   CDC_BULK_EPSIZE_HI, 0x00,
    0x07, 0x05,
    CDC_DATA_IN_ENDPOINT | 0x80,
-   0x02, 0x00,
-   0x02, 0x00,
+   0x02, CDC_BULK_EPSIZE_LO,
+   CDC_BULK_EPSIZE_HI, 0x00,
 };
 /* clang-format on */
 
