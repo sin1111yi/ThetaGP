@@ -51,6 +51,31 @@
 #include "BoardConfig.h"
 #include "utils/log/log.h"
 
+//--------------------------------------------------------------------+
+// ThetaGP Private USB Configuration
+//--------------------------------------------------------------------+
+
+// USB speed indicator
+#if defined(USBHW_SPEED_HS)
+#define THETAGP_USB_HIGH_SPEED 1
+#elif defined(USBHW_SPEED_FS)
+#define THETAGP_USB_HIGH_SPEED 0
+#else
+#error "USB speed not configured (define USBHW_SPEED_HS or USBHW_SPEED_FS)"
+#endif
+
+// USB endpoint 0 max packet size
+#define THETAGP_USB_EP0_SIZE 64
+
+// USB root hub port
+#if defined(USBHW_IF_ULPI) || defined(USBHW_IF_OTG1)
+#define THETAGP_USB_RHPORT 1
+#elif defined(USBHW_IF_OTG2)
+#define THETAGP_USB_RHPORT 0
+#else
+#define THETAGP_USB_RHPORT 0
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -61,30 +86,22 @@ extern "C" {
 
 // RHPort number used for device (ULPI is port 1)
 #ifndef BOARD_TUD_RHPORT
-
-#if defined(USBHW_IF_ULPI) || defined(USBHW_IF_OTG1)
-#define BOARD_TUD_RHPORT 1
-#elif defined(USBHW_IF_OTG2)
-#define BOARD_TUD_RHPORT 0
-#else
-#define BOARD_TUD_RHPORT 0
-#endif
-
+#define BOARD_TUD_RHPORT THETAGP_USB_RHPORT
 #endif
 
 // RHPort max operational speed (from BoardConfig.h)
 #ifndef BOARD_TUD_MAX_SPEED
-#if defined(USBHW_SPEED_HS)
+#if THETAGP_USB_HIGH_SPEED
 #define BOARD_TUD_MAX_SPEED OPT_MODE_HIGH_SPEED
-#elif defined(USBHW_SPEED_FS)
+#else
 #define BOARD_TUD_MAX_SPEED OPT_MODE_FULL_SPEED
 #endif
 #endif
 
 // Device mode with rhport and speed
-#if BOARD_TUD_RHPORT == 0
+#if THETAGP_USB_RHPORT == 0
 #define CFG_TUSB_RHPORT0_MODE (OPT_MODE_DEVICE | BOARD_TUD_MAX_SPEED)
-#elif BOARD_TUD_RHPORT == 1
+#elif THETAGP_USB_RHPORT == 1
 #define CFG_TUSB_RHPORT1_MODE (OPT_MODE_DEVICE | BOARD_TUD_MAX_SPEED)
 #else
 #error "Incorrect RHPort configuration"
@@ -129,18 +146,18 @@ extern "C" {
 //--------------------------------------------------------------------
 
 #ifndef CFG_TUD_ENDPOINT0_SIZE
-#define CFG_TUD_ENDPOINT0_SIZE 64
+#define CFG_TUD_ENDPOINT0_SIZE THETAGP_USB_EP0_SIZE
 #endif
 
 // CDC FIFO size of TX and RX
-#define CFG_TUD_CDC_RX_BUFSIZE (TUD_OPT_HIGH_SPEED ? 512 : 64)
-#define CFG_TUD_CDC_TX_BUFSIZE (TUD_OPT_HIGH_SPEED ? 512 : 64)
+#define CFG_TUD_CDC_RX_BUFSIZE (THETAGP_USB_HIGH_SPEED ? 512 : 64)
+#define CFG_TUD_CDC_TX_BUFSIZE (THETAGP_USB_HIGH_SPEED ? 512 : 64)
 
 // CDC Endpoint transfer buffer size, default to max bulk packet size (HS 512,
 // FS 64). Larger is faster. Larger RX_EPSIZE requires CFG_TUD_CDC_RX_NEED_ZLP =
 // 1 and host ZLP support
-#define CFG_TUD_CDC_RX_EPSIZE  (TUD_OPT_HIGH_SPEED ? 512 : 64)
-#define CFG_TUD_CDC_TX_EPSIZE  (TUD_OPT_HIGH_SPEED ? 512 : 64)
+#define CFG_TUD_CDC_RX_EPSIZE  (THETAGP_USB_HIGH_SPEED ? 512 : 64)
+#define CFG_TUD_CDC_TX_EPSIZE  (THETAGP_USB_HIGH_SPEED ? 512 : 64)
 
 //------------- CLASS -------------//
 #define CFG_TUD_HID            1
