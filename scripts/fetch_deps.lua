@@ -26,7 +26,7 @@ If not, see <https://www.gnu.org/licenses/>.
 -- =============================================================================
 
 local script_dir = debug.getinfo(1, "S").source:match [[^@?(.*[\/])]]
-local project_root = script_dir .. "../"
+local project_root = script_dir:gsub("[^/]+/$", "")
 
 -- Load dependencies configuration
 dofile(project_root .. "deps_config.lua")
@@ -47,12 +47,28 @@ local function is_git_repo(path)
 end
 
 local function get_git_ref(repo)
-    return repo.tag or repo.branch or "master"
+    return repo.tag or repo.branch or "main"
 end
 
 local function ensure_directory(path)
-    local cmd = string.format("mkdir -p '%s'", path)
-    os.execute(cmd)
+    local ok = os.execute(string.format("mkdir -p '%s'", path))
+    if not ok then
+        log.print_error("Failed to create directory:", path)
+    end
+    return ok
+end
+
+local function check_sparse_paths(dest_path, sparse_paths)
+    local all_exist = true
+    local missing = {}
+    for _, path in ipairs(sparse_paths) do
+        local full_path = dest_path .. "/" .. path
+        if not log.file_exists(full_path) then
+            all_exist = false
+            table.insert(missing, path)
+        end
+    end
+    return all_exist, missing
 end
 
 local function clone_or_pull(repo)
@@ -60,22 +76,9 @@ local function clone_or_pull(repo)
     local ref = get_git_ref(repo)
 
     if repo.type == "git_sparse" then
-        -- Handle sparse checkout with multiple paths
         local sparse_paths = repo.sparse_paths or { repo.sparse_path }
+        local all_paths_exist, missing_paths = check_sparse_paths(dest_path, sparse_paths)
 
-        -- Check if all sparse paths exist
-        local all_paths_exist = true
-        local missing_paths = {}
-
-        for _, path in ipairs(sparse_paths) do
-            local full_path = dest_path .. "/" .. path
-            if not log.file_exists(full_path) then
-                all_paths_exist = false
-                table.insert(missing_paths, path)
-            end
-        end
-
-        -- Only skip if all paths exist AND it's a git repo
         if all_paths_exist and is_git_repo(dest_path) then
             log.print_info("Dependency already exists:", repo.dest)
             return true
@@ -90,13 +93,13 @@ local function clone_or_pull(repo)
         end
 
         -- Remove existing directory if it exists (partial or incomplete)
-        if log.file_exists(dest_path) then
+        if log.file_exists(dest_path) and dest_path and dest_path ~= "" then
             local rm_cmd = string.format("rm -rf '%s'", dest_path)
             os.execute(rm_cmd)
         end
 
         -- Step 1: Clone with --sparse flag (Git 2.25+)
-        local clone_cmd = string.format("git clone --sparse --filter=blob:none --depth 1 %s %s",
+        local clone_cmd = string.format("git clone --sparse --filter=blob:none %s %s",
             repo.url, dest_path)
 
         if not log.execute_command(clone_cmd, repo.optional) then
@@ -142,7 +145,7 @@ local function clone_or_pull(repo)
         -- Standard full clone
         if is_git_repo(dest_path) then
             log.print_info("Updating existing repository:", repo.dest)
-            local cmd = string.format("cd %s && git fetch --all && git checkout %s", dest_path, ref)
+            local cmd = string.format("cd %s && git fetch origin && git checkout %s", dest_path, ref)
             if not log.execute_command(cmd, repo.optional) then
                 if not repo.optional then
                     log.print_error("Failed to update repository:", repo.name)
@@ -173,7 +176,7 @@ local function clone_or_pull(repo)
             -- Standard full clone
             log.print_info("Cloning repository:", repo.name, "to", repo.dest)
             ensure_directory(dest_path)
-            local cmd = string.format("git clone --branch %s --depth 1 %s %s",
+            local cmd = string.format("git clone --branch %s %s %s",
                 ref, repo.url, dest_path)
             if not log.execute_command(cmd, repo.optional) then
                 if not repo.optional then
@@ -211,19 +214,9 @@ local function main()
 
         local dest_path = project_root .. dep.dest
 
-        -- For git_sparse type, check if all sparse paths exist
         if dep.type == "git_sparse" and is_git_repo(dest_path) then
             local sparse_paths = dep.sparse_paths or { dep.sparse_path }
-            local all_paths_exist = true
-            local missing_paths = {}
-
-            for _, path in ipairs(sparse_paths) do
-                local full_path = dest_path .. "/" .. path
-                if not log.file_exists(full_path) then
-                    all_paths_exist = false
-                    table.insert(missing_paths, path)
-                end
-            end
+            local all_paths_exist, missing_paths = check_sparse_paths(dest_path, sparse_paths)
 
             if all_paths_exist then
                 log.print_info("Dependency already exists:", dep.dest)
