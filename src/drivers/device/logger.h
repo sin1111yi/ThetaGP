@@ -45,7 +45,7 @@ public:
 
 private:
 #if defined(LOGGER_UART)
-  using UartInstance = Drivers::Peripheral::BUS::UartInstance;
+  using UartInstance = Drivers::Peripheral::BUS::Instance;
   using Port = Drivers::Peripheral::GPIO::Port;
   using Pin = Drivers::Peripheral::GPIO::Pin;
 

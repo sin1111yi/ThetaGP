@@ -33,7 +33,7 @@ namespace Drivers {
 namespace Peripheral {
 namespace BUS {
 
-enum class UartInstance {
+enum class Instance {
 #if defined(STM32H7)
   Uart1,
   Uart2,
@@ -48,7 +48,7 @@ enum class UartInstance {
 };
 
 struct UartDesc {
-  UartInstance uartx;
+  Instance uartx;
 
   GPIO::PinDesc tx;
   GPIO::PinDesc rx;
@@ -60,13 +60,11 @@ private:
   static constexpr uint32_t _bufSize = 256;
   UartDesc _desc;
   void *_halHandle = nullptr;
-  void configTxRxPins();
-  uint8_t getGpioAlternate();
+  void configPins();
 
 public:
-  UartBus() {}
-  UartBus(UartInstance uartx, GPIO::PinDesc tx, GPIO::PinDesc rx,
-          uint32_t baud = 115200);
+  UartBus(Instance uartx, GPIO::PinDesc tx, GPIO::PinDesc rx,
+          uint32_t baudrate = 115200);
   explicit UartBus(const UartDesc &desc);
   ~UartBus() = default;
 
