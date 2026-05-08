@@ -6,17 +6,6 @@
 extern "C" {
 #endif
 
-void SystemInitialize(void) {
-  SCB_EnableICache();
-  // SCB_EnableDCache();
-
-  // Initialize HAL
-  HAL_Init();
-
-  // Configure system clock
-  SystemClock_Config();
-}
-
 void SystemClock_Config(void) {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
@@ -65,6 +54,38 @@ void SystemClock_Config(void) {
   RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV2;
 
   HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4);
+}
+
+void PeriphCommonClock_Config(void) {
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_PLL2_DIVP |
+                                             RCC_PERIPHCLK_PLL2_DIVQ |
+                                             RCC_PERIPHCLK_PLL2_DIVR;
+  PeriphClkInitStruct.PLL2.PLL2M = 5;
+  PeriphClkInitStruct.PLL2.PLL2N = 192;
+  PeriphClkInitStruct.PLL2.PLL2P = 8;
+  PeriphClkInitStruct.PLL2.PLL2Q = 8;
+  PeriphClkInitStruct.PLL2.PLL2R = 2;
+  PeriphClkInitStruct.PLL2.PLL2RGE = RCC_PLL2VCIRANGE_2;
+  PeriphClkInitStruct.PLL2.PLL2VCOSEL = RCC_PLL2VCOWIDE;
+  PeriphClkInitStruct.PLL2.PLL2FRACN = 0;
+
+  HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct);
+}
+
+void SystemInitialize(void) {
+  SCB_EnableICache();
+  // SCB_EnableDCache();
+
+  // Initialize HAL
+  HAL_Init();
+
+  // Configure system clock
+  SystemClock_Config();
+
+  // Configure the peripherals common clocks
+  PeriphCommonClock_Config();
 }
 
 #ifdef __cplusplus

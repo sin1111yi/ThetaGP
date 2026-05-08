@@ -39,23 +39,20 @@ enum class Instance {
   Spi6,
 };
 
-enum class SpiNcs { BusSpiNcs1, BusSpiNcs2 };
+enum class SpiBusIO { CLK, MOSI, MISO };
 
 struct SpiDesc {
   Instance spix;
 
-  GPIO::PinDesc mosi;
-  GPIO::PinDesc miso;
-  GPIO::PinDesc sck;
-
-  GPIO::Gpio ncs1;
-  GPIO::Gpio ncs2;
+  GPIO::PinDesc busPinDesc[3];
+  GPIO::PinDesc ncs;
 };
 
 class SpiBus : public Bus {
 private:
-  SpiDesc _spiDesc;
-  bool _initialized = false;
+  uint32_t _bufSize = 16;
+  SpiDesc _desc;
+  void *_halHandle = nullptr;
 
   void enableClock() const;
   void configPins();
@@ -70,14 +67,12 @@ private:
   RetVal readDMA(uint8_t *bytes, uint16_t num);
 
 public:
-  SpiBus();
-  ~SpiBus();
-  SpiBus(const SpiDesc &spiDesc);
-  SpiBus(Instance spix, GPIO::PinDesc mosi, GPIO::PinDesc miso,
-         GPIO::PinDesc sck);
+  SpiBus(Instance spix, GPIO::PinDesc clk, GPIO::PinDesc mosi,
+         GPIO::PinDesc miso, GPIO::PinDesc ncs);
+  explicit SpiBus(const SpiDesc &desc);
+  ~SpiBus() = default;
 
-  void setNcs(SpiNcs ncsx, GPIO::PinDesc pin);
-  void config();
+  void configBufSize(uint32_t txBufSize, uint32_t rxBufSize);
 
   void init() override;
   void enableClock() override;

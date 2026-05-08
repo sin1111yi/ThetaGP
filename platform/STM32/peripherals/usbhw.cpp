@@ -54,6 +54,11 @@ static constexpr std::array<PinDesc, 12> ULPIPinDescs = {{
     {Port::PortB, Pin::Pin5},  // D7, PB5
 }};
 
+static constexpr std::array<PinDesc, 2> DpDmPinDescs = {{
+    {Port::PortA, Pin::Pin12},
+    {Port::PortA, Pin::Pin11},
+}};
+
 static constexpr uint32_t GpioAlternateUSB = 0x0A;
 
 extern "C" {
@@ -95,7 +100,6 @@ HardwareUSB::HardwareUSB(USBSpeed speed, USBPeripheral peripheral) {
 
 void HardwareUSB::initULPIPins() {
 #if defined(STM32H7)
-  HAL_PWREx_EnableUSBVoltageDetector();
   // Enable SYSCFG IO compensation cell for ULPI 60MHz signal integrity
   HAL_EnableCompensationCell();
 
@@ -123,16 +127,12 @@ void HardwareUSB::initULPIPins() {
 
 void HardwareUSB::initHighSpeedPins() {
 #if defined(STM32H7)
-  Gpio dp(Port::PortA, Pin::Pin12);
-  Gpio dm(Port::PortA, Pin::Pin11);
-
-  dp.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,
-            GpioAlternateUSB);
-  dm.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,
-            GpioAlternateUSB);
-
-  dp.init();
-  dm.init();
+  for (const auto &pinDesc : DpDmPinDescs) {
+    Gpio gpio(pinDesc);
+    gpio.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,
+                GpioAlternateUSB);
+    gpio.init();
+  }
 
   __HAL_RCC_USB_OTG_HS_CLK_ENABLE();
 #endif
@@ -140,16 +140,12 @@ void HardwareUSB::initHighSpeedPins() {
 
 void HardwareUSB::initFullSpeedPins() {
 #if defined(STM32H7)
-  Gpio dp(Port::PortA, Pin::Pin12);
-  Gpio dm(Port::PortA, Pin::Pin11);
-
-  dp.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,
-            GpioAlternateUSB);
-  dm.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,
-            GpioAlternateUSB);
-
-  dp.init();
-  dm.init();
+  for (const auto &pinDesc : DpDmPinDescs) {
+    Gpio gpio(pinDesc);
+    gpio.config(Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::VeryHigh,
+                GpioAlternateUSB);
+    gpio.init();
+  }
 
   __HAL_RCC_USB_OTG_FS_CLK_ENABLE();
 #endif
@@ -158,8 +154,7 @@ void HardwareUSB::initFullSpeedPins() {
 ThetaGP::RetVal HardwareUSB::init() {
   enableClock();
 
-  delay_ms(5);
-
+  HAL_PWREx_EnableUSBVoltageDetector();
   /* clang-format off */
   if (_peripheral == USBPeripheral::ULPI && 
       _speed == USBSpeed::UsbHighSpeed) {

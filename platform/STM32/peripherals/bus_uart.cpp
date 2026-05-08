@@ -39,37 +39,37 @@ struct HalUart {
   UART_HandleTypeDef handle;
 };
 
-#define HANDLE (static_cast<HalUart*>(_halHandle)->handle)
+#define HANDLE (static_cast<HalUart *>(_halHandle)->handle)
 
 static constexpr struct {
-  UartInstance uart;
+  Instance uart;
   Port port;
   Pin pin;
   uint8_t af;
 } uartPinAfTable[] = {
-    { UartInstance::Uart1, Port::PortA, Pin::Pin9,  7 },
-    { UartInstance::Uart1, Port::PortA, Pin::Pin10, 7 },
-    { UartInstance::Uart1, Port::PortB, Pin::Pin14, 4 },
-    { UartInstance::Uart1, Port::PortB, Pin::Pin15, 4 },
-    { UartInstance::Uart2, Port::PortA, Pin::Pin2,  7 },
-    { UartInstance::Uart2, Port::PortA, Pin::Pin3,  7 },
-    { UartInstance::Uart3, Port::PortB, Pin::Pin10, 7 },
-    { UartInstance::Uart3, Port::PortB, Pin::Pin11, 7 },
-    { UartInstance::Uart4, Port::PortA, Pin::Pin0,  8 },
-    { UartInstance::Uart4, Port::PortA, Pin::Pin1,  8 },
-    { UartInstance::Uart4, Port::PortB, Pin::Pin8,  8 },
-    { UartInstance::Uart4, Port::PortB, Pin::Pin9,  8 },
-    { UartInstance::Uart5, Port::PortB, Pin::Pin5,  8 },
-    { UartInstance::Uart5, Port::PortB, Pin::Pin6,  8 },
-    { UartInstance::Uart6, Port::PortC, Pin::Pin6,  7 },
-    { UartInstance::Uart6, Port::PortC, Pin::Pin7,  7 },
-    { UartInstance::Uart7, Port::PortF, Pin::Pin7,  7 },
-    { UartInstance::Uart7, Port::PortF, Pin::Pin8,  7 },
-    { UartInstance::Uart8, Port::PortJ, Pin::Pin8,  8 },
-    { UartInstance::Uart8, Port::PortJ, Pin::Pin9,  8 },
+    {Instance::Uart1, Port::PortA, Pin::Pin9, 7},
+    {Instance::Uart1, Port::PortA, Pin::Pin10, 7},
+    {Instance::Uart1, Port::PortB, Pin::Pin14, 4},
+    {Instance::Uart1, Port::PortB, Pin::Pin15, 4},
+    {Instance::Uart2, Port::PortA, Pin::Pin2, 7},
+    {Instance::Uart2, Port::PortA, Pin::Pin3, 7},
+    {Instance::Uart3, Port::PortB, Pin::Pin10, 7},
+    {Instance::Uart3, Port::PortB, Pin::Pin11, 7},
+    {Instance::Uart4, Port::PortA, Pin::Pin0, 8},
+    {Instance::Uart4, Port::PortA, Pin::Pin1, 8},
+    {Instance::Uart4, Port::PortB, Pin::Pin8, 8},
+    {Instance::Uart4, Port::PortB, Pin::Pin9, 8},
+    {Instance::Uart5, Port::PortB, Pin::Pin5, 8},
+    {Instance::Uart5, Port::PortB, Pin::Pin6, 8},
+    {Instance::Uart6, Port::PortC, Pin::Pin6, 7},
+    {Instance::Uart6, Port::PortC, Pin::Pin7, 7},
+    {Instance::Uart7, Port::PortF, Pin::Pin7, 7},
+    {Instance::Uart7, Port::PortF, Pin::Pin8, 7},
+    {Instance::Uart8, Port::PortJ, Pin::Pin8, 8},
+    {Instance::Uart8, Port::PortJ, Pin::Pin9, 8},
 };
 
-static uint8_t lookupUartAf(UartInstance uart, Port port, Pin pin) {
+static uint8_t lookupUartAf(Instance uart, Port port, Pin pin) {
   for (auto &entry : uartPinAfTable) {
     if (entry.uart == uart && entry.port == port && entry.pin == pin)
       return entry.af;
@@ -92,7 +92,7 @@ constexpr std::array<IRQn_Type, UART_IRQ_GROUPS> uartGroupIRQn = {
 #error "Unknown CPU"
 #endif
 
-void enableBusUartClock(UartInstance uartx) {
+void enableBusUartClock(Instance uartx) {
   using ClockFunc = void (*)();
   static const std::array<ClockFunc, UART_IRQ_GROUPS> clockEnableTable = {{
 #if defined(STM32H7)
@@ -113,46 +113,34 @@ void enableBusUartClock(UartInstance uartx) {
   }
 }
 
-UartBus::UartBus(UartInstance uartx, PinDesc tx, PinDesc rx, uint32_t baud) {
+UartBus::UartBus(Instance uartx, PinDesc tx, PinDesc rx,
+                 uint32_t baudrate) {
   _halHandle = new HalUart();
   setType(Type::Uart);
 
   _desc.uartx = uartx;
   _desc.tx = tx;
   _desc.rx = rx;
-  _desc.baudrate = baud;
+  _desc.baudrate = baudrate;
 
-  _pTxBufSize = _bufSize;
-  _pRxBufSize = _bufSize;
-  allocBuf(_bufSize, _bufSize);
-  std::memset(_pRxBuf, 0, _pTxBufSize);
-  std::memset(_pTxBuf, 0, _pRxBufSize);
-
-  std::memset(&HANDLE, 0, sizeof(UART_HandleTypeDef));
+  std::memset(&_halHandle, 0, sizeof(HalUart));
 }
 
 UartBus::UartBus(const UartDesc &desc) {
   _halHandle = new HalUart();
   setType(Type::Uart);
 
-  _pTxBufSize = _bufSize;
-  _pRxBufSize = _bufSize;
-  allocBuf(_bufSize, _bufSize);
-  std::memset(_pRxBuf, 0, _pTxBufSize * sizeof(uint8_t));
-  std::memset(_pTxBuf, 0, _pRxBufSize * sizeof(uint8_t));
-
   _desc = desc;
-  std::memset(&HANDLE, 0, sizeof(UART_HandleTypeDef));
+  std::memset(&_halHandle, 0, sizeof(HalUart));
 }
 
 void UartBus::enableClock() {
   RCC_PeriphCLKInitTypeDef periphClkInitStruct;
-
   std::memset(&periphClkInitStruct, 0, sizeof(RCC_PeriphCLKInitTypeDef));
 
   switch (_desc.uartx) {
-  case UartInstance::Uart1:
-  case UartInstance::Uart6:
+  case Instance::Uart1:
+  case Instance::Uart6:
     periphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USART16;
     periphClkInitStruct.Usart16ClockSelection = RCC_USART16CLKSOURCE_D2PCLK2;
     break;
@@ -168,7 +156,7 @@ void UartBus::enableClock() {
   enableBusUartClock(_desc.uartx);
 }
 
-void UartBus::configTxRxPins() {
+void UartBus::configPins() {
 #if defined(STM32H7)
   uint32_t alternate = lookupUartAf(_desc.uartx, _desc.tx.port, _desc.tx.pin);
 
@@ -186,9 +174,14 @@ void UartBus::configTxRxPins() {
 }
 
 void UartBus::init() {
+  _pTxBufSize = _bufSize;
+  _pRxBufSize = _bufSize;
+  allocBuf(_bufSize, _bufSize);
+  std::memset(_pRxBuf, 0, _pTxBufSize * sizeof(uint8_t));
+  std::memset(_pTxBuf, 0, _pRxBufSize * sizeof(uint8_t));
 
   enableClock();
-  configTxRxPins();
+  configPins();
 
 #if defined(STM32H7)
   const auto uartIdx = static_cast<uint32_t>(_desc.uartx);
