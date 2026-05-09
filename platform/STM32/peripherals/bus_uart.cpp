@@ -123,7 +123,7 @@ UartBus::UartBus(Instance uartx, PinDesc tx, PinDesc rx,
   _desc.rx = rx;
   _desc.baudrate = baudrate;
 
-  std::memset(&_halHandle, 0, sizeof(HalUart));
+  std::memset(_halHandle, 0, sizeof(HalUart));
 }
 
 UartBus::UartBus(const UartDesc &desc) {
@@ -131,7 +131,7 @@ UartBus::UartBus(const UartDesc &desc) {
   setType(Type::Uart);
 
   _desc = desc;
-  std::memset(&_halHandle, 0, sizeof(HalUart));
+  std::memset(_halHandle, 0, sizeof(HalUart));
 }
 
 void UartBus::enableClock() {
