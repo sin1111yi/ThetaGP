@@ -49,9 +49,9 @@ void Gamepad::reinit() { setup(); }
  * @brief Register a keypad device
  * @param device Reference to Device (must be Keypad)
  */
-void Gamepad::registerKeypadDevice(Device &device) {
-  if (std::strcmp(device.getName(), "keypad") == 0) {
-    _inputDevice = &device;
+void Gamepad::registerKeypadDevice(Device *device) {
+  if (std::strcmp(device->getName(), "keypad") == 0) {
+    _inputDevice = device;
     _ready = true;
   }
 }
@@ -94,12 +94,12 @@ void Gamepad::read() {
     return;
   }
 
-  Keypad &keypad = reinterpret_cast<Keypad &>(_inputDevice);
+  Keypad &keypad = static_cast<Keypad &>(*_inputDevice);
 
   _state.buttons = 0;
   _state.dpad = 0;
 
-  uint32_t keypadMask = keypad.getPressedMaskValue();
+  uint32_t keypadMask = keypad.getPressed();
 
   // Process all 32 physical keys
   for (uint8_t i = 0; i < 32; i++) {

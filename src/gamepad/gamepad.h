@@ -83,7 +83,7 @@ public:
    * @brief Register a keypad device
    * @param device Reference to Device (must be Keypad)
    */
-  void registerKeypadDevice(Device &device);
+  void registerKeypadDevice(Device *device);
 
   /**
    * @brief Set button mapping

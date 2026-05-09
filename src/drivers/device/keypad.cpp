@@ -26,6 +26,8 @@
 #include "drivers/peripherals/gpio.h"
 #include "drivers/peripherals/peripheralsmgr.h"
 
+#include "utils/log/log.h"
+
 namespace ThetaGP::Drivers::Device {
 
 using namespace Peripheral::GPIO;
@@ -92,17 +94,7 @@ void Keypad::scanCallback() {
     }
   }
 
-  // Update output buffer
-  const uint8_t nextWrite = 1 - _writeBuffer;
-  _outputBuffer[nextWrite].pressedMask = debouncedMask;
-  _outputBuffer[nextWrite].sequenceNum++;
-
-  // Atomic buffer swap
-  const uint32_t primask = __get_PRIMASK();
-  __disable_irq();
-  _readBuffer = nextWrite;
-  _writeBuffer = 1 - _readBuffer;
-  __set_PRIMASK(primask);
+  _pressedMask = debouncedMask;
 }
 
 void Keypad::readInputScanMatrix(uint32_t *mask) {
@@ -159,22 +151,15 @@ void Keypad::initPins() {
 #endif
 }
 
-const uint32_t *Keypad::getPressedMask() const {
-  return &_outputBuffer[_readBuffer].pressedMask;
-}
-
-uint32_t Keypad::getSequenceNum() const {
-  return _outputBuffer[_readBuffer].sequenceNum;
-}
-
-uint32_t Keypad::getPressedMaskValue() const {
-  return _outputBuffer[_readBuffer].pressedMask;
+uint32_t Keypad::getPressed() const {
+  UNUSED(this);
+  return _pressedMask;
 }
 
 bool Keypad::isKeyPressed(uint8_t keyId) const {
   if (keyId >= MAX_KEYS)
     return false;
-  return (_outputBuffer[_readBuffer].pressedMask & (1U << keyId)) != 0;
+  return (_pressedMask & (1U << keyId)) != 0;
 }
 
 } // namespace ThetaGP::Drivers::Device
