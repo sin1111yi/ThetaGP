@@ -107,9 +107,9 @@ void Keypad::scanCallback() {
 
 void Keypad::readInputScanMatrix(uint32_t *mask) {
   const bool activeLow = (_active == KeypadConfig::Active::Low);
-  const PinState driveState = activeLow ? PinState::Set : PinState::Reset;
-  const PinState senseState = activeLow ? PinState::Reset : PinState::Set;
-  const PinState idleState = activeLow ? PinState::Reset : PinState::Set;
+  const PinState driveState = activeLow ? PinState::Reset : PinState::Set;
+  const PinState idleState = activeLow ? PinState::Set : PinState::Reset;
+  const PinState senseState = driveState;
 
   for (size_t d = 0; d < DRIVE_PIN_NUM; d++) {
     Gpio driveGpio(_drivePins[d]);
@@ -138,8 +138,9 @@ void Keypad::initPins() {
   const PinDesc drivePinsTmp[] = {KEYPAD_DRIVE_IO_LIST};
   const PinDesc sensePinsTmp[] = {KEYPAD_SENSE_IO_LIST};
 
-  const PinState idleState =
-      (_active == KeypadConfig::Active::Low) ? PinState::Reset : PinState::Set;
+  const bool activeLow = (_active == KeypadConfig::Active::Low);
+  const PinState idleState = activeLow ? PinState::Set : PinState::Reset;
+  const Pull sensePull = activeLow ? Pull::PullUp : Pull::PullDown;
 
   for (size_t i = 0; i < DRIVE_PIN_NUM; i++) {
     _drivePins[i] = drivePinsTmp[i];
@@ -152,7 +153,7 @@ void Keypad::initPins() {
   for (size_t i = 0; i < SENSE_PIN_NUM; i++) {
     _sensePins[i] = sensePinsTmp[i];
     Gpio gpio(_sensePins[i]);
-    gpio.config(Mode::Input, Pull::PullUp, Speed::High);
+    gpio.config(Mode::Input, sensePull, Speed::High);
     gpio.init();
   }
 #endif
