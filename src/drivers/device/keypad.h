@@ -95,14 +95,7 @@ private:
   std::array<KeySampler, MAX_KEYS> _samplers;
   uint8_t _scanCount = 0;
 
-  struct OutputBuffer {
-    uint32_t pressedMask = 0;
-    uint32_t sequenceNum = 0;
-  };
-
-  OutputBuffer _outputBuffer[2]{};
-  volatile uint8_t _writeBuffer = 0;
-  volatile uint8_t _readBuffer = 0;
+  volatile uint32_t _pressedMask = 0;
   HardwareTimer _scanTimer;
 
   static constexpr KeypadConfig::Mode _mode = KEYPAD_DRIVE_MODE;
@@ -130,9 +123,7 @@ public:
 
   void init() override;
 
-  const uint32_t *getPressedMask() const;
-  uint32_t getSequenceNum() const;
-  uint32_t getPressedMaskValue() const;
+  uint32_t getPressed() const;
 
   bool isKeyPressed(uint8_t keyId) const;
 

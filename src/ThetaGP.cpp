@@ -56,11 +56,11 @@ void ThetaGamepad::setup() {
 
   // setup devices' driver
   Drivers::Device::DeviceManager::getInstance().registerDevice(
-      reinterpret_cast<Device *>(&Drivers::Device::Keypad::getInstance()));
+      &Drivers::Device::Keypad::getInstance());
   Drivers::Device::DeviceManager::getInstance().registerDevice(
-      reinterpret_cast<Device *>(&Drivers::Device::SystemTimer::getInstance()));
+      &Drivers::Device::SystemTimer::getInstance());
   Drivers::Device::DeviceManager::getInstance().registerDevice(
-      reinterpret_cast<Device *>(&Drivers::Device::Logger::getInstance()));
+      &Drivers::Device::Logger::getInstance());
 
   Drivers::Device::DeviceManager::getInstance().initDevices();
 
@@ -73,7 +73,7 @@ void ThetaGamepad::setup() {
   // setup gamepad
   Gamepad::Gamepad::getInstance().setup();
   Gamepad::Gamepad::getInstance().registerKeypadDevice(
-      reinterpret_cast<Device &>(Drivers::Device::Keypad::getInstance()));
+      &Drivers::Device::Keypad::getInstance());
   Gamepad::Gamepad::getInstance().setButtonMappings();
 }
 
