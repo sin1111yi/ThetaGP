@@ -21,6 +21,8 @@
 
 #include "drivers/device/devicemgr.h"
 
+#include <cstring>
+
 namespace ThetaGP::Drivers::Device {
 
 DeviceManager::DeviceManager() {}
@@ -36,23 +38,6 @@ void DeviceManager::registerDevice(Device *device) {
     }
   }
 
-  uint8_t instanceId = 0;
-  for (uint8_t id = 0; id < 255; id++) {
-    bool used = false;
-    for (size_t i = 0; i < _count; i++) {
-      if (_devices[i]->getType() == device->getType() &&
-          _devices[i]->getInstanceId() == id) {
-        used = true;
-        break;
-      }
-    }
-    if (!used) {
-      instanceId = id;
-      break;
-    }
-  }
-
-  device->setInstanceId(instanceId);
   _devices[_count++] = device;
 }
 
@@ -64,10 +49,9 @@ void DeviceManager::initDevices() {
   }
 }
 
-Device *DeviceManager::findDevice(DeviceType type, uint8_t instanceId) const {
+Device *DeviceManager::findDevice(const char *name) const {
   for (size_t i = 0; i < _count; i++) {
-    if (_devices[i] && _devices[i]->getType() == type &&
-        _devices[i]->getInstanceId() == instanceId) {
+    if (_devices[i] && std::strcmp(_devices[i]->getName(), name) == 0) {
       return _devices[i];
     }
   }

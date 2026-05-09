@@ -27,7 +27,7 @@
 
 namespace ThetaGP::Drivers::Device {
 
-Logger::Logger() : Device(DeviceType::Logger, 0) {}
+Logger::Logger() : Device("logger") {}
 
 void Logger::init() {
 #if defined(LOGGER_UART)

@@ -26,6 +26,7 @@
 #include "drivers/device/keypad.h"
 #include "drivers/gpdriver/gpdrivermgr.h"
 #include <cstdint>
+#include <cstring>
 
 namespace ThetaGP::Gamepad {
 
@@ -49,7 +50,7 @@ void Gamepad::reinit() { setup(); }
  * @param device Reference to Device (must be Keypad)
  */
 void Gamepad::registerKeypadDevice(Device &device) {
-  if (device.getType() == DeviceType::Keypad) {
+  if (std::strcmp(device.getName(), "keypad") == 0) {
     _inputDevice = &device;
     _ready = true;
   }

@@ -24,7 +24,7 @@
 
 namespace ThetaGP::Drivers::Device {
 
-SystemTimer::SystemTimer() : Device(DeviceType::SystemTimer, 0) {}
+SystemTimer::SystemTimer() : Device("systimer") {}
 
 void SystemTimer::init() {
   _initialized = true;

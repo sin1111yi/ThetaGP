@@ -31,7 +31,7 @@ namespace ThetaGP::Drivers::Device {
 using namespace Peripheral::GPIO;
 using namespace Peripheral::TIMER;
 
-Keypad::Keypad() : Device(DeviceType::Keypad, 0) {}
+Keypad::Keypad() : Device("keypad") {}
 
 void Keypad::init() {
   if (_initialized)
