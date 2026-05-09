@@ -31,7 +31,7 @@ M.BoardConfig = {
         led0 = { pin = "PC0", active_low = false },
         keypad = {
             drive_mode = "scan_matrix",
-            active_mode = "none",
+            active_mode = "low",
             drive_pins = {
                 { pin = "PD8" },
                 { pin = "PD9" },
