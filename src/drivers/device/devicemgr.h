@@ -45,12 +45,12 @@ public:
   void registerDevice(Device *device);
   void initDevices();
 
-  Device *findDevice(DeviceType type, uint8_t instanceId = 0) const;
+  Device *findDevice(DeviceType type, uint8_t instanceId) const;
   Device *getDevice(size_t index) const;
   size_t getDeviceCount() const { return _count; }
 
   template <typename T>
-  T *findDeviceTyped(DeviceType type, uint8_t instanceId = 0) const {
+  T *findDeviceTyped(DeviceType type, uint8_t instanceId) const {
     Device *device = findDevice(type, instanceId);
     return device ? static_cast<T *>(device) : nullptr;
   }
