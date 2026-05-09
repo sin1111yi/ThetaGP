@@ -21,27 +21,14 @@
 
 #pragma once
 
-#include <cstdint>
-
 namespace ThetaGP::Drivers::Device {
-
-enum class DeviceType : uint8_t {
-  None = 0,
-  Keypad,
-  SystemTimer,
-  Led,
-  Logger,
-  Custom,
-};
 
 class Device {
 protected:
   bool _initialized = false;
-  DeviceType _type;
-  uint8_t _instanceId;
+  const char *_name;
 
-  Device(DeviceType type, uint8_t instanceId = 0)
-      : _type(type), _instanceId(instanceId) {}
+  Device(const char *name) : _name(name) {}
 
 public:
   virtual ~Device() = default;
@@ -49,11 +36,9 @@ public:
   virtual void init() = 0;
 
   [[nodiscard]] bool isInitialized() const { return _initialized; }
-  [[nodiscard]] DeviceType getType() const { return _type; }
-  [[nodiscard]] uint8_t getInstanceId() const { return _instanceId; }
+  [[nodiscard]] const char *getName() const { return _name; }
 
   void setInitialized(bool initialized) { _initialized = initialized; }
-  void setInstanceId(uint8_t id) { _instanceId = id; }
 };
 
 } // namespace ThetaGP::Drivers::Device

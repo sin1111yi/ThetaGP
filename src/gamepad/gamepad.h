@@ -26,7 +26,7 @@
 #include "utils/time.h"
 #include "utils/types.h"
 
-#include "drivers/device/device.h"
+#include "drivers/device/devicemgr.h"
 #include "drivers/gpdriver/gpdriver.h"
 #include "drivers/gpdriver/gpdrivermgr.h"
 
@@ -37,7 +37,6 @@
 namespace ThetaGP::Gamepad {
 
 using Device = ThetaGP::Drivers::Device::Device;
-using DeviceType = ThetaGP::Drivers::Device::DeviceType;
 using GPDriverManager = ThetaGP::Drivers::GPDriver::GPDriverManager;
 
 /**
