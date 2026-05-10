@@ -27,6 +27,7 @@
 #include "drivers/peripherals/gpio.h"
 
 #include <cstdint>
+#include <functional>
 
 namespace ThetaGP {
 namespace Drivers {
@@ -62,20 +63,51 @@ private:
   void *_halHandle = nullptr;
   void configPins();
 
+  using UartCallbackFunc = std::function<void(void *context)>;
+  UartCallbackFunc _rxCallback;
+  void *_rxContext = nullptr;
+  UartCallbackFunc _txCallback;
+  void *_txContext = nullptr;
+
+  uint16_t _rxCount = 0;
+  uint16_t _txTotal = 0;
+  uint16_t _txIndex = 0;
+
+  RetVal writeBytePolling(uint8_t byte) override;
+  RetVal writeBytesPolling(uint8_t *bytes, uint16_t num) override;
+  RetVal readBytePolling(uint8_t *byte) override;
+  RetVal readBytesPolling(uint8_t *bytes, uint16_t num) override;
+
+  RetVal writeByteInterrupt(uint8_t byte) override;
+  RetVal writeBytesInterrupt(uint8_t *bytes, uint16_t num) override;
+  RetVal readByteInterrupt(uint8_t *byte) override;
+  RetVal readBytesInterrupt(uint8_t *bytes, uint16_t num) override;
+
 public:
   UartBus(Instance uartx, GPIO::PinDesc tx, GPIO::PinDesc rx,
           uint32_t baudrate = 115200);
   explicit UartBus(const UartDesc &desc);
   ~UartBus() = default;
 
-  void enableClock() override;
   void init() override;
+  void enableClock() override;
 
-  RetVal write(uint8_t byte) override;
-  RetVal write(uint8_t *bytes, uint16_t num) override;
+  void setRxCallback(UartCallbackFunc cb, void *context = nullptr);
+  void setTxCallback(UartCallbackFunc cb, void *context = nullptr);
+  void rxCallback() {
+    if (_rxCallback) {
+      _rxCallback(_rxContext);
+    }
+  }
+  void txCallback() {
+    if (_txCallback) {
+      _txCallback(_txContext);
+    }
+  }
 
-  RetVal read(uint8_t *byte) override;
-  RetVal read(uint8_t *bytes, uint16_t num) override;
+  void pushRxByte(uint8_t byte);
+  bool txMore() const;
+  uint8_t currentTxByte();
 };
 
 } // namespace BUS
