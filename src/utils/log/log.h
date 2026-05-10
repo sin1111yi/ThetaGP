@@ -86,6 +86,8 @@ static inline void LogInit(LogPrintFunc func) { (void)func; }
 
 #endif
 
+#define LOG_INIT LogInit
+
 #ifdef __cplusplus
 }
 #endif

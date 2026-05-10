@@ -273,7 +273,7 @@ local function step_flash()
     end
 
     local cmd = string.format(
-        "openocd -f '%s' -c 'program \"%s\" verify reset exit'",
+        "openocd -f '%s' -c 'program \"%s\" verify' -c 'reset run' -c 'sleep 100' -c 'shutdown'",
         options.openocd_cfg, elf
     )
     return execute_command(cmd)

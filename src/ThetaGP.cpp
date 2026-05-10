@@ -64,8 +64,6 @@ void ThetaGamepad::setup() {
 
   Drivers::Device::DeviceManager::getInstance().initDevices();
 
-  LogInit(Drivers::Device::Logger::LoggerTransmitBytes);
-
   // setup GP drivers
   Drivers::GPDriver::GPDriverManager::getInstance().setup(
       Drivers::GPDriver::InputMode::HID);
