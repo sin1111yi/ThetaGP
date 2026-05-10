@@ -69,10 +69,6 @@ private:
   UartCallbackFunc _txCallback;
   void *_txContext = nullptr;
 
-  uint16_t _rxCount = 0;
-  uint16_t _txTotal = 0;
-  uint16_t _txIndex = 0;
-
   RetVal writeBytePolling(uint8_t byte) override;
   RetVal writeBytesPolling(uint8_t *bytes, uint16_t num) override;
   RetVal readBytePolling(uint8_t *byte) override;
@@ -105,9 +101,8 @@ public:
     }
   }
 
-  void pushRxByte(uint8_t byte);
-  bool txMore() const;
-  uint8_t currentTxByte();
+  bool isBusy() const;
+  void *halHandle() const { return _halHandle; }
 };
 
 } // namespace BUS

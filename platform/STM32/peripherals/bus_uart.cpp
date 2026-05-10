@@ -279,22 +279,13 @@ void UartBus::setTxCallback(UartCallbackFunc cb, void *context) {
   _txContext = context;
 }
 
-void UartBus::pushRxByte(uint8_t byte) {
-  if (_pRxBuf && _rxCount < _pRxBufSize) {
-    _pRxBuf[_rxCount++] = byte;
-  }
-}
-
 RetVal UartBus::writeByteInterrupt(uint8_t byte) {
 #if defined(STM32H7)
   if (_initialized) {
-    USART_TypeDef *UARTx = uartInstance[static_cast<size_t>(_desc.uartx)];
     _pTxBuf[0] = byte;
-    _txTotal = 1;
-    _txIndex = 1;
-    UARTx->TDR = byte;
-    UARTx->CR1 |= USART_CR1_TCIE;
-    return RetVal::Ok;
+    return HAL_UART_Transmit_IT(&HANDLE, _pTxBuf, 1) == HAL_OK
+               ? RetVal::Ok
+               : RetVal::Error;
   }
 #endif
   return RetVal::Error;
@@ -302,16 +293,11 @@ RetVal UartBus::writeByteInterrupt(uint8_t byte) {
 
 RetVal UartBus::writeBytesInterrupt(uint8_t *bytes, uint16_t num) {
 #if defined(STM32H7)
-  if (_initialized) {
-    if (num <= _pTxBufSize) {
-      USART_TypeDef *UARTx = uartInstance[static_cast<size_t>(_desc.uartx)];
-      std::memcpy(_pTxBuf, bytes, num);
-      _txTotal = num;
-      _txIndex = 1;
-      UARTx->TDR = _pTxBuf[0];
-      UARTx->CR1 |= USART_CR1_TCIE;
-      return RetVal::Ok;
-    }
+  if (_initialized && bytes && num > 0 && num <= _pTxBufSize) {
+    std::memcpy(_pTxBuf, bytes, num);
+    return HAL_UART_Transmit_IT(&HANDLE, _pTxBuf, num) == HAL_OK
+               ? RetVal::Ok
+               : RetVal::Error;
   }
 #endif
   return RetVal::Error;
@@ -320,16 +306,9 @@ RetVal UartBus::writeBytesInterrupt(uint8_t *bytes, uint16_t num) {
 RetVal UartBus::readByteInterrupt(uint8_t *byte) {
 #if defined(STM32H7)
   if (_initialized && byte) {
-    if (_rxCount > 0) {
-      *byte = _pRxBuf[0];
-      _rxCount--;
-      if (_rxCount > 0) {
-        std::memmove(_pRxBuf, _pRxBuf + 1, _rxCount);
-      }
-    }
-    USART_TypeDef *UARTx = uartInstance[static_cast<size_t>(_desc.uartx)];
-    UARTx->CR1 |= USART_CR1_RXNEIE;
-    return RetVal::Ok;
+    return HAL_UART_Receive_IT(&HANDLE, byte, 1) == HAL_OK
+               ? RetVal::Ok
+               : RetVal::Error;
   }
 #endif
   return RetVal::Error;
@@ -337,54 +316,64 @@ RetVal UartBus::readByteInterrupt(uint8_t *byte) {
 
 RetVal UartBus::readBytesInterrupt(uint8_t *bytes, uint16_t num) {
 #if defined(STM32H7)
-  if (_initialized && bytes) {
-    uint16_t toCopy = (num < _rxCount) ? num : _rxCount;
-    if (toCopy > 0) {
-      std::memcpy(bytes, _pRxBuf, toCopy);
-      if (_rxCount > toCopy) {
-        std::memmove(_pRxBuf, _pRxBuf + toCopy, _rxCount - toCopy);
-      }
-      _rxCount -= toCopy;
-    }
-    USART_TypeDef *UARTx = uartInstance[static_cast<size_t>(_desc.uartx)];
-    UARTx->CR1 |= USART_CR1_RXNEIE;
-    return RetVal::Ok;
+  if (_initialized && bytes && num > 0) {
+    return HAL_UART_Receive_IT(&HANDLE, bytes, num) == HAL_OK
+               ? RetVal::Ok
+               : RetVal::Error;
   }
 #endif
   return RetVal::Error;
 }
 
-bool UartBus::txMore() const { return _txIndex < _txTotal; }
-
-uint8_t UartBus::currentTxByte() { return _pTxBuf[_txIndex++]; }
+bool UartBus::isBusy() const {
+#if defined(STM32H7)
+  return HANDLE.gState != HAL_UART_STATE_READY;
+#else
+  return false;
+#endif
+}
 
 extern "C" {
 
 #if defined(STM32H7)
 
 static void UARTx_IRQHandler(uint32_t uartIdx) {
-  USART_TypeDef *UARTx = uartInstance[uartIdx];
   auto *instance = uartBusInstance[uartIdx];
-  if (!UARTx || !instance) {
+  if (!instance) {
     return;
   }
 
-  uint32_t isr = UARTx->ISR;
+  auto *huart = &static_cast<HalUart *>(instance->halHandle())->handle;
+  auto *UARTx = huart->Instance;
 
-  if (isr & USART_ISR_RXNE_RXFNE) {
-    uint8_t byte = (uint8_t)UARTx->RDR;
-    instance->pushRxByte(byte);
-    instance->rxCallback();
+  uint32_t isr = UARTx->ISR;
+  uint32_t cr1 = UARTx->CR1;
+
+  if (isr & (USART_ISR_PE | USART_ISR_FE | USART_ISR_NE | USART_ISR_ORE)) {
+    uint32_t icrMask = 0;
+    if (isr & USART_ISR_PE) icrMask |= USART_ICR_PECF;
+    if (isr & USART_ISR_FE) icrMask |= USART_ICR_FECF;
+    if (isr & USART_ISR_NE) icrMask |= USART_ICR_NECF;
+    if (isr & USART_ISR_ORE) icrMask |= USART_ICR_ORECF;
+    UARTx->ICR = icrMask;
   }
 
-  if ((isr & USART_ISR_TC) && (UARTx->CR1 & USART_CR1_TCIE)) {
-    UARTx->ICR = USART_ICR_TCCF;
-    if (instance->txMore()) {
-      UARTx->TDR = instance->currentTxByte();
-    } else {
-      UARTx->CR1 &= ~USART_CR1_TCIE;
-      instance->txCallback();
+  if ((isr & USART_ISR_RXNE_RXFNE) && (cr1 & USART_CR1_RXNEIE_RXFNEIE)) {
+    huart->RxISR(huart);
+    if (huart->RxState == HAL_UART_STATE_READY) {
+      instance->rxCallback();
     }
+  }
+
+  if ((isr & USART_ISR_TXE_TXFNF) && (cr1 & USART_CR1_TXEIE_TXFNFIE)) {
+    huart->TxISR(huart);
+  }
+
+  if ((isr & USART_ISR_TC) && (cr1 & USART_CR1_TCIE)) {
+    UARTx->ICR = USART_ICR_TCCF;
+    UARTx->CR1 &= ~USART_CR1_TCIE;
+    huart->gState = HAL_UART_STATE_READY;
+    instance->txCallback();
   }
 }
 
@@ -404,5 +393,4 @@ uartIrqHandler(UART7_IRQHandler, UART(7));
 uartIrqHandler(UART8_IRQHandler, UART(8));
 
 #endif
-
-} // extern "C"
+}
