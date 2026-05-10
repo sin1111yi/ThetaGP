@@ -68,35 +68,61 @@ void Bus::freeBuf() {
   }
 }
 
-// Default implementations for bulk operations
+void Bus::init() {
+  setupCallbacks();
+  _initialized = true;
+}
+
+void Bus::setupCallbacks() {
+  switch (_mode) {
+  case Mode::Polling:
+    _writeByteFn = &Bus::writeBytePolling;
+    _writeBytesFn = &Bus::writeBytesPolling;
+    _readByteFn = &Bus::readBytePolling;
+    _readBytesFn = &Bus::readBytesPolling;
+    break;
+  case Mode::Interrupt:
+    _writeByteFn = &Bus::writeByteInterrupt;
+    _writeBytesFn = &Bus::writeBytesInterrupt;
+    _readByteFn = &Bus::readByteInterrupt;
+    _readBytesFn = &Bus::readBytesInterrupt;
+    break;
+  case Mode::DirectMemAccess:
+    _writeByteFn = &Bus::writeByteDMA;
+    _writeBytesFn = &Bus::writeBytesDMA;
+    _readByteFn = &Bus::readByteDMA;
+    _readBytesFn = &Bus::readBytesDMA;
+    break;
+  }
+}
+
+// Function-pointer dispatch for single-byte operations
+RetVal Bus::write(uint8_t byte) {
+  if (_writeByteFn != nullptr) {
+    return (this->*_writeByteFn)(byte);
+  }
+  return RetVal::Error;
+}
+
+RetVal Bus::read(uint8_t *byte) {
+  if (_readByteFn != nullptr) {
+    return (this->*_readByteFn)(byte);
+  }
+  return RetVal::Error;
+}
+
 RetVal Bus::write(uint8_t *bytes, uint16_t num) {
-  if (bytes == nullptr || num == 0) {
+  if (bytes == nullptr || num == 0 || _writeBytesFn == nullptr) {
     return RetVal::Error;
   }
-
-  for (uint16_t i = 0; i < num; i++) {
-    RetVal result = write(bytes[i]);
-    if (result != RetVal::Ok) {
-      return result;
-    }
-  }
-
-  return RetVal::Ok;
+  return (this->*_writeBytesFn)(bytes, num);
 }
 
 RetVal Bus::read(uint8_t *bytes, uint16_t num) {
-  if (bytes == nullptr || num == 0) {
+  if (bytes == nullptr || num == 0 || _readBytesFn == nullptr) {
     return RetVal::Error;
   }
-
-  for (uint16_t i = 0; i < num; i++) {
-    RetVal result = read(&bytes[i]);
-    if (result != RetVal::Ok) {
-      return result;
-    }
-  }
-
-  return RetVal::Ok;
+  return (this->*_readBytesFn)(bytes, num);
 }
 
 } // namespace BUS
