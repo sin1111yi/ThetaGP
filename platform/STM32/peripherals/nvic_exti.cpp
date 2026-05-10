@@ -116,7 +116,7 @@ void NvicExti::init() {
 }
 
 void NvicExti::setCallback(ExtiCallback cb, void *context) {
-  _callback = std::move(cb);
+  _callback = cb;
   _context = context;
 }
 
