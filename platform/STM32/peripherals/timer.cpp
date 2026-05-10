@@ -232,7 +232,7 @@ void HardwareTimer::calculatePrescalerAndPeriod(uint32_t frequency) {
 }
 
 void HardwareTimer::setCallback(TimerCallbackFunc cb, void *context) {
-  _callback = std::move(cb);
+  _callback = cb;
   _context = context;
 }
 
