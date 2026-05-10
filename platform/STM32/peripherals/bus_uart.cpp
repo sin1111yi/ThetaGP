@@ -23,6 +23,8 @@
 
 #include "drivers/peripherals/bus/bus_uart.h"
 #include "drivers/peripherals/gpio.h"
+#include "drivers/peripherals/nvic.h"
+#include "drivers/peripherals/nvic_exti.h"
 
 #include <array>
 #include <cstring>
@@ -113,8 +115,7 @@ void enableBusUartClock(Instance uartx) {
   }
 }
 
-UartBus::UartBus(Instance uartx, PinDesc tx, PinDesc rx,
-                 uint32_t baudrate) {
+UartBus::UartBus(Instance uartx, PinDesc tx, PinDesc rx, uint32_t baudrate) {
   _halHandle = new HalUart();
   setType(Type::Uart);
 
@@ -201,44 +202,207 @@ void UartBus::init() {
   HAL_UARTEx_SetRxFifoThreshold(&HANDLE, UART_RXFIFO_THRESHOLD_1_8);
   HAL_UARTEx_DisableFifoMode(&HANDLE);
 
+  if (uartIdx < uartBusInstance.size()) {
+    uartBusInstance[uartIdx] = this;
+  }
+  const auto uartPrio =
+      static_cast<uint32_t>(NVIC_EXTI::NvicPriority::PriorityLow);
+  HAL_NVIC_SetPriority(uartGroupIRQn[uartIdx], NVIC_PRIORITY_BASE(uartPrio),
+                       NVIC_PRIORITY_SUB(uartPrio));
+  HAL_NVIC_EnableIRQ(uartGroupIRQn[uartIdx]);
 #endif
 
-  _initialized = true;
+  Bus::init();
 }
 
-RetVal UartBus::write(uint8_t byte) {
+RetVal UartBus::writeBytePolling(uint8_t byte) {
 #if defined(STM32H7)
   if (_initialized) {
     if (_pTxBuf != NULL && 1 <= _pTxBufSize) {
       _pTxBuf[0] = byte;
-      HAL_UART_Transmit(&HANDLE, _pTxBuf, 1, 0x1000);
+      HAL_UART_Transmit(&HANDLE, _pTxBuf, 1, 10);
+      return RetVal::Ok;
     }
-  } else
-    ;
+  }
 #endif
-  return RetVal::Ok;
+  return RetVal::Error;
 }
 
-RetVal UartBus::write(uint8_t *bytes, uint16_t num) {
+RetVal UartBus::writeBytesPolling(uint8_t *bytes, uint16_t num) {
 #if defined(STM32H7)
   if (_initialized) {
     if (_pTxBuf != NULL && num <= _pTxBufSize) {
       std::memcpy(_pTxBuf, bytes, num * sizeof(uint8_t));
-      HAL_UART_Transmit(&HANDLE, _pTxBuf, num, 0x1000);
+      HAL_UART_Transmit(&HANDLE, _pTxBuf, num, 10);
+      return RetVal::Ok;
     }
-  } else
-    ;
+  }
 #endif
-  return RetVal::Ok;
+  return RetVal::Error;
 }
 
-RetVal UartBus::read(uint8_t *byte) {
-  (void)byte;
-  return RetVal::Ok;
+RetVal UartBus::readBytePolling(uint8_t *byte) {
+#if defined(STM32H7)
+  if (_initialized) {
+    if (_pRxBuf != NULL && 1 <= _pRxBufSize) {
+      if (HAL_OK == HAL_UART_Receive(&HANDLE, _pRxBuf, 1, 10)) {
+        *byte = _pRxBuf[0];
+        return RetVal::Ok;
+      }
+    }
+  }
+#endif
+  return RetVal::Error;
 }
 
-RetVal UartBus::read(uint8_t *bytes, uint16_t num) {
-  (void)bytes;
-  (void)num;
-  return RetVal::Ok;
+RetVal UartBus::readBytesPolling(uint8_t *bytes, uint16_t num) {
+#if defined(STM32H7)
+  if (_initialized) {
+    if (_pRxBuf != NULL && num <= _pRxBufSize) {
+      if (HAL_OK == HAL_UART_Receive(&HANDLE, _pRxBuf, num, 10)) {
+        std::memcpy(bytes, _pRxBuf, num);
+        return RetVal::Ok;
+      }
+    }
+  }
+#endif
+  return RetVal::Error;
 }
+
+void UartBus::setRxCallback(UartCallbackFunc cb, void *context) {
+  _rxCallback = std::move(cb);
+  _rxContext = context;
+}
+
+void UartBus::setTxCallback(UartCallbackFunc cb, void *context) {
+  _txCallback = std::move(cb);
+  _txContext = context;
+}
+
+void UartBus::pushRxByte(uint8_t byte) {
+  if (_pRxBuf && _rxCount < _pRxBufSize) {
+    _pRxBuf[_rxCount++] = byte;
+  }
+}
+
+RetVal UartBus::writeByteInterrupt(uint8_t byte) {
+#if defined(STM32H7)
+  if (_initialized) {
+    USART_TypeDef *UARTx = uartInstance[static_cast<size_t>(_desc.uartx)];
+    _pTxBuf[0] = byte;
+    _txTotal = 1;
+    _txIndex = 1;
+    UARTx->TDR = byte;
+    UARTx->CR1 |= USART_CR1_TCIE;
+    return RetVal::Ok;
+  }
+#endif
+  return RetVal::Error;
+}
+
+RetVal UartBus::writeBytesInterrupt(uint8_t *bytes, uint16_t num) {
+#if defined(STM32H7)
+  if (_initialized) {
+    if (num <= _pTxBufSize) {
+      USART_TypeDef *UARTx = uartInstance[static_cast<size_t>(_desc.uartx)];
+      std::memcpy(_pTxBuf, bytes, num);
+      _txTotal = num;
+      _txIndex = 1;
+      UARTx->TDR = _pTxBuf[0];
+      UARTx->CR1 |= USART_CR1_TCIE;
+      return RetVal::Ok;
+    }
+  }
+#endif
+  return RetVal::Error;
+}
+
+RetVal UartBus::readByteInterrupt(uint8_t *byte) {
+#if defined(STM32H7)
+  if (_initialized && byte) {
+    if (_rxCount > 0) {
+      *byte = _pRxBuf[0];
+      _rxCount--;
+      if (_rxCount > 0) {
+        std::memmove(_pRxBuf, _pRxBuf + 1, _rxCount);
+      }
+    }
+    USART_TypeDef *UARTx = uartInstance[static_cast<size_t>(_desc.uartx)];
+    UARTx->CR1 |= USART_CR1_RXNEIE;
+    return RetVal::Ok;
+  }
+#endif
+  return RetVal::Error;
+}
+
+RetVal UartBus::readBytesInterrupt(uint8_t *bytes, uint16_t num) {
+#if defined(STM32H7)
+  if (_initialized && bytes) {
+    uint16_t toCopy = (num < _rxCount) ? num : _rxCount;
+    if (toCopy > 0) {
+      std::memcpy(bytes, _pRxBuf, toCopy);
+      if (_rxCount > toCopy) {
+        std::memmove(_pRxBuf, _pRxBuf + toCopy, _rxCount - toCopy);
+      }
+      _rxCount -= toCopy;
+    }
+    USART_TypeDef *UARTx = uartInstance[static_cast<size_t>(_desc.uartx)];
+    UARTx->CR1 |= USART_CR1_RXNEIE;
+    return RetVal::Ok;
+  }
+#endif
+  return RetVal::Error;
+}
+
+bool UartBus::txMore() const { return _txIndex < _txTotal; }
+
+uint8_t UartBus::currentTxByte() { return _pTxBuf[_txIndex++]; }
+
+extern "C" {
+
+#if defined(STM32H7)
+
+static void UARTx_IRQHandler(uint32_t uartIdx) {
+  USART_TypeDef *UARTx = uartInstance[uartIdx];
+  auto *instance = uartBusInstance[uartIdx];
+  if (!UARTx || !instance) {
+    return;
+  }
+
+  uint32_t isr = UARTx->ISR;
+
+  if (isr & USART_ISR_RXNE_RXFNE) {
+    uint8_t byte = (uint8_t)UARTx->RDR;
+    instance->pushRxByte(byte);
+    instance->rxCallback();
+  }
+
+  if ((isr & USART_ISR_TC) && (UARTx->CR1 & USART_CR1_TCIE)) {
+    UARTx->ICR = USART_ICR_TCCF;
+    if (instance->txMore()) {
+      UARTx->TDR = instance->currentTxByte();
+    } else {
+      UARTx->CR1 &= ~USART_CR1_TCIE;
+      instance->txCallback();
+    }
+  }
+}
+
+#define uartIrqHandler(name, idx)                                              \
+  void name(void) { UARTx_IRQHandler(idx); }                                   \
+  struct dummy
+
+#define UART(x) static_cast<uint32_t>(Instance::Uart##x)
+
+uartIrqHandler(USART1_IRQHandler, UART(1));
+uartIrqHandler(USART2_IRQHandler, UART(2));
+uartIrqHandler(USART3_IRQHandler, UART(3));
+uartIrqHandler(UART4_IRQHandler, UART(4));
+uartIrqHandler(UART5_IRQHandler, UART(5));
+uartIrqHandler(USART6_IRQHandler, UART(6));
+uartIrqHandler(UART7_IRQHandler, UART(7));
+uartIrqHandler(UART8_IRQHandler, UART(8));
+
+#endif
+
+} // extern "C"
