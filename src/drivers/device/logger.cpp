@@ -19,11 +19,16 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "utils/log/log.h"
+
 #include "drivers/device/logger.h"
-#include "drivers/device/device.h"
 #include "drivers/peripherals/bus/bus.h"
 #include "drivers/peripherals/bus/bus_uart.h"
+#include "utils/types.h"
+
 #include <cstdint>
+
+using namespace ThetaGP::Drivers::Peripheral::BUS;
 
 namespace ThetaGP::Drivers::Device {
 
@@ -31,18 +36,25 @@ Logger::Logger() : Device("logger") {}
 
 void Logger::init() {
 #if defined(LOGGER_UART)
+  _uart.setMode(Mode::Interrupt);
   _uart.init();
 #endif
   _initialized = true;
+
+  LOG_INIT(LoggerTransmitBytes);
+  LOG_DEBUG("Hello world");
 }
 
 void Logger::LoggerTransmitBytes(uint8_t *data, uint16_t n) {
   auto &self = getInstance();
 
-  if (self.isInitialized())
+  if (self.isInitialized()) {
 #if defined(LOGGER_UART)
+    if (self._uart.isBusy())
+      return;
     self._uart.write(data, n);
 #endif
+  }
 }
 
 } // namespace ThetaGP::Drivers::Device
