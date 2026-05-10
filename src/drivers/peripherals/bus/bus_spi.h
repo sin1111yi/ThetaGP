@@ -60,11 +60,10 @@ private:
   void enableTxDMA();
   void enableRxDMA();
 
-  RetVal writePolling(uint8_t *bytes, uint16_t num);
-  RetVal writeDMA(uint8_t *bytes, uint16_t num);
-
-  RetVal readPolling(uint8_t *bytes, uint16_t num);
-  RetVal readDMA(uint8_t *bytes, uint16_t num);
+  RetVal writeBytesPolling(uint8_t *bytes, uint16_t num) override;
+  RetVal writeBytesDMA(uint8_t *bytes, uint16_t num) override;
+  RetVal readBytesPolling(uint8_t *bytes, uint16_t num) override;
+  RetVal readBytesDMA(uint8_t *bytes, uint16_t num) override;
 
 public:
   SpiBus(Instance spix, GPIO::PinDesc clk, GPIO::PinDesc mosi,
@@ -76,12 +75,6 @@ public:
 
   void init() override;
   void enableClock() override;
-
-  RetVal write(uint8_t byte) override;
-  RetVal write(uint8_t *bytes, uint16_t num) override;
-
-  RetVal read(uint8_t *byte) override;
-  RetVal read(uint8_t *bytes, uint16_t num) override;
 };
 
 } // namespace BUS

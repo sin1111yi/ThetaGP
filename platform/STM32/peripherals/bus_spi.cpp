@@ -235,10 +235,8 @@ void SpiBus::init() {
   HANDLE.Init.MasterSSIdleness = SPI_MASTER_SS_IDLENESS_00CYCLE;
   HANDLE.Init.MasterInterDataIdleness = SPI_MASTER_INTERDATA_IDLENESS_00CYCLE;
   HANDLE.Init.MasterReceiverAutoSusp = SPI_MASTER_RX_AUTOSUSP_DISABLE;
-  HANDLE.Init.MasterKeepIOState = SPI_MASTER_KEEP_IO_STATE_DISABLE;
-  HANDLE.Init.IOSwap = SPI_IO_SWAP_DISABLE;
   HAL_SPI_Init(&HANDLE);
 #endif
 
-  _initialized = true;
+  Bus::init();
 }
