@@ -26,12 +26,17 @@
 #include "drivers/peripherals/nvic.h"
 #include "drivers/peripherals/nvic_exti.h"
 
+#include "utils/log/log.h"
+
 #include <array>
 #include <cstring>
 
 #if defined(STM32H7)
 #define UART_IRQ_GROUPS 8
 #endif
+
+// Polling timeout (milliseconds)
+static constexpr uint32_t UART_POLL_TIMEOUT_MS = 10;
 
 using namespace ThetaGP::Drivers::Peripheral::BUS;
 using namespace ThetaGP::Drivers::Peripheral::GPIO;
@@ -41,7 +46,7 @@ struct HalUart {
   UART_HandleTypeDef handle;
 };
 
-#define HANDLE (static_cast<HalUart *>(_halHandle)->handle)
+#define UART_HANDLE (static_cast<HalUart *>(_halHandle)->handle)
 
 static constexpr struct {
   Instance uart;
@@ -82,7 +87,7 @@ static uint8_t lookupUartAf(Instance uart, Port port, Pin pin) {
 #if defined(STM32H7)
 static std::array<UartBus *, UART_IRQ_GROUPS> uartBusInstance = {};
 
-const std::array<USART_TypeDef *, UART_IRQ_GROUPS> uartInstance = {
+constexpr std::array<USART_TypeDef *, UART_IRQ_GROUPS> uartInstance = {
     USART1, USART2, USART3, UART4, UART5, USART6, UART7, UART8,
 };
 
@@ -94,10 +99,25 @@ constexpr std::array<IRQn_Type, UART_IRQ_GROUPS> uartGroupIRQn = {
 #error "Unknown CPU"
 #endif
 
+// ── Safe enum-to-array-index mapping ──
+static constexpr uint32_t uartInstanceIndex(Instance uart) noexcept {
+  switch (uart) {
+  case Instance::Uart1: return 0;
+  case Instance::Uart2: return 1;
+  case Instance::Uart3: return 2;
+  case Instance::Uart4: return 3;
+  case Instance::Uart5: return 4;
+  case Instance::Uart6: return 5;
+  case Instance::Uart7: return 6;
+  case Instance::Uart8: return 7;
+  default:              return UINT32_MAX;
+  }
+}
+
+#if defined(STM32H7)
 void enableBusUartClock(Instance uartx) {
   using ClockFunc = void (*)();
   static const std::array<ClockFunc, UART_IRQ_GROUPS> clockEnableTable = {{
-#if defined(STM32H7)
       []() { __HAL_RCC_USART1_CLK_ENABLE(); },
       []() { __HAL_RCC_USART2_CLK_ENABLE(); },
       []() { __HAL_RCC_USART3_CLK_ENABLE(); },
@@ -106,14 +126,14 @@ void enableBusUartClock(Instance uartx) {
       []() { __HAL_RCC_USART6_CLK_ENABLE(); },
       []() { __HAL_RCC_UART7_CLK_ENABLE(); },
       []() { __HAL_RCC_UART8_CLK_ENABLE(); },
-#endif
   }};
 
-  const auto index = static_cast<size_t>(uartx);
+  const auto index = uartInstanceIndex(uartx);
   if (index < clockEnableTable.size()) {
     clockEnableTable[index]();
   }
 }
+#endif
 
 UartBus::UartBus(Instance uartx, PinDesc tx, PinDesc rx, uint32_t baudrate) {
   _halHandle = new HalUart();
@@ -152,22 +172,26 @@ void UartBus::enableClock() {
     break;
   }
 
-  HAL_RCCEx_PeriphCLKConfig(&periphClkInitStruct);
+  if (HAL_RCCEx_PeriphCLKConfig(&periphClkInitStruct) != HAL_OK) {
+    LOG_ERROR("UART%u clock config failed",
+              static_cast<uint32_t>(_desc.uartx) + 1);
+  }
 
   enableBusUartClock(_desc.uartx);
 }
 
 void UartBus::configPins() {
 #if defined(STM32H7)
-  uint32_t alternate = lookupUartAf(_desc.uartx, _desc.tx.port, _desc.tx.pin);
+  uint32_t txAlternate = lookupUartAf(_desc.uartx, _desc.tx.port, _desc.tx.pin);
+  uint32_t rxAlternate = lookupUartAf(_desc.uartx, _desc.rx.port, _desc.rx.pin);
 
   Gpio tx(_desc.tx);
   Gpio rx(_desc.rx);
 
   tx.config(GPIO::Mode::AlternateFunctionPushPull, GPIO::Pull::NoPull,
-            GPIO::Speed::Medium, alternate);
+            GPIO::Speed::Medium, txAlternate);
   rx.config(GPIO::Mode::AlternateFunctionPushPull, GPIO::Pull::NoPull,
-            GPIO::Speed::Medium, alternate);
+            GPIO::Speed::Medium, rxAlternate);
 
   tx.init();
   rx.init();
@@ -185,24 +209,36 @@ void UartBus::init() {
   configPins();
 
 #if defined(STM32H7)
-  const auto uartIdx = static_cast<uint32_t>(_desc.uartx);
-  HANDLE.Instance = uartInstance[uartIdx];
-  HANDLE.Init.BaudRate = _desc.baudrate;
-  HANDLE.Init.WordLength = UART_WORDLENGTH_8B;
-  HANDLE.Init.StopBits = UART_STOPBITS_1;
-  HANDLE.Init.Parity = UART_PARITY_NONE;
-  HANDLE.Init.Mode = UART_MODE_TX_RX;
-  HANDLE.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  HANDLE.Init.OverSampling = UART_OVERSAMPLING_16;
-  HANDLE.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  HANDLE.Init.ClockPrescaler = UART_PRESCALER_DIV1;
-  HANDLE.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  HAL_UART_Init(&HANDLE);
-  HAL_UARTEx_SetTxFifoThreshold(&HANDLE, UART_TXFIFO_THRESHOLD_1_8);
-  HAL_UARTEx_SetRxFifoThreshold(&HANDLE, UART_RXFIFO_THRESHOLD_1_8);
-  HAL_UARTEx_DisableFifoMode(&HANDLE);
+  const auto uartIdx = uartInstanceIndex(_desc.uartx);
+  UART_HANDLE.Instance = uartInstance[uartIdx];
+  UART_HANDLE.Init.BaudRate = _desc.baudrate;
+  UART_HANDLE.Init.WordLength = UART_WORDLENGTH_8B;
+  UART_HANDLE.Init.StopBits = UART_STOPBITS_1;
+  UART_HANDLE.Init.Parity = UART_PARITY_NONE;
+  UART_HANDLE.Init.Mode = UART_MODE_TX_RX;
+  UART_HANDLE.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  UART_HANDLE.Init.OverSampling = UART_OVERSAMPLING_16;
+  UART_HANDLE.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  UART_HANDLE.Init.ClockPrescaler = UART_PRESCALER_DIV1;
+  UART_HANDLE.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&UART_HANDLE) != HAL_OK) {
+    LOG_ERROR("UART%u init failed", uartIdx + 1);
+    return;
+  }
+  if (HAL_UARTEx_SetTxFifoThreshold(&UART_HANDLE, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK) {
+    LOG_ERROR("UART%u TX FIFO config failed", uartIdx + 1);
+  }
+  if (HAL_UARTEx_SetRxFifoThreshold(&UART_HANDLE, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK) {
+    LOG_ERROR("UART%u RX FIFO config failed", uartIdx + 1);
+  }
+  if (HAL_UARTEx_DisableFifoMode(&UART_HANDLE) != HAL_OK) {
+    LOG_ERROR("UART%u FIFO disable failed", uartIdx + 1);
+  }
 
   if (uartIdx < uartBusInstance.size()) {
+    if (uartBusInstance[uartIdx] != nullptr) {
+      LOG_WARN("UART%u already initialized, overwriting", uartIdx + 1);
+    }
     uartBusInstance[uartIdx] = this;
   }
   const auto uartPrio =
@@ -220,7 +256,9 @@ RetVal UartBus::writeBytePolling(uint8_t byte) {
   if (_initialized) {
     if (_pTxBuf != NULL && 1 <= _pTxBufSize) {
       _pTxBuf[0] = byte;
-      HAL_UART_Transmit(&HANDLE, _pTxBuf, 1, 10);
+      if (HAL_UART_Transmit(&UART_HANDLE, _pTxBuf, 1, UART_POLL_TIMEOUT_MS) != HAL_OK) {
+        return RetVal::Error;
+      }
       return RetVal::Ok;
     }
   }
@@ -233,7 +271,9 @@ RetVal UartBus::writeBytesPolling(uint8_t *bytes, uint16_t num) {
   if (_initialized) {
     if (_pTxBuf != NULL && num <= _pTxBufSize) {
       std::memcpy(_pTxBuf, bytes, num * sizeof(uint8_t));
-      HAL_UART_Transmit(&HANDLE, _pTxBuf, num, 10);
+      if (HAL_UART_Transmit(&UART_HANDLE, _pTxBuf, num, UART_POLL_TIMEOUT_MS) != HAL_OK) {
+        return RetVal::Error;
+      }
       return RetVal::Ok;
     }
   }
@@ -245,7 +285,7 @@ RetVal UartBus::readBytePolling(uint8_t *byte) {
 #if defined(STM32H7)
   if (_initialized) {
     if (_pRxBuf != NULL && 1 <= _pRxBufSize) {
-      if (HAL_OK == HAL_UART_Receive(&HANDLE, _pRxBuf, 1, 10)) {
+      if (HAL_OK == HAL_UART_Receive(&UART_HANDLE, _pRxBuf, 1, UART_POLL_TIMEOUT_MS)) {
         *byte = _pRxBuf[0];
         return RetVal::Ok;
       }
@@ -259,7 +299,7 @@ RetVal UartBus::readBytesPolling(uint8_t *bytes, uint16_t num) {
 #if defined(STM32H7)
   if (_initialized) {
     if (_pRxBuf != NULL && num <= _pRxBufSize) {
-      if (HAL_OK == HAL_UART_Receive(&HANDLE, _pRxBuf, num, 10)) {
+      if (HAL_OK == HAL_UART_Receive(&UART_HANDLE, _pRxBuf, num, UART_POLL_TIMEOUT_MS)) {
         std::memcpy(bytes, _pRxBuf, num);
         return RetVal::Ok;
       }
@@ -282,8 +322,11 @@ void UartBus::setTxCallback(UartCallbackFunc cb, void *context) {
 RetVal UartBus::writeByteInterrupt(uint8_t byte) {
 #if defined(STM32H7)
   if (_initialized) {
+    if (isBusy()) {
+      return RetVal::Busy;
+    }
     _pTxBuf[0] = byte;
-    return HAL_UART_Transmit_IT(&HANDLE, _pTxBuf, 1) == HAL_OK
+    return HAL_UART_Transmit_IT(&UART_HANDLE, _pTxBuf, 1) == HAL_OK
                ? RetVal::Ok
                : RetVal::Error;
   }
@@ -294,8 +337,11 @@ RetVal UartBus::writeByteInterrupt(uint8_t byte) {
 RetVal UartBus::writeBytesInterrupt(uint8_t *bytes, uint16_t num) {
 #if defined(STM32H7)
   if (_initialized && bytes && num > 0 && num <= _pTxBufSize) {
+    if (isBusy()) {
+      return RetVal::Busy;
+    }
     std::memcpy(_pTxBuf, bytes, num);
-    return HAL_UART_Transmit_IT(&HANDLE, _pTxBuf, num) == HAL_OK
+    return HAL_UART_Transmit_IT(&UART_HANDLE, _pTxBuf, num) == HAL_OK
                ? RetVal::Ok
                : RetVal::Error;
   }
@@ -306,7 +352,7 @@ RetVal UartBus::writeBytesInterrupt(uint8_t *bytes, uint16_t num) {
 RetVal UartBus::readByteInterrupt(uint8_t *byte) {
 #if defined(STM32H7)
   if (_initialized && byte) {
-    return HAL_UART_Receive_IT(&HANDLE, byte, 1) == HAL_OK
+    return HAL_UART_Receive_IT(&UART_HANDLE, byte, 1) == HAL_OK
                ? RetVal::Ok
                : RetVal::Error;
   }
@@ -316,8 +362,8 @@ RetVal UartBus::readByteInterrupt(uint8_t *byte) {
 
 RetVal UartBus::readBytesInterrupt(uint8_t *bytes, uint16_t num) {
 #if defined(STM32H7)
-  if (_initialized && bytes && num > 0) {
-    return HAL_UART_Receive_IT(&HANDLE, bytes, num) == HAL_OK
+  if (_initialized && bytes && num > 0 && num <= _pRxBufSize) {
+    return HAL_UART_Receive_IT(&UART_HANDLE, bytes, num) == HAL_OK
                ? RetVal::Ok
                : RetVal::Error;
   }
@@ -327,7 +373,7 @@ RetVal UartBus::readBytesInterrupt(uint8_t *bytes, uint16_t num) {
 
 bool UartBus::isBusy() const {
 #if defined(STM32H7)
-  return HANDLE.gState != HAL_UART_STATE_READY;
+  return UART_HANDLE.gState != HAL_UART_STATE_READY;
 #else
   return false;
 #endif
@@ -356,8 +402,18 @@ static void UARTx_IRQHandler(uint32_t uartIdx) {
     if (isr & USART_ISR_NE) icrMask |= USART_ICR_NECF;
     if (isr & USART_ISR_ORE) icrMask |= USART_ICR_ORECF;
     UARTx->ICR = icrMask;
+    LOG_WARN("UART error: PE=%d FE=%d NE=%d ORE=%d",
+             !!(isr & USART_ISR_PE), !!(isr & USART_ISR_FE),
+             !!(isr & USART_ISR_NE), !!(isr & USART_ISR_ORE));
   }
 
+  // ── Data transfer (ISR context) ──
+  // Calls huart->RxISR/TxISR (HAL internal function pointers initialized
+  // by HAL_UART_Init). These handle register-level data movement, FIFO,
+  // and buffer management. Direct register replication would be ~200 LoC.
+  //
+  // rxCallback/txCallback run in ISR context — keep them lightweight
+  // (no blocking, no allocation, no mutex).
   if ((isr & USART_ISR_RXNE_RXFNE) && (cr1 & USART_CR1_RXNEIE_RXFNEIE)) {
     huart->RxISR(huart);
     if (huart->RxState == HAL_UART_STATE_READY) {
@@ -372,7 +428,9 @@ static void UARTx_IRQHandler(uint32_t uartIdx) {
   if ((isr & USART_ISR_TC) && (cr1 & USART_CR1_TCIE)) {
     UARTx->ICR = USART_ICR_TCCF;
     UARTx->CR1 &= ~USART_CR1_TCIE;
-    huart->gState = HAL_UART_STATE_READY;
+    if (huart->Lock != HAL_LOCKED) {
+      huart->gState = HAL_UART_STATE_READY;
+    }
     instance->txCallback();
   }
 }
@@ -381,7 +439,7 @@ static void UARTx_IRQHandler(uint32_t uartIdx) {
   void name(void) { UARTx_IRQHandler(idx); }                                   \
   struct dummy
 
-#define UART(x) static_cast<uint32_t>(Instance::Uart##x)
+#define UART(x) uartInstanceIndex(Instance::Uart##x)
 
 uartIrqHandler(USART1_IRQHandler, UART(1));
 uartIrqHandler(USART2_IRQHandler, UART(2));

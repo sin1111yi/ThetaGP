@@ -1,16 +1,30 @@
 ---
+# ThetaGP Clang-Tidy Configuration
+# Target: STM32H7 embedded C++ (C23 / C++20)
+# Tools: C++23, LLVM 22
 Checks: >
+  # ── Core diagnostics ──
   clang-diagnostic-*,
   clang-analyzer-*,
+
+  # ── Correctness ──
   bugprone-*,
   -bugprone-easily-swappable-parameters,
   -bugprone-reserved-identifier,
   -bugprone-branch-clone,
+  -bugprone-implicit-widening-of-multiplication-result,
+
+  # ── Modern C++ ──
   modernize-*,
   -modernize-use-trailing-return-type,
   -modernize-use-nodiscard,
+  -modernize-use-auto,
+
+  # ── Performance ──
   performance-*,
   -performance-no-int-to-ptr,
+
+  # ── Readability ──
   readability-*,
   -readability-avoid-const-params-in-decls,
   -readability-convert-member-functions-to-static,
@@ -23,6 +37,30 @@ Checks: >
   -readability-redundant-access-specifiers,
   -readability-static-accessed-through-instance,
   -readability-uppercase-literal-suffix,
+
+  # ── Embedded / Safety ──
+  cppcoreguidelines-*,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-macro-usage,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-type-vararg,
+  -cppcoreguidelines-pro-type-union-access,
+  -cppcoreguidelines-prefer-member-initializer,
+
+  # ── Concurrency ──
+  concurrency-*,
+
+  # ── Miscellaneous ──
+  misc-*,
+  -misc-include-cleaner,
+  -misc-no-recursion,
+  -misc-const-correctness,
+
+  # ── Portability ──
+  portability-*,
+
 WarningsAsErrors: ''
 HeaderFileExtensions:
   - h
@@ -35,7 +73,12 @@ ImplementationFileExtensions:
 HeaderFilterRegex: '.'
 ExcludeHeaderFilterRegex: /lib/.*
 FormatStyle: file
-CheckOptions: {}
+CheckOptions:
+  # Embedded: allow reinterpret_cast for register access
+  cppcoreguidelines-pro-type-reinterpret-cast: 0
+  # Allow union for register bitfields
+  cppcoreguidelines-pro-type-union-access: 0
+  # Allow vararg for logging
+  cppcoreguidelines-pro-type-vararg: 0
 SystemHeaders: false
 ...
-
