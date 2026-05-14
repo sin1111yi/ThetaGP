@@ -20,11 +20,13 @@
 #include "drivers/peripherals/nvic_exti.h"
 
 #include <cstdint>
-#include <functional>
 
 namespace ThetaGP::Drivers::Peripheral::TIMER {
 
 using TimerPriority = NVIC_EXTI::NvicPriority;
+
+// ── C-style ISR callback ──
+typedef void (*TimerCallbackFunc)(void *context);
 
 enum class Instance : uint8_t {
   Timer1,
@@ -69,7 +71,6 @@ private:
   void *_halHandle = nullptr;
   void *_context = nullptr;
 
-  using TimerCallbackFunc = std::function<void(void *context)>;
   TimerCallbackFunc _callback;
 
   void enableClock() const;
