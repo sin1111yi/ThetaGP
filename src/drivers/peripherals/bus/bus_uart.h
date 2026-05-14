@@ -70,17 +70,13 @@ private:
   UartCallbackFunc _txCallback;
   void *_txContext = nullptr;
 
-  // DMA channels (mode == DirectMemAccess)
-  DMA::DmaChannel *_dmaTx = nullptr;
-  DMA::DmaChannel *_dmaRx = nullptr;
-
-private:
-
+  // Polling mode
   RetVal writeBytePolling(uint8_t byte) override;
   RetVal writeBytesPolling(uint8_t *bytes, uint16_t num) override;
   RetVal readBytePolling(uint8_t *byte) override;
   RetVal readBytesPolling(uint8_t *bytes, uint16_t num) override;
 
+  // Interrupt mode
   RetVal writeByteInterrupt(uint8_t byte) override;
   RetVal writeBytesInterrupt(uint8_t *bytes, uint16_t num) override;
   RetVal readByteInterrupt(uint8_t *byte) override;
@@ -90,7 +86,7 @@ private:
   RetVal writeByteDMA(uint8_t byte) override;
   RetVal writeBytesDMA(uint8_t *bytes, uint16_t num) override;
   RetVal readByteDMA(uint8_t *byte) override;
-  RetVal readBytesDMA(uint8_t *bytes, uint16_t num) override;
+  RetVal readBytesDMAIdle(uint8_t *bytes, uint16_t num) override;
 
 public:
   UartBus(Instance uartx, GPIO::PinDesc tx, GPIO::PinDesc rx,
@@ -123,6 +119,11 @@ public:
 
   // DMA-safe RX buffer access (inherited protected member)
   uint8_t *rxBuf() const { return _pRxBuf; }
+
+  // DMA channels and state (accessed by static ISR callbacks in .cpp)
+  DMA::DmaChannel *_dmaTx = nullptr;
+  DMA::DmaChannel *_dmaRx = nullptr;
+  volatile bool _idleDetectionEnabled = false;
 };
 
 } // namespace BUS

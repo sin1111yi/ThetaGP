@@ -143,6 +143,11 @@ protected:
     UNUSED(num);
     return RetVal::Error;
   }
+  virtual RetVal readBytesDMAIdle(uint8_t *bytes, uint16_t num) {
+    UNUSED(bytes);
+    UNUSED(num);
+    return RetVal::Error;
+  }
 
 public:
   virtual ~Bus();

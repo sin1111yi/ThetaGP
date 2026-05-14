@@ -91,7 +91,7 @@ void Bus::setupCallbacks() {
     _writeByteFn = &Bus::writeByteDMA;
     _writeBytesFn = &Bus::writeBytesDMA;
     _readByteFn = &Bus::readByteDMA;
-    _readBytesFn = &Bus::readBytesDMA;
+    _readBytesFn = &Bus::readBytesDMAIdle;
     break;
   }
 }
