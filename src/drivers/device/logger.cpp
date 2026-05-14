@@ -27,10 +27,14 @@
 #include "utils/types.h"
 
 #include <cstdint>
+#include <cstring>
 
 using namespace ThetaGP::Drivers::Peripheral::BUS;
 
 namespace ThetaGP::Drivers::Device {
+
+// Echo buffer in DMA-safe memory
+COMMON_CODE static uint8_t echoBuf[256];
 
 Logger::Logger() : Device("logger") {}
 
@@ -38,11 +42,45 @@ void Logger::init() {
 #if defined(LOGGER_UART)
   _uart.setMode(Mode::DirectMemAccess);
   _uart.init();
+
+  // Register RX and TX callbacks for DMA echo sequencing
+  _uart.setRxCallback(echoRxCallback, this);
+  _uart.setTxCallback(echoTxCallback, this);
+  startEchoRx();
 #endif
   _initialized = true;
 
   LOG_INIT(LoggerTransmitBytes);
   LOG_DEBUG("Logger Enabled!");
+}
+
+void Logger::startEchoRx() {
+  _uart.read(echoBuf, sizeof(echoBuf));
+}
+
+void Logger::echoRxCallback(void *context) {
+  auto *self = static_cast<Logger *>(context);
+  if (!self) return;
+
+  self->echoTx();
+}
+
+void Logger::echoTx() {
+  // Echo received data back via TX DMA.
+  // Cannot re-arm RX here because isBusy() returns true (TX in progress).
+  // The txCallback will re-arm RX after TX completes.
+  _echoPending = true;
+  _uart.write(echoBuf, _uart._readDmaBufLen);
+}
+
+void Logger::echoTxCallback(void *context) {
+  auto *self = static_cast<Logger *>(context);
+  if (!self) return;
+
+  if (self->_echoPending) {
+    self->_echoPending = false;
+    self->startEchoRx();
+  }
 }
 
 void Logger::LoggerTransmitBytes(uint8_t *data, uint16_t n) {

@@ -460,6 +460,8 @@ static void uartRxDmaComplete(void *context) {
 
   auto *huart = &static_cast<HalUart *>(uart->halHandle())->handle;
   huart->Instance->CR3 &= ~USART_CR3_DMAR;
+  huart->Instance->CR1 &= ~USART_CR1_IDLEIE;
+  uart->_idleDetectionEnabled = false;
   huart->RxState = HAL_UART_STATE_READY;
 
   // Copy from DMA-safe _pRxBuf to caller buffer (may be in DTCM)
@@ -467,9 +469,8 @@ static void uartRxDmaComplete(void *context) {
     std::memcpy(uart->_readDmaBufPtr, uart->rxBuf(), uart->_readDmaBufLen);
     uart->_readDmaBufPtr = nullptr;
     uart->_readDmaBufLen = 0;
+    uart->rxCallback();
   }
-
-  uart->rxCallback();
 }
 
 // ── DMA TX ──
@@ -530,21 +531,24 @@ RetVal UartBus::readByteDMA(uint8_t *byte) {
   return RetVal::Error;
 }
 
-RetVal UartBus::readBytesDMA(uint8_t *bytes, uint16_t num) {
+RetVal UartBus::readBytesDMAIdle(uint8_t *bytes, uint16_t num) {
 #if defined(STM32H7)
   if (_initialized && _dmaRx && bytes && num > 0 && num <= _pRxBufSize && _pRxBuf != nullptr) {
     if (isBusy()) {
       return RetVal::Busy;
     }
     // Store caller buffer pointer; DMA into _pRxBuf (DMA-safe),
-    // then copy to caller buffer in completion callback
+    // then copy to caller buffer in completion callback or idle ISR
     _readDmaBufPtr = bytes;
     _readDmaBufLen = num;
+    _idleDetectionEnabled = true;
     auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
     UART_HANDLE.RxState = HAL_UART_STATE_BUSY_RX;
     _dmaRx->start(reinterpret_cast<uint32_t>(&huart->Instance->RDR),
                   reinterpret_cast<uint32_t>(_pRxBuf), num);
     huart->Instance->CR3 |= USART_CR3_DMAR;
+    // Enable UART idle line detection interrupt
+    huart->Instance->CR1 |= USART_CR1_IDLEIE;
     return RetVal::Ok;
   }
 #endif
@@ -595,6 +599,33 @@ static void UARTx_IRQHandler(uint32_t uartIdx) {
   //
   // rxCallback/txCallback run in ISR context — keep them lightweight
   // (no blocking, no allocation, no mutex).
+
+  // ── Idle line detection (DMA variable-length read) ──
+  // When IDLE is set and a DMA read is active, stop the DMA
+  // and determine the actual byte count from the remaining NDTR.
+  if ((isr & USART_ISR_IDLE) && instance->_idleDetectionEnabled &&
+      instance->_dmaRx && instance->_readDmaBufPtr != nullptr) {
+    UARTx->ICR = USART_ICR_IDLECF;
+    instance->_dmaRx->stop();
+    UARTx->CR3 &= ~USART_CR3_DMAR;
+    UARTx->CR1 &= ~USART_CR1_IDLEIE;
+    instance->_idleDetectionEnabled = false;
+    huart->RxState = HAL_UART_STATE_READY;
+
+    uint16_t remaining = instance->_dmaRx->getRemainingCount();
+    uint16_t received = (remaining < instance->_readDmaBufLen)
+                            ? (instance->_readDmaBufLen - remaining)
+                            : 0;
+    if (received > 0 && instance->_readDmaBufPtr != nullptr) {
+      std::memcpy(instance->_readDmaBufPtr, instance->rxBuf(), received);
+    }
+    instance->_readDmaBufLen = received;
+    instance->_readDmaBufPtr = nullptr;
+    instance->rxCallback();
+    // Skip remaining ISR processing — the read is complete
+    return;
+  }
+
   if ((isr & USART_ISR_RXNE_RXFNE) && (cr1 & USART_CR1_RXNEIE_RXFNEIE)) {
     huart->RxISR(huart);
     if (huart->RxState == HAL_UART_STATE_READY) {
