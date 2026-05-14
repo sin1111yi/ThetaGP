@@ -22,11 +22,13 @@
 #include "utils/types.h"
 
 #include "drivers/peripherals/bus/bus_uart.h"
+#include "drivers/peripherals/dma.h"
 #include "drivers/peripherals/gpio.h"
 #include "drivers/peripherals/nvic.h"
 #include "drivers/peripherals/nvic_exti.h"
 
 #include "utils/log/log.h"
+#include "drivers/peripherals/systick.h"
 
 #include <array>
 #include <cstring>
@@ -155,6 +157,19 @@ UartBus::UartBus(const UartDesc &desc) {
   std::memset(_halHandle, 0, sizeof(HalUart));
 }
 
+UartBus::~UartBus() {
+  if (_dmaTx) {
+    _dmaTx->deinit();
+    delete _dmaTx;
+    _dmaTx = nullptr;
+  }
+  if (_dmaRx) {
+    _dmaRx->deinit();
+    delete _dmaRx;
+    _dmaRx = nullptr;
+  }
+}
+
 void UartBus::enableClock() {
   RCC_PeriphCLKInitTypeDef periphClkInitStruct;
   std::memset(&periphClkInitStruct, 0, sizeof(RCC_PeriphCLKInitTypeDef));
@@ -197,6 +212,10 @@ void UartBus::configPins() {
   rx.init();
 #endif
 }
+
+// ── DMA completion callbacks (forward decl for init()) ──
+static void uartTxDmaComplete(void *context);
+static void uartRxDmaComplete(void *context);
 
 void UartBus::init() {
   _pTxBufSize = _bufSize;
@@ -246,6 +265,53 @@ void UartBus::init() {
   HAL_NVIC_SetPriority(uartGroupIRQn[uartIdx], NVIC_PRIORITY_BASE(uartPrio),
                        NVIC_PRIORITY_SUB(uartPrio));
   HAL_NVIC_EnableIRQ(uartGroupIRQn[uartIdx]);
+
+  // ── DMA mode setup ──
+  if (_mode == Mode::DirectMemAccess) {
+    uint32_t txRequestId = 0;
+    uint32_t rxRequestId = 0;
+    switch (_desc.uartx) {
+    case Instance::Uart1: txRequestId = DMA_REQUEST_USART1_TX; rxRequestId = DMA_REQUEST_USART1_RX; break;
+    case Instance::Uart2: txRequestId = DMA_REQUEST_USART2_TX; rxRequestId = DMA_REQUEST_USART2_RX; break;
+    case Instance::Uart3: txRequestId = DMA_REQUEST_USART3_TX; rxRequestId = DMA_REQUEST_USART3_RX; break;
+    case Instance::Uart4: txRequestId = DMA_REQUEST_UART4_TX;  rxRequestId = DMA_REQUEST_UART4_RX;  break;
+    case Instance::Uart5: txRequestId = DMA_REQUEST_UART5_TX;  rxRequestId = DMA_REQUEST_UART5_RX;  break;
+    case Instance::Uart6: txRequestId = DMA_REQUEST_USART6_TX; rxRequestId = DMA_REQUEST_USART6_RX; break;
+    case Instance::Uart7: txRequestId = DMA_REQUEST_UART7_TX;  rxRequestId = DMA_REQUEST_UART7_RX;  break;
+    case Instance::Uart8: txRequestId = DMA_REQUEST_UART8_TX;  rxRequestId = DMA_REQUEST_UART8_RX;  break;
+    default: break;
+    }
+
+    // TX: DMA1 Stream1 — memory to peripheral (buffer → UART TDR)
+    _dmaTx = new DMA::DmaChannel(DMA::Controller::Dma1,
+                                 DMA::Stream::Stream1);
+    _dmaTx->setRequestId(txRequestId);
+    _dmaTx->configure({
+        .direction = DMA::Direction::MemoryToPeripheral,
+        .srcDataWidth = DMA::DataWidth::Byte,
+        .destDataWidth = DMA::DataWidth::Byte,
+        .priority = DMA::Priority::Medium,
+        .srcIncrement = true,
+        .destIncrement = false,
+    });
+    _dmaTx->setCallback(uartTxDmaComplete, this);
+    _dmaTx->init();
+
+    // RX: DMA1 Stream0 — peripheral to memory (UART RDR → buffer)
+    _dmaRx = new DMA::DmaChannel(DMA::Controller::Dma1,
+                                 DMA::Stream::Stream0);
+    _dmaRx->setRequestId(rxRequestId);
+    _dmaRx->configure({
+        .direction = DMA::Direction::PeripheralToMemory,
+        .srcDataWidth = DMA::DataWidth::Byte,
+        .destDataWidth = DMA::DataWidth::Byte,
+        .priority = DMA::Priority::Medium,
+        .srcIncrement = false,
+        .destIncrement = true,
+    });
+    _dmaRx->setCallback(uartRxDmaComplete, this);
+    _dmaRx->init();
+  }
 #endif
 
   Bus::init();
@@ -310,12 +376,12 @@ RetVal UartBus::readBytesPolling(uint8_t *bytes, uint16_t num) {
 }
 
 void UartBus::setRxCallback(UartCallbackFunc cb, void *context) {
-  _rxCallback = std::move(cb);
+  _rxCallback = cb;
   _rxContext = context;
 }
 
 void UartBus::setTxCallback(UartCallbackFunc cb, void *context) {
-  _txCallback = std::move(cb);
+  _txCallback = cb;
   _txContext = context;
 }
 
@@ -371,9 +437,124 @@ RetVal UartBus::readBytesInterrupt(uint8_t *bytes, uint16_t num) {
   return RetVal::Error;
 }
 
+// ── DMA mode ──
+// Uses LL-level DMA control directly: DmaChannel::start() to set up the
+// DMA stream, then manually enable UART CR3 bits to trigger DMA requests.
+// Completion is dispatched through DmaChannel's callback.
+// No HAL_UART_Transmit_DMA / HAL_DMA_Start_IT dependency.
+
+static void uartTxDmaComplete(void *context) {
+  auto *uart = static_cast<UartBus *>(context);
+  if (!uart) return;
+
+  auto *huart = &static_cast<HalUart *>(uart->halHandle())->handle;
+  huart->Instance->CR3 &= ~USART_CR3_DMAT;
+  huart->gState = HAL_UART_STATE_READY;
+
+  uart->txCallback();
+}
+
+static void uartRxDmaComplete(void *context) {
+  auto *uart = static_cast<UartBus *>(context);
+  if (!uart) return;
+
+  auto *huart = &static_cast<HalUart *>(uart->halHandle())->handle;
+  huart->Instance->CR3 &= ~USART_CR3_DMAR;
+  huart->RxState = HAL_UART_STATE_READY;
+
+  // Copy from DMA-safe _pRxBuf to caller buffer (may be in DTCM)
+  if (uart->_readDmaBufPtr && uart->_readDmaBufLen > 0) {
+    std::memcpy(uart->_readDmaBufPtr, uart->rxBuf(), uart->_readDmaBufLen);
+    uart->_readDmaBufPtr = nullptr;
+    uart->_readDmaBufLen = 0;
+  }
+
+  uart->rxCallback();
+}
+
+// ── DMA TX ──
+RetVal UartBus::writeByteDMA(uint8_t byte) {
+#if defined(STM32H7)
+  if (_initialized && _dmaTx && _pTxBuf != nullptr) {
+    if (isBusy()) {
+      return RetVal::Busy;
+    }
+    _pTxBuf[0] = byte;
+    auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
+    UART_HANDLE.gState = HAL_UART_STATE_BUSY_TX;
+    _dmaTx->start(reinterpret_cast<uint32_t>(_pTxBuf),
+                  reinterpret_cast<uint32_t>(&huart->Instance->TDR), 1);
+    huart->Instance->CR3 |= USART_CR3_DMAT;
+    return RetVal::Ok;
+  }
+#endif
+  return RetVal::Error;
+}
+
+RetVal UartBus::writeBytesDMA(uint8_t *bytes, uint16_t num) {
+#if defined(STM32H7)
+  if (_initialized && _dmaTx && bytes && num > 0 && num <= _pTxBufSize && _pTxBuf != nullptr) {
+    if (isBusy()) {
+      return RetVal::Busy;
+    }
+    std::memcpy(_pTxBuf, bytes, num);
+    auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
+    UART_HANDLE.gState = HAL_UART_STATE_BUSY_TX;
+    _dmaTx->start(reinterpret_cast<uint32_t>(_pTxBuf),
+                  reinterpret_cast<uint32_t>(&huart->Instance->TDR), num);
+    huart->Instance->CR3 |= USART_CR3_DMAT;
+    return RetVal::Ok;
+  }
+#endif
+  return RetVal::Error;
+}
+
+RetVal UartBus::readByteDMA(uint8_t *byte) {
+#if defined(STM32H7)
+  if (_initialized && _dmaRx && byte && _pRxBuf != nullptr) {
+    if (isBusy()) {
+      return RetVal::Busy;
+    }
+    // Store caller buffer pointer; DMA into _pRxBuf (DMA-safe),
+    // then copy to caller buffer in completion callback
+    _readDmaBufPtr = byte;
+    _readDmaBufLen = 1;
+    auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
+    UART_HANDLE.RxState = HAL_UART_STATE_BUSY_RX;
+    _dmaRx->start(reinterpret_cast<uint32_t>(&huart->Instance->RDR),
+                  reinterpret_cast<uint32_t>(_pRxBuf), 1);
+    huart->Instance->CR3 |= USART_CR3_DMAR;
+    return RetVal::Ok;
+  }
+#endif
+  return RetVal::Error;
+}
+
+RetVal UartBus::readBytesDMA(uint8_t *bytes, uint16_t num) {
+#if defined(STM32H7)
+  if (_initialized && _dmaRx && bytes && num > 0 && num <= _pRxBufSize && _pRxBuf != nullptr) {
+    if (isBusy()) {
+      return RetVal::Busy;
+    }
+    // Store caller buffer pointer; DMA into _pRxBuf (DMA-safe),
+    // then copy to caller buffer in completion callback
+    _readDmaBufPtr = bytes;
+    _readDmaBufLen = num;
+    auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
+    UART_HANDLE.RxState = HAL_UART_STATE_BUSY_RX;
+    _dmaRx->start(reinterpret_cast<uint32_t>(&huart->Instance->RDR),
+                  reinterpret_cast<uint32_t>(_pRxBuf), num);
+    huart->Instance->CR3 |= USART_CR3_DMAR;
+    return RetVal::Ok;
+  }
+#endif
+  return RetVal::Error;
+}
+
 bool UartBus::isBusy() const {
 #if defined(STM32H7)
-  return UART_HANDLE.gState != HAL_UART_STATE_READY;
+  return UART_HANDLE.gState != HAL_UART_STATE_READY ||
+         UART_HANDLE.RxState != HAL_UART_STATE_READY;
 #else
   return false;
 #endif

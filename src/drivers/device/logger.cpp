@@ -36,13 +36,13 @@ Logger::Logger() : Device("logger") {}
 
 void Logger::init() {
 #if defined(LOGGER_UART)
-  _uart.setMode(Mode::Interrupt);
+  _uart.setMode(Mode::DirectMemAccess);
   _uart.init();
 #endif
   _initialized = true;
 
   LOG_INIT(LoggerTransmitBytes);
-  LOG_DEBUG("Hello world");
+  LOG_DEBUG("Logger Enabled!");
 }
 
 void Logger::LoggerTransmitBytes(uint8_t *data, uint16_t n) {

@@ -26,8 +26,6 @@
 #include "drivers/peripherals/gpio.h"
 #include "drivers/peripherals/nvic.h"
 
-#include <functional>
-
 #define NVIC_PROIRITY_BASE_WIDTH (2)
 #define NVIC_PROIRITY_SUB_WIDTH  (4 - NVIC_PROIRITY_BASE_WIDTH)
 
@@ -52,7 +50,8 @@ private:
 
   void *_context = nullptr;
 
-  using ExtiCallback = std::function<void(NvicExti *self)>;
+  // ── C-style ISR callback ──
+  typedef void (*ExtiCallback)(void *context);
   ExtiCallback _callback;
 
 public:
@@ -65,7 +64,7 @@ public:
   void setCallback(ExtiCallback cb, void *context = nullptr);
   void callback() {
     if (_callback) {
-      _callback(this);
+      _callback(_context);
     }
   }
   void release();

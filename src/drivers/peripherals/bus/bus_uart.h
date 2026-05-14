@@ -24,10 +24,10 @@
 #include "utils/utils.h"
 
 #include "drivers/peripherals/bus/bus.h"
+#include "drivers/peripherals/dma.h"
 #include "drivers/peripherals/gpio.h"
 
 #include <cstdint>
-#include <functional>
 
 namespace ThetaGP {
 namespace Drivers {
@@ -63,11 +63,18 @@ private:
   void *_halHandle = nullptr;
   void configPins();
 
-  using UartCallbackFunc = std::function<void(void *context)>;
+  // ── C-style ISR callback ──
+  typedef void (*UartCallbackFunc)(void *context);
   UartCallbackFunc _rxCallback;
   void *_rxContext = nullptr;
   UartCallbackFunc _txCallback;
   void *_txContext = nullptr;
+
+  // DMA channels (mode == DirectMemAccess)
+  DMA::DmaChannel *_dmaTx = nullptr;
+  DMA::DmaChannel *_dmaRx = nullptr;
+
+private:
 
   RetVal writeBytePolling(uint8_t byte) override;
   RetVal writeBytesPolling(uint8_t *bytes, uint16_t num) override;
@@ -79,11 +86,17 @@ private:
   RetVal readByteInterrupt(uint8_t *byte) override;
   RetVal readBytesInterrupt(uint8_t *bytes, uint16_t num) override;
 
+  // DMA mode
+  RetVal writeByteDMA(uint8_t byte) override;
+  RetVal writeBytesDMA(uint8_t *bytes, uint16_t num) override;
+  RetVal readByteDMA(uint8_t *byte) override;
+  RetVal readBytesDMA(uint8_t *bytes, uint16_t num) override;
+
 public:
   UartBus(Instance uartx, GPIO::PinDesc tx, GPIO::PinDesc rx,
           uint32_t baudrate = 115200);
   explicit UartBus(const UartDesc &desc);
-  ~UartBus() = default;
+  ~UartBus();
 
   void init() override;
   void enableClock() override;
@@ -103,6 +116,13 @@ public:
 
   bool isBusy() const;
   void *halHandle() const { return _halHandle; }
+
+  // DMA read buffer (accessed by static completion callback)
+  uint8_t *_readDmaBufPtr = nullptr;
+  uint16_t _readDmaBufLen = 0;
+
+  // DMA-safe RX buffer access (inherited protected member)
+  uint8_t *rxBuf() const { return _pRxBuf; }
 };
 
 } // namespace BUS

@@ -28,7 +28,6 @@
 #include "tusb.h"
 
 #include <cstdint>
-#include <functional>
 
 namespace ThetaGP::USB {
 
@@ -39,7 +38,8 @@ private:
 
   usbd_class_driver_t _drivers[2];
 
-  using CDCRxCallbackFunc = std::function<void(void *buffer, uint16_t len)>;
+  // ── C-style CDC RX callback ──
+  typedef void (*CDCRxCallbackFunc)(void *buffer, uint16_t len);
   CDCRxCallbackFunc _cdcRxCallback;
 
 public:
