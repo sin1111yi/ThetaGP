@@ -172,10 +172,6 @@ SpiBus::~SpiBus() {
 }
 
 void SpiBus::enableClock() {
-  enableClockHw();
-}
-
-void SpiBus::enableClockHw() const {
   RCC_PeriphCLKInitTypeDef periphClkInitStruct;
   std::memset(&periphClkInitStruct, 0, sizeof(RCC_PeriphCLKInitTypeDef));
 
@@ -233,7 +229,7 @@ void SpiBus::init() {
   std::memset(_pRxBuf, 0, _pTxBufSize * sizeof(uint8_t));
   std::memset(_pTxBuf, 0, _pRxBufSize * sizeof(uint8_t));
 
-  enableClockHw();
+  enableClock();
   configPins();
 #if defined(STM32H7)
   const auto spiIdx = static_cast<uint32_t>(_desc.spix);

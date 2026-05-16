@@ -54,7 +54,6 @@ private:
   SpiDesc _desc;
   void *_halHandle = nullptr;
 
-  void enableClockHw() const;
   void configPins();
 
   void enableTxDMA();
