@@ -31,6 +31,7 @@
 #include "taskmanager.h"
 
 #include "drivers/device/devicemgr.h"
+#include "drivers/device/flash/flash_w25qxx.h"
 #include "drivers/device/keypad.h"
 #include "drivers/device/systimer.h"
 #include "drivers/gpdriver/gpdrivermgr.h"
@@ -61,6 +62,8 @@ void ThetaGamepad::setup() {
       &Drivers::Device::SystemTimer::getInstance());
   Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::Logger::getInstance());
+  Drivers::Device::DeviceManager::getInstance().registerDevice(
+      &Drivers::Device::W25qxxFlash::getInstance());
 
   Drivers::Device::DeviceManager::getInstance().initDevices();
 

@@ -34,7 +34,7 @@ namespace Drivers {
 namespace Peripheral {
 namespace BUS {
 
-enum class Instance {
+enum class UartInstance {
 #if defined(STM32H7)
   Uart1,
   Uart2,
@@ -49,7 +49,7 @@ enum class Instance {
 };
 
 struct UartDesc {
-  Instance uartx;
+  UartInstance uartx;
 
   GPIO::PinDesc tx;
   GPIO::PinDesc rx;
@@ -77,7 +77,7 @@ private:
   RetVal readAsync(uint8_t *data, uint16_t len) override;
 
 public:
-  UartBus(Instance uartx, GPIO::PinDesc tx, GPIO::PinDesc rx,
+  UartBus(UartInstance uartx, GPIO::PinDesc tx, GPIO::PinDesc rx,
           uint32_t baudrate = 115200);
   explicit UartBus(const UartDesc &desc);
   ~UartBus() override;

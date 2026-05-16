@@ -30,7 +30,7 @@ namespace Drivers {
 namespace Peripheral {
 namespace BUS {
 
-enum class Instance {
+enum class SpiInstance {
   Spi1,
   Spi2,
   Spi3,
@@ -42,7 +42,7 @@ enum class Instance {
 enum class SpiBusIO { CLK, MOSI, MISO };
 
 struct SpiDesc {
-  Instance spix;
+  SpiInstance spix;
 
   GPIO::PinDesc busPinDesc[3];
   GPIO::PinDesc ncs;
@@ -54,7 +54,7 @@ private:
   SpiDesc _desc;
   void *_halHandle = nullptr;
 
-  void enableClock() const;
+  void enableClockHw() const;
   void configPins();
 
   void enableTxDMA();
@@ -68,7 +68,7 @@ private:
   // When DMA support is needed, override writeAsync/readAsync here.
 
 public:
-  SpiBus(Instance spix, GPIO::PinDesc clk, GPIO::PinDesc mosi,
+  SpiBus(SpiInstance spix, GPIO::PinDesc clk, GPIO::PinDesc mosi,
          GPIO::PinDesc miso, GPIO::PinDesc ncs);
   explicit SpiBus(const SpiDesc &desc);
   ~SpiBus() override;
