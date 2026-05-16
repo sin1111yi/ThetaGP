@@ -79,7 +79,13 @@ static void LogSetRootPath(void) {
 
 void LogPrint(LogLevel level, const char *file, uint16_t line,
               const char *format, va_list args) {
-  if (!(level & LOG_LV_ALWAYS) && level < g_LogLevel)
+  // When g_LogLevel has LOG_LV_ALWAYS set (Debug/Interface), show all
+  // regular levels (threshold = 0). Otherwise compare against the
+  // non-ALWAYS level value.
+  LogLevel effectiveThreshold = (g_LogLevel & LOG_LV_ALWAYS)
+                                    ? (LogLevel)0
+                                    : g_LogLevel;
+  if (!(level & LOG_LV_ALWAYS) && level < effectiveThreshold)
     return;
 
   const char *level_str = LogLevelHint(level);

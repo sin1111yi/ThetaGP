@@ -218,7 +218,7 @@ void SpiBus::configPins() {
   }
 
   Gpio gpio(_desc.ncs);
-  gpio.config(GPIO::Mode::AlternateFunctionPushPull, Pull::NoPull, Speed::High);
+  gpio.config(GPIO::Mode::OutputPushPull, Pull::NoPull, Speed::High);
   gpio.init();
 
 #endif
@@ -265,30 +265,47 @@ void SpiBus::init() {
 
 RetVal SpiBus::writeSync(const uint8_t *data, uint16_t num) {
 #if defined(STM32H7)
-  if (_initialized && data && num > 0 && num <= _pTxBufSize) {
-    // Convert to non-const for HAL (HAL_SPI_Transmit takes non-const)
-    std::memcpy(_pTxBuf, data, num);
-    if (HAL_SPI_Transmit(&HANDLE, _pTxBuf, num, HAL_MAX_DELAY) != HAL_OK) {
+  if (!_initialized || !data || num == 0)
+    return RetVal::InvalidParam;
+
+  uint16_t offset = 0;
+  while (offset < num) {
+    uint16_t remaining = num - offset;
+    uint16_t thisLen = (remaining < _pTxBufSize) ? remaining : _pTxBufSize;
+    std::memcpy(_pTxBuf, data + offset, thisLen);
+    if (HAL_SPI_Transmit(&HANDLE, _pTxBuf, thisLen, HAL_MAX_DELAY) != HAL_OK)
       return RetVal::Error;
-    }
-    return RetVal::Ok;
+    offset += thisLen;
   }
-#endif
+  return RetVal::Ok;
+#else
+  (void)data;
+  (void)num;
   return RetVal::Error;
+#endif
 }
 
 // ── Synchronous read (was readBytesPolling) ──
 
 RetVal SpiBus::readSync(uint8_t *data, uint16_t num) {
 #if defined(STM32H7)
-  if (_initialized && data && num > 0) {
-    if (HAL_SPI_Receive(&HANDLE, data, num, HAL_MAX_DELAY) != HAL_OK) {
+  if (!_initialized || !data || num == 0)
+    return RetVal::InvalidParam;
+
+  uint16_t offset = 0;
+  while (offset < num) {
+    uint16_t remaining = num - offset;
+    uint16_t thisLen = (remaining < _pRxBufSize) ? remaining : _pRxBufSize;
+    if (HAL_SPI_Receive(&HANDLE, data + offset, thisLen, HAL_MAX_DELAY) != HAL_OK)
       return RetVal::Error;
-    }
-    return RetVal::Ok;
+    offset += thisLen;
   }
-#endif
+  return RetVal::Ok;
+#else
+  (void)data;
+  (void)num;
   return RetVal::Error;
+#endif
 }
 
 // ── Full-duplex transfer (SPI-specific) ──
@@ -300,54 +317,52 @@ RetVal SpiBus::transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len) {
     return RetVal::InvalidParam;
   }
 
-  // Assert NCS (chip select) — output low
+  // Assert NCS (chip select) — output low for entire multi-chunk transfer
   Gpio ncs(_desc.ncs);
   ncs.reset();
 
-  if (txData != nullptr && rxData != nullptr) {
-    // Full-duplex: send txData, receive into rxData
-    if (len > _pTxBufSize) {
-      ncs.set();
-      return RetVal::InvalidParam;
+  // Determine chunk size (min of both buffers when full-duplex)
+  uint16_t chunkSize = _pTxBufSize;
+  if (rxData != nullptr && txData != nullptr && _pRxBufSize < _pTxBufSize)
+    chunkSize = _pRxBufSize;
+
+  uint16_t offset = 0;
+  while (offset < len) {
+    uint16_t remaining = len - offset;
+    uint16_t thisLen = (remaining < chunkSize) ? remaining : chunkSize;
+
+    if (txData != nullptr && rxData != nullptr) {
+      // Full-duplex: send txData, receive into rxData
+      std::memcpy(_pTxBuf, txData + offset, thisLen);
+      if (HAL_SPI_TransmitReceive(&HANDLE, _pTxBuf, rxData + offset, thisLen,
+                                  HAL_MAX_DELAY) != HAL_OK) {
+        ncs.set();
+        return RetVal::Error;
+      }
+    } else if (txData != nullptr) {
+      // TX only (MOSI only)
+      std::memcpy(_pTxBuf, txData + offset, thisLen);
+      if (HAL_SPI_Transmit(&HANDLE, _pTxBuf, thisLen, HAL_MAX_DELAY) != HAL_OK) {
+        ncs.set();
+        return RetVal::Error;
+      }
+    } else if (rxData != nullptr) {
+      // RX only (send dummy 0xFF to clock in data)
+      if (HAL_SPI_Receive(&HANDLE, rxData + offset, thisLen,
+                          HAL_MAX_DELAY) != HAL_OK) {
+        ncs.set();
+        return RetVal::Error;
+      }
+    } else {
+      // Both null: send dummy 0xFF bytes, discard RX
+      std::memset(_pTxBuf, 0xFF, thisLen);
+      if (HAL_SPI_Transmit(&HANDLE, _pTxBuf, thisLen, HAL_MAX_DELAY) != HAL_OK) {
+        ncs.set();
+        return RetVal::Error;
+      }
     }
-    std::memcpy(_pTxBuf, txData, len);
-    if (HAL_SPI_TransmitReceive(&HANDLE, _pTxBuf, rxData, len,
-                                HAL_MAX_DELAY) != HAL_OK) {
-      ncs.set();
-      return RetVal::Error;
-    }
-  } else if (txData != nullptr) {
-    // TX only (MOSI only)
-    if (len > _pTxBufSize) {
-      ncs.set();
-      return RetVal::InvalidParam;
-    }
-    std::memcpy(_pTxBuf, txData, len);
-    if (HAL_SPI_Transmit(&HANDLE, _pTxBuf, len, HAL_MAX_DELAY) != HAL_OK) {
-      ncs.set();
-      return RetVal::Error;
-    }
-  } else if (rxData != nullptr) {
-    // RX only (send dummy 0xFF to clock in data)
-    if (len > _pRxBufSize) {
-      ncs.set();
-      return RetVal::InvalidParam;
-    }
-    if (HAL_SPI_Receive(&HANDLE, rxData, len, HAL_MAX_DELAY) != HAL_OK) {
-      ncs.set();
-      return RetVal::Error;
-    }
-  } else {
-    // Both null: send dummy 0xFF bytes, discard RX
-    if (len > _pTxBufSize) {
-      ncs.set();
-      return RetVal::InvalidParam;
-    }
-    std::memset(_pTxBuf, 0xFF, len);
-    if (HAL_SPI_Transmit(&HANDLE, _pTxBuf, len, HAL_MAX_DELAY) != HAL_OK) {
-      ncs.set();
-      return RetVal::Error;
-    }
+
+    offset += thisLen;
   }
 
   // De-assert NCS (chip select) — output high

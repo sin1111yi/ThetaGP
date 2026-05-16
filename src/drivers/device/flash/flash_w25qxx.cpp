@@ -22,6 +22,7 @@
 #include "drivers/device/flash/flash_w25qxx.h"
 
 #include "drivers/peripherals/systick.h"
+#include "utils/log/log.h"
 
 #include <cstring>
 
@@ -103,16 +104,18 @@ uint32_t W25qxxFlash::readId() {
 
 void W25qxxFlash::init() {
 #if defined(FLASH_SPI)
-  // Increase SPI buffer to handle page-size transfers (cmd + addr + up to 256
-  // bytes of data)
   _spi.configBufSize(512, 512);
   _spi.init();
+  LOG_INFO("FLASH: SPI bus initialized");
 #endif
 
   reset();
+  LOG_INFO("FLASH: reset sent, waiting 10ms...");
   delay_ms(10);
+  LOG_INFO("FLASH: delay done, reading ID...");
 
   uint16_t chipId = static_cast<uint16_t>(readId() & 0xFFFF);
+  LOG_INFO("FLASH: chip ID = 0x%04X", chipId);
 
   // Determine flash size from chip ID
   uint32_t sizeMb = 0;
@@ -199,7 +202,7 @@ bool W25qxxFlash::read(uint32_t addr, uint8_t *data, uint32_t len) {
     // We'll use a local buffer and call transfer multiple times if the chunk
     // is small enough. For larger reads, we rely on the SPI buffer being
     // configured large enough (512 bytes in init).
-    uint8_t totalLen = cmdLen + chunkLen;
+    uint16_t totalLen = cmdLen + chunkLen;
 
     // Allocate on stack if small enough, otherwise... use a pattern
     // Since cmdLen <= 5 and chunkLen <= 256, totalLen <= 261 fits in configured
@@ -260,7 +263,7 @@ bool W25qxxFlash::write(uint32_t addr, const uint8_t *data, uint32_t len) {
 
     uint8_t addrBytes = _addrMode4Byte ? 4 : 3;
     uint8_t cmdLen = 1 + addrBytes;
-    uint8_t totalLen = cmdLen + writeLen;
+    uint16_t totalLen = cmdLen + writeLen;
 
     // Build full transfer buffer: cmd + addr + data
     uint8_t txBuf[261]; // max: 5 (cmd+4byte addr) + 256 (page)
