@@ -137,31 +137,6 @@ static void clearTeFlag(DMA_TypeDef *dma, uint32_t stream) {
 
 #endif
 
-// ── Per-stream ISR handler (pure C) ──
-
-#if defined(STM32H7)
-static void dmaIrqHandler(int idx) {
-  if (idx < 0 || idx >= static_cast<int>(DMA_STREAM_TOTAL)) return;
-
-  auto *dma = dmaControllers[idx];
-  uint32_t stream = llStreamId[idx];
-
-  if (checkTcFlag(dma, stream)) {
-    clearTcFlag(dma, stream);
-    if (dmaIsrTable[idx].handler) {
-      dmaIsrTable[idx].handler(dmaIsrTable[idx].context);
-    }
-  }
-
-  if (checkTeFlag(dma, stream)) {
-    clearTeFlag(dma, stream);
-    if (dmaIsrTable[idx].handler) {
-      dmaIsrTable[idx].handler(dmaIsrTable[idx].context);
-    }
-  }
-}
-#endif
-
 // ── DmaChannel ──
 
 DmaChannel::DmaChannel(Controller controller, Stream stream)
@@ -433,6 +408,27 @@ uint32_t DmaChannel::getRemainingCount() const {
 extern "C" {
 
 #if defined(STM32H7)
+
+static void dmaIrqHandler(int idx) {
+  if (idx < 0 || idx >= static_cast<int>(DMA_STREAM_TOTAL)) return;
+
+  auto *dma = dmaControllers[idx];
+  uint32_t stream = llStreamId[idx];
+
+  if (checkTcFlag(dma, stream)) {
+    clearTcFlag(dma, stream);
+    if (dmaIsrTable[idx].handler) {
+      dmaIsrTable[idx].handler(dmaIsrTable[idx].context);
+    }
+  }
+
+  if (checkTeFlag(dma, stream)) {
+    clearTeFlag(dma, stream);
+    if (dmaIsrTable[idx].handler) {
+      dmaIsrTable[idx].handler(dmaIsrTable[idx].context);
+    }
+  }
+}
 
 #define DMAx_StreamN_IRQHandler(name, idx) \
   void name(void) { dmaIrqHandler(idx); }

@@ -60,18 +60,32 @@ private:
   void enableTxDMA();
   void enableRxDMA();
 
-  RetVal writeBytesPolling(uint8_t *bytes, uint16_t num) override;
-  RetVal writeBytesDMA(uint8_t *bytes, uint16_t num) override;
-  RetVal readBytesPolling(uint8_t *bytes, uint16_t num) override;
-  RetVal readBytesDMA(uint8_t *bytes, uint16_t num) override;
+  // ── Subclass hooks (refactored: only Sync implemented) ──
+  RetVal writeSync(const uint8_t *data, uint16_t num) override;
+  RetVal readSync(uint8_t *data, uint16_t num) override;
+
+  // DMA stubs removed — default Bus::writeAsync/readAsync return Unsupported.
+  // When DMA support is needed, override writeAsync/readAsync here.
 
 public:
   SpiBus(Instance spix, GPIO::PinDesc clk, GPIO::PinDesc mosi,
          GPIO::PinDesc miso, GPIO::PinDesc ncs);
   explicit SpiBus(const SpiDesc &desc);
-  ~SpiBus() = default;
+  ~SpiBus() override;
+
+  SpiBus(const SpiBus &) = delete;
+  SpiBus &operator=(const SpiBus &) = delete;
 
   void configBufSize(uint32_t txBufSize, uint32_t rxBufSize);
+
+  /**
+   * @brief Full-duplex SPI transfer (MOSI + MISO simultaneously)
+   *
+   * This is SPI-specific and not part of the base Bus interface.
+   * Pass txData=nullptr to send dummy bytes (0xFF).
+   * Pass rxData=nullptr to discard received bytes.
+   */
+  RetVal transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len);
 
   void init() override;
   void enableClock() override;

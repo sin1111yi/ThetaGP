@@ -70,29 +70,20 @@ private:
   UartCallbackFunc _txCallback;
   void *_txContext = nullptr;
 
-  // Polling mode
-  RetVal writeBytePolling(uint8_t byte) override;
-  RetVal writeBytesPolling(uint8_t *bytes, uint16_t num) override;
-  RetVal readBytePolling(uint8_t *byte) override;
-  RetVal readBytesPolling(uint8_t *bytes, uint16_t num) override;
-
-  // Interrupt mode
-  RetVal writeByteInterrupt(uint8_t byte) override;
-  RetVal writeBytesInterrupt(uint8_t *bytes, uint16_t num) override;
-  RetVal readByteInterrupt(uint8_t *byte) override;
-  RetVal readBytesInterrupt(uint8_t *bytes, uint16_t num) override;
-
-  // DMA mode
-  RetVal writeByteDMA(uint8_t byte) override;
-  RetVal writeBytesDMA(uint8_t *bytes, uint16_t num) override;
-  RetVal readByteDMA(uint8_t *byte) override;
-  RetVal readBytesDMAIdle(uint8_t *bytes, uint16_t num) override;
+  // ── Subclass hooks (refactored base Bus interface) ──
+  RetVal writeSync(const uint8_t *data, uint16_t len) override;
+  RetVal readSync(uint8_t *data, uint16_t len) override;
+  RetVal writeAsync(const uint8_t *data, uint16_t len) override;
+  RetVal readAsync(uint8_t *data, uint16_t len) override;
 
 public:
   UartBus(Instance uartx, GPIO::PinDesc tx, GPIO::PinDesc rx,
           uint32_t baudrate = 115200);
   explicit UartBus(const UartDesc &desc);
-  ~UartBus();
+  ~UartBus() override;
+
+  UartBus(const UartBus &) = delete;
+  UartBus &operator=(const UartBus &) = delete;
 
   void init() override;
   void enableClock() override;
@@ -111,6 +102,8 @@ public:
   }
 
   bool isBusy() const;
+  bool isTxBusy() const;
+  bool isRxBusy() const;
   void *halHandle() const { return _halHandle; }
 
   // DMA read buffer (accessed by static completion callback)

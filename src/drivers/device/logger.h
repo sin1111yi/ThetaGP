@@ -55,13 +55,6 @@ private:
   Peripheral::BUS::UartBus _uart{UartInstance::LOGGER_UART_INIT(PERIPHERAL),
                                  LOGGER_UART_INIT(TX_PIN),
                                  LOGGER_UART_INIT(RX_PIN)};
-
-  // ── DMA echo ──
-  static void echoRxCallback(void *context);
-  static void echoTxCallback(void *context);
-  void startEchoRx();
-  void echoTx();
-  bool _echoPending = false;
 #else
   Peripheral::BUS::UartBus _uart;
 #endif
