@@ -88,7 +88,7 @@ protected:
 
 #define FLASH_SPI_INIT(name) CONTACT3(FLASH_SPI, _, name)
 
-  using SpiInstance = Drivers::Peripheral::BUS::Instance;
+  using SpiInstance = Drivers::Peripheral::BUS::SpiInstance;
   using Port = Drivers::Peripheral::GPIO::Port;
   using Pin = Drivers::Peripheral::GPIO::Pin;
 

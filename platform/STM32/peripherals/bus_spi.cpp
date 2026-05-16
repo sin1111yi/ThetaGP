@@ -50,61 +50,61 @@ struct HalSpi {
 #define HANDLE (static_cast<HalSpi *>(_halHandle)->handle)
 
 static constexpr struct {
-  Instance spi;
+  SpiInstance spi;
   Port port;
   Pin pin;
   uint8_t af;
 } spiPinAfTable[] = {
-    {Instance::Spi1, Port::PortA, Pin::Pin5, 5},
-    {Instance::Spi1, Port::PortA, Pin::Pin6, 5},
-    {Instance::Spi1, Port::PortA, Pin::Pin7, 5},
-    {Instance::Spi1, Port::PortB, Pin::Pin3, 5},
-    {Instance::Spi1, Port::PortB, Pin::Pin4, 5},
-    {Instance::Spi1, Port::PortB, Pin::Pin5, 5},
-    {Instance::Spi1, Port::PortE, Pin::Pin13, 5},
-    {Instance::Spi1, Port::PortE, Pin::Pin14, 5},
-    {Instance::Spi1, Port::PortE, Pin::Pin15, 5},
-    {Instance::Spi2, Port::PortB, Pin::Pin10, 5},
-    {Instance::Spi2, Port::PortB, Pin::Pin13, 5},
-    {Instance::Spi2, Port::PortB, Pin::Pin14, 5},
-    {Instance::Spi2, Port::PortB, Pin::Pin15, 5},
-    {Instance::Spi2, Port::PortC, Pin::Pin2, 5},
-    {Instance::Spi2, Port::PortD, Pin::Pin1, 6},
-    {Instance::Spi2, Port::PortD, Pin::Pin3, 6},
-    {Instance::Spi2, Port::PortD, Pin::Pin4, 6},
-    {Instance::Spi2, Port::PortI, Pin::Pin1, 5},
-    {Instance::Spi2, Port::PortI, Pin::Pin2, 5},
-    {Instance::Spi2, Port::PortI, Pin::Pin3, 5},
-    {Instance::Spi3, Port::PortB, Pin::Pin3, 6},
-    {Instance::Spi3, Port::PortB, Pin::Pin4, 6},
-    {Instance::Spi3, Port::PortB, Pin::Pin5, 6},
-    {Instance::Spi3, Port::PortC, Pin::Pin10, 6},
-    {Instance::Spi3, Port::PortC, Pin::Pin11, 6},
-    {Instance::Spi3, Port::PortC, Pin::Pin12, 6},
-    {Instance::Spi3, Port::PortD, Pin::Pin6, 5},
-    {Instance::Spi4, Port::PortE, Pin::Pin2, 5},
-    {Instance::Spi4, Port::PortE, Pin::Pin5, 5},
-    {Instance::Spi4, Port::PortE, Pin::Pin6, 5},
-    {Instance::Spi4, Port::PortE, Pin::Pin12, 5},
-    {Instance::Spi4, Port::PortE, Pin::Pin13, 5},
-    {Instance::Spi4, Port::PortE, Pin::Pin14, 5},
-    {Instance::Spi5, Port::PortF, Pin::Pin7, 5},
-    {Instance::Spi5, Port::PortF, Pin::Pin8, 5},
-    {Instance::Spi5, Port::PortF, Pin::Pin9, 5},
-    {Instance::Spi5, Port::PortH, Pin::Pin6, 5},
-    {Instance::Spi5, Port::PortH, Pin::Pin7, 5},
-    {Instance::Spi6, Port::PortG, Pin::Pin12, 5},
-    {Instance::Spi6, Port::PortG, Pin::Pin13, 5},
-    {Instance::Spi6, Port::PortG, Pin::Pin14, 5},
-    {Instance::Spi6, Port::PortB, Pin::Pin3, 7},
-    {Instance::Spi6, Port::PortB, Pin::Pin4, 7},
-    {Instance::Spi6, Port::PortB, Pin::Pin5, 7},
-    {Instance::Spi6, Port::PortA, Pin::Pin5, 8},
-    {Instance::Spi6, Port::PortA, Pin::Pin6, 8},
-    {Instance::Spi6, Port::PortA, Pin::Pin7, 8},
+    {SpiInstance::Spi1, Port::PortA, Pin::Pin5, 5},
+    {SpiInstance::Spi1, Port::PortA, Pin::Pin6, 5},
+    {SpiInstance::Spi1, Port::PortA, Pin::Pin7, 5},
+    {SpiInstance::Spi1, Port::PortB, Pin::Pin3, 5},
+    {SpiInstance::Spi1, Port::PortB, Pin::Pin4, 5},
+    {SpiInstance::Spi1, Port::PortB, Pin::Pin5, 5},
+    {SpiInstance::Spi1, Port::PortE, Pin::Pin13, 5},
+    {SpiInstance::Spi1, Port::PortE, Pin::Pin14, 5},
+    {SpiInstance::Spi1, Port::PortE, Pin::Pin15, 5},
+    {SpiInstance::Spi2, Port::PortB, Pin::Pin10, 5},
+    {SpiInstance::Spi2, Port::PortB, Pin::Pin13, 5},
+    {SpiInstance::Spi2, Port::PortB, Pin::Pin14, 5},
+    {SpiInstance::Spi2, Port::PortB, Pin::Pin15, 5},
+    {SpiInstance::Spi2, Port::PortC, Pin::Pin2, 5},
+    {SpiInstance::Spi2, Port::PortD, Pin::Pin1, 6},
+    {SpiInstance::Spi2, Port::PortD, Pin::Pin3, 6},
+    {SpiInstance::Spi2, Port::PortD, Pin::Pin4, 6},
+    {SpiInstance::Spi2, Port::PortI, Pin::Pin1, 5},
+    {SpiInstance::Spi2, Port::PortI, Pin::Pin2, 5},
+    {SpiInstance::Spi2, Port::PortI, Pin::Pin3, 5},
+    {SpiInstance::Spi3, Port::PortB, Pin::Pin3, 6},
+    {SpiInstance::Spi3, Port::PortB, Pin::Pin4, 6},
+    {SpiInstance::Spi3, Port::PortB, Pin::Pin5, 6},
+    {SpiInstance::Spi3, Port::PortC, Pin::Pin10, 6},
+    {SpiInstance::Spi3, Port::PortC, Pin::Pin11, 6},
+    {SpiInstance::Spi3, Port::PortC, Pin::Pin12, 6},
+    {SpiInstance::Spi3, Port::PortD, Pin::Pin6, 5},
+    {SpiInstance::Spi4, Port::PortE, Pin::Pin2, 5},
+    {SpiInstance::Spi4, Port::PortE, Pin::Pin5, 5},
+    {SpiInstance::Spi4, Port::PortE, Pin::Pin6, 5},
+    {SpiInstance::Spi4, Port::PortE, Pin::Pin12, 5},
+    {SpiInstance::Spi4, Port::PortE, Pin::Pin13, 5},
+    {SpiInstance::Spi4, Port::PortE, Pin::Pin14, 5},
+    {SpiInstance::Spi5, Port::PortF, Pin::Pin7, 5},
+    {SpiInstance::Spi5, Port::PortF, Pin::Pin8, 5},
+    {SpiInstance::Spi5, Port::PortF, Pin::Pin9, 5},
+    {SpiInstance::Spi5, Port::PortH, Pin::Pin6, 5},
+    {SpiInstance::Spi5, Port::PortH, Pin::Pin7, 5},
+    {SpiInstance::Spi6, Port::PortG, Pin::Pin12, 5},
+    {SpiInstance::Spi6, Port::PortG, Pin::Pin13, 5},
+    {SpiInstance::Spi6, Port::PortG, Pin::Pin14, 5},
+    {SpiInstance::Spi6, Port::PortB, Pin::Pin3, 7},
+    {SpiInstance::Spi6, Port::PortB, Pin::Pin4, 7},
+    {SpiInstance::Spi6, Port::PortB, Pin::Pin5, 7},
+    {SpiInstance::Spi6, Port::PortA, Pin::Pin5, 8},
+    {SpiInstance::Spi6, Port::PortA, Pin::Pin6, 8},
+    {SpiInstance::Spi6, Port::PortA, Pin::Pin7, 8},
 };
 
-static uint8_t lookupSpiAf(Instance spi, Port port, Pin pin) {
+static uint8_t lookupSpiAf(SpiInstance spi, Port port, Pin pin) {
   for (auto &entry : spiPinAfTable) {
     if (entry.spi == spi && entry.port == port && entry.pin == pin)
       return entry.af;
@@ -122,7 +122,7 @@ constexpr std::array<IRQn_Type, SPI_IRQ_GROUPS> spiGroupIRQn = {
     SPI1_IRQn, SPI2_IRQn, SPI3_IRQn, SPI4_IRQn, SPI5_IRQn, SPI6_IRQn};
 #endif
 
-void enableBusSPIClock(Instance spix) {
+void enableBusSPIClock(SpiInstance spix) {
   using ClockFunc = void (*)();
   static const std::array<ClockFunc, 6> clockEnableTable = {{
 #if defined(STM32H7)
@@ -141,7 +141,7 @@ void enableBusSPIClock(Instance spix) {
   }
 }
 
-SpiBus::SpiBus(Instance spix, PinDesc clk, PinDesc mosi, PinDesc miso,
+SpiBus::SpiBus(SpiInstance spix, PinDesc clk, PinDesc mosi, PinDesc miso,
                PinDesc ncs) {
   _halHandle = new HalSpi();
   setType(Type::Spi);
@@ -171,23 +171,27 @@ SpiBus::~SpiBus() {
   }
 }
 
-void SpiBus::enableClock() const {
+void SpiBus::enableClock() {
+  enableClockHw();
+}
+
+void SpiBus::enableClockHw() const {
   RCC_PeriphCLKInitTypeDef periphClkInitStruct;
   std::memset(&periphClkInitStruct, 0, sizeof(RCC_PeriphCLKInitTypeDef));
 
   switch (_desc.spix) {
-  case Instance::Spi1:
-  case Instance::Spi2:
-  case Instance::Spi3:
+  case SpiInstance::Spi1:
+  case SpiInstance::Spi2:
+  case SpiInstance::Spi3:
     periphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_SPI123;
     periphClkInitStruct.Spi123ClockSelection = RCC_SPI123CLKSOURCE_PLL2;
     break;
-  case Instance::Spi4:
-  case Instance::Spi5:
+  case SpiInstance::Spi4:
+  case SpiInstance::Spi5:
     periphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_SPI45;
     periphClkInitStruct.Spi45ClockSelection = RCC_SPI45CLKSOURCE_PLL2;
     break;
-  case Instance::Spi6:
+  case SpiInstance::Spi6:
     periphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_SPI6;
     periphClkInitStruct.Spi6ClockSelection = RCC_SPI6CLKSOURCE_PLL2;
     break;
@@ -229,7 +233,7 @@ void SpiBus::init() {
   std::memset(_pRxBuf, 0, _pTxBufSize * sizeof(uint8_t));
   std::memset(_pTxBuf, 0, _pRxBufSize * sizeof(uint8_t));
 
-  enableClock();
+  enableClockHw();
   configPins();
 #if defined(STM32H7)
   const auto spiIdx = static_cast<uint32_t>(_desc.spix);

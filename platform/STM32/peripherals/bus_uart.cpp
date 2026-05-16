@@ -52,34 +52,34 @@ struct HalUart {
 #define UART_HANDLE (static_cast<HalUart *>(_halHandle)->handle)
 
 static constexpr struct {
-  Instance uart;
+  UartInstance uart;
   Port port;
   Pin pin;
   uint8_t af;
 } uartPinAfTable[] = {
-    {Instance::Uart1, Port::PortA, Pin::Pin9, 7},
-    {Instance::Uart1, Port::PortA, Pin::Pin10, 7},
-    {Instance::Uart1, Port::PortB, Pin::Pin14, 4},
-    {Instance::Uart1, Port::PortB, Pin::Pin15, 4},
-    {Instance::Uart2, Port::PortA, Pin::Pin2, 7},
-    {Instance::Uart2, Port::PortA, Pin::Pin3, 7},
-    {Instance::Uart3, Port::PortB, Pin::Pin10, 7},
-    {Instance::Uart3, Port::PortB, Pin::Pin11, 7},
-    {Instance::Uart4, Port::PortA, Pin::Pin0, 8},
-    {Instance::Uart4, Port::PortA, Pin::Pin1, 8},
-    {Instance::Uart4, Port::PortB, Pin::Pin8, 8},
-    {Instance::Uart4, Port::PortB, Pin::Pin9, 8},
-    {Instance::Uart5, Port::PortB, Pin::Pin5, 8},
-    {Instance::Uart5, Port::PortB, Pin::Pin6, 8},
-    {Instance::Uart6, Port::PortC, Pin::Pin6, 7},
-    {Instance::Uart6, Port::PortC, Pin::Pin7, 7},
-    {Instance::Uart7, Port::PortF, Pin::Pin7, 7},
-    {Instance::Uart7, Port::PortF, Pin::Pin8, 7},
-    {Instance::Uart8, Port::PortJ, Pin::Pin8, 8},
-    {Instance::Uart8, Port::PortJ, Pin::Pin9, 8},
+    {UartInstance::Uart1, Port::PortA, Pin::Pin9, 7},
+    {UartInstance::Uart1, Port::PortA, Pin::Pin10, 7},
+    {UartInstance::Uart1, Port::PortB, Pin::Pin14, 4},
+    {UartInstance::Uart1, Port::PortB, Pin::Pin15, 4},
+    {UartInstance::Uart2, Port::PortA, Pin::Pin2, 7},
+    {UartInstance::Uart2, Port::PortA, Pin::Pin3, 7},
+    {UartInstance::Uart3, Port::PortB, Pin::Pin10, 7},
+    {UartInstance::Uart3, Port::PortB, Pin::Pin11, 7},
+    {UartInstance::Uart4, Port::PortA, Pin::Pin0, 8},
+    {UartInstance::Uart4, Port::PortA, Pin::Pin1, 8},
+    {UartInstance::Uart4, Port::PortB, Pin::Pin8, 8},
+    {UartInstance::Uart4, Port::PortB, Pin::Pin9, 8},
+    {UartInstance::Uart5, Port::PortB, Pin::Pin5, 8},
+    {UartInstance::Uart5, Port::PortB, Pin::Pin6, 8},
+    {UartInstance::Uart6, Port::PortC, Pin::Pin6, 7},
+    {UartInstance::Uart6, Port::PortC, Pin::Pin7, 7},
+    {UartInstance::Uart7, Port::PortF, Pin::Pin7, 7},
+    {UartInstance::Uart7, Port::PortF, Pin::Pin8, 7},
+    {UartInstance::Uart8, Port::PortJ, Pin::Pin8, 8},
+    {UartInstance::Uart8, Port::PortJ, Pin::Pin9, 8},
 };
 
-static uint8_t lookupUartAf(Instance uart, Port port, Pin pin) {
+static uint8_t lookupUartAf(UartInstance uart, Port port, Pin pin) {
   for (auto &entry : uartPinAfTable) {
     if (entry.uart == uart && entry.port == port && entry.pin == pin)
       return entry.af;
@@ -103,22 +103,22 @@ constexpr std::array<IRQn_Type, UART_IRQ_GROUPS> uartGroupIRQn = {
 #endif
 
 // ── Safe enum-to-array-index mapping ──
-static constexpr uint32_t uartInstanceIndex(Instance uart) noexcept {
+static constexpr uint32_t uartInstanceIndex(UartInstance uart) noexcept {
   switch (uart) {
-  case Instance::Uart1: return 0;
-  case Instance::Uart2: return 1;
-  case Instance::Uart3: return 2;
-  case Instance::Uart4: return 3;
-  case Instance::Uart5: return 4;
-  case Instance::Uart6: return 5;
-  case Instance::Uart7: return 6;
-  case Instance::Uart8: return 7;
+  case UartInstance::Uart1: return 0;
+  case UartInstance::Uart2: return 1;
+  case UartInstance::Uart3: return 2;
+  case UartInstance::Uart4: return 3;
+  case UartInstance::Uart5: return 4;
+  case UartInstance::Uart6: return 5;
+  case UartInstance::Uart7: return 6;
+  case UartInstance::Uart8: return 7;
   default:              return UINT32_MAX;
   }
 }
 
 #if defined(STM32H7)
-void enableBusUartClock(Instance uartx) {
+void enableBusUartClock(UartInstance uartx) {
   using ClockFunc = void (*)();
   static const std::array<ClockFunc, UART_IRQ_GROUPS> clockEnableTable = {{
       []() { __HAL_RCC_USART1_CLK_ENABLE(); },
@@ -138,7 +138,7 @@ void enableBusUartClock(Instance uartx) {
 }
 #endif
 
-UartBus::UartBus(Instance uartx, PinDesc tx, PinDesc rx, uint32_t baudrate) {
+UartBus::UartBus(UartInstance uartx, PinDesc tx, PinDesc rx, uint32_t baudrate) {
   _halHandle = new HalUart();
   setType(Type::Uart);
 
@@ -176,8 +176,8 @@ void UartBus::enableClock() {
   std::memset(&periphClkInitStruct, 0, sizeof(RCC_PeriphCLKInitTypeDef));
 
   switch (_desc.uartx) {
-  case Instance::Uart1:
-  case Instance::Uart6:
+  case UartInstance::Uart1:
+  case UartInstance::Uart6:
     periphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USART16;
     periphClkInitStruct.Usart16ClockSelection = RCC_USART16CLKSOURCE_D2PCLK2;
     break;
@@ -272,14 +272,14 @@ void UartBus::init() {
     uint32_t txRequestId = 0;
     uint32_t rxRequestId = 0;
     switch (_desc.uartx) {
-    case Instance::Uart1: txRequestId = DMA_REQUEST_USART1_TX; rxRequestId = DMA_REQUEST_USART1_RX; break;
-    case Instance::Uart2: txRequestId = DMA_REQUEST_USART2_TX; rxRequestId = DMA_REQUEST_USART2_RX; break;
-    case Instance::Uart3: txRequestId = DMA_REQUEST_USART3_TX; rxRequestId = DMA_REQUEST_USART3_RX; break;
-    case Instance::Uart4: txRequestId = DMA_REQUEST_UART4_TX;  rxRequestId = DMA_REQUEST_UART4_RX;  break;
-    case Instance::Uart5: txRequestId = DMA_REQUEST_UART5_TX;  rxRequestId = DMA_REQUEST_UART5_RX;  break;
-    case Instance::Uart6: txRequestId = DMA_REQUEST_USART6_TX; rxRequestId = DMA_REQUEST_USART6_RX; break;
-    case Instance::Uart7: txRequestId = DMA_REQUEST_UART7_TX;  rxRequestId = DMA_REQUEST_UART7_RX;  break;
-    case Instance::Uart8: txRequestId = DMA_REQUEST_UART8_TX;  rxRequestId = DMA_REQUEST_UART8_RX;  break;
+    case UartInstance::Uart1: txRequestId = DMA_REQUEST_USART1_TX; rxRequestId = DMA_REQUEST_USART1_RX; break;
+    case UartInstance::Uart2: txRequestId = DMA_REQUEST_USART2_TX; rxRequestId = DMA_REQUEST_USART2_RX; break;
+    case UartInstance::Uart3: txRequestId = DMA_REQUEST_USART3_TX; rxRequestId = DMA_REQUEST_USART3_RX; break;
+    case UartInstance::Uart4: txRequestId = DMA_REQUEST_UART4_TX;  rxRequestId = DMA_REQUEST_UART4_RX;  break;
+    case UartInstance::Uart5: txRequestId = DMA_REQUEST_UART5_TX;  rxRequestId = DMA_REQUEST_UART5_RX;  break;
+    case UartInstance::Uart6: txRequestId = DMA_REQUEST_USART6_TX; rxRequestId = DMA_REQUEST_USART6_RX; break;
+    case UartInstance::Uart7: txRequestId = DMA_REQUEST_UART7_TX;  rxRequestId = DMA_REQUEST_UART7_RX;  break;
+    case UartInstance::Uart8: txRequestId = DMA_REQUEST_UART8_TX;  rxRequestId = DMA_REQUEST_UART8_RX;  break;
     default: break;
     }
 
@@ -566,7 +566,7 @@ static void UARTx_IRQHandler(uint32_t uartIdx) {
   void name(void) { UARTx_IRQHandler(idx); }                                   \
   struct dummy
 
-#define UART(x) uartInstanceIndex(Instance::Uart##x)
+#define UART(x) uartInstanceIndex(UartInstance::Uart##x)
 
 uartIrqHandler(USART1_IRQHandler, UART(1));
 uartIrqHandler(USART2_IRQHandler, UART(2));
