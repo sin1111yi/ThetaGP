@@ -136,24 +136,6 @@ private:
   void reset();
 
   // ── Members ─────────────────────────────────────────────────
-#ifndef FLASH_SPI
-#error "flash & its spi bus must be defined in BoardConfig.h"
-#endif
-
-#define FLASH_SPI_INIT(name) CONTACT3(FLASH_SPI, _, name)
-
-  using SpiInstance = Drivers::Peripheral::BUS::Instance;
-  using Port = Drivers::Peripheral::GPIO::Port;
-  using Pin = Drivers::Peripheral::GPIO::Pin;
-
-  Drivers::Peripheral::BUS::SpiBus _spi{
-      SpiInstance::FLASH_SPI_INIT(PERIPHERAL),
-      FLASH_SPI_INIT(SCLK),
-      FLASH_SPI_INIT(MOSI),
-      FLASH_SPI_INIT(MISO),
-      FLASH_SPI_INIT(NCS)};
-
-  FlashInfo _info;
   bool _addrMode4Byte = false;
 };
 
