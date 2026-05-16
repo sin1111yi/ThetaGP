@@ -21,7 +21,13 @@
 
 /**
  * @file bus.cpp
- * @brief BUS base class implementation with memory pool support
+ * @brief BUS base class implementation
+ *
+ * After refactor:
+ *   - No function pointer dispatch (removed _writeByteFn etc.)
+ *   - No setupCallbacks() — dispatch is a simple switch in write()/read()
+ *   - All subclass hooks default to RetVal::Unsupported
+ *   - Single-byte write/read delegated to multi-byte variants
  */
 
 #include "build_info.h"
@@ -45,6 +51,7 @@ void Bus::allocBuf(uint32_t txSize, uint32_t rxSize) {
     _pTxBuf = static_cast<uint8_t *>(_busMem.allocTxBuffer(txSize));
     if (_pTxBuf != nullptr) {
       std::memset(_pTxBuf, 0, txSize);
+      _pTxBufSize = txSize;
     }
   }
 
@@ -52,6 +59,7 @@ void Bus::allocBuf(uint32_t txSize, uint32_t rxSize) {
     _pRxBuf = static_cast<uint8_t *>(_busMem.allocRxBuffer(rxSize));
     if (_pRxBuf != nullptr) {
       std::memset(_pRxBuf, 0, rxSize);
+      _pRxBufSize = rxSize;
     }
   }
 }
@@ -60,69 +68,76 @@ void Bus::freeBuf() {
   if (_pTxBuf != nullptr) {
     _busMem.freeTxBuffer(_pTxBuf);
     _pTxBuf = nullptr;
+    _pTxBufSize = 0;
   }
 
   if (_pRxBuf != nullptr) {
     _busMem.freeRxBuffer(_pRxBuf);
     _pRxBuf = nullptr;
+    _pRxBufSize = 0;
   }
 }
 
 void Bus::init() {
-  setupCallbacks();
   _initialized = true;
 }
 
-void Bus::setupCallbacks() {
-  switch (_mode) {
-  case Mode::Polling:
-    _writeByteFn = &Bus::writeBytePolling;
-    _writeBytesFn = &Bus::writeBytesPolling;
-    _readByteFn = &Bus::readBytePolling;
-    _readBytesFn = &Bus::readBytesPolling;
-    break;
-  case Mode::Interrupt:
-    _writeByteFn = &Bus::writeByteInterrupt;
-    _writeBytesFn = &Bus::writeBytesInterrupt;
-    _readByteFn = &Bus::readByteInterrupt;
-    _readBytesFn = &Bus::readBytesInterrupt;
-    break;
-  case Mode::DirectMemAccess:
-    _writeByteFn = &Bus::writeByteDMA;
-    _writeBytesFn = &Bus::writeBytesDMA;
-    _readByteFn = &Bus::readByteDMA;
-    _readBytesFn = &Bus::readBytesDMAIdle;
-    break;
-  }
+// ── Default subclass hooks (all return Unsupported) ──────────
+RetVal Bus::writeSync(const uint8_t *, uint16_t) {
+  return RetVal::Unsupported;
 }
 
-// Function-pointer dispatch for single-byte operations
+RetVal Bus::readSync(uint8_t *, uint16_t) {
+  return RetVal::Unsupported;
+}
+
+RetVal Bus::writeAsync(const uint8_t *, uint16_t) {
+  return RetVal::Unsupported;
+}
+
+RetVal Bus::readAsync(uint8_t *, uint16_t) {
+  return RetVal::Unsupported;
+}
+
+// ── Single-byte convenience (delegates to multi-byte) ────────
 RetVal Bus::write(uint8_t byte) {
-  if (_writeByteFn != nullptr) {
-    return (this->*_writeByteFn)(byte);
-  }
-  return RetVal::Error;
+  return write(&byte, 1);
 }
 
 RetVal Bus::read(uint8_t *byte) {
-  if (_readByteFn != nullptr) {
-    return (this->*_readByteFn)(byte);
+  if (byte == nullptr) return RetVal::InvalidParam;
+  return read(byte, 1);
+}
+
+// ── Multi-byte dispatch ──────────────────────────────────────
+RetVal Bus::write(const uint8_t *data, uint16_t len) {
+  if (data == nullptr || len == 0) {
+    return RetVal::InvalidParam;
   }
+
+  switch (_mode) {
+  case Mode::Synchronous:
+    return writeSync(data, len);
+  case Mode::Asynchronous:
+    return writeAsync(data, len);
+  }
+
   return RetVal::Error;
 }
 
-RetVal Bus::write(uint8_t *bytes, uint16_t num) {
-  if (bytes == nullptr || num == 0 || _writeBytesFn == nullptr) {
-    return RetVal::Error;
+RetVal Bus::read(uint8_t *data, uint16_t len) {
+  if (data == nullptr || len == 0) {
+    return RetVal::InvalidParam;
   }
-  return (this->*_writeBytesFn)(bytes, num);
-}
 
-RetVal Bus::read(uint8_t *bytes, uint16_t num) {
-  if (bytes == nullptr || num == 0 || _readBytesFn == nullptr) {
-    return RetVal::Error;
+  switch (_mode) {
+  case Mode::Synchronous:
+    return readSync(data, len);
+  case Mode::Asynchronous:
+    return readAsync(data, len);
   }
-  return (this->*_readBytesFn)(bytes, num);
+
+  return RetVal::Error;
 }
 
 } // namespace BUS

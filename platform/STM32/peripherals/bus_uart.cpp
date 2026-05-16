@@ -267,7 +267,7 @@ void UartBus::init() {
   HAL_NVIC_EnableIRQ(uartGroupIRQn[uartIdx]);
 
   // ── DMA mode setup ──
-  if (_mode == Mode::DirectMemAccess) {
+  if (_mode == Mode::Asynchronous) {
     uint32_t txRequestId = 0;
     uint32_t rxRequestId = 0;
     switch (_desc.uartx) {
@@ -317,59 +317,59 @@ void UartBus::init() {
   Bus::init();
 }
 
-RetVal UartBus::writeBytePolling(uint8_t byte) {
+// ── writeSync (LL polled write via TXE/TC flags) ──
+RetVal UartBus::writeSync(const uint8_t *data, uint16_t len) {
 #if defined(STM32H7)
-  if (_initialized) {
-    if (_pTxBuf != NULL && 1 <= _pTxBufSize) {
-      _pTxBuf[0] = byte;
-      if (HAL_UART_Transmit(&UART_HANDLE, _pTxBuf, 1, UART_POLL_TIMEOUT_MS) != HAL_OK) {
-        return RetVal::Error;
+  if (_initialized && data && len > 0) {
+    auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
+    USART_TypeDef *UARTx = huart->Instance;
+    // Approximate busy-wait iterations from timeout ms
+    const uint32_t timeout = UART_POLL_TIMEOUT_MS * 10000;
+
+    for (uint16_t i = 0; i < len; i++) {
+      uint32_t tick = 0;
+      while (!LL_USART_IsActiveFlag_TXE(UARTx)) {
+        if (++tick > timeout) {
+          return RetVal::Timeout;
+        }
       }
-      return RetVal::Ok;
+      LL_USART_TransmitData8(UARTx, data[i]);
     }
+
+    // Wait for TC (transmission complete) on the last byte
+    {
+      uint32_t tick = 0;
+      while (!LL_USART_IsActiveFlag_TC(UARTx)) {
+        if (++tick > timeout) {
+          return RetVal::Timeout;
+        }
+      }
+      LL_USART_ClearFlag_TC(UARTx);
+    }
+    return RetVal::Ok;
   }
 #endif
   return RetVal::Error;
 }
 
-RetVal UartBus::writeBytesPolling(uint8_t *bytes, uint16_t num) {
+// ── readSync (LL polled read via RXNE flag) ──
+RetVal UartBus::readSync(uint8_t *data, uint16_t len) {
 #if defined(STM32H7)
-  if (_initialized) {
-    if (_pTxBuf != NULL && num <= _pTxBufSize) {
-      std::memcpy(_pTxBuf, bytes, num * sizeof(uint8_t));
-      if (HAL_UART_Transmit(&UART_HANDLE, _pTxBuf, num, UART_POLL_TIMEOUT_MS) != HAL_OK) {
-        return RetVal::Error;
-      }
-      return RetVal::Ok;
-    }
-  }
-#endif
-  return RetVal::Error;
-}
+  if (_initialized && data && len > 0) {
+    auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
+    USART_TypeDef *UARTx = huart->Instance;
+    const uint32_t timeout = UART_POLL_TIMEOUT_MS * 10000;
 
-RetVal UartBus::readBytePolling(uint8_t *byte) {
-#if defined(STM32H7)
-  if (_initialized) {
-    if (_pRxBuf != NULL && 1 <= _pRxBufSize) {
-      if (HAL_OK == HAL_UART_Receive(&UART_HANDLE, _pRxBuf, 1, UART_POLL_TIMEOUT_MS)) {
-        *byte = _pRxBuf[0];
-        return RetVal::Ok;
+    for (uint16_t i = 0; i < len; i++) {
+      uint32_t tick = 0;
+      while (!LL_USART_IsActiveFlag_RXNE(UARTx)) {
+        if (++tick > timeout) {
+          return RetVal::Timeout;
+        }
       }
+      data[i] = LL_USART_ReceiveData8(UARTx);
     }
-  }
-#endif
-  return RetVal::Error;
-}
-
-RetVal UartBus::readBytesPolling(uint8_t *bytes, uint16_t num) {
-#if defined(STM32H7)
-  if (_initialized) {
-    if (_pRxBuf != NULL && num <= _pRxBufSize) {
-      if (HAL_OK == HAL_UART_Receive(&UART_HANDLE, _pRxBuf, num, UART_POLL_TIMEOUT_MS)) {
-        std::memcpy(bytes, _pRxBuf, num);
-        return RetVal::Ok;
-      }
-    }
+    return RetVal::Ok;
   }
 #endif
   return RetVal::Error;
@@ -385,58 +385,6 @@ void UartBus::setTxCallback(UartCallbackFunc cb, void *context) {
   _txContext = context;
 }
 
-RetVal UartBus::writeByteInterrupt(uint8_t byte) {
-#if defined(STM32H7)
-  if (_initialized) {
-    if (isBusy()) {
-      return RetVal::Busy;
-    }
-    _pTxBuf[0] = byte;
-    return HAL_UART_Transmit_IT(&UART_HANDLE, _pTxBuf, 1) == HAL_OK
-               ? RetVal::Ok
-               : RetVal::Error;
-  }
-#endif
-  return RetVal::Error;
-}
-
-RetVal UartBus::writeBytesInterrupt(uint8_t *bytes, uint16_t num) {
-#if defined(STM32H7)
-  if (_initialized && bytes && num > 0 && num <= _pTxBufSize) {
-    if (isBusy()) {
-      return RetVal::Busy;
-    }
-    std::memcpy(_pTxBuf, bytes, num);
-    return HAL_UART_Transmit_IT(&UART_HANDLE, _pTxBuf, num) == HAL_OK
-               ? RetVal::Ok
-               : RetVal::Error;
-  }
-#endif
-  return RetVal::Error;
-}
-
-RetVal UartBus::readByteInterrupt(uint8_t *byte) {
-#if defined(STM32H7)
-  if (_initialized && byte) {
-    return HAL_UART_Receive_IT(&UART_HANDLE, byte, 1) == HAL_OK
-               ? RetVal::Ok
-               : RetVal::Error;
-  }
-#endif
-  return RetVal::Error;
-}
-
-RetVal UartBus::readBytesInterrupt(uint8_t *bytes, uint16_t num) {
-#if defined(STM32H7)
-  if (_initialized && bytes && num > 0 && num <= _pRxBufSize) {
-    return HAL_UART_Receive_IT(&UART_HANDLE, bytes, num) == HAL_OK
-               ? RetVal::Ok
-               : RetVal::Error;
-  }
-#endif
-  return RetVal::Error;
-}
-
 // ── DMA mode ──
 // Uses LL-level DMA control directly: DmaChannel::start() to set up the
 // DMA stream, then manually enable UART CR3 bits to trigger DMA requests.
@@ -449,7 +397,6 @@ static void uartTxDmaComplete(void *context) {
 
   auto *huart = &static_cast<HalUart *>(uart->halHandle())->handle;
   huart->Instance->CR3 &= ~USART_CR3_DMAT;
-  huart->gState = HAL_UART_STATE_READY;
 
   uart->txCallback();
 }
@@ -462,7 +409,6 @@ static void uartRxDmaComplete(void *context) {
   huart->Instance->CR3 &= ~USART_CR3_DMAR;
   huart->Instance->CR1 &= ~USART_CR1_IDLEIE;
   uart->_idleDetectionEnabled = false;
-  huart->RxState = HAL_UART_STATE_READY;
 
   // Copy from DMA-safe _pRxBuf to caller buffer (may be in DTCM)
   if (uart->_readDmaBufPtr && uart->_readDmaBufLen > 0) {
@@ -473,18 +419,17 @@ static void uartRxDmaComplete(void *context) {
   }
 }
 
-// ── DMA TX ──
-RetVal UartBus::writeByteDMA(uint8_t byte) {
+// ── writeAsync (DMA write via LL CR3 DMAT control) ──
+RetVal UartBus::writeAsync(const uint8_t *data, uint16_t len) {
 #if defined(STM32H7)
-  if (_initialized && _dmaTx && _pTxBuf != nullptr) {
-    if (isBusy()) {
+  if (_initialized && _dmaTx && data && len > 0 && len <= _pTxBufSize && _pTxBuf != nullptr) {
+    if (isTxBusy()) {
       return RetVal::Busy;
     }
-    _pTxBuf[0] = byte;
+    std::memcpy(_pTxBuf, data, len);
     auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
-    UART_HANDLE.gState = HAL_UART_STATE_BUSY_TX;
     _dmaTx->start(reinterpret_cast<uint32_t>(_pTxBuf),
-                  reinterpret_cast<uint32_t>(&huart->Instance->TDR), 1);
+                  reinterpret_cast<uint32_t>(&huart->Instance->TDR), len);
     huart->Instance->CR3 |= USART_CR3_DMAT;
     return RetVal::Ok;
   }
@@ -492,62 +437,20 @@ RetVal UartBus::writeByteDMA(uint8_t byte) {
   return RetVal::Error;
 }
 
-RetVal UartBus::writeBytesDMA(uint8_t *bytes, uint16_t num) {
+// ── readAsync (DMA read + idle line detection, LL CR3 DMAR/CR1 IDLEIE) ──
+RetVal UartBus::readAsync(uint8_t *data, uint16_t len) {
 #if defined(STM32H7)
-  if (_initialized && _dmaTx && bytes && num > 0 && num <= _pTxBufSize && _pTxBuf != nullptr) {
-    if (isBusy()) {
+  if (_initialized && _dmaRx && data && len > 0 && len <= _pRxBufSize && _pRxBuf != nullptr) {
+    if (isRxBusy()) {
       return RetVal::Busy;
     }
-    std::memcpy(_pTxBuf, bytes, num);
-    auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
-    UART_HANDLE.gState = HAL_UART_STATE_BUSY_TX;
-    _dmaTx->start(reinterpret_cast<uint32_t>(_pTxBuf),
-                  reinterpret_cast<uint32_t>(&huart->Instance->TDR), num);
-    huart->Instance->CR3 |= USART_CR3_DMAT;
-    return RetVal::Ok;
-  }
-#endif
-  return RetVal::Error;
-}
-
-RetVal UartBus::readByteDMA(uint8_t *byte) {
-#if defined(STM32H7)
-  if (_initialized && _dmaRx && byte && _pRxBuf != nullptr) {
-    if (isBusy()) {
-      return RetVal::Busy;
-    }
-    // Store caller buffer pointer; DMA into _pRxBuf (DMA-safe),
-    // then copy to caller buffer in completion callback
-    _readDmaBufPtr = byte;
-    _readDmaBufLen = 1;
-    auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
-    UART_HANDLE.RxState = HAL_UART_STATE_BUSY_RX;
-    _dmaRx->start(reinterpret_cast<uint32_t>(&huart->Instance->RDR),
-                  reinterpret_cast<uint32_t>(_pRxBuf), 1);
-    huart->Instance->CR3 |= USART_CR3_DMAR;
-    return RetVal::Ok;
-  }
-#endif
-  return RetVal::Error;
-}
-
-RetVal UartBus::readBytesDMAIdle(uint8_t *bytes, uint16_t num) {
-#if defined(STM32H7)
-  if (_initialized && _dmaRx && bytes && num > 0 && num <= _pRxBufSize && _pRxBuf != nullptr) {
-    if (isBusy()) {
-      return RetVal::Busy;
-    }
-    // Store caller buffer pointer; DMA into _pRxBuf (DMA-safe),
-    // then copy to caller buffer in completion callback or idle ISR
-    _readDmaBufPtr = bytes;
-    _readDmaBufLen = num;
+    _readDmaBufPtr = data;
+    _readDmaBufLen = len;
     _idleDetectionEnabled = true;
     auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
-    UART_HANDLE.RxState = HAL_UART_STATE_BUSY_RX;
     _dmaRx->start(reinterpret_cast<uint32_t>(&huart->Instance->RDR),
-                  reinterpret_cast<uint32_t>(_pRxBuf), num);
+                  reinterpret_cast<uint32_t>(_pRxBuf), len);
     huart->Instance->CR3 |= USART_CR3_DMAR;
-    // Enable UART idle line detection interrupt
     huart->Instance->CR1 |= USART_CR1_IDLEIE;
     return RetVal::Ok;
   }
@@ -557,8 +460,23 @@ RetVal UartBus::readBytesDMAIdle(uint8_t *bytes, uint16_t num) {
 
 bool UartBus::isBusy() const {
 #if defined(STM32H7)
-  return UART_HANDLE.gState != HAL_UART_STATE_READY ||
-         UART_HANDLE.RxState != HAL_UART_STATE_READY;
+  return isTxBusy() || isRxBusy();
+#else
+  return false;
+#endif
+}
+
+bool UartBus::isTxBusy() const {
+#if defined(STM32H7)
+  return _dmaTx && _dmaTx->isBusy();
+#else
+  return false;
+#endif
+}
+
+bool UartBus::isRxBusy() const {
+#if defined(STM32H7)
+  return _dmaRx && _dmaRx->isBusy();
 #else
   return false;
 #endif
@@ -610,7 +528,6 @@ static void UARTx_IRQHandler(uint32_t uartIdx) {
     UARTx->CR3 &= ~USART_CR3_DMAR;
     UARTx->CR1 &= ~USART_CR1_IDLEIE;
     instance->_idleDetectionEnabled = false;
-    huart->RxState = HAL_UART_STATE_READY;
 
     uint16_t remaining = instance->_dmaRx->getRemainingCount();
     uint16_t received = (remaining < instance->_readDmaBufLen)
@@ -640,9 +557,6 @@ static void UARTx_IRQHandler(uint32_t uartIdx) {
   if ((isr & USART_ISR_TC) && (cr1 & USART_CR1_TCIE)) {
     UARTx->ICR = USART_ICR_TCCF;
     UARTx->CR1 &= ~USART_CR1_TCIE;
-    if (huart->Lock != HAL_LOCKED) {
-      huart->gState = HAL_UART_STATE_READY;
-    }
     instance->txCallback();
   }
 }

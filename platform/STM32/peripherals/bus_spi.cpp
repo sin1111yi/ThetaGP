@@ -15,6 +15,17 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+/**
+ * @file bus_spi.cpp (refactored)
+ * @brief SPI bus implementation for STM32H7
+ *
+ * After bus refactor:
+ *   - Removed: writeBytesDMA, readBytesDMA (empty stubs)
+ *   - Renamed: writeBytesPolling → writeSync
+ *   - Renamed: readBytesPolling → readSync
+ *   - Added: transfer() for full-duplex operation (fixes NCS assertion)
+ */
+
 #include "build_info.h"
 
 #include "drivers/peripherals/bus/bus.h"
@@ -30,6 +41,7 @@
 
 using namespace ThetaGP::Drivers::Peripheral::BUS;
 using namespace ThetaGP::Drivers::Peripheral::GPIO;
+using ThetaGP::RetVal;
 
 struct HalSpi {
   SPI_HandleTypeDef handle;
@@ -144,11 +156,19 @@ SpiBus::SpiBus(Instance spix, PinDesc clk, PinDesc mosi, PinDesc miso,
 }
 
 SpiBus::SpiBus(const SpiDesc &desc) {
+  _halHandle = new HalSpi();
   setType(Type::Spi);
   _desc = desc;
 
   _pTxBufSize = _bufSize;
   _pRxBufSize = _bufSize;
+}
+
+SpiBus::~SpiBus() {
+  if (_halHandle) {
+    delete static_cast<HalSpi *>(_halHandle);
+    _halHandle = nullptr;
+  }
 }
 
 void SpiBus::enableClock() const {
@@ -239,4 +259,105 @@ void SpiBus::init() {
 #endif
 
   Bus::init();
+}
+
+// ── Synchronous write (was writeBytesPolling) ──
+
+RetVal SpiBus::writeSync(const uint8_t *data, uint16_t num) {
+#if defined(STM32H7)
+  if (_initialized && data && num > 0 && num <= _pTxBufSize) {
+    // Convert to non-const for HAL (HAL_SPI_Transmit takes non-const)
+    std::memcpy(_pTxBuf, data, num);
+    if (HAL_SPI_Transmit(&HANDLE, _pTxBuf, num, HAL_MAX_DELAY) != HAL_OK) {
+      return RetVal::Error;
+    }
+    return RetVal::Ok;
+  }
+#endif
+  return RetVal::Error;
+}
+
+// ── Synchronous read (was readBytesPolling) ──
+
+RetVal SpiBus::readSync(uint8_t *data, uint16_t num) {
+#if defined(STM32H7)
+  if (_initialized && data && num > 0) {
+    if (HAL_SPI_Receive(&HANDLE, data, num, HAL_MAX_DELAY) != HAL_OK) {
+      return RetVal::Error;
+    }
+    return RetVal::Ok;
+  }
+#endif
+  return RetVal::Error;
+}
+
+// ── Full-duplex transfer (SPI-specific) ──
+// Handles NCS assertion/deassertion and simultaneous TX/RX.
+
+RetVal SpiBus::transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len) {
+#if defined(STM32H7)
+  if (!_initialized || len == 0) {
+    return RetVal::InvalidParam;
+  }
+
+  // Assert NCS (chip select) — output low
+  Gpio ncs(_desc.ncs);
+  ncs.reset();
+
+  if (txData != nullptr && rxData != nullptr) {
+    // Full-duplex: send txData, receive into rxData
+    if (len > _pTxBufSize) {
+      ncs.set();
+      return RetVal::InvalidParam;
+    }
+    std::memcpy(_pTxBuf, txData, len);
+    if (HAL_SPI_TransmitReceive(&HANDLE, _pTxBuf, rxData, len,
+                                HAL_MAX_DELAY) != HAL_OK) {
+      ncs.set();
+      return RetVal::Error;
+    }
+  } else if (txData != nullptr) {
+    // TX only (MOSI only)
+    if (len > _pTxBufSize) {
+      ncs.set();
+      return RetVal::InvalidParam;
+    }
+    std::memcpy(_pTxBuf, txData, len);
+    if (HAL_SPI_Transmit(&HANDLE, _pTxBuf, len, HAL_MAX_DELAY) != HAL_OK) {
+      ncs.set();
+      return RetVal::Error;
+    }
+  } else if (rxData != nullptr) {
+    // RX only (send dummy 0xFF to clock in data)
+    if (len > _pRxBufSize) {
+      ncs.set();
+      return RetVal::InvalidParam;
+    }
+    if (HAL_SPI_Receive(&HANDLE, rxData, len, HAL_MAX_DELAY) != HAL_OK) {
+      ncs.set();
+      return RetVal::Error;
+    }
+  } else {
+    // Both null: send dummy 0xFF bytes, discard RX
+    if (len > _pTxBufSize) {
+      ncs.set();
+      return RetVal::InvalidParam;
+    }
+    std::memset(_pTxBuf, 0xFF, len);
+    if (HAL_SPI_Transmit(&HANDLE, _pTxBuf, len, HAL_MAX_DELAY) != HAL_OK) {
+      ncs.set();
+      return RetVal::Error;
+    }
+  }
+
+  // De-assert NCS (chip select) — output high
+  ncs.set();
+
+  return RetVal::Ok;
+#else
+  (void)txData;
+  (void)rxData;
+  (void)len;
+  return RetVal::Error;
+#endif
 }
