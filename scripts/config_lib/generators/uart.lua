@@ -45,7 +45,7 @@ function M.generate(bus_config)
     end
 
     for i, config in ipairs(uart_list) do
-        local prefix = string.format("UART%d", i)
+        local prefix = string.format("UART_%d", i)
         local enum_val = PERIPHERAL_ENUM_MAP[config.peripheral]
 
         if config.bind and config.peripheral then

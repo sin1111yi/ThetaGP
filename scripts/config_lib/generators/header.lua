@@ -13,7 +13,7 @@ function M.generate_mcu_header(mcu_series)
     return MCU_HEADER_MAP[mcu_series] or ""
 end
 
-function M.generate_content(mcu_series, board_info, pin_lines, keypad_lines, usb_lines, uart_lines)
+function M.generate_content(mcu_series, board_info, pin_lines, keypad_lines, usb_lines, uart_lines, spi_lines)
     local mcu_header = M.generate_mcu_header(mcu_series)
 
     local content = [[
@@ -65,6 +65,13 @@ function M.generate_content(mcu_series, board_info, pin_lines, keypad_lines, usb
     if #uart_lines > 0 then
         content = content .. "\n"
         for _, line in ipairs(uart_lines) do
+            content = content .. line .. "\n"
+        end
+    end
+
+    if spi_lines and #spi_lines > 0 then
+        content = content .. "\n"
+        for _, line in ipairs(spi_lines) do
             content = content .. line .. "\n"
         end
     end

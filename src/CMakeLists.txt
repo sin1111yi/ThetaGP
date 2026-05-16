@@ -30,6 +30,9 @@ file(GLOB_RECURSE SRC_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cc"
 )
 
+# Exclude legacy C drivers that have been replaced by C++ versions
+list(FILTER SRC_FILES EXCLUDE REGEX ".*w25qxx\\.c$")
+
 # =============================================================================
 # TinyUSB Configuration
 # =============================================================================
