@@ -19,7 +19,7 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "drivers/device/flash/w25qxx_flash.h"
+#include "drivers/device/flash/flash_w25qxx.h"
 
 #include "drivers/peripherals/systick.h"
 
