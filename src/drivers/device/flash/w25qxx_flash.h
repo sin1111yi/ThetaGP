@@ -137,7 +137,7 @@ private:
 
   // ── Members ─────────────────────────────────────────────────
 #ifndef FLASH_SPI
-#error "FLASH_SPI must be defined in BoardConfig.h"
+#error "flash & its spi bus must be defined in BoardConfig.h"
 #endif
 
 #define FLASH_SPI_INIT(name) CONTACT3(FLASH_SPI, _, name)
