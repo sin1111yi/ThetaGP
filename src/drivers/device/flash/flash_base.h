@@ -21,7 +21,13 @@
 
 #pragma once
 
+#include "BoardConfig.h"
+#include "build_info.h"
+#include "utils/utils.h"
+
 #include "drivers/device/device.h"
+#include "drivers/peripherals/bus/bus_spi.h"
+#include "drivers/peripherals/gpio.h"
 
 #include <cstdint>
 
@@ -44,6 +50,8 @@ struct FlashInfo {
  *
  * Inherits Device and defines the common interface for flash memory
  * operations: read, write, erase, and identification.
+ * SPI bus members (_spi, _info) are defined here and shared by all
+ * derived flash drivers. FLASH_SPI must be defined in BoardConfig.h.
  */
 class FlashBase : public Device {
 public:
@@ -72,6 +80,26 @@ public:
 
   /** @brief Check if the flash is busy (erase/program in progress) */
   virtual bool isBusy() = 0;
+
+protected:
+#ifndef FLASH_SPI
+#error "FLASH_SPI must be defined in BoardConfig.h"
+#endif
+
+#define FLASH_SPI_INIT(name) CONTACT3(FLASH_SPI, _, name)
+
+  using SpiInstance = Drivers::Peripheral::BUS::Instance;
+  using Port = Drivers::Peripheral::GPIO::Port;
+  using Pin = Drivers::Peripheral::GPIO::Pin;
+
+  Drivers::Peripheral::BUS::SpiBus _spi{
+      SpiInstance::FLASH_SPI_INIT(PERIPHERAL),
+      FLASH_SPI_INIT(SCLK),
+      FLASH_SPI_INIT(MOSI),
+      FLASH_SPI_INIT(MISO),
+      FLASH_SPI_INIT(NCS)};
+
+  FlashInfo _info;
 };
 
 } // namespace ThetaGP::Drivers::Device
