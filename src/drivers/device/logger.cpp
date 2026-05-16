@@ -37,7 +37,7 @@ Logger::Logger() : Device("logger") {}
 
 void Logger::init() {
 #if defined(LOGGER_UART)
-  _uart.setMode(Mode::Asynchronous);
+  _uart.setMode(Mode::Synchronous);
   _uart.init();
 #endif
   _initialized = true;
