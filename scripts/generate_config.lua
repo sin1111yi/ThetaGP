@@ -136,6 +136,15 @@ if not ok then
 end
 log.print_info("  UART: ", #uart_lines, " macros generated")
 
+-- Generate SPI flash macros
+log.print_info("Generating SPI flash macros...")
+local ok, spi_lines = pcall(generators.spi.generate, necessary_config.bus)
+if not ok then
+    log.print_error("SPI flash generation failed: ", spi_lines)
+    os.exit(1)
+end
+log.print_info("  SPI flash: ", #spi_lines, " macros generated")
+
 -- =============================================================================
 -- Generate output files
 -- =============================================================================
@@ -150,7 +159,8 @@ local header_content = generators.header.generate_content(
     pin_lines,
     keypad_lines,
     usb_lines,
-    uart_lines
+    uart_lines,
+    spi_lines
 )
 
 -- Generate CMake content

@@ -66,6 +66,16 @@ M.BoardConfig = {
                     tx = "PA9",
                     rx = "PA10",
                 }
+            },
+            spi = {
+                {
+                    bind = "flash",
+                    peripheral = "SPI2",
+                    sclk = "PB13",
+                    mosi = "PB15",
+                    miso = "PB14",
+                    ncs = "PB12",
+                }
             }
         },
     },

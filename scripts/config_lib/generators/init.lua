@@ -24,6 +24,7 @@ M.header = require("generators.header")
 M.keypad = require("generators.keypad")
 M.usb = require("generators.usb")
 M.uart = require("generators.uart")
+M.spi = require("generators.spi")
 M.cmake = require("generators.cmake")
 
 return M
