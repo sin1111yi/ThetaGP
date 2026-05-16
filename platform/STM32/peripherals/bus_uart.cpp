@@ -23,6 +23,7 @@
 
 #include "drivers/peripherals/bus/bus_uart.h"
 #include "drivers/peripherals/dma.h"
+#include "drivers/peripherals/dma_manager.h"
 #include "drivers/peripherals/gpio.h"
 #include "drivers/peripherals/nvic.h"
 #include "drivers/peripherals/nvic_exti.h"
@@ -282,10 +283,10 @@ void UartBus::init() {
     default: break;
     }
 
-    // TX: DMA1 Stream1 — memory to peripheral (buffer → UART TDR)
-    _dmaTx = new DMA::DmaChannel(DMA::Controller::Dma1,
-                                 DMA::Stream::Stream1);
-    _dmaTx->setRequestId(txRequestId);
+    // TX
+    _dmaTx = DMA::DmaManager::getInstance().allocate(
+        DMA::Controller::Dma1, txRequestId);
+    if (!_dmaTx) { /* handle error */ }
     _dmaTx->configure({
         .direction = DMA::Direction::MemoryToPeripheral,
         .srcDataWidth = DMA::DataWidth::Byte,
@@ -297,10 +298,10 @@ void UartBus::init() {
     _dmaTx->setCallback(uartTxDmaComplete, this);
     _dmaTx->init();
 
-    // RX: DMA1 Stream0 — peripheral to memory (UART RDR → buffer)
-    _dmaRx = new DMA::DmaChannel(DMA::Controller::Dma1,
-                                 DMA::Stream::Stream0);
-    _dmaRx->setRequestId(rxRequestId);
+    // RX
+    _dmaRx = DMA::DmaManager::getInstance().allocate(
+        DMA::Controller::Dma1, rxRequestId);
+    if (!_dmaRx) { /* handle error */ }
     _dmaRx->configure({
         .direction = DMA::Direction::PeripheralToMemory,
         .srcDataWidth = DMA::DataWidth::Byte,
