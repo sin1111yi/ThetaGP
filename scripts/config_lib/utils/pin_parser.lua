@@ -83,6 +83,13 @@ function M.generate_pin_macro(name, pin_str)
     return string.format('#define %-28s {%s, %s}', name, port, pin)
 end
 
+-- Generate pin struct initializer string (no #define prefix)
+-- Input: "PB13" → Output: "{Port::PortB, Pin::Pin13}"
+function M.generate_pin_struct(pin_str)
+    local port, pin = M.parse_pin(pin_str)
+    return string.format('{%s, %s}', port, pin)
+end
+
 -- Generate pin array macro (multi-line format)
 function M.generate_pin_array_macro(macro_name, pins)
     local lines = {}

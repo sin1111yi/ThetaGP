@@ -33,52 +33,27 @@
 #include "build_info.h"
 
 #include "drivers/peripherals/bus/bus.h"
-#include "drivers/peripherals/bus/busmem.h"
-
-#include <cstring>
 
 namespace ThetaGP {
 namespace Drivers {
 namespace Peripheral {
 namespace BUS {
 
-Bus::Bus() : _busMem(BusMem::getInstance()) {}
+Bus::Bus() {}
 
-Bus::~Bus() { freeBuf(); }
+Bus::~Bus() {}
 
-void Bus::allocBuf(uint32_t txSize, uint32_t rxSize) {
-  if (_pTxBuf == nullptr) {
-    _pTxBuf = static_cast<uint8_t *>(_busMem.allocTxBuffer(txSize));
-    if (_pTxBuf != nullptr) {
-      std::memset(_pTxBuf, 0, txSize);
-      _pTxBufSize = txSize;
-    }
-  }
-
-  if (_pRxBuf == nullptr) {
-    _pRxBuf = static_cast<uint8_t *>(_busMem.allocRxBuffer(rxSize));
-    if (_pRxBuf != nullptr) {
-      std::memset(_pRxBuf, 0, rxSize);
-      _pRxBufSize = rxSize;
-    }
-  }
-}
-
-void Bus::freeBuf() {
-  if (_pTxBuf != nullptr) {
-    _busMem.freeTxBuffer(_pTxBuf);
-    _pTxBuf = nullptr;
-    _pTxBufSize = 0;
-  }
-
-  if (_pRxBuf != nullptr) {
-    _busMem.freeRxBuffer(_pRxBuf);
-    _pRxBuf = nullptr;
-    _pRxBufSize = 0;
-  }
+void Bus::setBuffers(uint8_t *txBuf, uint8_t *rxBuf, uint32_t size) {
+  _txBuf = txBuf;
+  _rxBuf = rxBuf;
+  _bufSize = size;
 }
 
 void Bus::init() {
+  if (_txBuf == nullptr && _rxBuf == nullptr) {
+    _initialized = false;
+    return;
+  }
   _initialized = true;
 }
 

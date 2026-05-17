@@ -19,17 +19,32 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "BoardConfig.h"
-
 #include "drivers/peripherals/bus/bus.h"
 #include "drivers/peripherals/peripheralsmgr.h"
 #include "drivers/peripherals/systick.h"
 #include "drivers/peripherals/timer.h"
 #include "drivers/peripherals/usbhw.h"
 
+#include "BoardConfig.h"
+
 #include "utils/log/log.h"
 
 using namespace ThetaGP::Drivers::Peripheral;
+using namespace ThetaGP::Drivers::Peripheral::BUS;
+using namespace ThetaGP::Drivers::Peripheral::GPIO;
+
+// Static desc tables from BoardConfig.h DESC_DATA macros
+#if defined(USE_SPI_COUNT) && USE_SPI_COUNT > 0
+static constexpr BUS::SpiDesc g_spiDescTable[USE_SPI_COUNT] = {
+    SPI_DESC_DATA
+};
+#endif
+
+#if defined(USE_UART_COUNT) && USE_UART_COUNT > 0
+static constexpr BUS::UartDesc g_uartDescTable[USE_UART_COUNT] = {
+    UART_DESC_DATA
+};
+#endif
 
 PeripheralsManager::PeripheralsManager() {}
 
@@ -45,8 +60,14 @@ void PeripheralsManager::initPeripherals() {
   cycleCounterInit();
 
   Drivers::Peripheral::NVIC_EXTI::NvicExti::preinit();
-  Drivers::Peripheral::BUS::BusMem::getInstance().init();
 
+  // SPI buses
+  initSpiBuses();
+
+  // UART buses
+  initUartBuses();
+
+  // USB (existing logic unchanged)
   USB::USBSpeed usbSpeed =
 #if defined(USBHW_SPEED_HS)
       USB::USBSpeed::UsbHighSpeed;
@@ -67,4 +88,30 @@ void PeripheralsManager::initPeripherals() {
 
   USB::HardwareUSB hwusb(usbSpeed, usbPeriph);
   hwusb.init();
+}
+
+void PeripheralsManager::initSpiBuses() {
+#if defined(USE_SPI_COUNT) && USE_SPI_COUNT > 0
+  for (int i = 0; i < USE_SPI_COUNT; i++) {
+    new (&_spiBuses[i]) BUS::SpiBus(g_spiDescTable[i]);
+  }
+  // Buses are constructed with buffer pointers = nullptr.
+  // Device init() must alloc via MempoolManager + setBuffers + bus.init().
+#endif
+}
+
+void PeripheralsManager::initUartBuses() {
+#if defined(USE_UART_COUNT) && USE_UART_COUNT > 0
+  for (int i = 0; i < USE_UART_COUNT; i++) {
+    new (&_uartBuses[i]) BUS::UartBus(g_uartDescTable[i]);
+  }
+#endif
+}
+
+BUS::SpiBus &PeripheralsManager::spiBus(int idx) {
+  return _spiBuses[idx];
+}
+
+BUS::UartBus &PeripheralsManager::uartBus(int idx) {
+  return _uartBuses[idx];
 }

@@ -82,9 +82,12 @@ void LogPrint(LogLevel level, const char *file, uint16_t line,
   // When g_LogLevel has LOG_LV_ALWAYS set (Debug/Interface), show all
   // regular levels (threshold = 0). Otherwise compare against the
   // non-ALWAYS level value.
-  LogLevel effectiveThreshold = (g_LogLevel & LOG_LV_ALWAYS)
-                                    ? (LogLevel)0
-                                    : g_LogLevel;
+  LogLevel effectiveThreshold =
+      (g_LogLevel & LOG_LV_ALWAYS) ? (LogLevel)0 : g_LogLevel;
+
+  if (!g_PrintCallback)
+    return;
+
   if (!(level & LOG_LV_ALWAYS) && level < effectiveThreshold)
     return;
 
@@ -97,11 +100,11 @@ void LogPrint(LogLevel level, const char *file, uint16_t line,
   int prefix_len = 0;
 
   if (level == LOG_LV(Interface)) {
-    prefix_len = snprintf(buffer, sizeof(buffer), "[%s:%u]: ",
-                          relative_file, line);
+    prefix_len =
+        snprintf(buffer, sizeof(buffer), "[%s:%u]: ", relative_file, line);
   } else {
-    prefix_len = snprintf(buffer, sizeof(buffer), "[%s][%s:%u]: ",
-                          level_str, relative_file, line);
+    prefix_len = snprintf(buffer, sizeof(buffer), "[%s][%s:%u]: ", level_str,
+                          relative_file, line);
   }
 
   if (prefix_len > 0 && prefix_len < (int)sizeof(buffer)) {
@@ -115,8 +118,7 @@ void LogPrint(LogLevel level, const char *file, uint16_t line,
     buffer[len] = '\0';
   }
 
-  if (g_PrintCallback != NULL)
-    g_PrintCallback((uint8_t *)buffer, len);
+  g_PrintCallback((uint8_t *)buffer, len);
 }
 
 void LogInit(LogPrintFunc func) {

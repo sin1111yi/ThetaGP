@@ -39,6 +39,14 @@ enum class SpiInstance {
   Spi6,
 };
 
+// Abstract bus index → PeripheralsManager array index
+#define BUS_SPI_1 0
+#define BUS_SPI_2 1
+#define BUS_SPI_3 2
+#define BUS_SPI_4 3
+#define BUS_SPI_5 4
+#define BUS_SPI_6 5
+
 enum class SpiBusIO { CLK, MOSI, MISO };
 
 struct SpiDesc {

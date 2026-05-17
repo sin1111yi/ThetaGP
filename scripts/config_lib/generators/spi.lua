@@ -1,22 +1,20 @@
 -- scripts/config_lib/generators/spi.lua
 --
 -- Generates SPI flash configuration macros from BoardConfig.lua bus.spi config
--- Format matches UART generator pattern:
---   #define FLASH_SPI SPI_2          ← bind_SPI = peripheral name (with underscore)
---   #define SPI_2_PERIPHERAL Spi2    ← peripheral name as prefix for sub-macros
---   #define SPI_2_SCLK {Port::PortB, Pin::Pin13}
+-- New format: DESCRIPTOR_TABLE arrays instead of individual pin macros.
+-- Bind macros use BUS_SPI_1 format.
 
 local utils = require("utils")
 
 local M = {}
 
 local PERIPHERAL_ENUM_MAP = {
-    SPI1 = "Spi1",
-    SPI2 = "Spi2",
-    SPI3 = "Spi3",
-    SPI4 = "Spi4",
-    SPI5 = "Spi5",
-    SPI6 = "Spi6",
+    SPI1 = "SpiInstance::Spi1",
+    SPI2 = "SpiInstance::Spi2",
+    SPI3 = "SpiInstance::Spi3",
+    SPI4 = "SpiInstance::Spi4",
+    SPI5 = "SpiInstance::Spi5",
+    SPI6 = "SpiInstance::Spi6",
 }
 
 function M.generate(bus_config)
@@ -31,44 +29,62 @@ function M.generate(bus_config)
         return lines
     end
 
-    for i, config in ipairs(flash_list) do
-        local enum_val = PERIPHERAL_ENUM_MAP[config.peripheral]
+    -- Count entries with bind for USE_SPI_COUNT
+    local bind_count = 0
+    for _, config in ipairs(flash_list) do
+        if config.bind then
+            bind_count = bind_count + 1
+        end
+    end
 
-        if config.bind and config.peripheral then
-            -- Transform peripheral name (SPI2 -> SPI_2) to avoid HAL conflict
-            local prefix = config.peripheral:gsub("^(SPI)(%d+)$", "SPI_%2")
+    -- USE_SPI_X macros (one per entry, regardless of bind)
+    for i, _ in ipairs(flash_list) do
+        local prefix = string.format("SPI_%d", i)
+        table.insert(lines, string.format('#define %-28s', 'USE_' .. prefix))
+    end
 
-            -- Bind macro: #define FLASH_SPI SPI_2
-            table.insert(lines, string.format(
-                '#define %-28s %s',
-                string.upper(config.bind) .. "_SPI",
-                prefix
-            ))
+    if bind_count > 0 then
+        table.insert(lines, '')
+        table.insert(lines, string.format('#define USE_SPI_COUNT %d', bind_count))
 
-            -- Sub-macros use peripheral name with underscore as prefix (e.g., SPI_2_*)
-
-            if config.peripheral and enum_val then
+        -- Bind macros (only for entries with bind)
+        table.insert(lines, '')
+        for i, config in ipairs(flash_list) do
+            if config.bind and config.peripheral then
                 table.insert(lines, string.format(
                     '#define %-28s %s',
-                    prefix .. "_PERIPHERAL",
-                    enum_val
+                    string.upper(config.bind) .. "_SPI",
+                    string.format("BUS_SPI_%d", i)
                 ))
             end
+        end
 
-            if config.sclk then
-                table.insert(lines, utils.generate_pin_macro(prefix .. "_SCLK", config.sclk))
+        -- Descriptor table entries
+        local desc_entries = {}
+        for i, config in ipairs(flash_list) do
+            if config.bind and config.peripheral then
+                local enum_val = PERIPHERAL_ENUM_MAP[config.peripheral]
+
+                local sclk_str = utils.generate_pin_struct(config.sclk)
+                local mosi_str = utils.generate_pin_struct(config.mosi)
+                local miso_str = utils.generate_pin_struct(config.miso)
+                local ncs_str = utils.generate_pin_struct(config.ncs)
+
+                local bus_pins = string.format('{%s, %s, %s}', sclk_str, mosi_str, miso_str)
+                local entry = string.format('    {%s, %s, %s}', enum_val, bus_pins, ncs_str)
+                table.insert(desc_entries, entry)
             end
+        end
 
-            if config.mosi then
-                table.insert(lines, utils.generate_pin_macro(prefix .. "_MOSI", config.mosi))
-            end
-
-            if config.miso then
-                table.insert(lines, utils.generate_pin_macro(prefix .. "_MISO", config.miso))
-            end
-
-            if config.ncs then
-                table.insert(lines, utils.generate_pin_macro(prefix .. "_NCS", config.ncs))
+        if #desc_entries > 0 then
+            table.insert(lines, '')
+            table.insert(lines, string.format('#define %-28s \\', 'SPI_DESC_DATA'))
+            for j, entry in ipairs(desc_entries) do
+                if j < #desc_entries then
+                    table.insert(lines, '    ' .. entry .. ', \\')
+                else
+                    table.insert(lines, '    ' .. entry)
+                end
             end
         end
     end

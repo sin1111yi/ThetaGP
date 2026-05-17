@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include "BoardConfig.h"
+#include "drivers/peripherals/bus/bus_spi.h"
 #include "drivers/peripherals/bus/bus_uart.h"
 #include "drivers/peripherals/timer.h"
 
@@ -37,7 +39,29 @@ public:
 
   void initPeripherals();
 
+  // ── Bus access ──
+  BUS::SpiBus &spiBus(int idx);
+  BUS::UartBus &uartBus(int idx);
+
+  // ── Timer ──
   TIMER::Instance reservedTimer();
+
+private:
+  // ── Bus instance storage (raw storage + placement new) ──
+#if defined(USE_SPI_COUNT) && USE_SPI_COUNT > 0
+  alignas(BUS::SpiBus) uint8_t _spiBufStorage[
+      sizeof(BUS::SpiBus) * USE_SPI_COUNT];
+  BUS::SpiBus *_spiBuses = reinterpret_cast<BUS::SpiBus *>(_spiBufStorage);
+#endif
+
+#if defined(USE_UART_COUNT) && USE_UART_COUNT > 0
+  alignas(BUS::UartBus) uint8_t _uartBufStorage[
+      sizeof(BUS::UartBus) * USE_UART_COUNT];
+  BUS::UartBus *_uartBuses = reinterpret_cast<BUS::UartBus *>(_uartBufStorage);
+#endif
+
+  void initSpiBuses();    // 从 SPI_DESC_DATA 构造
+  void initUartBuses();   // 从 UART_DESC_DATA 构造
 };
 
 } // namespace ThetaGP::Drivers::Peripheral

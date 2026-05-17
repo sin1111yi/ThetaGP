@@ -48,6 +48,16 @@ enum class UartInstance {
   UartNone = 0xFF,
 };
 
+// Abstract bus index → PeripheralsManager array index
+#define BUS_UART_1 0
+#define BUS_UART_2 1
+#define BUS_UART_3 2
+#define BUS_UART_4 3
+#define BUS_UART_5 4
+#define BUS_UART_6 5
+#define BUS_UART_7 6
+#define BUS_UART_8 7
+
 struct UartDesc {
   UartInstance uartx;
 
@@ -111,7 +121,7 @@ public:
   uint16_t _readDmaBufLen = 0;
 
   // DMA-safe RX buffer access (inherited protected member)
-  uint8_t *rxBuf() const { return _pRxBuf; }
+  uint8_t *rxBuf() const { return _rxBuf; }
 
   // DMA channels and state (accessed by static ISR callbacks in .cpp)
   DMA::DmaChannel *_dmaTx = nullptr;

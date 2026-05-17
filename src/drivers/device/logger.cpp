@@ -19,27 +19,32 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "drivers/device/logger.h"
+#include "drivers/device/devmem.h"
+#include "utils/mempool/mempoolmanager.h"
 #include "utils/log/log.h"
 
-#include "drivers/device/logger.h"
-#include "drivers/peripherals/bus/bus.h"
-#include "drivers/peripherals/bus/bus_uart.h"
-#include "utils/types.h"
+using namespace ThetaGP::Drivers::Device;
+using ThetaGP::Drivers::Peripheral::BUS::Mode;
 
-#include <cstdint>
-#include <cstring>
+static constexpr uint16_t LOG_BUF_SIZE = 256;
 
-using namespace ThetaGP::Drivers::Peripheral::BUS;
-
-namespace ThetaGP::Drivers::Device {
-
-Logger::Logger() : Device("logger") {}
+Logger::Logger()
+    : Device("logger"),
+      _uart(Drivers::Peripheral::PeripheralsManager::getInstance().uartBus(
+          LOGGER_UART)) {}
 
 void Logger::init() {
-#if defined(LOGGER_UART)
+  _txBuf = static_cast<uint8_t *>(
+      Mempool::MempoolManager::alloc(
+          Drivers::Device::DevMem::getInstance().poolId(), LOG_BUF_SIZE));
+  _rxBuf = static_cast<uint8_t *>(
+      Mempool::MempoolManager::alloc(
+          Drivers::Device::DevMem::getInstance().poolId(), LOG_BUF_SIZE));
+
+  _uart.setBuffers(_txBuf, _rxBuf, LOG_BUF_SIZE);
   _uart.setMode(Mode::Synchronous);
   _uart.init();
-#endif
   _initialized = true;
 
   LOG_INIT(LoggerTransmitBytes);
@@ -47,15 +52,11 @@ void Logger::init() {
 }
 
 void Logger::LoggerTransmitBytes(uint8_t *data, uint16_t n) {
-  auto &self = getInstance();
+  auto &logger = getInstance();
 
-  if (self.isInitialized()) {
-#if defined(LOGGER_UART)
-    if (self._uart.isTxBusy())
-      return;
-    self._uart.write(data, n);
-#endif
-  }
+  if (!logger._initialized)
+    return;
+  if (logger._uart.isTxBusy())
+    return;
+  logger._uart.write(data, n);
 }
-
-} // namespace ThetaGP::Drivers::Device
