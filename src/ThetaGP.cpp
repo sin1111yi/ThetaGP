@@ -22,6 +22,7 @@
 #include "BoardConfig.h"
 
 #include "drivers/device/logger.h"
+#include "drivers/device/devmem.h"
 #include "drivers/peripherals/peripheralsmgr.h"
 #include "gamepad/scheduler/scheduler.h"
 #include "utils/log/log.h"
@@ -31,7 +32,7 @@
 #include "taskmanager.h"
 
 #include "drivers/device/devicemgr.h"
-#include "drivers/device/flash/flash_w25qxx.h"
+#include "drivers/device/flash/flash_base.h"
 #include "drivers/device/keypad.h"
 #include "drivers/device/systimer.h"
 #include "drivers/gpdriver/gpdrivermgr.h"
@@ -52,6 +53,9 @@ void ThetaGamepad::setup() {
   // initialize Mempool Manager
   Mempool::MempoolManager::init();
 
+  // initialize Device memory pool (AXI SRAM)
+  Drivers::Device::DevMem::getInstance().init();
+
   // setup peripherals' driver
   Drivers::Peripheral::PeripheralsManager::getInstance().initPeripherals();
 
@@ -60,10 +64,12 @@ void ThetaGamepad::setup() {
       &Drivers::Device::Keypad::getInstance());
   Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::SystemTimer::getInstance());
+#ifdef LOGGER_UART
   Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::Logger::getInstance());
+#endif
   Drivers::Device::DeviceManager::getInstance().registerDevice(
-      &Drivers::Device::W25qxxFlash::getInstance());
+      &Drivers::Device::FlashBase::getInstance());
 
   Drivers::Device::DeviceManager::getInstance().initDevices();
 

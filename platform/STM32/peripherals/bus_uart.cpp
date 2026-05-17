@@ -219,11 +219,11 @@ static void uartTxDmaComplete(void *context);
 static void uartRxDmaComplete(void *context);
 
 void UartBus::init() {
-  _pTxBufSize = _bufSize;
-  _pRxBufSize = _bufSize;
-  allocBuf(_bufSize, _bufSize);
-  std::memset(_pRxBuf, 0, _pTxBufSize * sizeof(uint8_t));
-  std::memset(_pTxBuf, 0, _pRxBufSize * sizeof(uint8_t));
+  if (_txBuf == nullptr || _rxBuf == nullptr) {
+    return;
+  }
+  std::memset(_rxBuf, 0, _bufSize * sizeof(uint8_t));
+  std::memset(_txBuf, 0, _bufSize * sizeof(uint8_t));
 
   enableClock();
   configPins();
@@ -411,7 +411,7 @@ static void uartRxDmaComplete(void *context) {
   huart->Instance->CR1 &= ~USART_CR1_IDLEIE;
   uart->_idleDetectionEnabled = false;
 
-  // Copy from DMA-safe _pRxBuf to caller buffer (may be in DTCM)
+  // Copy from DMA-safe _rxBuf to caller buffer (may be in DTCM)
   if (uart->_readDmaBufPtr && uart->_readDmaBufLen > 0) {
     std::memcpy(uart->_readDmaBufPtr, uart->rxBuf(), uart->_readDmaBufLen);
     uart->_readDmaBufPtr = nullptr;
@@ -423,13 +423,13 @@ static void uartRxDmaComplete(void *context) {
 // ── writeAsync (DMA write via LL CR3 DMAT control) ──
 RetVal UartBus::writeAsync(const uint8_t *data, uint16_t len) {
 #if defined(STM32H7)
-  if (_initialized && _dmaTx && data && len > 0 && len <= _pTxBufSize && _pTxBuf != nullptr) {
+  if (_initialized && _dmaTx && data && len > 0 && len <= _bufSize && _txBuf != nullptr) {
     if (isTxBusy()) {
       return RetVal::Busy;
     }
-    std::memcpy(_pTxBuf, data, len);
+    std::memcpy(_txBuf, data, len);
     auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
-    _dmaTx->start(reinterpret_cast<uint32_t>(_pTxBuf),
+    _dmaTx->start(reinterpret_cast<uint32_t>(_txBuf),
                   reinterpret_cast<uint32_t>(&huart->Instance->TDR), len);
     huart->Instance->CR3 |= USART_CR3_DMAT;
     return RetVal::Ok;
@@ -441,7 +441,7 @@ RetVal UartBus::writeAsync(const uint8_t *data, uint16_t len) {
 // ── readAsync (DMA read + idle line detection, LL CR3 DMAR/CR1 IDLEIE) ──
 RetVal UartBus::readAsync(uint8_t *data, uint16_t len) {
 #if defined(STM32H7)
-  if (_initialized && _dmaRx && data && len > 0 && len <= _pRxBufSize && _pRxBuf != nullptr) {
+  if (_initialized && _dmaRx && data && len > 0 && len <= _bufSize && _rxBuf != nullptr) {
     if (isRxBusy()) {
       return RetVal::Busy;
     }
@@ -450,7 +450,7 @@ RetVal UartBus::readAsync(uint8_t *data, uint16_t len) {
     _idleDetectionEnabled = true;
     auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
     _dmaRx->start(reinterpret_cast<uint32_t>(&huart->Instance->RDR),
-                  reinterpret_cast<uint32_t>(_pRxBuf), len);
+                  reinterpret_cast<uint32_t>(_rxBuf), len);
     huart->Instance->CR3 |= USART_CR3_DMAR;
     huart->Instance->CR1 |= USART_CR1_IDLEIE;
     return RetVal::Ok;

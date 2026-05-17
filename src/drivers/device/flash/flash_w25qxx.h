@@ -21,14 +21,11 @@
 
 #pragma once
 
-#include "BoardConfig.h"
-
 #include "build_info.h"
 #include "utils/utils.h"
 
 #include "drivers/device/flash/flash_base.h"
 #include "drivers/peripherals/bus/bus_spi.h"
-#include "drivers/peripherals/gpio.h"
 
 namespace ThetaGP::Drivers::Device {
 
@@ -37,7 +34,7 @@ namespace ThetaGP::Drivers::Device {
  *
  * Replaces the old C-style w25qxx.c/w25qxx.h driver.
  * Uses SpiBus::transfer() for all SPI communication (full-duplex).
- * Singleton pattern, gated by FLASH_SPI compile-time macro.
+ * Buffers are allocated via MempoolManager + DevMem at init time.
  */
 class W25qxxFlash : public FlashBase {
 public:
@@ -137,6 +134,10 @@ private:
 
   // ── Members ─────────────────────────────────────────────────
   bool _addrMode4Byte = false;
+
+  // ── DMA-safe buffers (allocated via MempoolManager) ─────────
+  uint8_t *_txBuf = nullptr;
+  uint8_t *_rxBuf = nullptr;
 };
 
 } // namespace ThetaGP::Drivers::Device

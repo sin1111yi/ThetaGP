@@ -19,31 +19,21 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
-
 #include "build_info.h"
-#include "drivers/device/device.h"
-#include "drivers/peripherals/peripheralsmgr.h"
+#include "drivers/device/devmem.h"
 
-#include <cstdint>
+using namespace ThetaGP::Drivers::Device;
 
-namespace ThetaGP::Drivers::Device {
+#define DEV_MEMPOOL_SIZE (2048 + 2048 + 16)
 
-class Logger : public Device {
-public:
-  static Logger &getInstance() {
-    static Logger instance;
-    return instance;
+COMMON_CODE static uint8_t s_DevMempool[DEV_MEMPOOL_SIZE];
+
+bool DevMem::init() {
+  _poolId = ThetaGP::Mempool::MempoolManager::createPool(
+      s_DevMempool, DEV_MEMPOOL_SIZE, "DevPool");
+  if (_poolId == ThetaGP::Mempool::INVALID_POOL_ID) {
+    return false;
   }
-
-  void init() override;
-  static void LoggerTransmitBytes(uint8_t *data, uint16_t n);
-
-private:
-  Logger();
-  Peripheral::BUS::UartBus &_uart;
-  uint8_t *_txBuf = nullptr;
-  uint8_t *_rxBuf = nullptr;
-};
-
-} // namespace ThetaGP::Drivers::Device
+  _initialized = true;
+  return true;
+}

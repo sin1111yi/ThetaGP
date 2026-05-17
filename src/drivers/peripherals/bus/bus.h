@@ -38,8 +38,6 @@
 #include "utils/mempool/mempoolmanager.h"
 #include "utils/types.h"
 
-#include "drivers/peripherals/bus/busmem.h"
-
 namespace ThetaGP {
 namespace Drivers {
 namespace Peripheral {
@@ -79,6 +77,7 @@ public:
   Type type() const { return _type; }
   Mode mode() const { return _mode; }
   bool isInitialized() const { return _initialized; }
+  void setBuffers(uint8_t *txBuf, uint8_t *rxBuf, uint32_t size);
 
   // ── Lifecycle ───────────────────────────────────────────────
   virtual void init();
@@ -98,16 +97,10 @@ protected:
   Mode _mode = Mode::Synchronous;
   bool _initialized = false;
 
-  // DMA-safe buffers (DTCMRAM cannot be accessed by DMA on STM32H7,
-  // so subclasses use these pointers to DMA-capable memory regions)
-  uint8_t *_pTxBuf = nullptr;
-  uint8_t *_pRxBuf = nullptr;
-  BusMem &_busMem;
-  uint32_t _pTxBufSize = 0;
-  uint32_t _pRxBufSize = 0;
-
-  void allocBuf(uint32_t txSize, uint32_t rxSize);
-  void freeBuf();
+  // DMA-safe buffers (set externally via setBuffers())
+  uint8_t *_txBuf = nullptr;
+  uint8_t *_rxBuf = nullptr;
+  uint32_t _bufSize = 0;
 };
 
 } // namespace BUS

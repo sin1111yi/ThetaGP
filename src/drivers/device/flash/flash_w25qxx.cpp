@@ -21,8 +21,10 @@
 
 #include "drivers/device/flash/flash_w25qxx.h"
 
+#include "drivers/device/devmem.h"
 #include "drivers/peripherals/systick.h"
 #include "utils/log/log.h"
+#include "utils/mempool/mempoolmanager.h"
 
 #include <cstring>
 
@@ -33,7 +35,8 @@ namespace ThetaGP::Drivers::Device {
 // ── Constructor ───────────────────────────────────────────────
 
 W25qxxFlash::W25qxxFlash()
-    : FlashBase("w25qxx") {
+    : FlashBase("w25qxx",
+        Drivers::Peripheral::PeripheralsManager::getInstance().spiBus(FLASH_SPI)) {
 }
 
 // ── Internal helpers ──────────────────────────────────────────
@@ -103,11 +106,18 @@ uint32_t W25qxxFlash::readId() {
 // ── init ──────────────────────────────────────────────────────
 
 void W25qxxFlash::init() {
-#if defined(FLASH_SPI)
-  _spi.configBufSize(512, 512);
+  // Allocate DMA-safe buffers from DevMem pool via MempoolManager
+  constexpr uint32_t BUF_SIZE = 512;
+  _txBuf = static_cast<uint8_t *>(
+      ThetaGP::Mempool::MempoolManager::alloc(
+          ThetaGP::Drivers::Device::DevMem::getInstance().poolId(), BUF_SIZE));
+  _rxBuf = static_cast<uint8_t *>(
+      ThetaGP::Mempool::MempoolManager::alloc(
+          ThetaGP::Drivers::Device::DevMem::getInstance().poolId(), BUF_SIZE));
+
+  _spi.setBuffers(_txBuf, _rxBuf, BUF_SIZE);
   _spi.init();
   LOG_INFO("FLASH: SPI bus initialized");
-#endif
 
   reset();
   LOG_INFO("FLASH: reset sent, waiting 10ms...");
@@ -360,6 +370,11 @@ bool W25qxxFlash::eraseChip() {
 
 const FlashInfo &W25qxxFlash::getInfo() const {
   return _info;
+}
+
+// FlashBase singleton delegates to concrete flash driver
+FlashBase &FlashBase::getInstance() {
+  return W25qxxFlash::getInstance();
 }
 
 } // namespace ThetaGP::Drivers::Device

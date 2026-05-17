@@ -31,6 +31,6 @@ M.parse_pin = M.pin_parser.parse_pin
 M.validate_pin_format = M.pin_parser.validate_pin_format
 M.generate_pin_macro = M.pin_parser.generate_pin_macro
 M.generate_pin_array_macro = M.pin_parser.generate_pin_array_macro
-M.generate_pin_struct = M.pin_parser.generate_pin_macro
+M.generate_pin_struct = M.pin_parser.generate_pin_struct
 
 return M
