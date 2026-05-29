@@ -21,6 +21,7 @@
 
 #include "drivers/device/logger.h"
 #include "drivers/device/devmem.h"
+#include "drivers/peripherals/systick.h"
 #include "utils/mempool/mempoolmanager.h"
 #include "utils/log/log.h"
 
@@ -47,7 +48,7 @@ void Logger::init() {
   _uart.init();
   _initialized = true;
 
-  LOG_INIT(LoggerTransmitBytes);
+  LOG_INIT(LoggerTransmitBytes, delay_us);
   LOG_DEBUG("Logger Enabled!");
 }
 

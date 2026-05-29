@@ -25,6 +25,7 @@
 
 static const char *g_RootPath = NULL;
 static LogPrintFunc g_PrintCallback = NULL;
+static LogDelayFunc g_DelayCallback = NULL;
 static LogLevel g_LogLevel
 #if defined(THETAGP_CFG_LOG_LEVEL)
     = LOG_LV(THETAGP_CFG_LOG_LEVEL);
@@ -117,12 +118,17 @@ void LogPrint(LogLevel level, const char *file, uint16_t line,
     buffer[len++] = '\n';
     buffer[len] = '\0';
   }
+  // Optional delay before transmit (default ~100us)
+  if (g_DelayCallback) {
+    g_DelayCallback(100);
+  }
 
   g_PrintCallback((uint8_t *)buffer, len);
 }
 
-void LogInit(LogPrintFunc func) {
-  g_PrintCallback = func;
+void LogInit(LogPrintFunc printFunc, LogDelayFunc delayFunc) {
+  g_PrintCallback = printFunc;
+  g_DelayCallback = delayFunc;
   LogSetRootPath();
 }
 

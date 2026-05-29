@@ -61,7 +61,7 @@ void FrameLayer::processByte(uint8_t byte) {
             // Frame complete
             _rxBuf[_rxLen] = '\0';
             if (_frameCallback && _rxLen > 0) {
-                LOG_IF("FrameLayer: RX frame (%uB): %.*s",
+                LOG_DEBUG("FrameLayer: RX frame (%uB): %.*s",
                        _rxLen, _rxLen > 60 ? 60 : _rxLen, _rxBuf);
                 _frameCallback(_rxBuf);
             }
@@ -84,7 +84,7 @@ void FrameLayer::processByte(uint8_t byte) {
             // CRLF complete
             _rxBuf[_rxLen] = '\0';
             if (_frameCallback && _rxLen > 0) {
-                LOG_IF("FrameLayer: RX frame (%uB): %.*s",
+                LOG_DEBUG("FrameLayer: RX frame (%uB): %.*s",
                        _rxLen, _rxLen > 60 ? 60 : _rxLen, _rxBuf);
                 _frameCallback(_rxBuf);
             }
@@ -136,7 +136,7 @@ void FrameLayer::flushTx() {
         return;
     }
     tud_cdc_write_flush();
-    LOG_IF("FrameLayer: TX done (%u bytes)", _txPendingLen);
+    LOG_DEBUG("FrameLayer: TX done (%u bytes)", _txPendingLen);
     _txPending = false;
     _txPendingSent = 0;
 }

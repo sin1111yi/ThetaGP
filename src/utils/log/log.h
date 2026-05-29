@@ -44,6 +44,7 @@ typedef enum {
 } LogLevel;
 
 typedef void (*LogPrintFunc)(uint8_t *data, uint16_t len);
+typedef void (*LogDelayFunc)(uint32_t us);
 
 #if THETAGP_CFG_LOG_ENABLE
 
@@ -51,7 +52,7 @@ typedef void (*LogPrintFunc)(uint8_t *data, uint16_t len);
 #define LOG_BUFFER_SIZE 256
 #endif
 
-void LogInit(LogPrintFunc func);
+void LogInit(LogPrintFunc printFunc, LogDelayFunc delayFunc);
 void LogPrint(LogLevel level, const char *file, uint16_t line,
               const char *format, va_list args);
 
@@ -76,7 +77,10 @@ static inline void _LOG(LogLevel level, const char *file, uint16_t line,
 
 #else
 
-static inline void LogInit(LogPrintFunc func) { (void)func; }
+static inline void LogInit(LogPrintFunc printFunc, LogDelayFunc delayFunc) {
+    (void)printFunc;
+    (void)delayFunc;
+}
 
 #define LOG_DEBUG(...) ((void)0)
 #define LOG_INFO(...)  ((void)0)
