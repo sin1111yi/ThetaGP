@@ -1,0 +1,500 @@
+# =============================================================================
+# ThetaGP CDC JSON Protocol Definition
+# =============================================================================
+# This file is the SINGLE SOURCE OF TRUTH for all CDC JSON protocol types,
+# commands, constants, and error codes. The Python code generator
+# (scripts/gen_proto.py) reads this file and produces:
+#   - C++   headers (protocol/proto.h)   — device side
+#   - Rust  types   (protocol/proto.rs)   — Tauri backend
+#   - TS    types   (protocol/types.ts)   — frontend
+#
+# Format overview:
+#   [meta]            — project metadata
+#   [[types]]         — shared data structures (structs)
+#   [[enums]]         — enumeration types
+#   [[commands]]      — per-command definitions
+#   [error_codes]     — global error codes
+#   [domains]         — domain prefix registry
+#   [[async_messages]] — device-initiated async message definitions
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Meta
+# ---------------------------------------------------------------------------
+[meta]
+name = "ThetaGP CDC JSON Protocol"
+version = "1.0"
+description = "CDC ACM JSON command protocol for ThetaGP embedded gamepad"
+
+# ---------------------------------------------------------------------------
+# Domains
+# ---------------------------------------------------------------------------
+[domains]
+sys = "System commands (ping, reset, DFU)"
+test = "Test and injection commands"
+config = "Configuration commands (reserved)"
+
+# ---------------------------------------------------------------------------
+# Global Error Codes
+# ---------------------------------------------------------------------------
+[error_codes]
+ERR_NONE            = { code = 0,  description = "Success (internal only)" }
+ERR_UNKNOWN_CMD     = { code = 1,  description = "Unknown command name" }
+ERR_INVALID_PARAM   = { code = 2,  description = "Invalid parameter value" }
+ERR_INTERNAL        = { code = 3,  description = "Device internal error" }
+ERR_BUSY            = { code = 4,  description = "Device busy, retry later" }
+ERR_QUEUE_FULL      = { code = 5,  description = "Inject queue is full" }
+ERR_NOT_SUPPORTED   = { code = 6,  description = "Command not supported in current state" }
+ERR_BUFFER_OVERFLOW = { code = 7,  description = "Response too long to send" }
+
+# ---------------------------------------------------------------------------
+# Enumerations
+# ---------------------------------------------------------------------------
+
+[[enums]]
+name = "TestMode"
+description = "Test injection mode"
+values = [
+  { name = "PASS_THRU", value = 0, description = "Pass-through mode (default)" },
+  { name = "INJECT",    value = 1, description = "Inject mode (consumes queue)" },
+  { name = "RECORD",    value = 2, description = "Record mode (captures history)" },
+]
+
+[[enums]]
+name = "InjectPoint"
+description = "Injection point identifier"
+values = [
+  { name = "GAMEPAD_STATE", value = 0, description = "GamepadRawInput hook" },
+  { name = "HID_REPORT",    value = 1, description = "HIDReport hook" },
+  { name = "ALL",           value = 2, description = "All points" },
+]
+
+[[enums]]
+name = "AsyncMsgType"
+description = "Device-initiated async message type"
+values = [
+  { name = "HISTORY_FULL",     value = 0, description = "History ring buffer overflow" },
+  { name = "INJECT_DEPLETED",  value = 1, description = "Inject queue consumed" },
+  { name = "ERROR",            value = 2, description = "Internal error notification" },
+]
+
+# ---------------------------------------------------------------------------
+# Type definitions
+# ---------------------------------------------------------------------------
+
+[[types]]
+name = "GamepadRawInput"
+namespace = "ThetaGP::Gamepad"
+description = "Gamepad raw input state (buttons + dpad + analog sticks + triggers)"
+codebase_owned = true
+fields = [
+  { name = "buttons",       type = "u32", json = "buttons",       description = "32-bit button mask" },
+  { name = "dpad",          type = "u8",  json = "dpad",          description = "D-pad 4-bit value (0-15)" },
+  { name = "dpadOriginal", type = "u8",  json = "dpad_original", description = "Original d-pad before SOCD cleaning" },
+  { name = "aux",           type = "u16", json = "aux",           description = "AUX state (function button etc.)" },
+  { name = "lx",            type = "u16", json = "lx",            description = "Left stick X (0-65535)" },
+  { name = "ly",            type = "u16", json = "ly",            description = "Left stick Y (0-65535)" },
+  { name = "rx",            type = "u16", json = "rx",            description = "Right stick X (0-65535)" },
+  { name = "ry",            type = "u16", json = "ry",            description = "Right stick Y (0-65535)" },
+  { name = "lt",            type = "u8",  json = "lt",            description = "Left trigger (0-255)" },
+  { name = "rt",            type = "u8",  json = "rt",            description = "Right trigger (0-255)" },
+]
+
+[[types]]
+name = "HIDReport"
+namespace = "ThetaGP"
+description = "HID gamepad report sent over USB (8-bit analog, 4-bit hat switch)"
+codebase_owned = true
+fields = [
+  { name = "buttons",   type = "u32", json = "buttons",   description = "32-bit button mask" },
+  { name = "direction", type = "u8",  json = "dpad",      description = "HAT switch value (8=center, bitfield in actual HIDReport struct)" },
+  { name = "dummy",     type = "u8",  json = "",           description = "Padding bits (4-bit), internal", omit_in_serialize = true },
+  { name = "l_x_axis",  type = "u8",  json = "l_x_axis",  description = "Left stick X (0-255)" },
+  { name = "l_y_axis",  type = "u8",  json = "l_y_axis",  description = "Left stick Y (0-255)" },
+  { name = "r_x_axis",  type = "u8",  json = "r_x_axis",  description = "Right stick X (0-255)" },
+  { name = "r_y_axis",  type = "u8",  json = "r_y_axis",  description = "Right stick Y (0-255)" },
+]
+
+[[types]]
+name = "FirmwareInfo"
+namespace = "ThetaGP"
+description = "Device firmware version information"
+fields = [
+  { name = "board",      type = "string", json = "board",      description = "Board name (e.g. BoringTechH743)" },
+  { name = "version",    type = "string", json = "version",    description = "Semantic version string" },
+  { name = "build_date", type = "string", json = "build_date", description = "Build date" },
+  { name = "build_time", type = "string", json = "build_time", description = "Build time" },
+]
+
+[[types]]
+name = "GamepadRawInputEntry"
+namespace = "ThetaGP::Test"
+description = "Single gamepad history entry"
+fields = [
+  { name = "index",       type = "u8",  json = "index",        description = "Entry index" },
+  { name = "timestampUs", type = "u32", json = "timestamp_us", description = "Microsecond timestamp", omit_in_serialize = true },
+  { name = "buttons",     type = "u32", json = "buttons",      description = "32-bit button mask" },
+  { name = "dpad",        type = "u8",  json = "dpad",         description = "D-pad 4-bit value" },
+  { name = "lx",          type = "u16", json = "lx",           description = "Left stick X" },
+  { name = "ly",          type = "u16", json = "ly",           description = "Left stick Y" },
+  { name = "rx",          type = "u16", json = "rx",           description = "Right stick X" },
+  { name = "ry",          type = "u16", json = "ry",           description = "Right stick Y" },
+  { name = "lt",          type = "u8",  json = "lt",           description = "Left trigger" },
+  { name = "rt",          type = "u8",  json = "rt",           description = "Right trigger" },
+]
+
+[[types]]
+name = "HIDReportEntry"
+namespace = "ThetaGP::Test"
+description = "Single HID history entry"
+fields = [
+  { name = "index",       type = "u8",  json = "index",        description = "Entry index" },
+  { name = "timestampUs", type = "u32", json = "timestamp_us", description = "Microsecond timestamp", omit_in_serialize = true },
+  { name = "buttons",     type = "u32", json = "buttons",      description = "32-bit button mask" },
+  { name = "direction",   type = "u8",  json = "dpad",         description = "HAT switch value" },
+  { name = "l_x_axis",    type = "u8",  json = "l_x_axis",     description = "Left stick X" },
+  { name = "l_y_axis",    type = "u8",  json = "l_y_axis",     description = "Left stick Y" },
+  { name = "r_x_axis",    type = "u8",  json = "r_x_axis",     description = "Right stick X" },
+  { name = "r_y_axis",    type = "u8",  json = "r_y_axis",     description = "Right stick Y" },
+]
+
+[[types]]
+name = "TestStatus"
+namespace = "ThetaGP::Test"
+description = "Full test status snapshot"
+fields = [
+  { name = "mode",                   type = "u8",     json = "mode",                   description = "TestMode numeric value" },
+  { name = "mode_name",              type = "string", json = "mode_name",              description = "Human-readable mode name" },
+  { name = "override_gamepad_state", type = "bool",   json = "override_gamepad_state", description = "Override enabled for gamepad" },
+  { name = "override_hid_report",    type = "bool",   json = "override_hid_report",    description = "Override enabled for HID" },
+  { name = "gamepad_history_count",  type = "u8",     json = "gamepad_history_count",  description = "Gamepad history entries" },
+  { name = "hid_history_count",      type = "u8",     json = "hid_history_count",      description = "HID history entries" },
+  { name = "gamepad_inject_queued",  type = "u8",     json = "gamepad_inject_queued",  description = "Gamepad inject queue depth" },
+  { name = "hid_inject_queued",      type = "u8",     json = "hid_inject_queued",      description = "HID inject queue depth" },
+]
+
+# ===========================================================================
+# Commands
+# ===========================================================================
+
+# --- sys domain ---
+
+[[commands]]
+name = "ping"
+domain = "sys"
+description = "Connectivity health check"
+request = []
+response = []
+error_codes = []
+
+[[commands]]
+name = "get_fw_version"
+domain = "sys"
+description = "Read firmware version and build info"
+request = []
+response = [
+  { name = "board",      type = "string", json = "board" },
+  { name = "version",    type = "string", json = "version" },
+  { name = "build_date", type = "string", json = "build_date" },
+  { name = "build_time", type = "string", json = "build_time" },
+]
+error_codes = []
+
+[[commands]]
+name = "reset"
+domain = "sys"
+description = "Trigger NVIC system reset"
+request = []
+response = []
+error_codes = []
+
+[[commands]]
+name = "enter_dfu"
+domain = "sys"
+description = "Enter DFU bootloader mode"
+request = []
+response = []
+error_codes = [
+  { name = "ERR_NOT_SUPPORTED", code = 6, description = "DFU not yet implemented" },
+]
+
+# --- test domain ---
+
+[[commands]]
+name = "inject_gamepad_state"
+domain = "test"
+description = "Inject a GamepadRawInput into the inject queue (Point A)"
+request = [
+  { name = "buttons", type = "u32", json = "buttons", required = true, default = 0 },
+  { name = "dpad",    type = "u8",  json = "dpad",    required = true, default = 0 },
+  { name = "lx",      type = "u16", json = "lx",      required = false, default = 32767 },
+  { name = "ly",      type = "u16", json = "ly",      required = false, default = 32767 },
+  { name = "rx",      type = "u16", json = "rx",      required = false, default = 32767 },
+  { name = "ry",      type = "u16", json = "ry",      required = false, default = 32767 },
+  { name = "lt",      type = "u8",  json = "lt",      required = false, default = 0 },
+  { name = "rt",      type = "u8",  json = "rt",      required = false, default = 0 },
+]
+response = [
+  { name = "queued", type = "u8", json = "queued", description = "Items remaining in inject queue" },
+]
+error_codes = [
+  { name = "ERR_QUEUE_FULL", code = 5, description = "Inject queue is full" },
+]
+
+[[commands]]
+name = "inject_hid_report"
+domain = "test"
+description = "Inject an HIDReport into the inject queue (Point B)"
+request = [
+  { name = "buttons",  type = "u32", json = "buttons",  required = true, default = 0 },
+  { name = "dpad",     type = "u8",  json = "dpad",     required = true, default = 8 },
+  { name = "l_x_axis", type = "u8",  json = "l_x_axis", required = false, default = 128 },
+  { name = "l_y_axis", type = "u8",  json = "l_y_axis", required = false, default = 128 },
+  { name = "r_x_axis", type = "u8",  json = "r_x_axis", required = false, default = 128 },
+  { name = "r_y_axis", type = "u8",  json = "r_y_axis", required = false, default = 128 },
+]
+response = [
+  { name = "queued", type = "u8", json = "queued", description = "Items remaining in inject queue" },
+]
+error_codes = [
+  { name = "ERR_QUEUE_FULL", code = 5, description = "Inject queue is full" },
+]
+
+[[commands]]
+name = "get_gamepad_state"
+domain = "test"
+description = "Read current GamepadRawInput snapshot"
+request = []
+response = [
+  { name = "buttons", type = "u32", json = "buttons" },
+  { name = "dpad",    type = "u8",  json = "dpad" },
+  { name = "lx",      type = "u16", json = "lx" },
+  { name = "ly",      type = "u16", json = "ly" },
+  { name = "rx",      type = "u16", json = "rx" },
+  { name = "ry",      type = "u16", json = "ry" },
+  { name = "lt",      type = "u8",  json = "lt" },
+  { name = "rt",      type = "u8",  json = "rt" },
+]
+error_codes = []
+
+[[commands]]
+name = "get_hid_report"
+domain = "test"
+description = "Read current HIDReport snapshot"
+request = []
+response = [
+  { name = "buttons",  type = "u32", json = "buttons" },
+  { name = "dpad",     type = "u8",  json = "dpad" },
+  { name = "l_x_axis", type = "u8",  json = "l_x_axis" },
+  { name = "l_y_axis", type = "u8",  json = "l_y_axis" },
+  { name = "r_x_axis", type = "u8",  json = "r_x_axis" },
+  { name = "r_y_axis", type = "u8",  json = "r_y_axis" },
+]
+error_codes = []
+
+[[commands]]
+name = "set_override"
+domain = "test"
+description = "Enable or disable persistent override mode for a hook point"
+request = [
+  { name = "point",   type = "string", json = "point",   required = true, description = "gamepad_state or hid_report" },
+  { name = "enabled", type = "bool",   json = "enabled", required = true, description = "True to enable override" },
+]
+response = [
+  { name = "point",   type = "string", json = "point" },
+  { name = "enabled", type = "bool",   json = "enabled" },
+]
+error_codes = [
+  { name = "ERR_INTERNAL", code = 3, description = "Invalid point value" },
+]
+
+[[commands]]
+name = "clear_inject"
+domain = "test"
+description = "Clear the inject queue for a given point"
+request = [
+  { name = "point", type = "string", json = "point", required = true, default = "all", description = "gamepad_state, hid_report, or all" },
+]
+response = [
+  { name = "cleared", type = "u8", json = "cleared", description = "Number of items cleared" },
+]
+error_codes = []
+
+[[commands]]
+name = "set_mode"
+domain = "test"
+description = "Set the test injection mode"
+request = [
+  { name = "mode", type = "u8", json = "mode", required = true, description = "0=PASS_THRU, 1=INJECT, 2=RECORD" },
+]
+response = [
+  { name = "mode",      type = "u8",     json = "mode" },
+  { name = "mode_name", type = "string", json = "mode_name" },
+]
+error_codes = [
+  { name = "ERR_INTERNAL", code = 3, description = "Invalid mode value" },
+]
+
+[[commands]]
+name = "get_mode"
+domain = "test"
+description = "Read current test mode"
+request = []
+response = [
+  { name = "mode",      type = "u8",     json = "mode" },
+  { name = "mode_name", type = "string", json = "mode_name" },
+]
+error_codes = []
+
+[[commands]]
+name = "get_history"
+domain = "test"
+description = "Read entries from the history ring buffer"
+request = [
+  { name = "history_type",  type = "string", json = "type",  required = true, default = "gamepad_state", description = "gamepad_state or hid_report" },
+  { name = "count", type = "u8",     json = "count", required = false, default = 10, description = "Max entries to return (1-64)" },
+]
+response = [
+  { name = "history_type",    type = "string", json = "type" },
+  { name = "count",   type = "u8",     json = "count", description = "Actual entries returned" },
+  { name = "entries", type = "array",  json = "entries", description = "Array of entries", ref_type = "GamepadRawInputEntry|HIDReportEntry" },
+]
+error_codes = [
+  { name = "ERR_INTERNAL", code = 3, description = "Invalid type value" },
+]
+
+[[commands]]
+name = "clear_history"
+domain = "test"
+description = "Clear the history ring buffer for a given type"
+request = [
+{ name = "history_type", type = "string", json = "type", required = true, default = "gamepad_state" },
+]
+response = [
+  { name = "history_type", type = "string", json = "type" },
+]
+error_codes = []
+
+[[commands]]
+name = "get_status"
+domain = "test"
+description = "Read full test status snapshot"
+request = []
+response = [
+  { name = "mode",                   type = "u8",     json = "mode" },
+  { name = "mode_name",              type = "string", json = "mode_name" },
+  { name = "override_gamepad_state", type = "bool",   json = "override_gamepad_state" },
+  { name = "override_hid_report",    type = "bool",   json = "override_hid_report" },
+  { name = "gamepad_history_count",  type = "u8",     json = "gamepad_history_count" },
+  { name = "hid_history_count",      type = "u8",     json = "hid_history_count" },
+  { name = "gamepad_inject_queued",  type = "u8",     json = "gamepad_inject_queued" },
+  { name = "hid_inject_queued",      type = "u8",     json = "hid_inject_queued" },
+]
+error_codes = []
+
+[[commands]]
+name = "reset"
+domain = "test"
+description = "Reset TestInjector to default state"
+request = []
+response = []
+error_codes = []
+
+# --- config domain (reserved) ---
+
+[[commands]]
+name = "get_device_info"
+domain = "config"
+description = "Get device board name and firmware version"
+request = []
+response = [
+  { name = "board",      type = "string", json = "board" },
+  { name = "fw_version", type = "string", json = "fw_version" },
+  { name = "serial",     type = "string", json = "serial", description = "Device serial number" },
+]
+error_codes = []
+
+[[commands]]
+name = "set_key"
+domain = "config"
+description = "Set a configuration key-value pair (reserved)"
+request = [
+  { name = "key",   type = "string", json = "key",   required = true },
+  { name = "value", type = "any",    json = "value", required = true },
+]
+response = [
+  { name = "key", type = "string", json = "key" },
+]
+error_codes = [
+  { name = "ERR_NOT_SUPPORTED", code = 6, description = "Not yet implemented" },
+  { name = "ERR_INVALID_PARAM", code = 2, description = "Invalid key or value" },
+]
+
+[[commands]]
+name = "get_key"
+domain = "config"
+description = "Get a configuration key value (reserved)"
+request = [
+  { name = "key", type = "string", json = "key", required = true },
+]
+response = [
+  { name = "key",   type = "string", json = "key" },
+  { name = "value", type = "any",    json = "value" },
+]
+error_codes = [
+  { name = "ERR_NOT_SUPPORTED", code = 6, description = "Not yet implemented" },
+  { name = "ERR_INVALID_PARAM", code = 2, description = "Unknown key" },
+]
+
+[[commands]]
+name = "save"
+domain = "config"
+description = "Save configuration to persistent storage (reserved)"
+request = []
+response = []
+error_codes = [
+  { name = "ERR_NOT_SUPPORTED", code = 6, description = "Not yet implemented" },
+]
+
+[[commands]]
+name = "load"
+domain = "config"
+description = "Load configuration from persistent storage (reserved)"
+request = []
+response = []
+error_codes = [
+  { name = "ERR_NOT_SUPPORTED", code = 6, description = "Not yet implemented" },
+]
+
+[[commands]]
+name = "factory_reset"
+domain = "config"
+description = "Restore factory defaults and save (reserved)"
+request = []
+response = []
+error_codes = [
+  { name = "ERR_NOT_SUPPORTED", code = 6, description = "Not yet implemented" },
+]
+
+# ===========================================================================
+# Async message definitions
+# ===========================================================================
+
+[[async_messages]]
+cmd = "async.history_full"
+description = "History ring buffer overflowed, old entries overwritten"
+payload = [
+  { name = "history_type", type = "string", json = "type", description = "gamepad_state or hid_report" },
+]
+
+[[async_messages]]
+cmd = "async.inject_depleted"
+description = "Inject queue has been fully consumed"
+payload = []
+
+[[async_messages]]
+cmd = "async.error"
+description = "Internal device error notification"
+payload = [
+  { name = "reason", type = "string", json = "reason", description = "Error description" },
+]

@@ -22,3 +22,8 @@ lib/ArduinoJson
 *.jsonl
 
 *example*
+
+# Generated protocol output
+protocol/proto.h
+protocol/proto.rs
+protocol/types.ts

@@ -155,6 +155,10 @@ Before any operation, query files in this order:
 # Using Lua build script (preferred)
 lua tool.lua build --target BoringTechH743
 
+# Build with test API enabled
+lua tool.lua config --target BoringTechH743 -DTHETAGP_ENABLE_TEST_API=ON
+lua tool.lua build
+
 # Or CMake directly
 cmake -B build -DTARGET=BoringTechH743
 cmake --build build -- -j$(nproc)
@@ -170,7 +174,23 @@ The debug adapter is CMSIS-DAP (VID:PID 0d28:0204). Connect via SWD, udev rule a
 
 ### Serial output
 
-Logger outputs on UART1 (PA9 TX, PA10 RX) at 115200 baud. The CMSIS-DAP provides a VCP bridge on `ttyACM0`.
+Logger outputs on UART1 (PA9 TX, PA10 RX) at 115200 baud. The CMSIS-DAP (DAPLink) provides a VCP bridge on `ttyACM0`.
+
+### CDC test channel
+
+When built with `-DTHETAGP_ENABLE_TEST_API=ON`, the device exposes a CDC ACM
+virtual serial port for JSON test commands. Plugged via the device's own USB
+interface (not the debug probe), typically at `ttyACM1`.
+
+```bash
+# Send a ping
+echo '{"cmd":"sys.ping","queued":0}' > /dev/ttyACM1
+# Read response
+cat /dev/ttyACM1
+```
+
+See `docs/cdc-json-protocol.md` for the full protocol specification and
+`test_cdc.py` for an automated test suite.
 
 ---
 

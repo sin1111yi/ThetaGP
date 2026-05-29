@@ -25,9 +25,13 @@ Adding support for a new MCU family requires:
 - Scan-matrix keypad input with debounce
 - Configurable debug log output over UART
 - Configurable button mappings via BoardConfig.lua
+- **CDC ACM test channel** — JSON protocol over USB virtual serial port
+- **Test API** — inject/observe GamepadRawInput and HIDReport via CDC, with
+  queue injection, history recording, and override mode
 - TinyUSB stack
 - No RTOS — cooperative task scheduler
 - Static memory pool allocator (no malloc/free)
+- ArduinoJson v7.4.3 for JSON serialization
 
 ## Prerequisites
 
@@ -71,7 +75,6 @@ ThetaGP/
 │       ├── link/               Linker script
 │       └── system/             HAL config, system init, syscalls
 ├── scripts/                    Build & configuration tooling
-│   ├── tool.lua               Build/configure/flash helper
 │   ├── fetch_deps.lua          Dependency fetcher
 │   ├── generate_config.lua     Lua → C macro generator
 │   └── config_lib/             Generator & validator modules
@@ -79,14 +82,16 @@ ThetaGP/
 │   ├── conf/                   TinyUSB configuration
 │   ├── drivers/                Device & gamepad driver abstraction
 │   ├── gamepad/                Core gamepad logic & scheduler
-│   ├── peripherals/            MCU-agnostic peripheral interfaces
+│   ├── test/                   Test API (FrameLayer, Dispatcher, TestInjector)
 │   ├── utils/                  Memory pool, logging, atomic, time
 │   ├── ThetaGP.cpp             Entry point
 │   ├── ThetaGPTasks.cpp        Task definitions
 │   └── taskmanager.cpp/h       Task lifecycle
+├── docs/                       Design documentation
 ├── lib/                        Third-party libraries
 ├── openocd/                    OpenOCD configs
-├── AGENT.md                    AI agent behavior spec
+├── tool.lua                    Build/configure/flash helper
+├── AGENTS.md                   AI agent behavior spec
 └── README.md                   This file
 ```
 
