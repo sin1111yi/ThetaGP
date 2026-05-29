@@ -23,6 +23,10 @@
 
 #include "utils/log/log.h"
 
+#ifdef THETAGP_ENABLE_TEST_API
+#include "test/testinjector.h"
+#endif
+
 #include "drivers/device/keypad.h"
 #include "drivers/gpdriver/gpdrivermgr.h"
 #include <cstdint>
@@ -125,6 +129,11 @@ void Gamepad::process() {
     return;
   }
   read();
+
+#ifdef THETAGP_ENABLE_TEST_API
+  ThetaGP::Test::TestInjector::getInstance().onGamepadState(_state);
+#endif
+
   _gpDriverMgr->getgpdriverDevice()->process(this);
 }
 

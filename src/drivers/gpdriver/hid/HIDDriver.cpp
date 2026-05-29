@@ -28,6 +28,10 @@
 #include "tusb.h"
 #include <cstddef>
 
+#ifdef THETAGP_ENABLE_TEST_API
+#include "test/testinjector.h"
+#endif
+
 namespace ThetaGP::Drivers::GPDriver {
 
 HIDDriver::HIDDriver() {}
@@ -133,6 +137,10 @@ bool HIDDriver::process(void *gamepad) {
                       (gp->pressedE6() ? GAMEPAD_MASK_E6 : 0) |
                       (gp->pressedE7() ? GAMEPAD_MASK_E7 : 0) |
                       (gp->pressedE8() ? GAMEPAD_MASK_E8 : 0);
+
+#ifdef THETAGP_ENABLE_TEST_API
+  ThetaGP::Test::TestInjector::getInstance().onHIDReport(hidReport);
+#endif
 
   // Wake up TinyUSB device only when state changes while suspended
   if (tud_suspended()) {

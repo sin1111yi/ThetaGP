@@ -23,6 +23,7 @@
 #include "test/framelayer.h"
 #include "test/dispatcher.h"
 #include "test/testsys.h"
+#include "test/testcmds.h"
 
 #include "drivers/gpdriver/usbdriver.h"
 #include "utils/log/log.h"
@@ -35,6 +36,7 @@ void initTestSystem() {
 
     // Register domain handlers
     dispatcher.registerHandler("sys", SysHandler::handle);
+    dispatcher.registerHandler("test", TestCmdHandler::handle);
 
     // Wire frame-complete callback -> dispatcher
     framelayer.setFrameCallback(Dispatcher::dispatch);

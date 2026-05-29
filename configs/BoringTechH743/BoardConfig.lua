@@ -21,7 +21,7 @@ local M = {}
 
 M.BoardInfo = {
     identifier = "BoringTechH743",
-    name = "BoringTech-H743",
+    name = "BoringTechH743",
     mcu = "STM32H743xx",
     mcu_series = "STM32H7",
 }
