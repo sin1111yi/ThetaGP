@@ -26,6 +26,18 @@
 #include "BoardConfig.h"
 #include "utils/log/log.h"
 
+// Suppress deprecated volatile and pedantic warnings in TinyUSB upstream source
+// Note: Per-file pragma scope is insufficient — individual TinyUSB source files
+// include tusb_common.h which triggers these. Suppressed globally via CMake
+// target_compile_options on TINYUSB_SOURCES.
+//
+// Local diagnostics guard for tusb_config.h itself:
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#ifdef __cplusplus
+#pragma GCC diagnostic ignored "-Wvolatile"
+#endif
+
 //--------------------------------------------------------------------+
 // ThetaGP Private USB Configuration
 //--------------------------------------------------------------------+
@@ -109,7 +121,13 @@ extern "C" {
 #error CFG_TUSB_MCU must be defined
 #endif
 
+#define CFG_TUSB_DEBUG_PRINTF tu_printf
+
+// Logging output for TinyUSB — uses project's LOG_IF when debug enabled
+#if CFG_TUSB_DEBUG > 0
+#undef CFG_TUSB_DEBUG_PRINTF
 #define CFG_TUSB_DEBUG_PRINTF LOG_IF
+#endif
 
 // Enable Device stack, Default is max speed that hardware controller could
 // support with on-chip PHY
@@ -144,5 +162,8 @@ extern "C" {
 #ifdef __cplusplus
 }
 #endif
+
+// Restore compiler diagnostic settings
+#pragma GCC diagnostic pop
 
 #endif /* _TUSB_CONFIG_H_ */

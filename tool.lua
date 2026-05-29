@@ -38,6 +38,7 @@ Options:
   --jobs N           Parallel build jobs (default: auto)
   --openocd-cfg FILE OpenOCD config (required for flash)
   --target TARGET    Board target (required, or set TARGET env)
+  -D<var>=<val>      Pass CMake define directly (e.g. -DTHETAGP_ENABLE_TEST_API=ON)
 ]]
 
 local function print_help()
@@ -105,6 +106,7 @@ local options = {
     build_dir = "",
     jobs = nil,
     openocd_cfg = "",
+    cmake_defines = {},
 }
 
 local commands = {}
@@ -128,6 +130,8 @@ while i <= #args do
     elseif arg == "--openocd-cfg" then
         i = i + 1
         options.openocd_cfg = args[i]
+    elseif arg:sub(1, 2) == "-D" then
+        table.insert(options.cmake_defines, arg)
     elseif arg:sub(1, 1) ~= "-" then
         table.insert(commands, arg)
     else
@@ -192,6 +196,10 @@ local function step_config()
         "-DTARGET=" .. options.target,
         "-DCMAKE_BUILD_TYPE=" .. options.build_type,
     }
+
+    for _, define in ipairs(options.cmake_defines) do
+        table.insert(cmake_args, define)
+    end
 
     local cmd = "cmake " .. table.concat(cmake_args, " ")
     return execute_command(cmd)

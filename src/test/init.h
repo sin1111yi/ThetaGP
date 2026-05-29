@@ -19,32 +19,20 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "utils/log/log.h"
-#include "utils/utils.h"
+#pragma once
 
-#include "gamepad/gamepad.h"
-#include "taskmanager.h"
+namespace ThetaGP::Test {
 
-#include "ThetaGP.h"
+/**
+ * Initialize the test API system.
+ *
+ * Wires together FrameLayer, Dispatcher, and SysHandler:
+ *   - Registers sys handler with the dispatcher
+ *   - Sets FrameLayer frame-complete callback to Dispatcher::dispatch
+ *   - Registers FrameLayer::cdcRxHandler with USBDriver CDC callback
+ *
+ * Safe to call multiple times (singletons are idempotent).
+ */
+void initTestSystem();
 
-#ifdef THETAGP_ENABLE_TEST_API
-#include "test/framelayer.h"
-#endif
-
-using namespace ThetaGP;
-using namespace ThetaGP::Gamepad;
-
-static void taskGamepadCore(uint32_t currentTimeUs) {
-  UNUSED(currentTimeUs);
-
-  Gamepad::Gamepad::getInstance().process();
-#ifdef THETAGP_ENABLE_TEST_API
-  ThetaGP::Test::FrameLayer::getInstance().flushTx();
-#endif
-  tud_task();
-}
-
-void ThetaGP::ThetaGamepad::registerTasks(void) {
-  TaskManager::registerTask("GAMEPAD", "CORE", taskGamepadCore,
-                            TASK_PERIOD_HZ(1000), TaskPriority::Realtime);
-}
+} // namespace ThetaGP::Test

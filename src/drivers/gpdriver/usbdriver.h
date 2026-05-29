@@ -53,7 +53,7 @@ public:
   const usbd_class_driver_t *getDrivers(uint8_t *count);
   const uint8_t *getConfigurationDescriptor(uint8_t index);
 
-  void setCDCRxCallback(CDCRxCallbackFunc cb);
+  void setCDCRxCallback(CDCRxCallbackFunc cb) { _cdcRxCallback = cb; }
   void cdcRxCallback(uint8_t itf) {
     UNUSED(itf);
 

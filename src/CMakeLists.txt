@@ -20,6 +20,11 @@
 cmake_minimum_required(VERSION 3.22)
 
 # =============================================================================
+# Test API Option
+# =============================================================================
+option(THETAGP_ENABLE_TEST_API "Enable test API infrastructure" OFF)
+
+# =============================================================================
 # Source Files
 # =============================================================================
 
@@ -33,7 +38,8 @@ file(GLOB_RECURSE SRC_FILES
 # =============================================================================
 # TinyUSB Configuration
 # =============================================================================
-if(${THETAGP_CFG_LOG_LEVEL} STREQUAL "Debug")
+option(THETAGP_TINYUSB_DEBUG "TinyUSB debug level (0=off, 1=errors, 2=info, 3=verbose)" OFF)
+if(THETAGP_TINYUSB_DEBUG)
     set(TINYUSB_DEBUG_LEVEL 3)
 else()
     set(TINYUSB_DEBUG_LEVEL 0)
@@ -53,6 +59,15 @@ if(BOARD_MCU_SERIES STREQUAL "STM32H7")
         ${TINYUSB_SRC_PATH}/portable/synopsys/dwc2/dwc2_common.c
     )
 endif()
+
+# Suppress TinyUSB upstream source warnings (flexible array members, volatile ops)
+# These come from TinyUSB headers included by our .cpp files, not from .c sources
+foreach(TUSB_FILE ${TINYUSB_SOURCES})
+    set_source_files_properties(${TUSB_FILE} PROPERTIES
+        COMPILE_FLAGS "-Wno-volatile -Wno-pedantic")
+endforeach()
+# Project-wide: same warnings from TinyUSB headers pulled into C++ translation units
+add_compile_options(-Wno-volatile -Wno-pedantic)
 
 set(TINYUSB_CONFIG_FILE "conf/tusb_config.h")
 
@@ -136,6 +151,13 @@ target_compile_definitions(${CMAKE_PROJECT_NAME}
     BOARD_IDENTIFIER="${BOARD_IDENTIFIER}"
     BOARD_NAME="${BOARD_NAME}"
 )
+
+if(THETAGP_ENABLE_TEST_API)
+    target_compile_definitions(${CMAKE_PROJECT_NAME}
+        PRIVATE
+        THETAGP_ENABLE_TEST_API
+    )
+endif()
 
 # Set output directory and link script
 set_target_properties(${CMAKE_PROJECT_NAME}
