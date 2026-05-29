@@ -46,7 +46,7 @@ using GPDriverManager = ThetaGP::Drivers::GPDriver::GPDriverManager;
  */
 class Gamepad {
 private:
-  GamepadState _state;
+  GamepadRawInput _state;
   std::array<uint8_t, 32>
       _mappings; // Physical key → Gamepad button (0xFF = unmapped)
   Device *_inputDevice = nullptr;
@@ -68,6 +68,10 @@ private:
   }
 
 public:
+  /// Hook type: called after Gamepad::read(), can modify GamepadRawInput
+  using GamepadRawInputHook = void (*)(GamepadRawInput &state);
+  static void registerGamepadRawInputHook(GamepadRawInputHook hook);
+
   Gamepad();
 
   void setup();
@@ -130,8 +134,8 @@ public:
   /* clang-format on */
 
   // Get state
-  [[nodiscard]] const GamepadState &getState() const { return _state; }
-  [[nodiscard]] GamepadState &getState() { return _state; }
+  [[nodiscard]] const GamepadRawInput &getState() const { return _state; }
+  [[nodiscard]] GamepadRawInput &getState() { return _state; }
 
   // Check if ready
   [[nodiscard]] bool isReady() const { return _ready && _initialized; }

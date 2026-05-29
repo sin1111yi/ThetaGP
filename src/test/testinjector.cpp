@@ -55,12 +55,12 @@ void TestInjector::setMode(TestMode mode) {
 
 // --- Inject queue helpers ---
 
-bool TestInjector::injectGamepadState(const Gamepad::GamepadState &state) {
+bool TestInjector::injectGamepadRawInput(const Gamepad::GamepadRawInput &state) {
     if (_injectGpCount >= INJECT_QUEUE_DEPTH) {
         LOG_WARN("TestInjector: gamepad state inject queue full");
         return false;
     }
-    _injectedGamepadStates[_injectGpHead] = state;
+    _injectedGamepadRawInputs[_injectGpHead] = state;
     _injectGpHead = (_injectGpHead + 1) % INJECT_QUEUE_DEPTH;
     _injectGpCount++;
     LOG_DEBUG("TestInjector: gamepad state injected (queue=%u)", _injectGpCount);
@@ -79,7 +79,7 @@ bool TestInjector::injectHIDReport(const HIDReport &report) {
     return true;
 }
 
-void TestInjector::clearGamepadInjectQueue() {
+void TestInjector::clearGamepadRawInputQueue() {
     _injectGpHead = 0;
     _injectGpTail = 0;
     _injectGpCount = 0;
@@ -95,9 +95,9 @@ void TestInjector::clearHIDInjectQueue() {
 
 // --- Override control ---
 
-void TestInjector::setOverrideGamepadState(bool enabled) {
+void TestInjector::setOverrideGamepadRawInput(bool enabled) {
     LOG_DEBUG("TestInjector: override gamepad_state -> %s", enabled ? "ON" : "OFF");
-    _overrideGamepadState = enabled;
+    _overrideGamepadRawInput = enabled;
 }
 
 void TestInjector::setOverrideHIDReport(bool enabled) {
@@ -107,7 +107,7 @@ void TestInjector::setOverrideHIDReport(bool enabled) {
 
 // --- History recording ---
 
-void TestInjector::recordGamepadState(const Gamepad::GamepadState &state) {
+void TestInjector::recordGamepadRawInput(const Gamepad::GamepadRawInput &state) {
     if (_gpHistoryCount < HISTORY_DEPTH) {
         _gpHistoryCount++;
     }
@@ -125,7 +125,7 @@ void TestInjector::recordHIDReport(const HIDReport &report) {
     _hidHistoryHead = (_hidHistoryHead + 1) % HISTORY_DEPTH;
 }
 
-uint8_t TestInjector::readGamepadHistory(GamepadStateEntry *out,
+uint8_t TestInjector::readGamepadHistory(GamepadRawInputEntry *out,
                                          uint8_t maxCount) const {
     uint8_t count = _gpHistoryCount < maxCount ? _gpHistoryCount : maxCount;
     // Walk backwards from head to get newest entries
@@ -171,36 +171,39 @@ void TestInjector::clearHIDHistory() {
 
 void TestInjector::reset() {
     _mode = TestMode::PASS_THRU;
-    _overrideGamepadState = false;
+    _overrideGamepadRawInput = false;
     _overrideHIDReport = false;
 
-    clearGamepadInjectQueue();
+    clearGamepadRawInputQueue();
     clearHIDInjectQueue();
     clearGamepadHistory();
     clearHIDHistory();
 
-    _currentGamepadState = Gamepad::GamepadState{};
+    _currentGamepadRawInput = Gamepad::GamepadRawInput{};
     _currentHIDReport = HIDReport{};
 
     LOG_DEBUG("TestInjector: fully reset");
 }
 
-// --- Point A hook ---
+// --- GamepadRawInput hook ---
 
-void TestInjector::onGamepadState(Gamepad::GamepadState &state) {
+void TestInjector::onGamepadRawInput(Gamepad::GamepadRawInput &state) {
+    if (_mode != TestMode::PASS_THRU) {
+        LOG_DEBUG("TestInjector: gamepadRawInputHook mode=%s", modeName(_mode));
+    }
     // 1. Save snapshot
-    _currentGamepadState = state;
+    _currentGamepadRawInput = state;
 
     // 2. Record history in RECORD mode, or in PASS_THRU if there is room
     if (_mode == TestMode::RECORD) {
-        recordGamepadState(state);
+        recordGamepadRawInput(state);
     } else if (_mode == TestMode::PASS_THRU && _gpHistoryCount < HISTORY_DEPTH) {
-        recordGamepadState(state);
+        recordGamepadRawInput(state);
     }
 
     // 3. INJECT mode: replace state from queue
     if (_mode == TestMode::INJECT && _injectGpCount > 0) {
-        state = _injectedGamepadStates[_injectGpTail];
+        state = _injectedGamepadRawInputs[_injectGpTail];
         _injectGpTail = (_injectGpTail + 1) % INJECT_QUEUE_DEPTH;
         _injectGpCount--;
         LOG_DEBUG("TestInjector: injected gamepad state (queue=%u)",
@@ -208,19 +211,22 @@ void TestInjector::onGamepadState(Gamepad::GamepadState &state) {
     }
 
     // 4. Override mode: replace with last injected value if queue non-empty
-    if (_overrideGamepadState) {
+    if (_overrideGamepadRawInput) {
         if (_injectGpCount > 0) {
             // Use the most recently injected value
             uint8_t lastIdx =
                 (_injectGpHead == 0) ? INJECT_QUEUE_DEPTH - 1 : _injectGpHead - 1;
-            state = _injectedGamepadStates[lastIdx];
+            state = _injectedGamepadRawInputs[lastIdx];
         }
     }
 }
 
-// --- Point B hook ---
+// --- HIDReport hook ---
 
 void TestInjector::onHIDReport(HIDReport &report) {
+    if (_mode != TestMode::PASS_THRU) {
+        LOG_DEBUG("TestInjector: hidReportHook mode=%s", modeName(_mode));
+    }
     // 1. Save snapshot
     _currentHIDReport = report;
 

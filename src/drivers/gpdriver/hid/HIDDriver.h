@@ -31,6 +31,10 @@ namespace ThetaGP::Drivers::GPDriver {
 
 class HIDDriver : public GPDriver {
 public:
+  /// Hook type: called before tud_hid_report(), can modify HIDReport
+  using HIDReportHook = void (*)(HIDReport &report);
+  static void registerHIDReportHook(HIDReportHook hook);
+
   HIDDriver();
 
   void initialize() override;

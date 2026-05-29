@@ -39,10 +39,10 @@ TestCmdHandler &TestCmdHandler::getInstance() {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: serialize a GamepadState into a JsonObject
+// Helper: serialize a GamepadRawInput into a JsonObject
 // ---------------------------------------------------------------------------
-static void serializeGamepadState(JsonObject obj,
-                                  const Gamepad::GamepadState &state) {
+static void serializeGamepadRawInput(JsonObject obj,
+                                  const Gamepad::GamepadRawInput &state) {
     obj["buttons"] = state.buttons;
     obj["dpad"] = state.dpad;
     obj["dpad_original"] = state.dpadOriginal;
@@ -70,11 +70,11 @@ static void serializeHIDReport(JsonObject obj, const HIDReport &report) {
 // ---------------------------------------------------------------------------
 // Command: test.inject_gamepad_state
 // ---------------------------------------------------------------------------
-static void handleInjectGamepadState(const char *cmd, JsonDocument &doc,
+static void handleInjectGamepadRawInput(const char *cmd, JsonDocument &doc,
                                      int queued) {
     TestInjector &ti = TestInjector::getInstance();
 
-    Gamepad::GamepadState state;
+    Gamepad::GamepadRawInput state;
     state.buttons = doc["buttons"] | 0;
     state.dpad = doc["dpad"] | 0;
     state.dpadOriginal = doc["dpad_original"] | 0;
@@ -91,7 +91,7 @@ static void handleInjectGamepadState(const char *cmd, JsonDocument &doc,
     resp["cmd"] = cmd;
     resp["queued"] = queued + 1;
 
-    if (ti.injectGamepadState(state)) {
+    if (ti.injectGamepadRawInput(state)) {
         LOG_DEBUG("TestCmdHandler: gamepad state injected");
     } else {
         resp["status"] = "error";
@@ -137,15 +137,16 @@ static void handleInjectHIDReport(const char *cmd, JsonDocument &doc,
 // ---------------------------------------------------------------------------
 // Command: test.get_gamepad_state
 // ---------------------------------------------------------------------------
-static void handleGetGamepadState(const char *cmd, JsonDocument &doc,
+static void handleGetGamepadRawInput(const char *cmd, JsonDocument &doc,
                                   int queued) {
     (void)doc;
+    LOG_DEBUG("TestCmdHandler: get_gamepad_state");
     const auto &state =
-        TestInjector::getInstance().getCurrentGamepadState();
+        TestInjector::getInstance().getCurrentGamepadRawInput();
 
     JsonDocument resp;
     auto obj = resp.to<JsonObject>();
-    serializeGamepadState(obj, state);
+    serializeGamepadRawInput(obj, state);
     resp["status"] = "ok";
     resp["cmd"] = cmd;
     resp["queued"] = queued + 1;
@@ -157,6 +158,7 @@ static void handleGetGamepadState(const char *cmd, JsonDocument &doc,
 // ---------------------------------------------------------------------------
 static void handleGetHIDReport(const char *cmd, JsonDocument &doc, int queued) {
     (void)doc;
+    LOG_DEBUG("TestCmdHandler: get_hid_report");
     const auto &report =
         TestInjector::getInstance().getCurrentHIDReport();
 
@@ -178,7 +180,7 @@ static void handleSetOverride(const char *cmd, JsonDocument &doc, int queued) {
     bool enabled = doc["enabled"] | false;
 
     if (strcmp(point, "gamepad_state") == 0) {
-        ti.setOverrideGamepadState(enabled);
+        ti.setOverrideGamepadRawInput(enabled);
     } else if (strcmp(point, "hid_report") == 0) {
         ti.setOverrideHIDReport(enabled);
     } else {
@@ -188,6 +190,7 @@ static void handleSetOverride(const char *cmd, JsonDocument &doc, int queued) {
         resp["queued"] = queued + 1;
         resp["error_code"] = 3;
         resp["reason"] = "invalid point";
+        LOG_WARN("TestCmdHandler: set_override invalid point='%s'", point);
         FrameLayer::getInstance().sendResponse(resp);
         return;
     }
@@ -212,8 +215,8 @@ static void handleClearInject(const char *cmd, JsonDocument &doc, int queued) {
 
     uint8_t cleared = 0;
     if (strcmp(point, "all") == 0 || strcmp(point, "gamepad_state") == 0) {
-        cleared = ti.gamepadInjectQueueCount();
-        ti.clearGamepadInjectQueue();
+        cleared = ti.gamepadRawInputQueueCount();
+        ti.clearGamepadRawInputQueue();
     }
     if (strcmp(point, "all") == 0 || strcmp(point, "hid_report") == 0) {
         cleared += ti.hidInjectQueueCount();
@@ -243,6 +246,7 @@ static void handleSetMode(const char *cmd, JsonDocument &doc, int queued) {
         resp["queued"] = queued + 1;
         resp["error_code"] = 3;
         resp["reason"] = "invalid mode (0=PASS_THRU, 1=INJECT, 2=RECORD)";
+        LOG_WARN("TestCmdHandler: set_mode invalid mode=%d", modeVal);
         FrameLayer::getInstance().sendResponse(resp);
         return;
     }
@@ -265,6 +269,7 @@ static void handleSetMode(const char *cmd, JsonDocument &doc, int queued) {
 // ---------------------------------------------------------------------------
 static void handleGetMode(const char *cmd, JsonDocument &doc, int queued) {
     (void)doc;
+    LOG_DEBUG("TestCmdHandler: get_mode");
     auto mode = TestInjector::getInstance().getMode();
 
     JsonDocument resp;
@@ -283,6 +288,7 @@ static void handleGetHistory(const char *cmd, JsonDocument &doc, int queued) {
     TestInjector &ti = TestInjector::getInstance();
     const char *type = doc["type"] | "";
     int count = doc["count"] | 5;
+    LOG_DEBUG("TestCmdHandler: get_history type='%s' count=%d", type, count);
     if (count < 0) {
         count = 0;
     }
@@ -297,7 +303,7 @@ static void handleGetHistory(const char *cmd, JsonDocument &doc, int queued) {
     resp["type"] = type;
 
     if (strcmp(type, "gamepad_state") == 0) {
-        TestInjector::GamepadStateEntry entries[64];
+        TestInjector::GamepadRawInputEntry entries[64];
         uint8_t actual =
             ti.readGamepadHistory(entries, static_cast<uint8_t>(count));
         resp["count"] = actual;
@@ -305,7 +311,7 @@ static void handleGetHistory(const char *cmd, JsonDocument &doc, int queued) {
         for (uint8_t i = 0; i < actual; i++) {
             auto entry = arr.add<JsonObject>();
             entry["index"] = i;
-            serializeGamepadState(entry, entries[i].state);
+            serializeGamepadRawInput(entry, entries[i].state);
         }
     } else if (strcmp(type, "hid_report") == 0) {
         TestInjector::HIDReportEntry entries[64];
@@ -322,6 +328,7 @@ static void handleGetHistory(const char *cmd, JsonDocument &doc, int queued) {
         resp["status"] = "error";
         resp["error_code"] = 3;
         resp["reason"] = "invalid type (gamepad_state or hid_report)";
+        LOG_WARN("TestCmdHandler: get_history invalid type='%s'", type);
     }
 
     FrameLayer::getInstance().sendResponse(resp);
@@ -355,6 +362,7 @@ static void handleClearHistory(const char *cmd, JsonDocument &doc, int queued) {
 // ---------------------------------------------------------------------------
 static void handleGetStatus(const char *cmd, JsonDocument &doc, int queued) {
     (void)doc;
+    LOG_DEBUG("TestCmdHandler: get_status");
     TestInjector &ti = TestInjector::getInstance();
     auto mode = ti.getMode();
 
@@ -364,16 +372,16 @@ static void handleGetStatus(const char *cmd, JsonDocument &doc, int queued) {
     resp["queued"] = queued + 1;
     resp["mode"] = static_cast<int>(mode);
     resp["mode_name"] = TestInjector::modeName(mode);
-    resp["override_gamepad_state"] = ti.isOverrideGamepadState();
+    resp["override_gamepad_state"] = ti.isOverrideGamepadRawInput();
     resp["override_hid_report"] = ti.isOverrideHIDReport();
     resp["gamepad_history_count"] = ti.getGamepadHistoryCount();
     resp["hid_history_count"] = ti.getHIDHistoryCount();
-    resp["gamepad_inject_queued"] = ti.gamepadInjectQueueCount();
+    resp["gamepad_inject_queued"] = ti.gamepadRawInputQueueCount();
     resp["hid_inject_queued"] = ti.hidInjectQueueCount();
 
     // Add current snapshots
     auto gpState = resp["gamepad_state"].to<JsonObject>();
-    serializeGamepadState(gpState, ti.getCurrentGamepadState());
+    serializeGamepadRawInput(gpState, ti.getCurrentGamepadRawInput());
 
     auto hidReport = resp["hid_report"].to<JsonObject>();
     serializeHIDReport(hidReport, ti.getCurrentHIDReport());
@@ -404,11 +412,11 @@ void TestCmdHandler::handle(const char *cmd, JsonDocument &doc) {
     LOG_DEBUG("TestCmdHandler: cmd='%s' queued=%d", cmd, queued);
 
     if (strcmp(cmd, "test.inject_gamepad_state") == 0) {
-        handleInjectGamepadState(cmd, doc, queued);
+        handleInjectGamepadRawInput(cmd, doc, queued);
     } else if (strcmp(cmd, "test.inject_hid_report") == 0) {
         handleInjectHIDReport(cmd, doc, queued);
     } else if (strcmp(cmd, "test.get_gamepad_state") == 0) {
-        handleGetGamepadState(cmd, doc, queued);
+        handleGetGamepadRawInput(cmd, doc, queued);
     } else if (strcmp(cmd, "test.get_hid_report") == 0) {
         handleGetHIDReport(cmd, doc, queued);
     } else if (strcmp(cmd, "test.set_override") == 0) {

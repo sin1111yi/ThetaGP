@@ -28,13 +28,16 @@
 #include "tusb.h"
 #include <cstddef>
 
-#ifdef THETAGP_ENABLE_TEST_API
-#include "test/testinjector.h"
-#endif
-
 namespace ThetaGP::Drivers::GPDriver {
 
 HIDDriver::HIDDriver() {}
+
+// --- HIDReport hook (listener/callback, defaults to no-op) ---
+static HIDDriver::HIDReportHook g_hidReportHook = nullptr;
+
+void HIDDriver::registerHIDReportHook(HIDReportHook hook) {
+  g_hidReportHook = hook;
+}
 
 static bool hid_control_xfer_cb(uint8_t rhport, uint8_t stage,
                                 tusb_control_request_t const *request) {
@@ -138,9 +141,9 @@ bool HIDDriver::process(void *gamepad) {
                       (gp->pressedE7() ? GAMEPAD_MASK_E7 : 0) |
                       (gp->pressedE8() ? GAMEPAD_MASK_E8 : 0);
 
-#ifdef THETAGP_ENABLE_TEST_API
-  ThetaGP::Test::TestInjector::getInstance().onHIDReport(hidReport);
-#endif
+  if (g_hidReportHook) {
+    g_hidReportHook(hidReport);
+  }
 
   // Wake up TinyUSB device only when state changes while suspended
   if (tud_suspended()) {

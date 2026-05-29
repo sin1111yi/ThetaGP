@@ -31,11 +31,11 @@ namespace ThetaGP::Test {
 #ifdef THETAGP_ENABLE_TEST_API
 
 /**
- * TestInjector — Point A/B hook for test state injection and capture.
+ * TestInjector — GamepadRawInput / HIDReport hook for test state injection and capture.
  *
- * Provides two hook points in the main processing pipeline:
- *   Point A (onGamepadState): called after Gamepad::read()
- *   Point B (onHIDReport):    called before tud_hid_report()
+ * Registers as a listener on two hook points in the main processing pipeline:
+ *   gamepadRawInputHook (onGamepadRawInput): called after Gamepad::read()
+ *   hidReportHook (onHIDReport):       called before tud_hid_report()
  *
  * Supports three modes:
  *   PASS_THRU — pass data through unchanged, optionally record history
@@ -49,24 +49,34 @@ class TestInjector {
 public:
     static TestInjector &getInstance();
 
-    // Point A: called after Gamepad::read(), can modify state
-    void onGamepadState(Gamepad::GamepadState &state);
+    /// Static wrapper for GamepadRawInputHook registration
+    static void gamepadRawInputHook(Gamepad::GamepadRawInput &state) {
+        getInstance().onGamepadRawInput(state);
+    }
 
-    // Point B: called before tud_hid_report(), can modify report
+    /// Static wrapper for HIDReportHook registration
+    static void hidReportHook(HIDReport &report) {
+        getInstance().onHIDReport(report);
+    }
+
+    // Called after Gamepad::read(), can modify state
+    void onGamepadRawInput(Gamepad::GamepadRawInput &state);
+
+    // Called before tud_hid_report(), can modify report
     void onHIDReport(HIDReport &report);
 
     // --- Inject queue access (used by TestCmdHandler) ---
-    bool injectGamepadState(const Gamepad::GamepadState &state);
+    bool injectGamepadRawInput(const Gamepad::GamepadRawInput &state);
     bool injectHIDReport(const HIDReport &report);
-    void clearGamepadInjectQueue();
+    void clearGamepadRawInputQueue();
     void clearHIDInjectQueue();
-    uint8_t gamepadInjectQueueCount() const { return _injectGpCount; }
+    uint8_t gamepadRawInputQueueCount() const { return _injectGpCount; }
     uint8_t hidInjectQueueCount() const { return _injectHidCount; }
 
     // --- Override control ---
-    void setOverrideGamepadState(bool enabled);
+    void setOverrideGamepadRawInput(bool enabled);
     void setOverrideHIDReport(bool enabled);
-    bool isOverrideGamepadState() const { return _overrideGamepadState; }
+    bool isOverrideGamepadRawInput() const { return _overrideGamepadRawInput; }
     bool isOverrideHIDReport() const { return _overrideHIDReport; }
 
     // --- Mode control ---
@@ -77,13 +87,13 @@ public:
     static const char *modeName(TestMode mode);
 
     // --- Snapshot access ---
-    const Gamepad::GamepadState &getCurrentGamepadState() const { return _currentGamepadState; }
+    const Gamepad::GamepadRawInput &getCurrentGamepadRawInput() const { return _currentGamepadRawInput; }
     const HIDReport &getCurrentHIDReport() const { return _currentHIDReport; }
 
     // --- History access ---
-    struct GamepadStateEntry {
+    struct GamepadRawInputEntry {
         uint32_t timestampUs;
-        Gamepad::GamepadState state;
+        Gamepad::GamepadRawInput state;
     };
 
     struct HIDReportEntry {
@@ -98,7 +108,7 @@ public:
      * Copy up to `maxCount` entries from the gamepad history ring buffer.
      * Returns the number of entries actually copied (newest first).
      */
-    uint8_t readGamepadHistory(GamepadStateEntry *out, uint8_t maxCount) const;
+    uint8_t readGamepadHistory(GamepadRawInputEntry *out, uint8_t maxCount) const;
 
     /**
      * Copy up to `maxCount` entries from the HID history ring buffer.
@@ -117,19 +127,19 @@ private:
     TestInjector(const TestInjector &) = delete;
     TestInjector &operator=(const TestInjector &) = delete;
 
-    void recordGamepadState(const Gamepad::GamepadState &state);
+    void recordGamepadRawInput(const Gamepad::GamepadRawInput &state);
     void recordHIDReport(const HIDReport &report);
 
     // Test mode
     TestMode _mode = TestMode::PASS_THRU;
 
     // Override flags
-    bool _overrideGamepadState = false;
+    bool _overrideGamepadRawInput = false;
     bool _overrideHIDReport = false;
 
     // Inject queue (FIFO, depth 8)
     static constexpr uint8_t INJECT_QUEUE_DEPTH = 8;
-    Gamepad::GamepadState _injectedGamepadStates[INJECT_QUEUE_DEPTH];
+    Gamepad::GamepadRawInput _injectedGamepadRawInputs[INJECT_QUEUE_DEPTH];
     HIDReport _injectedHIDReports[INJECT_QUEUE_DEPTH];
     uint8_t _injectGpHead = 0;
     uint8_t _injectGpTail = 0;
@@ -139,12 +149,12 @@ private:
     uint8_t _injectHidCount = 0;
 
     // Current snapshots (for GET commands)
-    Gamepad::GamepadState _currentGamepadState{};
+    Gamepad::GamepadRawInput _currentGamepadRawInput{};
     HIDReport _currentHIDReport{};
 
     // History ring buffer (depth 64)
     static constexpr uint8_t HISTORY_DEPTH = 64;
-    GamepadStateEntry _gpHistory[HISTORY_DEPTH];
+    GamepadRawInputEntry _gpHistory[HISTORY_DEPTH];
     HIDReportEntry _hidHistory[HISTORY_DEPTH];
     uint8_t _gpHistoryHead = 0;
     uint8_t _gpHistoryCount = 0;
@@ -158,7 +168,7 @@ private:
 class TestInjector {
 public:
     static TestInjector &getInstance() { static TestInjector i; return i; }
-    void onGamepadState(Gamepad::GamepadState &) {}
+    void onGamepadRawInput(Gamepad::GamepadRawInput &) {}
     void onHIDReport(HIDReport &) {}
 };
 

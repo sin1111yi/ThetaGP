@@ -24,7 +24,10 @@
 #include "test/dispatcher.h"
 #include "test/testsys.h"
 #include "test/testcmds.h"
+#include "test/testinjector.h"
 
+#include "gamepad/gamepad.h"
+#include "drivers/gpdriver/hid/HIDDriver.h"
 #include "drivers/gpdriver/usbdriver.h"
 #include "utils/log/log.h"
 
@@ -43,6 +46,12 @@ void initTestSystem() {
 
     // Wire USB CDC RX callback -> frame layer
     USB::USBDriver::getInstance().setCDCRxCallback(FrameLayer::cdcRxHandler);
+
+    // Register hooks into production code via listener/callback pattern
+#ifdef THETAGP_ENABLE_TEST_API
+    Gamepad::Gamepad::registerGamepadRawInputHook(TestInjector::gamepadRawInputHook);
+    ThetaGP::Drivers::GPDriver::HIDDriver::registerHIDReportHook(TestInjector::hidReportHook);
+#endif
 
     LOG_INFO("Test API system initialized [THETAGP_ENABLE_TEST_API]");
 }

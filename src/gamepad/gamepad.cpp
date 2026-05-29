@@ -23,10 +23,6 @@
 
 #include "utils/log/log.h"
 
-#ifdef THETAGP_ENABLE_TEST_API
-#include "test/testinjector.h"
-#endif
-
 #include "drivers/device/keypad.h"
 #include "drivers/gpdriver/gpdrivermgr.h"
 #include <cstdint>
@@ -39,7 +35,7 @@ using Keypad = ThetaGP::Drivers::Device::Keypad;
 Gamepad::Gamepad() { setup(); }
 
 void Gamepad::setup() {
-  _state = GamepadState{};
+  _state = GamepadRawInput{};
   _inputDevice = nullptr;
   _initialized = true;
   _ready = false;
@@ -90,6 +86,13 @@ void Gamepad::setButtonMappings() {
 #endif
 }
 
+// --- GamepadRawInput hook (listener/callback, defaults to no-op) ---
+static Gamepad::GamepadRawInputHook g_gamepadRawInputHook = nullptr;
+
+void Gamepad::registerGamepadRawInputHook(GamepadRawInputHook hook) {
+  g_gamepadRawInputHook = hook;
+}
+
 /**
  * @brief Read input from registered keypad device
  */
@@ -130,9 +133,9 @@ void Gamepad::process() {
   }
   read();
 
-#ifdef THETAGP_ENABLE_TEST_API
-  ThetaGP::Test::TestInjector::getInstance().onGamepadState(_state);
-#endif
+  if (g_gamepadRawInputHook) {
+    g_gamepadRawInputHook(_state);
+  }
 
   _gpDriverMgr->getgpdriverDevice()->process(this);
 }

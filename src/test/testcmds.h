@@ -31,7 +31,7 @@ namespace ThetaGP::Test {
  * TestCmdHandler — handles commands in the `test.` domain.
  *
  * Supported commands (12 total):
- *   test.inject_gamepad_state  - Inject a GamepadState into the pipeline
+ *   test.inject_gamepad_state  - Inject a GamepadRawInput into the pipeline
  *   test.inject_hid_report     - Inject a HIDReport into the pipeline
  *   test.get_gamepad_state     - Read current gamepad state snapshot
  *   test.get_hid_report        - Read current HID report snapshot

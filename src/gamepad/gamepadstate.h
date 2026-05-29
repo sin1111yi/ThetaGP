@@ -129,7 +129,7 @@ const uint32_t buttonMasks[] = {
     GAMEPAD_MASK_E5, GAMEPAD_MASK_E6, GAMEPAD_MASK_E7, GAMEPAD_MASK_E8,
 };
 
-struct GamepadState {
+struct GamepadRawInput {
   uint8_t dpad{0};
   uint8_t dpadOriginal{0};
   uint32_t buttons{0};
@@ -146,10 +146,10 @@ struct GamepadState {
   float ema_2_y{GAMEPAD_JOYSTICK_MID};
 };
 
-// Convert the horizontal GamepadState dpad axis value into an analog value
+// Convert the horizontal GamepadRawInput dpad axis value into an analog value
 uint16_t dpadToAnalogX(uint8_t dpad);
 
-// Convert the vertical GamepadState dpad axis value into an analog value
+// Convert the vertical GamepadRawInput dpad axis value into an analog value
 uint16_t dpadToAnalogY(uint8_t dpad);
 
 uint8_t getMaskFromDirection(Enums::DpadDirection direction);
@@ -171,7 +171,7 @@ uint8_t filterToFourWayMode(uint8_t dpad);
  * @brief Run SOCD cleaning against a D-pad value.
  *
  * @param mode The SOCD cleaning mode.
- * @param dpad The GamepadState.dpad value.
+ * @param dpad The GamepadRawInput.dpad value.
  * @return uint8_t The clean D-pad value.
  */
 uint8_t runSOCDCleaner(Enums::SOCDMode mode, uint8_t dpad);
