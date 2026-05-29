@@ -156,6 +156,7 @@ Before any operation, query files in this order:
 lua tool.lua build --target BoringTechH743
 
 # Build with test API enabled
+# protocol/proto.h is auto-generated during cmake configure
 lua tool.lua config --target BoringTechH743 -DTHETAGP_ENABLE_TEST_API=ON
 lua tool.lua build
 

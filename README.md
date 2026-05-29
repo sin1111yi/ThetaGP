@@ -74,7 +74,12 @@ ThetaGP/
 │       ├── startup/            CMSIS startup file
 │       ├── link/               Linker script
 │       └── system/             HAL config, system init, syscalls
+├── openocd/                    OpenOCD configs
+├── protocol/                   Protocol definition & generated code
+│   ├── protocol.toml           Single source of truth (CDC JSON protocol)
+│   └── proto.h                 Generated C++ header (auto-regenerated at configure time)
 ├── scripts/                    Build & configuration tooling
+│   ├── gen_proto.py            Protocol code generator (TOML → C++/Rust/TS)
 │   ├── fetch_deps.lua          Dependency fetcher
 │   ├── generate_config.lua     Lua → C macro generator
 │   └── config_lib/             Generator & validator modules
@@ -89,7 +94,6 @@ ThetaGP/
 │   └── taskmanager.cpp/h       Task lifecycle
 ├── docs/                       Design documentation
 ├── lib/                        Third-party libraries
-├── openocd/                    OpenOCD configs
 ├── tool.lua                    Build/configure/flash helper
 ├── AGENTS.md                   AI agent behavior spec
 └── README.md                   This file
