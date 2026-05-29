@@ -25,6 +25,38 @@ cmake_minimum_required(VERSION 3.22)
 option(THETAGP_ENABLE_TEST_API "Enable test API infrastructure" OFF)
 
 # =============================================================================
+# Protocol Code Generation (configure-time)
+# =============================================================================
+# Run gen_proto.py at configure time to generate protocol/proto.h.
+# Only regenerates when protocol.toml changes (CMake tracks input/output).
+find_program(PYTHON3 python3)
+if(PYTHON3 AND THETAGP_ENABLE_TEST_API)
+    set(PROTO_TOML "${CMAKE_SOURCE_DIR}/protocol/protocol.toml")
+    set(PROTO_H "${CMAKE_SOURCE_DIR}/protocol/proto.h")
+    if(EXISTS "${PROTO_TOML}")
+        message(STATUS "Generating protocol/proto.h from protocol.toml ...")
+        execute_process(
+            COMMAND ${PYTHON3} "${CMAKE_SOURCE_DIR}/scripts/gen_proto.py"
+                --target cpp
+                --outdir-cpp "${CMAKE_SOURCE_DIR}/protocol"
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            RESULT_VARIABLE PROTO_GEN_RESULT
+        )
+        if(PROTO_GEN_RESULT EQUAL 0)
+            message(STATUS "Generated protocol/proto.h")
+            # Mark as generated for dependency tracking
+            set_property(SOURCE ${PROTO_H} PROPERTY GENERATED TRUE)
+        else()
+            message(WARNING "protocol/proto.h generation failed (exit=${PROTO_GEN_RESULT})")
+        endif()
+    else()
+        message(STATUS "protocol/protocol.toml not found — skipping code generation")
+    endif()
+else()
+    message(STATUS "Protocol code generation: skipped (python3=${PYTHON3}, test_api=${THETAGP_ENABLE_TEST_API})")
+endif()
+
+# =============================================================================
 # Source Files
 # =============================================================================
 
