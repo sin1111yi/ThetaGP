@@ -44,6 +44,10 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         message(STATUS "Set ThetaGP Log Level to Debug.")
         set(THETAGP_CFG_LOG_LEVEL "Debug")
     endif()
+
+    message(WARNING "Logging enabled (Debug build) — each log call adds ~100us delay. "
+                    "This may affect real-time performance of the 1kHz gamepad loop. "
+                    "Set -DCMAKE_BUILD_TYPE=Release to disable.")
 else()
     set(THETAGP_CFG_LOG_ENABLE 0)
 endif()
