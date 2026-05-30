@@ -22,6 +22,7 @@
 #pragma once
 
 #include "utils/mempool/mempoolmanager.h"
+#include "utils/types.h"
 #include <cstdint>
 
 namespace ThetaGP {
@@ -35,8 +36,8 @@ public:
     return instance;
   }
 
-  bool init();
-  Mempool::PoolID poolId() const { return _poolId; }
+  Result init();
+  [[nodiscard]] Mempool::PoolID poolId() const { return _poolId; }
 
 private:
   DevMem() = default;

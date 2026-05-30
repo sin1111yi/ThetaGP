@@ -66,17 +66,17 @@ public:
   virtual ~Bus();
 
   // ── Public API ──────────────────────────────────────────────
-  RetVal write(uint8_t byte);
-  RetVal write(const uint8_t *data, uint16_t len);
-  RetVal read(uint8_t *byte);
-  RetVal read(uint8_t *data, uint16_t len);
+  Result write(uint8_t byte);
+  Result write(const uint8_t *data, uint16_t len);
+  Result read(uint8_t *byte);
+  Result read(uint8_t *data, uint16_t len);
 
   // ── Configuration ───────────────────────────────────────────
   void setType(Type t) { _type = t; }
   void setMode(Mode m) { _mode = m; }
-  Type type() const { return _type; }
-  Mode mode() const { return _mode; }
-  bool isInitialized() const { return _initialized; }
+  [[nodiscard]] Type type() const { return _type; }
+  [[nodiscard]] Mode mode() const { return _mode; }
+  [[nodiscard]] bool isInitialized() const { return _initialized; }
   void setBuffers(uint8_t *txBuf, uint8_t *rxBuf, uint32_t size);
 
   // ── Lifecycle ───────────────────────────────────────────────
@@ -86,11 +86,11 @@ public:
 protected:
   Bus();
 
-  // ── Subclass hooks (all default to RetVal::Unsupported) ─────
-  virtual RetVal writeSync(const uint8_t *data, uint16_t len);
-  virtual RetVal readSync(uint8_t *data, uint16_t len);
-  virtual RetVal writeAsync(const uint8_t *data, uint16_t len);
-  virtual RetVal readAsync(uint8_t *data, uint16_t len);
+  // ── Subclass hooks (all default to Result::Unsupported) ─────
+  virtual Result writeSync(const uint8_t *data, uint16_t len);
+  virtual Result readSync(uint8_t *data, uint16_t len);
+  virtual Result writeAsync(const uint8_t *data, uint16_t len);
+  virtual Result readAsync(uint8_t *data, uint16_t len);
 
   // ── Members ─────────────────────────────────────────────────
   Type _type;

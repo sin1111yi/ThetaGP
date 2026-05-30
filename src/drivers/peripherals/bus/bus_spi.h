@@ -68,8 +68,8 @@ private:
   void enableRxDMA();
 
   // ── Subclass hooks (refactored: only Sync implemented) ──
-  RetVal writeSync(const uint8_t *data, uint16_t num) override;
-  RetVal readSync(uint8_t *data, uint16_t num) override;
+  Result writeSync(const uint8_t *data, uint16_t num) override;
+  Result readSync(uint8_t *data, uint16_t num) override;
 
   // DMA stubs removed — default Bus::writeAsync/readAsync return Unsupported.
   // When DMA support is needed, override writeAsync/readAsync here.
@@ -92,7 +92,7 @@ public:
    * Pass txData=nullptr to send dummy bytes (0xFF).
    * Pass rxData=nullptr to discard received bytes.
    */
-  RetVal transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len);
+  Result transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len);
 
   void init() override;
   void enableClock() override;

@@ -80,17 +80,17 @@ public:
   Mempool(const Mempool &) = delete;
   Mempool &operator=(const Mempool &) = delete;
 
-  PoolError init(void *memory, size_t size);
+  [[nodiscard]] PoolError init(void *memory, size_t size);
   void deinit();
 
-  void *alloc(size_t size);
-  PoolError free(void *ptr);
+  [[nodiscard]] void *alloc(size_t size);
+  [[nodiscard]] PoolError free(void *ptr);
 
-  bool isValidPtr(void *ptr) const;
-  PoolStats stats() const;
+  [[nodiscard]] bool isValidPtr(void *ptr) const;
+  [[nodiscard]] PoolStats stats() const;
 
-  size_t freeSize() const;
-  size_t usedSize() const { return _usedSize; }
+  [[nodiscard]] size_t freeSize() const;
+  [[nodiscard]] size_t usedSize() const { return _usedSize; }
 };
 
 } // namespace Mempool

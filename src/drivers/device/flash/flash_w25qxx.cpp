@@ -44,7 +44,7 @@ W25qxxFlash::W25qxxFlash()
 void W25qxxFlash::reset() {
   // Enable Reset + Reset Device sequence
   uint8_t tx[2] = {I_ENABLE_RESET, I_RESET_DEVICE};
-  _spi.transfer(tx, nullptr, sizeof(tx));
+  (void)_spi.transfer(tx, nullptr, sizeof(tx));
 }
 
 uint8_t W25qxxFlash::readStatusReg(uint8_t idx) {
@@ -65,13 +65,13 @@ uint8_t W25qxxFlash::readStatusReg(uint8_t idx) {
 
   uint8_t tx[2] = {cmd, 0x00};
   uint8_t rx[2] = {0};
-  _spi.transfer(tx, rx, sizeof(tx));
+  (void)_spi.transfer(tx, rx, sizeof(tx));
   return rx[1];
 }
 
 void W25qxxFlash::writeEnable() {
   uint8_t tx[1] = {I_WRITE_EN};
-  _spi.transfer(tx, nullptr, sizeof(tx));
+  (void)_spi.transfer(tx, nullptr, sizeof(tx));
   waitWhileBusy();
 }
 
@@ -82,7 +82,7 @@ void W25qxxFlash::waitWhileBusy() {
 
 void W25qxxFlash::set4ByteAddrMode(bool enable) {
   uint8_t tx[1] = {enable ? I_ENTER_4B_ADDR_MODE : I_EXIT_4B_ADDR_MODE};
-  _spi.transfer(tx, nullptr, sizeof(tx));
+  (void)_spi.transfer(tx, nullptr, sizeof(tx));
   _addrMode4Byte = enable;
 }
 
@@ -98,7 +98,7 @@ uint32_t W25qxxFlash::readId() {
   // Manufacturer/Device ID command (0x90): cmd + 3-byte address (0x000000)
   uint8_t tx[6] = {I_MANUF_DEV_ID, 0x00, 0x00, 0x00, 0x00, 0x00};
   uint8_t rx[6] = {0};
-  _spi.transfer(tx, rx, sizeof(tx));
+  (void)_spi.transfer(tx, rx, sizeof(tx));
   // rx[4] = manufacturer ID, rx[5] = device ID
   return (static_cast<uint32_t>(rx[4]) << 8) | static_cast<uint32_t>(rx[5]);
 }
@@ -233,7 +233,7 @@ bool W25qxxFlash::read(uint32_t addr, uint8_t *data, uint32_t len) {
     }
     // Fill remaining with dummy (0x00) — already zero from stack initialization
 
-    if (_spi.transfer(txBuf, rxBuf, totalLen) != RetVal::Ok) {
+    if (_spi.transfer(txBuf, rxBuf, totalLen) != Result::Ok) {
       return false;
     }
 
@@ -293,7 +293,7 @@ bool W25qxxFlash::write(uint32_t addr, const uint8_t *data, uint32_t len) {
     std::memcpy(&txBuf[cmdLen], currentData, writeLen);
 
     // Full-duplex transfer: send command + addr + data, discard rx
-    if (_spi.transfer(txBuf, rxBuf, totalLen) != RetVal::Ok) {
+    if (_spi.transfer(txBuf, rxBuf, totalLen) != Result::Ok) {
       return false;
     }
 
@@ -338,7 +338,7 @@ bool W25qxxFlash::eraseSector(uint32_t addr) {
     txBuf[3] = static_cast<uint8_t>(addr & 0xFF);
   }
 
-  if (_spi.transfer(txBuf, rxBuf, totalLen) != RetVal::Ok) {
+  if (_spi.transfer(txBuf, rxBuf, totalLen) != Result::Ok) {
     return false;
   }
 
@@ -358,7 +358,7 @@ bool W25qxxFlash::eraseChip() {
   uint8_t tx[1] = {I_CHIP_ERASE};
   uint8_t rx[1] = {0};
 
-  if (_spi.transfer(tx, rx, sizeof(tx)) != RetVal::Ok) {
+  if (_spi.transfer(tx, rx, sizeof(tx)) != Result::Ok) {
     return false;
   }
 

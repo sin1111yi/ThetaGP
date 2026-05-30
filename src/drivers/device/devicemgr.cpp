@@ -27,18 +27,22 @@ namespace ThetaGP::Drivers::Device {
 
 DeviceManager::DeviceManager() {}
 
-void DeviceManager::registerDevice(Device *device) {
-  if (!device || _count >= MAX_DEVICES) {
-    return;
+Result DeviceManager::registerDevice(Device *device) {
+  if (!device) {
+    return Result::InvalidParam;
+  }
+  if (_count >= MAX_DEVICES) {
+    return Result::NoMemory;
   }
 
   for (size_t i = 0; i < _count; i++) {
     if (_devices[i] == device) {
-      return;
+      return Result::Ok;
     }
   }
 
   _devices[_count++] = device;
+  return Result::Ok;
 }
 
 void DeviceManager::initDevices() {

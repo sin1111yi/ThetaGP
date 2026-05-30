@@ -48,9 +48,8 @@ SysHandler &SysHandler::getInstance() {
 // Handler functions (CommandHandler signature)
 // ---------------------------------------------------------------------------
 
-static void handleSysPing(const char *cmd, JsonDocument &doc) {
-    (void)cmd;
-    (void)doc;
+static void handleSysPing([[maybe_unused]] const char *cmd,
+                          [[maybe_unused]] JsonDocument &doc) {
     JsonDocument resp;
     resp["status"] = "ok";
     resp["cmd"] = "sys.ping";
@@ -59,9 +58,8 @@ static void handleSysPing(const char *cmd, JsonDocument &doc) {
     FrameLayer::getInstance().sendResponse(resp);
 }
 
-static void handleSysGetFwVersion(const char *cmd, JsonDocument &doc) {
-    (void)cmd;
-    (void)doc;
+static void handleSysGetFwVersion([[maybe_unused]] const char *cmd,
+                                  [[maybe_unused]] JsonDocument &doc) {
     JsonDocument resp;
     resp["status"] = "ok";
     resp["cmd"] = "sys.get_fw_version";
@@ -74,9 +72,8 @@ static void handleSysGetFwVersion(const char *cmd, JsonDocument &doc) {
     FrameLayer::getInstance().sendResponse(resp);
 }
 
-static void handleSysReset(const char *cmd, JsonDocument &doc) {
-    (void)cmd;
-    (void)doc;
+[[noreturn]] static void handleSysReset([[maybe_unused]] const char *cmd,
+                                         [[maybe_unused]] JsonDocument &doc) {
     JsonDocument resp;
     resp["status"] = "ok";
     resp["cmd"] = "sys.reset";
@@ -89,9 +86,8 @@ static void handleSysReset(const char *cmd, JsonDocument &doc) {
     NVIC_SystemReset();
 }
 
-static void handleSysEnterDfu(const char *cmd, JsonDocument &doc) {
-    (void)cmd;
-    (void)doc;
+static void handleSysEnterDfu([[maybe_unused]] const char *cmd,
+                              [[maybe_unused]] JsonDocument &doc) {
     JsonDocument resp;
     resp["status"] = "error";
     resp["cmd"] = "sys.enter_dfu";

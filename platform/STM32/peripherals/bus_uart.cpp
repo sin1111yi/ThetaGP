@@ -43,7 +43,7 @@ static constexpr uint32_t UART_POLL_TIMEOUT_MS = 10;
 
 using namespace ThetaGP::Drivers::Peripheral::BUS;
 using namespace ThetaGP::Drivers::Peripheral::GPIO;
-using ThetaGP::RetVal;
+using ThetaGP::Result;
 
 struct HalUart {
   UART_HandleTypeDef handle;
@@ -160,12 +160,12 @@ UartBus::UartBus(const UartDesc &desc) {
 
 UartBus::~UartBus() {
   if (_dmaTx) {
-    _dmaTx->deinit();
+    (void)_dmaTx->deinit();
     delete _dmaTx;
     _dmaTx = nullptr;
   }
   if (_dmaRx) {
-    _dmaRx->deinit();
+    (void)_dmaRx->deinit();
     delete _dmaRx;
     _dmaRx = nullptr;
   }
@@ -296,7 +296,7 @@ void UartBus::init() {
         .destIncrement = false,
     });
     _dmaTx->setCallback(uartTxDmaComplete, this);
-    _dmaTx->init();
+    (void)_dmaTx->init();
 
     // RX
     _dmaRx = DMA::DmaManager::getInstance().allocate(
@@ -311,7 +311,7 @@ void UartBus::init() {
         .destIncrement = true,
     });
     _dmaRx->setCallback(uartRxDmaComplete, this);
-    _dmaRx->init();
+    (void)_dmaRx->init();
   }
 #endif
 
@@ -319,7 +319,7 @@ void UartBus::init() {
 }
 
 // ── writeSync (LL polled write via TXE/TC flags) ──
-RetVal UartBus::writeSync(const uint8_t *data, uint16_t len) {
+Result UartBus::writeSync(const uint8_t *data, uint16_t len) {
 #if defined(STM32H7)
   if (_initialized && data && len > 0) {
     auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
@@ -331,7 +331,7 @@ RetVal UartBus::writeSync(const uint8_t *data, uint16_t len) {
       uint32_t tick = 0;
       while (!LL_USART_IsActiveFlag_TXE(UARTx)) {
         if (++tick > timeout) {
-          return RetVal::Timeout;
+          return Result::Timeout;
         }
       }
       LL_USART_TransmitData8(UARTx, data[i]);
@@ -342,19 +342,19 @@ RetVal UartBus::writeSync(const uint8_t *data, uint16_t len) {
       uint32_t tick = 0;
       while (!LL_USART_IsActiveFlag_TC(UARTx)) {
         if (++tick > timeout) {
-          return RetVal::Timeout;
+          return Result::Timeout;
         }
       }
       LL_USART_ClearFlag_TC(UARTx);
     }
-    return RetVal::Ok;
+    return Result::Ok;
   }
 #endif
-  return RetVal::Error;
+  return Result::Error;
 }
 
 // ── readSync (LL polled read via RXNE flag) ──
-RetVal UartBus::readSync(uint8_t *data, uint16_t len) {
+Result UartBus::readSync(uint8_t *data, uint16_t len) {
 #if defined(STM32H7)
   if (_initialized && data && len > 0) {
     auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
@@ -365,15 +365,15 @@ RetVal UartBus::readSync(uint8_t *data, uint16_t len) {
       uint32_t tick = 0;
       while (!LL_USART_IsActiveFlag_RXNE(UARTx)) {
         if (++tick > timeout) {
-          return RetVal::Timeout;
+          return Result::Timeout;
         }
       }
       data[i] = LL_USART_ReceiveData8(UARTx);
     }
-    return RetVal::Ok;
+    return Result::Ok;
   }
 #endif
-  return RetVal::Error;
+  return Result::Error;
 }
 
 void UartBus::setRxCallback(UartCallbackFunc cb, void *context) {
@@ -421,42 +421,42 @@ static void uartRxDmaComplete(void *context) {
 }
 
 // ── writeAsync (DMA write via LL CR3 DMAT control) ──
-RetVal UartBus::writeAsync(const uint8_t *data, uint16_t len) {
+Result UartBus::writeAsync(const uint8_t *data, uint16_t len) {
 #if defined(STM32H7)
   if (_initialized && _dmaTx && data && len > 0 && len <= _bufSize && _txBuf != nullptr) {
     if (isTxBusy()) {
-      return RetVal::Busy;
+      return Result::Busy;
     }
     std::memcpy(_txBuf, data, len);
     auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
-    _dmaTx->start(reinterpret_cast<uint32_t>(_txBuf),
+    (void)_dmaTx->start(reinterpret_cast<uint32_t>(_txBuf),
                   reinterpret_cast<uint32_t>(&huart->Instance->TDR), len);
     huart->Instance->CR3 |= USART_CR3_DMAT;
-    return RetVal::Ok;
+    return Result::Ok;
   }
 #endif
-  return RetVal::Error;
+  return Result::Error;
 }
 
 // ── readAsync (DMA read + idle line detection, LL CR3 DMAR/CR1 IDLEIE) ──
-RetVal UartBus::readAsync(uint8_t *data, uint16_t len) {
+Result UartBus::readAsync(uint8_t *data, uint16_t len) {
 #if defined(STM32H7)
   if (_initialized && _dmaRx && data && len > 0 && len <= _bufSize && _rxBuf != nullptr) {
     if (isRxBusy()) {
-      return RetVal::Busy;
+      return Result::Busy;
     }
     _readDmaBufPtr = data;
     _readDmaBufLen = len;
     _idleDetectionEnabled = true;
     auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
-    _dmaRx->start(reinterpret_cast<uint32_t>(&huart->Instance->RDR),
+    (void)_dmaRx->start(reinterpret_cast<uint32_t>(&huart->Instance->RDR),
                   reinterpret_cast<uint32_t>(_rxBuf), len);
     huart->Instance->CR3 |= USART_CR3_DMAR;
     huart->Instance->CR1 |= USART_CR1_IDLEIE;
-    return RetVal::Ok;
+    return Result::Ok;
   }
 #endif
-  return RetVal::Error;
+  return Result::Error;
 }
 
 bool UartBus::isBusy() const {
@@ -525,7 +525,7 @@ static void UARTx_IRQHandler(uint32_t uartIdx) {
   if ((isr & USART_ISR_IDLE) && instance->_idleDetectionEnabled &&
       instance->_dmaRx && instance->_readDmaBufPtr != nullptr) {
     UARTx->ICR = USART_ICR_IDLECF;
-    instance->_dmaRx->stop();
+    (void)instance->_dmaRx->stop();
     UARTx->CR3 &= ~USART_CR3_DMAR;
     UARTx->CR1 &= ~USART_CR1_IDLEIE;
     instance->_idleDetectionEnabled = false;

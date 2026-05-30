@@ -39,35 +39,52 @@ extern "C" {
 namespace ThetaGP {
 
 /**
- * @brief Return value status codes
+ * @brief Result type with [[nodiscard]] enforcement
  *
- * Modern C++ enum class for type safety
+ * Modern C++ class wrapping operation result codes.
+ * Use isOk() / isError() or compare against Result::Value constants.
  */
-enum class RetVal : int32_t {
-  Ok = 0,            // Operation succeeded
-  Error = -1,        // Operation failed
-  Timeout = -2,      // Operation timed out
-  Busy = -3,         // Resource busy
-  NoMemory = -4,     // Out of memory
-  InvalidParam = -5, // Invalid parameter
-  NotReady = -6,     // Device not ready
-  Unsupported = -7,  // Operation unsupported
+class [[nodiscard]] Result {
+public:
+  enum Value : int32_t {
+    Ok = 0,            // Operation succeeded
+    Error = -1,        // Operation failed
+    Timeout = -2,      // Operation timed out
+    Busy = -3,         // Resource busy
+    NoMemory = -4,     // Out of memory
+    InvalidParam = -5, // Invalid parameter
+    NotReady = -6,     // Device not ready
+    Unsupported = -7,  // Operation unsupported
+  };
+
+  constexpr Result() = default;
+  constexpr Result(Value v) : _value(v) {}
+
+  constexpr bool operator==(Value v) const { return _value == v; }
+  constexpr bool operator!=(Value v) const { return _value != v; }
+  constexpr bool operator==(const Result &) const = default;
+  constexpr bool operator!=(const Result &) const = default;
+
+  [[nodiscard]] constexpr bool isOk() const { return _value == Ok; }
+  [[nodiscard]] constexpr bool isError() const { return _value != Ok; }
+  [[nodiscard]] constexpr Value value() const { return _value; }
+
+  [[nodiscard]] const char *toString() const;
+
+private:
+  Value _value = Ok;
 };
 
 /**
- * @brief Check if return value indicates success
+ * @brief Check if result indicates success
  */
-constexpr inline bool isOk(RetVal rv) { return rv == RetVal::Ok; }
+[[nodiscard]] constexpr inline bool isOk(Result r) { return r.isOk(); }
 
 /**
- * @brief Check if return value indicates error
+ * @brief Check if result indicates error
  */
-constexpr inline bool isError(RetVal rv) { return rv != RetVal::Ok; }
+[[nodiscard]] constexpr inline bool isError(Result r) { return r.isError(); }
 
 } // namespace ThetaGP
-
-// C compatibility macro
-#define RETVAL_OK  static_cast<int32_t>(ThetaGP::RetVal::Ok)
-#define RETVAL_ERR static_cast<int32_t>(ThetaGP::RetVal::Error)
 
 #endif // __cplusplus

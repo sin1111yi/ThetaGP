@@ -151,7 +151,7 @@ void HardwareUSB::initFullSpeedPins() {
 #endif
 }
 
-ThetaGP::RetVal HardwareUSB::init() {
+ThetaGP::Result HardwareUSB::init() {
   enableClock();
 
   HAL_PWREx_EnableUSBVoltageDetector();
@@ -168,7 +168,7 @@ ThetaGP::RetVal HardwareUSB::init() {
   }
   /* clang-format on */
 
-  return RetVal::Ok;
+  return Result::Ok;
 }
 
 #ifdef __cplusplus

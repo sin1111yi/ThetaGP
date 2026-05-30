@@ -41,7 +41,7 @@
 
 using namespace ThetaGP::Drivers::Peripheral::BUS;
 using namespace ThetaGP::Drivers::Peripheral::GPIO;
-using ThetaGP::RetVal;
+using ThetaGP::Result;
 
 struct HalSpi {
   SPI_HandleTypeDef handle;
@@ -260,10 +260,10 @@ void SpiBus::init() {
 
 // ── Synchronous write (was writeBytesPolling) ──
 
-RetVal SpiBus::writeSync(const uint8_t *data, uint16_t num) {
+Result SpiBus::writeSync(const uint8_t *data, uint16_t num) {
 #if defined(STM32H7)
   if (!_initialized || !data || num == 0)
-    return RetVal::InvalidParam;
+    return Result::InvalidParam;
 
   uint16_t offset = 0;
   while (offset < num) {
@@ -271,47 +271,47 @@ RetVal SpiBus::writeSync(const uint8_t *data, uint16_t num) {
     uint16_t thisLen = (remaining < _bufSize) ? remaining : _bufSize;
     std::memcpy(_txBuf, data + offset, thisLen);
     if (HAL_SPI_Transmit(&HANDLE, _txBuf, thisLen, HAL_MAX_DELAY) != HAL_OK)
-      return RetVal::Error;
+      return Result::Error;
     offset += thisLen;
   }
-  return RetVal::Ok;
+  return Result::Ok;
 #else
   (void)data;
   (void)num;
-  return RetVal::Error;
+  return Result::Error;
 #endif
 }
 
 // ── Synchronous read (was readBytesPolling) ──
 
-RetVal SpiBus::readSync(uint8_t *data, uint16_t num) {
+Result SpiBus::readSync(uint8_t *data, uint16_t num) {
 #if defined(STM32H7)
   if (!_initialized || !data || num == 0)
-    return RetVal::InvalidParam;
+    return Result::InvalidParam;
 
   uint16_t offset = 0;
   while (offset < num) {
     uint16_t remaining = num - offset;
     uint16_t thisLen = (remaining < _bufSize) ? remaining : _bufSize;
     if (HAL_SPI_Receive(&HANDLE, data + offset, thisLen, HAL_MAX_DELAY) != HAL_OK)
-      return RetVal::Error;
+      return Result::Error;
     offset += thisLen;
   }
-  return RetVal::Ok;
+  return Result::Ok;
 #else
   (void)data;
   (void)num;
-  return RetVal::Error;
+  return Result::Error;
 #endif
 }
 
 // ── Full-duplex transfer (SPI-specific) ──
 // Handles NCS assertion/deassertion and simultaneous TX/RX.
 
-RetVal SpiBus::transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len) {
+Result SpiBus::transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len) {
 #if defined(STM32H7)
   if (!_initialized || len == 0) {
-    return RetVal::InvalidParam;
+    return Result::InvalidParam;
   }
 
   // Assert NCS (chip select) — output low for entire multi-chunk transfer
@@ -332,28 +332,28 @@ RetVal SpiBus::transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len) {
       if (HAL_SPI_TransmitReceive(&HANDLE, _txBuf, rxData + offset, thisLen,
                                   HAL_MAX_DELAY) != HAL_OK) {
         ncs.set();
-        return RetVal::Error;
+        return Result::Error;
       }
     } else if (txData != nullptr) {
       // TX only (MOSI only)
       std::memcpy(_txBuf, txData + offset, thisLen);
       if (HAL_SPI_Transmit(&HANDLE, _txBuf, thisLen, HAL_MAX_DELAY) != HAL_OK) {
         ncs.set();
-        return RetVal::Error;
+        return Result::Error;
       }
     } else if (rxData != nullptr) {
       // RX only (send dummy 0xFF to clock in data)
       if (HAL_SPI_Receive(&HANDLE, rxData + offset, thisLen,
                           HAL_MAX_DELAY) != HAL_OK) {
         ncs.set();
-        return RetVal::Error;
+        return Result::Error;
       }
     } else {
       // Both null: send dummy 0xFF bytes, discard RX
       std::memset(_txBuf, 0xFF, thisLen);
       if (HAL_SPI_Transmit(&HANDLE, _txBuf, thisLen, HAL_MAX_DELAY) != HAL_OK) {
         ncs.set();
-        return RetVal::Error;
+        return Result::Error;
       }
     }
 
@@ -363,11 +363,11 @@ RetVal SpiBus::transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len) {
   // De-assert NCS (chip select) — output high
   ncs.set();
 
-  return RetVal::Ok;
+  return Result::Ok;
 #else
   (void)txData;
   (void)rxData;
   (void)len;
-  return RetVal::Error;
+  return Result::Error;
 #endif
 }

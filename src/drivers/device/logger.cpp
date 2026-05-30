@@ -59,5 +59,5 @@ void Logger::LoggerTransmitBytes(uint8_t *data, uint16_t n) {
     return;
   if (logger._uart.isTxBusy())
     return;
-  logger._uart.write(data, n);
+  (void)logger._uart.write(data, n);
 }

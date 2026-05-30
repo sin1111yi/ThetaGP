@@ -75,7 +75,7 @@ private:
 public:
   HardwareUSB(USBSpeed speed, USBPeripheral peripheral);
 
-  RetVal init();
+  [[nodiscard]] Result init();
   bool isInitialized() const { return _initialized; }
 };
 

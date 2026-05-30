@@ -26,7 +26,7 @@
  * After refactor:
  *   - No function pointer dispatch (removed _writeByteFn etc.)
  *   - No setupCallbacks() — dispatch is a simple switch in write()/read()
- *   - All subclass hooks default to RetVal::Unsupported
+ *   - All subclass hooks default to Result::Unsupported
  *   - Single-byte write/read delegated to multi-byte variants
  */
 
@@ -58,36 +58,36 @@ void Bus::init() {
 }
 
 // ── Default subclass hooks (all return Unsupported) ──────────
-RetVal Bus::writeSync(const uint8_t *, uint16_t) {
-  return RetVal::Unsupported;
+Result Bus::writeSync(const uint8_t *, uint16_t) {
+  return Result::Unsupported;
 }
 
-RetVal Bus::readSync(uint8_t *, uint16_t) {
-  return RetVal::Unsupported;
+Result Bus::readSync(uint8_t *, uint16_t) {
+  return Result::Unsupported;
 }
 
-RetVal Bus::writeAsync(const uint8_t *, uint16_t) {
-  return RetVal::Unsupported;
+Result Bus::writeAsync(const uint8_t *, uint16_t) {
+  return Result::Unsupported;
 }
 
-RetVal Bus::readAsync(uint8_t *, uint16_t) {
-  return RetVal::Unsupported;
+Result Bus::readAsync(uint8_t *, uint16_t) {
+  return Result::Unsupported;
 }
 
 // ── Single-byte convenience (delegates to multi-byte) ────────
-RetVal Bus::write(uint8_t byte) {
+Result Bus::write(uint8_t byte) {
   return write(&byte, 1);
 }
 
-RetVal Bus::read(uint8_t *byte) {
-  if (byte == nullptr) return RetVal::InvalidParam;
+Result Bus::read(uint8_t *byte) {
+  if (byte == nullptr) return Result::InvalidParam;
   return read(byte, 1);
 }
 
 // ── Multi-byte dispatch ──────────────────────────────────────
-RetVal Bus::write(const uint8_t *data, uint16_t len) {
+Result Bus::write(const uint8_t *data, uint16_t len) {
   if (data == nullptr || len == 0) {
-    return RetVal::InvalidParam;
+    return Result::InvalidParam;
   }
 
   switch (_mode) {
@@ -97,12 +97,12 @@ RetVal Bus::write(const uint8_t *data, uint16_t len) {
     return writeAsync(data, len);
   }
 
-  return RetVal::Error;
+  return Result::Error;
 }
 
-RetVal Bus::read(uint8_t *data, uint16_t len) {
+Result Bus::read(uint8_t *data, uint16_t len) {
   if (data == nullptr || len == 0) {
-    return RetVal::InvalidParam;
+    return Result::InvalidParam;
   }
 
   switch (_mode) {
@@ -112,7 +112,7 @@ RetVal Bus::read(uint8_t *data, uint16_t len) {
     return readAsync(data, len);
   }
 
-  return RetVal::Error;
+  return Result::Error;
 }
 
 } // namespace BUS

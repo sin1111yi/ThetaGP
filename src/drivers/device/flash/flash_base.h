@@ -62,25 +62,25 @@ public:
   // ── Pure virtual interface ──────────────────────────────────
 
   /** @brief Read len bytes from addr into data buffer */
-  virtual bool read(uint32_t addr, uint8_t *data, uint32_t len) = 0;
+  [[nodiscard]] virtual bool read(uint32_t addr, uint8_t *data, uint32_t len) = 0;
 
   /** @brief Write len bytes from data buffer to addr */
-  virtual bool write(uint32_t addr, const uint8_t *data, uint32_t len) = 0;
+  [[nodiscard]] virtual bool write(uint32_t addr, const uint8_t *data, uint32_t len) = 0;
 
   /** @brief Erase a 4KB sector starting at addr */
-  virtual bool eraseSector(uint32_t addr) = 0;
+  [[nodiscard]] virtual bool eraseSector(uint32_t addr) = 0;
 
   /** @brief Erase entire chip (may take many seconds) */
-  virtual bool eraseChip() = 0;
+  [[nodiscard]] virtual bool eraseChip() = 0;
 
   /** @brief Read the chip identification (manufacturer + device) */
-  virtual uint32_t readId() = 0;
+  [[nodiscard]] virtual uint32_t readId() = 0;
 
   /** @brief Get const reference to flash information struct */
-  virtual const FlashInfo &getInfo() const = 0;
+  [[nodiscard]] virtual const FlashInfo &getInfo() const = 0;
 
   /** @brief Check if the flash is busy (erase/program in progress) */
-  virtual bool isBusy() = 0;
+  [[nodiscard]] virtual bool isBusy() = 0;
 
 protected:
   Drivers::Peripheral::BUS::SpiBus &_spi;

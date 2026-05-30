@@ -45,13 +45,13 @@ public:
 
   // ── FlashBase interface ─────────────────────────────────────
   void init() override;
-  bool read(uint32_t addr, uint8_t *data, uint32_t len) override;
-  bool write(uint32_t addr, const uint8_t *data, uint32_t len) override;
-  bool eraseSector(uint32_t addr) override;
-  bool eraseChip() override;
-  uint32_t readId() override;
-  const FlashInfo &getInfo() const override;
-  bool isBusy() override;
+  [[nodiscard]] bool read(uint32_t addr, uint8_t *data, uint32_t len) override;
+  [[nodiscard]] bool write(uint32_t addr, const uint8_t *data, uint32_t len) override;
+  [[nodiscard]] bool eraseSector(uint32_t addr) override;
+  [[nodiscard]] bool eraseChip() override;
+  [[nodiscard]] uint32_t readId() override;
+  [[nodiscard]] const FlashInfo &getInfo() const override;
+  [[nodiscard]] bool isBusy() override;
 
 private:
   W25qxxFlash();

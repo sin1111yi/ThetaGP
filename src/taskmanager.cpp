@@ -84,7 +84,7 @@ TID TaskManager::createTask(const char *name, const char *subName,
   TaskAttribute *attr = static_cast<TaskAttribute *>(
       Mempool::MempoolManager::alloc(taskPoolId, sizeof(TaskAttribute)));
   if (!attr) {
-    Mempool::MempoolManager::free(taskPoolId, task);
+    (void)Mempool::MempoolManager::free(taskPoolId, task);
     return -1;
   }
 
@@ -124,8 +124,8 @@ void TaskManager::destroyTask(TID tid) {
 
   TaskRecord &rec = records[tid];
   scheduler->queueRemove(rec.task);
-  Mempool::MempoolManager::free(taskPoolId, rec.attribute);
-  Mempool::MempoolManager::free(taskPoolId, rec.task);
+  (void)Mempool::MempoolManager::free(taskPoolId, rec.attribute);
+  (void)Mempool::MempoolManager::free(taskPoolId, rec.task);
 
   rec.task = nullptr;
   rec.attribute = nullptr;

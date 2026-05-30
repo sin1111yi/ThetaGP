@@ -58,21 +58,21 @@ void ThetaGamepad::setup() {
   Mempool::MempoolManager::init();
 
   // initialize Device memory pool (AXI SRAM)
-  Drivers::Device::DevMem::getInstance().init();
+  (void)Drivers::Device::DevMem::getInstance().init();
 
   // setup peripherals' driver
   Drivers::Peripheral::PeripheralsManager::getInstance().initPeripherals();
 
   // setup devices' driver
-  Drivers::Device::DeviceManager::getInstance().registerDevice(
+  (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::Keypad::getInstance());
-  Drivers::Device::DeviceManager::getInstance().registerDevice(
+  (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::SystemTimer::getInstance());
 #ifdef LOGGER_UART
-  Drivers::Device::DeviceManager::getInstance().registerDevice(
+  (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::Logger::getInstance());
 #endif
-  Drivers::Device::DeviceManager::getInstance().registerDevice(
+  (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::FlashBase::getInstance());
 
   Drivers::Device::DeviceManager::getInstance().initDevices();

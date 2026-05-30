@@ -81,10 +81,10 @@ private:
   void *_txContext = nullptr;
 
   // ── Subclass hooks (refactored base Bus interface) ──
-  RetVal writeSync(const uint8_t *data, uint16_t len) override;
-  RetVal readSync(uint8_t *data, uint16_t len) override;
-  RetVal writeAsync(const uint8_t *data, uint16_t len) override;
-  RetVal readAsync(uint8_t *data, uint16_t len) override;
+  Result writeSync(const uint8_t *data, uint16_t len) override;
+  Result readSync(uint8_t *data, uint16_t len) override;
+  Result writeAsync(const uint8_t *data, uint16_t len) override;
+  Result readAsync(uint8_t *data, uint16_t len) override;
 
 public:
   UartBus(UartInstance uartx, GPIO::PinDesc tx, GPIO::PinDesc rx,

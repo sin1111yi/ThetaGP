@@ -40,11 +40,11 @@ public:
   void initPeripherals();
 
   // ── Bus access ──
-  BUS::SpiBus &spiBus(int idx);
-  BUS::UartBus &uartBus(int idx);
+  [[nodiscard]] BUS::SpiBus &spiBus(int idx);
+  [[nodiscard]] BUS::UartBus &uartBus(int idx);
 
   // ── Timer ──
-  TIMER::Instance reservedTimer();
+  [[nodiscard]] TIMER::Instance reservedTimer();
 
 private:
   // ── Bus instance storage (raw storage + placement new) ──
@@ -60,8 +60,8 @@ private:
   BUS::UartBus *_uartBuses = reinterpret_cast<BUS::UartBus *>(_uartBufStorage);
 #endif
 
-  void initSpiBuses();    // 从 SPI_DESC_DATA 构造
-  void initUartBuses();   // 从 UART_DESC_DATA 构造
+  void initSpiBuses();
+  void initUartBuses();
 };
 
 } // namespace ThetaGP::Drivers::Peripheral

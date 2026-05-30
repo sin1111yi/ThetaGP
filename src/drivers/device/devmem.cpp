@@ -23,17 +23,18 @@
 #include "drivers/device/devmem.h"
 
 using namespace ThetaGP::Drivers::Device;
+using ThetaGP::Result;
 
 #define DEV_MEMPOOL_SIZE (2048 + 2048 + 16)
 
 COMMON_CODE static uint8_t s_DevMempool[DEV_MEMPOOL_SIZE];
 
-bool DevMem::init() {
+Result DevMem::init() {
   _poolId = ThetaGP::Mempool::MempoolManager::createPool(
       s_DevMempool, DEV_MEMPOOL_SIZE, "DevPool");
   if (_poolId == ThetaGP::Mempool::INVALID_POOL_ID) {
-    return false;
+    return Result::NoMemory;
   }
   _initialized = true;
-  return true;
+  return Result::Ok;
 }

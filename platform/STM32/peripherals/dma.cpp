@@ -31,7 +31,7 @@
 
 #include <cstring>
 
-using ThetaGP::RetVal;
+using ThetaGP::Result;
 using namespace ThetaGP::Drivers::Peripheral::DMA;
 
 // ── Constants ──
@@ -146,7 +146,7 @@ DmaChannel::DmaChannel(Controller controller, Stream stream)
 }
 
 DmaChannel::~DmaChannel() {
-  deinit();
+  (void)deinit();
 }
 
 void DmaChannel::setRequestId(uint32_t dmamuxRequestId) {
@@ -182,15 +182,15 @@ void DmaChannel::disableClock() {
 #endif
 }
 
-RetVal DmaChannel::init() {
+Result DmaChannel::init() {
   if (_initialized) {
-    return RetVal::Ok;
+    return Result::Ok;
   }
 
 #if defined(STM32H7)
   const auto idx = streamIndex(_ctrl, _stream);
   if (idx >= DMA_STREAM_TOTAL || streamInstances[idx] == nullptr) {
-    return RetVal::Error;
+    return Result::Error;
   }
 
   auto *dma = dmaControllers[idx];
@@ -272,15 +272,15 @@ RetVal DmaChannel::init() {
   HAL_NVIC_EnableIRQ(streamIRQn[idx]);
 
   _initialized = true;
-  return RetVal::Ok;
+  return Result::Ok;
 #else
-  return RetVal::Error;
+  return Result::Error;
 #endif
 }
 
-RetVal DmaChannel::deinit() {
+Result DmaChannel::deinit() {
   if (!_initialized) {
-    return RetVal::Ok;
+    return Result::Ok;
   }
 
 #if defined(STM32H7)
@@ -302,16 +302,16 @@ RetVal DmaChannel::deinit() {
   dmaIsrTable[idx].context = nullptr;
 
   _initialized = false;
-  return RetVal::Ok;
+  return Result::Ok;
 #else
-  return RetVal::Error;
+  return Result::Error;
 #endif
 }
 
-RetVal DmaChannel::start(uint32_t srcAddress, uint32_t dstAddress,
+Result DmaChannel::start(uint32_t srcAddress, uint32_t dstAddress,
                          uint16_t dataCount) {
   if (!_initialized) {
-    return RetVal::Error;
+    return Result::Error;
   }
 
 #if defined(STM32H7)
@@ -344,15 +344,15 @@ RetVal DmaChannel::start(uint32_t srcAddress, uint32_t dstAddress,
   LL_DMA_EnableIT_TE(dma, stream);
   LL_DMA_EnableStream(dma, stream);
 
-  return RetVal::Ok;
+  return Result::Ok;
 #else
-  return RetVal::Error;
+  return Result::Error;
 #endif
 }
 
-RetVal DmaChannel::stop() {
+Result DmaChannel::stop() {
   if (!_initialized) {
-    return RetVal::Ok;
+    return Result::Ok;
   }
 
 #if defined(STM32H7)
@@ -372,9 +372,9 @@ RetVal DmaChannel::stop() {
   LL_DMA_DisableIT_TC(dma, stream);
   LL_DMA_DisableIT_TE(dma, stream);
 
-  return RetVal::Ok;
+  return Result::Ok;
 #else
-  return RetVal::Error;
+  return Result::Error;
 #endif
 }
 

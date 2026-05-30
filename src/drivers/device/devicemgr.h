@@ -13,7 +13,7 @@
  * PARTICULAR PURPOSE. See the GNU General Public License
  * for more details.
  *
- * You should have received a copy of the GNU General Public
+ * You should have not received a copy of the GNU General Public
  * License along with this program.
  *
  * If not, see <https://www.gnu.org/licenses/>.
@@ -22,6 +22,7 @@
 #pragma once
 
 #include "drivers/device/device.h"
+#include "utils/types.h"
 
 #include <array>
 #include <cstddef>
@@ -42,12 +43,12 @@ public:
     return instance;
   }
 
-  void registerDevice(Device *device);
+  Result registerDevice(Device *device);
   void initDevices();
 
-  Device *findDevice(const char *name) const;
-  Device *getDevice(size_t index) const;
-  size_t getDeviceCount() const { return _count; }
+  [[nodiscard]] Device *findDevice(const char *name) const;
+  [[nodiscard]] Device *getDevice(size_t index) const;
+  [[nodiscard]] size_t getDeviceCount() const { return _count; }
 };
 
 } // namespace ThetaGP::Drivers::Device

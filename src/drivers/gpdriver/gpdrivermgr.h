@@ -37,10 +37,10 @@ public:
     return instance;
   }
 
-  GPDriver *getgpdriverDevice() { return usbdevice; }
+  [[nodiscard]] GPDriver *getgpdriverDevice() { return usbdevice; }
   void setup(InputMode mode);
-  InputMode getInputMode() { return inputMode; }
-  bool isConfigMode() { return (inputMode == InputMode::Config); }
+  [[nodiscard]] InputMode getInputMode() { return inputMode; }
+  [[nodiscard]] bool isConfigMode() { return (inputMode == InputMode::Config); }
 
 private:
   GPDriverManager() = default;

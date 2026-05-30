@@ -56,7 +56,7 @@ public:
    * @return DmaChannel* on success, nullptr if all streams on that
    *         controller are already allocated
    */
-  DmaChannel *allocate(Controller ctrl, uint32_t requestId);
+  [[nodiscard]] DmaChannel *allocate(Controller ctrl, uint32_t requestId);
 
 private:
   DmaManager() = default;

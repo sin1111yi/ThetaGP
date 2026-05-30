@@ -87,7 +87,7 @@ void PeripheralsManager::initPeripherals() {
 #endif
 
   USB::HardwareUSB hwusb(usbSpeed, usbPeriph);
-  hwusb.init();
+  (void)hwusb.init();
 }
 
 void PeripheralsManager::initSpiBuses() {

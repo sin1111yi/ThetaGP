@@ -127,16 +127,16 @@ public:
   void setCallback(DmaIsrCallback cb, void *context = nullptr);
 
   // --- Lifecycle ---
-  RetVal init();
-  RetVal deinit();
+  [[nodiscard]] Result init();
+  [[nodiscard]] Result deinit();
 
   // --- Transfer control ---
-  RetVal start(uint32_t srcAddress, uint32_t dstAddress,
+  [[nodiscard]] Result start(uint32_t srcAddress, uint32_t dstAddress,
                uint16_t dataCount);
-  RetVal stop();
+  [[nodiscard]] Result stop();
 
   // --- Status ---
-  bool isBusy() const;
+  [[nodiscard]] bool isBusy() const;
   bool isInitialized() const { return _initialized; }
   void *halHandle() const { return _halHandle; }
 
