@@ -33,19 +33,6 @@ using namespace ThetaGP::Drivers::Peripheral;
 using namespace ThetaGP::Drivers::Peripheral::BUS;
 using namespace ThetaGP::Drivers::Peripheral::GPIO;
 
-// Static desc tables from BoardConfig.h DESC_DATA macros
-#if defined(USE_SPI_COUNT) && USE_SPI_COUNT > 0
-static constexpr BUS::SpiDesc g_spiDescTable[USE_SPI_COUNT] = {
-    SPI_DESC_DATA
-};
-#endif
-
-#if defined(USE_UART_COUNT) && USE_UART_COUNT > 0
-static constexpr BUS::UartDesc g_uartDescTable[USE_UART_COUNT] = {
-    UART_DESC_DATA
-};
-#endif
-
 PeripheralsManager::PeripheralsManager() {}
 
 TIMER::Instance PeripheralsManager::reservedTimer(void) {
@@ -91,27 +78,46 @@ void PeripheralsManager::initPeripherals() {
 }
 
 void PeripheralsManager::initSpiBuses() {
-#if defined(USE_SPI_COUNT) && USE_SPI_COUNT > 0
-  for (int i = 0; i < USE_SPI_COUNT; i++) {
-    new (&_spiBuses[i]) BUS::SpiBus(g_spiDescTable[i]);
-  }
-  // Buses are constructed with buffer pointers = nullptr.
-  // Device init() must alloc via MempoolManager + setBuffers + bus.init().
+#if defined(SPI_DESC_DATA)
+  static BUS::SpiBus g_buses[] = { BUS::SpiBus{ SPI_DESC_DATA } };
+  _spiBuses = g_buses;
+  _spiCount = sizeof(g_buses) / sizeof(g_buses[0]);
+#else
+  _spiBuses = nullptr;
+  _spiCount = 0;
 #endif
 }
 
 void PeripheralsManager::initUartBuses() {
-#if defined(USE_UART_COUNT) && USE_UART_COUNT > 0
-  for (int i = 0; i < USE_UART_COUNT; i++) {
-    new (&_uartBuses[i]) BUS::UartBus(g_uartDescTable[i]);
-  }
+#if defined(UART_DESC_DATA)
+  static BUS::UartBus g_buses[] = { BUS::UartBus{ UART_DESC_DATA } };
+  _uartBuses = g_buses;
+  _uartCount = sizeof(g_buses) / sizeof(g_buses[0]);
+#else
+  _uartBuses = nullptr;
+  _uartCount = 0;
 #endif
 }
 
 BUS::SpiBus &PeripheralsManager::spiBus(int idx) {
+  static BUS::SpiBus s_dummy(
+      BUS::SpiInstance::SpiNone,
+      {GPIO::Port::PortNone, GPIO::Pin::PinNone},
+      {GPIO::Port::PortNone, GPIO::Pin::PinNone},
+      {GPIO::Port::PortNone, GPIO::Pin::PinNone},
+      {GPIO::Port::PortNone, GPIO::Pin::PinNone});
+  if (idx < 0 || idx >= static_cast<int>(_spiCount) || !_spiBuses)
+    return s_dummy;
   return _spiBuses[idx];
 }
 
 BUS::UartBus &PeripheralsManager::uartBus(int idx) {
+  static BUS::UartBus s_dummy(
+      BUS::UartInstance::UartNone,
+      {GPIO::Port::PortNone, GPIO::Pin::PinNone},
+      {GPIO::Port::PortNone, GPIO::Pin::PinNone},
+      115200);
+  if (idx < 0 || idx >= static_cast<int>(_uartCount) || !_uartBuses)
+    return s_dummy;
   return _uartBuses[idx];
 }

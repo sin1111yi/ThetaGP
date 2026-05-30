@@ -37,6 +37,7 @@ enum class SpiInstance {
   Spi4,
   Spi5,
   Spi6,
+  SpiNone = 0xFF,
 };
 
 // Abstract bus index → PeripheralsManager array index
