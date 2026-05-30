@@ -52,6 +52,7 @@ public:
 
     static TestCmdHandler &getInstance();
     static void handle(const char *cmd, JsonDocument &doc);
+    static void registerHandlers();
 };
 
 #else
@@ -61,6 +62,7 @@ class TestCmdHandler {
 public:
     static TestCmdHandler &getInstance() { static TestCmdHandler i; return i; }
     static void handle(const char *, JsonDocument &) {}
+    static void registerHandlers() {}
 };
 
 #endif

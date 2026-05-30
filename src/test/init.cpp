@@ -35,11 +35,10 @@ namespace ThetaGP::Test {
 
 void initTestSystem() {
     FrameLayer &framelayer = FrameLayer::getInstance();
-    Dispatcher &dispatcher = Dispatcher::getInstance();
 
-    // Register domain handlers
-    dispatcher.registerHandler("sys", SysHandler::handle);
-    dispatcher.registerHandler("test", TestCmdHandler::handle);
+    // Each domain handler self-registers
+    SysHandler::registerHandlers();
+    TestCmdHandler::registerHandlers();
 
     // Wire frame-complete callback -> dispatcher
     framelayer.setFrameCallback(Dispatcher::dispatch);

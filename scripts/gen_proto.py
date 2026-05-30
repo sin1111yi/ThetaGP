@@ -144,7 +144,7 @@ def gen_cpp(proto: dict, out: Optional[Path] = None) -> str:
     w("#include <ArduinoJson.h>")
     w("#include <cstdint>")
     w("#include <cstring>")
-    w("#include <functional>")
+
 
     # Add includes for codebase-owned types
     for t in types:
@@ -163,13 +163,7 @@ def gen_cpp(proto: dict, out: Optional[Path] = None) -> str:
     w("// =============================================================================")
     w("// Error Codes")
     w("// =============================================================================")
-    w("namespace ThetaGP { namespace Proto {")
-    w("enum class ErrorCode : uint8_t {")
-    for name, info in error_codes.items():
-        w(f"    {name} = {info['code']}, // {sanitize_cpp_comment(info['description'])}")
-    w("};")
-    w("}} // namespace ThetaGP::Proto")
-    w()
+    class ProtoErrorCodeTag: pass  # marker for the class context
 
     # ── Enums ────────────────────────────────────────────────────────────────
     for enum_info in enums:
@@ -241,43 +235,40 @@ def gen_cpp(proto: dict, out: Optional[Path] = None) -> str:
                 w("}")
         w()
 
-    # ── Serialize helpers ────────────────────────────────────────────────────
-    w("// =============================================================================")
-    w("// Serialize helpers")
-    w("// =============================================================================")
-    w("namespace ThetaGP { namespace Proto {")
-
-    # Add using declarations so bare names work in serializers
-    for t in types:
-        ns = t.get("namespace", "")
-        name = t["name"]
-        # HIDReport is a C-style typedef in global scope — no using needed
+    # Resolve fully-qualified C++ name for a type
+    def fq_type_name(name: str, ns: str) -> str:
         if name == "HIDReport":
-            continue
+            return "HIDReport"  # C-style typedef at global scope, accessible from ThetaGP::
         if ns:
-            w(f"using {ns}::{name};")
+            return f"::{ns}::{name}"
+        return name
 
-    w()
+    # ── Serialize helpers (accumulated into buffer, emitted inside class) ────
+    _serialize_lines: List[str] = []
+
+    def sw(line: str = "") -> None:
+        _serialize_lines.append(line)
 
     for t in types:
         name = t["name"]
         ns = t.get("namespace", "")
+        fq = fq_type_name(name, ns)
         desc = sanitize_cpp_comment(t.get("description", ""))
-        w(f"// Serialize {name} into a JsonObject")
-        w(f"inline void serialize_{to_snake(name)}(JsonObject obj, const {name} &v) {{")
+        sw(f"    // Serialize {name} into a JsonObject")
+        sw(f"    inline static void serialize{name}(JsonObject obj, const {fq} &v) {{")
         for f in t["fields"]:
             if f.get("omit_in_serialize"):
                 continue
             json_key = f["json"]
             field_name = f["name"]
             if json_key:
-                w(f'    obj["{json_key}"] = v.{field_name};')
-        w("}")
-        w()
+                sw(f'        obj["{json_key}"] = v.{field_name};')
+        sw("    }")
+        sw()
 
         # Deserialize
-        w(f"// Deserialize {name} from a JsonDocument")
-        w(f"inline void deserialize_{to_snake(name)}(const JsonDocument &doc, {name} &v) {{")
+        sw(f"    // Deserialize {name} from a JsonDocument")
+        sw(f"    inline static void deserialize{name}(const JsonDocument &doc, {fq} &v) {{")
         for f in t["fields"]:
             if f.get("omit_in_serialize"):
                 continue
@@ -291,107 +282,77 @@ def gen_cpp(proto: dict, out: Optional[Path] = None) -> str:
                 mid_defaults = {"lx": "GAMEPAD_JOYSTICK_MID", "ly": "GAMEPAD_JOYSTICK_MID",
                                 "rx": "GAMEPAD_JOYSTICK_MID", "ry": "GAMEPAD_JOYSTICK_MID"}
                 if field_name in mid_defaults:
-                    w(f'    v.{field_name} = doc["{json_key}"] | {mid_defaults[field_name]};')
+                    sw(f'        v.{field_name} = doc["{json_key}"] | {mid_defaults[field_name]};')
                     continue
             if f["type"] == "string":
-                w(f'    v.{field_name} = doc["{json_key}"] | "";')
+                sw(f'        v.{field_name} = doc["{json_key}"] | "";')
             elif f["type"] == "bool":
-                w(f'    v.{field_name} = doc["{json_key}"] | false;')
+                sw(f'        v.{field_name} = doc["{json_key}"] | false;')
             else:
-                w(f'    v.{field_name} = doc["{json_key}"] | {default_val};')
-        w("}")
-        w()
+                sw(f'        v.{field_name} = doc["{json_key}"] | {default_val};')
+        sw("    }")
+        sw()
 
-    w("}} // namespace ThetaGP::Proto")
+    # ── Proto class ──────────────────────────────────────────────────────────
+    w("// =============================================================================")
+    w("// Proto class — command dispatch + serialization")
+    w("// =============================================================================")
+    w("namespace ThetaGP {")
+    w()
+    # ErrorCode inside class
+    w("class Proto {")
+    w("public:")
+    w("    // Error Codes")
+    w("    enum class ErrorCode : uint8_t {")
+    for name, info in error_codes.items():
+        w(f"        {name} = {info['code']}, // {sanitize_cpp_comment(info['description'])}")
+    w("    };")
+    w()
+    w("    // Command handler signature")
+    w("    using Handler = void (*)(const char *cmd, JsonDocument &doc);")
     w()
 
-    # ── Command handling ────────────────────────────────────────────────────
-    w("// =============================================================================")
-    w("// Command dispatch table")
-    w("// =============================================================================")
-    w("namespace ThetaGP { namespace Proto {")
-    w()
-    w("// Command handler signature")
-    w("using CommandHandler = void (*)(const char *cmd, JsonDocument &doc);")
-    w()
-    w("// Route table entry")
-    w("struct CommandEntry {")
-    w("    const char *name;")
-    w("    CommandHandler handler;")
-    w("};")
-    w()
-    w("// Forward declarations")
+    # Serialize/deserialize helpers
+    w("    // ── Serialize helpers ──")
+    for sw_line in _serialize_lines:
+        w(sw_line)
+
+    # Registration functions + handler variables
+    w("    // ── Handler registration ──")
     for cmd_info in commands:
         domain = cmd_info["domain"]
-        handler_name = f"handle_{domain}_{cmd_info['name']}"
-        w(f"void {handler_name}(const char *cmd, JsonDocument &doc);")
+        var_name = f"_{domain}{to_pascal(cmd_info['name'])}Handler"
+        func_name = f"register{to_pascal(domain)}{to_pascal(cmd_info['name'])}"
+        w(f"    inline static void {func_name}(Handler h) {{ {var_name} = h; }}")
     w()
-    w("// Dispatch table")
-    w("inline CommandEntry COMMAND_TABLE[] = {")
-    for cmd_info in commands:
+    w("    // ── Dispatch ──")
+    w("    inline static void dispatch(const char *cmd, JsonDocument &doc) {")
+    for i, cmd_info in enumerate(commands):
         domain = cmd_info["domain"]
         full_name = f"{domain}.{cmd_info['name']}"
-        handler_name = f"handle_{domain}_{cmd_info['name']}"
-        w(f'    {{"{full_name}", {handler_name}}},')
-    w('    {nullptr, nullptr}  // sentinel')
-    w("};")
-    w()
-    w("// Main dispatcher")
-    w("inline void dispatch(const char *cmd, JsonDocument &doc) {")
-    w("    for (const CommandEntry *e = COMMAND_TABLE; e->name; ++e) {")
-    w("        if (strcmp(cmd, e->name) == 0) {")
-    w("            e->handler(cmd, doc);")
-    w("            return;")
-    w("        }")
+        var_name = f"_{domain}{to_pascal(cmd_info['name'])}Handler"
+        if i == 0:
+            w(f'        if (strcmp(cmd, "{full_name}") == 0)              {{ if ({var_name}) {var_name}(cmd, doc); }}')
+        else:
+            w(f'        else if (strcmp(cmd, "{full_name}") == 0) {{ if ({var_name}) {var_name}(cmd, doc); }}')
+    w("        // Unknown command — silently ignored")
     w("    }")
-    w("    // Unknown command — send error")
-    w("    JsonDocument resp;")
-    w('    resp["status"] = "error";')
-    w('    resp["cmd"] = cmd;')
-    w("    int queued = doc[\"queued\"].as<int>();")
-    w("    resp[\"queued\"] = queued + 1;")
-    w('    resp["error_code"] = 1;')
-    w('    resp["reason"] = "unknown command";')
-    w("}")
     w()
-    w("}} // namespace ThetaGP::Proto")
+    w("private:")
+    for cmd_info in commands:
+        domain = cmd_info["domain"]
+        var_name = f"_{domain}{to_pascal(cmd_info['name'])}Handler"
+        w(f"    inline static Handler {var_name} = nullptr;")
     w()
-
-    # ── Handler stubs ────────────────────────────────────────────────────────
-    w("// =============================================================================")
-    w("// Command handler implementations — EDIT these to add business logic")
-    w("// =============================================================================")
+    w("}; // class Proto")
+    w()
+    w("} // namespace ThetaGP")
+    w()
     w("#ifdef __GNUC__")
     w("#pragma GCC diagnostic push")
     w('#pragma GCC diagnostic ignored "-Wunused-parameter"')
     w("#endif")
     w()
-
-    for cmd_info in commands:
-        domain = cmd_info["domain"]
-        handler_name = f"handle_{domain}_{cmd_info['name']}"
-        full_name = f"{domain}.{cmd_info['name']}"
-        desc = sanitize_cpp_comment(cmd_info.get("description", ""))
-        w(f"// ---------------------------------------------------------------------------")
-        w(f"// {full_name} — {desc}")
-        w(f"// ---------------------------------------------------------------------------")
-        w(f"void {handler_name}(const char *cmd, JsonDocument &doc) {{")
-        w(f"    // TODO: implement {handler_name}")
-        w(f"    int queued = doc[\"queued\"].as<int>();")
-        w(f"    JsonDocument resp;")
-        w(f"    resp[\"status\"] = \"ok\";")
-        w(f"    resp[\"cmd\"] = cmd;")
-        w(f"    resp[\"queued\"] = queued + 1;")
-        # Add response fields with defaults
-        resp_fields = {}
-        for rf in cmd_info.get("response", []):
-            if rf.get("description"):
-                w(f"    // resp[\"{rf['json']}\"] = ...; // {sanitize_cpp_comment(rf.get('description', ''))}")
-        w(f"    // FrameLayer::getInstance().sendResponse(resp);")
-        w(f"    (void)doc;")
-        w("}")
-        w()
-
     w("#ifdef __GNUC__")
     w("#pragma GCC diagnostic pop")
     w("#endif")

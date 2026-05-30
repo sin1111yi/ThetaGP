@@ -44,6 +44,7 @@ public:
 
     static SysHandler &getInstance();
     static void handle(const char *cmd, JsonDocument &doc);
+    static void registerHandlers();
 };
 
 #else
@@ -53,6 +54,7 @@ class SysHandler {
 public:
     static SysHandler &getInstance() { static SysHandler i; return i; }
     static void handle(const char *, JsonDocument &) {}
+    static void registerHandlers() {}
 };
 
 #endif

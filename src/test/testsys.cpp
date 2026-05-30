@@ -20,9 +20,12 @@
  */
 
 #include "test/testsys.h"
+#include "test/dispatcher.h"
 #include "test/framelayer.h"
 
 #include "utils/log/log.h"
+
+#include "protocol/proto.h"
 
 #include <cstring>
 
@@ -41,60 +44,87 @@ SysHandler &SysHandler::getInstance() {
     return instance;
 }
 
+// ---------------------------------------------------------------------------
+// Handler functions (CommandHandler signature)
+// ---------------------------------------------------------------------------
+
+static void handleSysPing(const char *cmd, JsonDocument &doc) {
+    (void)cmd;
+    (void)doc;
+    JsonDocument resp;
+    resp["status"] = "ok";
+    resp["cmd"] = "sys.ping";
+    int queued = doc["queued"].as<int>();
+    resp["queued"] = queued + 1;
+    FrameLayer::getInstance().sendResponse(resp);
+}
+
+static void handleSysGetFwVersion(const char *cmd, JsonDocument &doc) {
+    (void)cmd;
+    (void)doc;
+    JsonDocument resp;
+    resp["status"] = "ok";
+    resp["cmd"] = "sys.get_fw_version";
+    int queued = doc["queued"].as<int>();
+    resp["queued"] = queued + 1;
+    resp["board"] = BOARD_NAME;
+    resp["version"] = THETAGP_FW_VERSION;
+    resp["build_date"] = __DATE__;
+    resp["build_time"] = __TIME__;
+    FrameLayer::getInstance().sendResponse(resp);
+}
+
+static void handleSysReset(const char *cmd, JsonDocument &doc) {
+    (void)cmd;
+    (void)doc;
+    JsonDocument resp;
+    resp["status"] = "ok";
+    resp["cmd"] = "sys.reset";
+    int queued = doc["queued"].as<int>();
+    resp["queued"] = queued + 1;
+    resp["info"] = "resetting...";
+    FrameLayer::getInstance().sendResponse(resp);
+    // Small delay to allow the response to be sent
+    for (volatile uint32_t i = 0; i < 100000; ++i) {}
+    NVIC_SystemReset();
+}
+
+static void handleSysEnterDfu(const char *cmd, JsonDocument &doc) {
+    (void)cmd;
+    (void)doc;
+    JsonDocument resp;
+    resp["status"] = "error";
+    resp["cmd"] = "sys.enter_dfu";
+    int queued = doc["queued"].as<int>();
+    resp["queued"] = queued + 1;
+    resp["error_code"] = static_cast<uint8_t>(Proto::ErrorCode::ERR_NOT_SUPPORTED);
+    resp["reason"] = "DFU not yet implemented";
+    FrameLayer::getInstance().sendResponse(resp);
+}
+
+// ---------------------------------------------------------------------------
+// registerHandlers — self-register with the Dispatcher and Proto
+// ---------------------------------------------------------------------------
+void SysHandler::registerHandlers() {
+    Dispatcher::getInstance().registerHandler("sys", SysHandler::handle);
+    Proto::registerSysPing(handleSysPing);
+    Proto::registerSysGetFwVersion(handleSysGetFwVersion);
+    Proto::registerSysReset(handleSysReset);
+    Proto::registerSysEnterDfu(handleSysEnterDfu);
+}
+
+// ---------------------------------------------------------------------------
+// Main dispatch — delegates to Proto-generated dispatch table
+// ---------------------------------------------------------------------------
 void SysHandler::handle(const char *cmd, JsonDocument &doc) {
     int queued = doc["queued"].as<int>();
     LOG_DEBUG("SysHandler: cmd='%s' queued=%d", cmd, queued);
-
-    if (strcmp(cmd, "sys.ping") == 0) {
-        JsonDocument resp;
-        resp["status"] = "ok";
-        resp["cmd"] = "sys.ping";
-        resp["queued"] = queued + 1;
-        FrameLayer::getInstance().sendResponse(resp);
-        LOG_DEBUG("SysHandler: ping responded");
-
-    } else if (strcmp(cmd, "sys.get_fw_version") == 0) {
-        JsonDocument resp;
-        resp["status"] = "ok";
-        resp["cmd"] = "sys.get_fw_version";
-        resp["queued"] = queued + 1;
-        resp["board"] = BOARD_NAME;
-        resp["version"] = THETAGP_FW_VERSION;
-        resp["build_date"] = __DATE__;
-        resp["build_time"] = __TIME__;
-        FrameLayer::getInstance().sendResponse(resp);
-        LOG_DEBUG("SysHandler: firmware version reported");
-
-    } else if (strcmp(cmd, "sys.reset") == 0) {
-        JsonDocument resp;
-        resp["status"] = "ok";
-        resp["cmd"] = "sys.reset";
-        resp["queued"] = queued + 1;
-        FrameLayer::getInstance().sendResponse(resp);
-        LOG_INFO("SysHandler: system reset requested");
-        NVIC_SystemReset();
-
-    } else if (strcmp(cmd, "sys.enter_dfu") == 0) {
-        JsonDocument resp;
-        resp["status"] = "error";
-        resp["cmd"] = "sys.enter_dfu";
-        resp["queued"] = queued + 1;
-        resp["error_code"] = 6;
-        resp["reason"] = "DFU mode not supported yet";
-        FrameLayer::getInstance().sendResponse(resp);
-        LOG_WARN("SysHandler: DFU mode requested but not supported");
-
-    } else {
-        LOG_WARN("SysHandler: Unknown sys command: %s", cmd);
-        JsonDocument resp;
-        resp["status"] = "error";
-        resp["cmd"] = cmd;
-        resp["queued"] = queued + 1;
-        resp["error_code"] = 1;
-        resp["reason"] = "unknown command";
-        FrameLayer::getInstance().sendResponse(resp);
-    }
+    Proto::dispatch(cmd, doc);
 }
+
+#else
+
+void SysHandler::registerHandlers() {}
 
 #endif // THETAGP_ENABLE_TEST_API
 
