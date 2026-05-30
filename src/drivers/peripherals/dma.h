@@ -127,13 +127,13 @@ public:
   void setCallback(DmaIsrCallback cb, void *context = nullptr);
 
   // --- Lifecycle ---
-  [[nodiscard]] Result init();
-  [[nodiscard]] Result deinit();
+  Result init();
+  Result deinit();
 
   // --- Transfer control ---
-  [[nodiscard]] Result start(uint32_t srcAddress, uint32_t dstAddress,
+  Result start(uint32_t srcAddress, uint32_t dstAddress,
                uint16_t dataCount);
-  [[nodiscard]] Result stop();
+  Result stop();
 
   // --- Status ---
   [[nodiscard]] bool isBusy() const;
