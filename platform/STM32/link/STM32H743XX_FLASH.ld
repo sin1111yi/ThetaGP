@@ -211,6 +211,20 @@ SECTIONS
     _edtcmram_bss = .;
   } >DTCMRAM
 
+  /* Hot-path function code in DTCMRAM (copied from Flash at boot) */
+  .dtcmram_code :
+  {
+    . = ALIGN(4);
+    _sdtcmram_code = .;
+    *(.dtcmram_code)
+    *(.dtcmram_code*)
+    . = ALIGN(4);
+    _edtcmram_code = .;
+  } >DTCMRAM AT> FLASH
+
+  /* Load address of .dtcmram_code section in FLASH */
+  _sidtcmram_code = LOADADDR(.dtcmram_code);
+
   /* Stack section in DTCMRAM (heap no longer here) */
   ._user_stack :
   {

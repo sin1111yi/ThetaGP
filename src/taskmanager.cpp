@@ -68,7 +68,7 @@ void TaskManager::setupScheduler() {
   scheduler->init();
 }
 
-void TaskManager::run() { scheduler->run(); }
+FAST_CODE void TaskManager::run() { scheduler->run(); }
 
 TID TaskManager::createTask(const char *name, const char *subName,
                             TaskFunc func, uint32_t periodUs,
@@ -144,7 +144,7 @@ bool TaskManager::isValidTID(TID tid) {
   return tid >= 0 && static_cast<size_t>(tid) < taskCount && records[tid].inUse;
 }
 
-void TaskManager::taskSystemLoad(uint32_t currentTimeUs) {
+FAST_CODE void TaskManager::taskSystemLoad(uint32_t currentTimeUs) {
   FAST_DATA_ZERO_INIT static uint32_t lastExecutedAtUs = 0;
   uint32_t deltaTime = currentTimeUs - lastExecutedAtUs;
   if (deltaTime) {
@@ -156,6 +156,6 @@ void TaskManager::taskSystemLoad(uint32_t currentTimeUs) {
   }
 }
 
-void TaskManager::taskMain(uint32_t currentTimeUs) { UNUSED(currentTimeUs); }
+FAST_CODE void TaskManager::taskMain(uint32_t currentTimeUs) { UNUSED(currentTimeUs); }
 
 } // namespace ThetaGP::Gamepad

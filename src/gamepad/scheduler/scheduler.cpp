@@ -20,6 +20,7 @@
  */
 
 #include "gamepad/scheduler/scheduler.h"
+#include "build_info.h"
 
 #include <algorithm>
 #include <climits>
@@ -38,7 +39,7 @@ Scheduler::Scheduler() = default;
 // Scheduler Initialization
 // ============================================================================
 
-void Scheduler::init() {
+FAST_CODE void Scheduler::init() {
   schedLoopStartMinCycles = timer->microsToCycles(SCHED_START_LOOP_MIN_US);
   schedLoopStartMaxCycles = timer->microsToCycles(SCHED_START_LOOP_MAX_US);
   schedLoopStartCycles = schedLoopStartMinCycles;
@@ -69,7 +70,7 @@ void Scheduler::init() {
 // Scheduler Run Loop
 // ============================================================================
 
-void Scheduler::run() {
+FAST_CODE void Scheduler::run() {
   uint32_t currentTimeUs = 0;
   uint32_t nowCycles = 0;
   Task *selectedTask = nullptr;
@@ -245,11 +246,11 @@ uint32_t Scheduler::getAndResetTotalExecutionTime() {
 // Time Comparison
 // ============================================================================
 
-int32_t Scheduler::cmpTimeCycles(uint32_t t1, uint32_t t2) {
+FAST_CODE int32_t Scheduler::cmpTimeCycles(uint32_t t1, uint32_t t2) {
   return static_cast<int32_t>(t1 - t2);
 }
 
-uint32_t Scheduler::cmpTimeUs(uint32_t t1, uint32_t t2) { return t1 - t2; }
+FAST_CODE uint32_t Scheduler::cmpTimeUs(uint32_t t1, uint32_t t2) { return t1 - t2; }
 
 // ============================================================================
 // Task Queue Management
@@ -313,12 +314,12 @@ bool Scheduler::queueRemove(Task *task) {
   return false;
 }
 
-Task *Scheduler::queueFirst() {
+FAST_CODE Task *Scheduler::queueFirst() {
   taskQueuePos = 0;
   return taskQueueArray[0];
 }
 
-Task *Scheduler::queueNext() { return taskQueueArray[++taskQueuePos]; }
+FAST_CODE Task *Scheduler::queueNext() { return taskQueueArray[++taskQueuePos]; }
 
 // ============================================================================
 // Task State Management
@@ -349,7 +350,7 @@ uint32_t Scheduler::getNextStateTime() {
 // Task Execution
 // ============================================================================
 
-uint32_t Scheduler::executeTask(Task *selectedTask, uint32_t currentTimeUs) {
+FAST_CODE uint32_t Scheduler::executeTask(Task *selectedTask, uint32_t currentTimeUs) {
   uint32_t taskExecutionTimeUs = 0;
 
   if (selectedTask) {

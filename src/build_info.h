@@ -33,15 +33,15 @@ extern "C" {
 //
 // FAST_DATA            → fast CPU-local RAM (DTCM), initialized (Flash load image)
 // FAST_DATA_ZERO_INIT  → fast CPU-local RAM (DTCM), zero-init (NOLOAD, no Flash copy)
-// FAST_CODE            → reserved — function in fast instruction memory (ITCM/DTCM)
+// FAST_CODE            → function in DTCM RAM (.dtcmram_code, 0-wait, copied from Flash)
 // FAST_CODE_PREF       → reserved — prefer fast RAM, fallback to Flash
-// FAST_CODE_NOINLINE   → function in fast RAM, no inlining
+// FAST_CODE_NOINLINE   → function in DTCM RAM, no inlining
 
 #define FAST_DATA            DTCM_RAM_DATA
 #define FAST_DATA_ZERO_INIT  DTCM_RAM_BSS
-#define FAST_CODE            /* reserved — code placement TBD */
+#define FAST_CODE            DTCM_RAM_CODE
 #define FAST_CODE_PREF       /* reserved — code placement TBD */
-#define FAST_CODE_NOINLINE   __attribute__((noinline))
+#define FAST_CODE_NOINLINE   FAST_CODE __attribute__((noinline))
 
 #define DMA_DATA       RAM_DATA __attribute__((aligned(32)))
 #define DMA_BSS        RAM_BSS __attribute__((aligned(32)))

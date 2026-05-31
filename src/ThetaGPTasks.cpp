@@ -21,6 +21,7 @@
 
 #include "utils/log/log.h"
 #include "utils/utils.h"
+#include "build_info.h"
 
 #include "gamepad/gamepad.h"
 #include "taskmanager.h"
@@ -34,7 +35,7 @@
 using namespace ThetaGP;
 using namespace ThetaGP::Gamepad;
 
-static void taskGamepadCore(uint32_t currentTimeUs) {
+FAST_CODE static void taskGamepadCore(uint32_t currentTimeUs) {
   UNUSED(currentTimeUs);
 
   Gamepad::Gamepad::getInstance().process();

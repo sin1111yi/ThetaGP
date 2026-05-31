@@ -213,9 +213,9 @@ DMA_DATA              → RAM_DATA → __attribute__((section(".ram_data"), alig
 DMA_BSS               → RAM_BSS  → __attribute__((section(".ram_bss"), aligned(32)))             → DMA-safe system RAM, NOLOAD (zero-init, no Flash copy)
 FAST_DATA             → DTCM_RAM_DATA → __attribute__((section(".dtcmram_data")))                → fast CPU-local RAM (DTCM), initialized
 FAST_DATA_ZERO_INIT   → DTCM_RAM_BSS  → __attribute__((section(".dtcmram_bss")))                 → fast CPU-local RAM (DTCM), NOLOAD (zero-init, no Flash copy)
-FAST_CODE             → reserved — function in fast instruction memory (ITCM/DTCM)
+FAST_CODE             → DTCM_RAM_CODE → __attribute__((section(".dtcmram_code")))                   → hot-path function in DTCM RAM (0-wait, copied from Flash)
 FAST_CODE_PREF        → reserved — prefer fast RAM, fallback to Flash
-FAST_CODE_NOINLINE    → __attribute__((noinline))
+FAST_CODE_NOINLINE    → FAST_CODE + __attribute__((noinline))
 DMA_DATA_AUTO         → Convenience: `static DMA_DATA` (shorthand for `static DMA_DATA ...`)
 ```
 

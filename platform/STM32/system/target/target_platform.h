@@ -59,6 +59,8 @@ extern "C" {
 
 #define DTCM_RAM_DATA __attribute__((section(".dtcmram_data")))
 #define DTCM_RAM_BSS  __attribute__((section(".dtcmram_bss")))
+// DTCM_RAM_CODE: function code in DTCMRAM (0-wait, copied from Flash at boot)
+#define DTCM_RAM_CODE  __attribute__((section(".dtcmram_code")))
 #define RAM_DATA      __attribute__((section(".ram_data")))
 #define RAM_BSS       __attribute__((section(".ram_bss")))
 #define RAM_D2_DATA   __attribute__((section(".ram_d2_data")))
@@ -70,6 +72,7 @@ extern "C" {
 // Variables land in default .data/.bss (usually DTCM or main SRAM)
 #define DTCM_RAM_DATA
 #define DTCM_RAM_BSS
+#define DTCM_RAM_CODE
 #define RAM_DATA
 #define RAM_BSS
 #define RAM_D2_DATA
