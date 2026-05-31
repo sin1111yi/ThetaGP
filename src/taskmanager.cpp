@@ -36,10 +36,10 @@
 
 namespace ThetaGP::Gamepad {
 
-Scheduler *TaskManager::scheduler = nullptr;
+FAST_DATA_ZERO_INIT Scheduler *TaskManager::scheduler = nullptr;
 Mempool::PoolID TaskManager::taskPoolId = Mempool::INVALID_POOL_ID;
 DMA_BSS uint8_t TaskManager::taskPoolMemory[TASK_POOL_SIZE]{};
-TaskManager::TaskRecord TaskManager::records[MAX_TASKS]{};
+FAST_DATA_ZERO_INIT TaskManager::TaskRecord TaskManager::records[MAX_TASKS]{};
 size_t TaskManager::taskCount = 0;
 uint16_t TaskManager::averageSystemLoadPercent = 0;
 
@@ -145,7 +145,7 @@ bool TaskManager::isValidTID(TID tid) {
 }
 
 void TaskManager::taskSystemLoad(uint32_t currentTimeUs) {
-  static uint32_t lastExecutedAtUs = 0;
+  FAST_DATA_ZERO_INIT static uint32_t lastExecutedAtUs = 0;
   uint32_t deltaTime = currentTimeUs - lastExecutedAtUs;
   if (deltaTime) {
     uint32_t totalExecTime = scheduler->getAndResetTotalExecutionTime();
