@@ -234,7 +234,7 @@ SECTIONS
     *(.itcmram_code*)
     . = ALIGN(4);
     _eitcmram_code = .;
-  } >ITCMRAM
+  } >ITCMRAM AT>FLASH
 
   /* Load address of .itcmram_code section in FLASH */
   _siitcmram_code = LOADADDR(.itcmram_code);
