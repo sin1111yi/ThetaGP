@@ -95,11 +95,15 @@ endif()
 # Suppress TinyUSB upstream source warnings (flexible array members, volatile ops)
 # These come from TinyUSB headers included by our .cpp files, not from .c sources
 foreach(TUSB_FILE ${TINYUSB_SOURCES})
-    set_source_files_properties(${TUSB_FILE} PROPERTIES
-        COMPILE_FLAGS "-Wno-volatile -Wno-pedantic")
+    get_filename_component(TUSB_EXT "${TUSB_FILE}" EXT)
+    if(TUSB_EXT STREQUAL ".cpp" OR TUSB_EXT STREQUAL ".cc")
+        set_source_files_properties(${TUSB_FILE} PROPERTIES
+            COMPILE_FLAGS "-Wno-volatile -Wno-pedantic")
+    endif()
 endforeach()
 # Project-wide: same warnings from TinyUSB headers pulled into C++ translation units
-add_compile_options(-Wno-volatile -Wno-pedantic)
+add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wno-volatile>")
+add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wno-pedantic>")
 
 set(TINYUSB_CONFIG_FILE "conf/tusb_config.h")
 

@@ -24,10 +24,10 @@
 
 #if THETAGP_CFG_LOG_ENABLE
 
-static const char *g_RootPath = NULL;
-static LogPrintFunc g_PrintCallback = NULL;
-static LogDelayFunc g_DelayCallback = NULL;
-static LogLevel g_LogLevel
+FAST_DATA_ZERO_INIT static const char *g_RootPath = NULL;
+FAST_DATA_ZERO_INIT static LogPrintFunc g_PrintCallback = NULL;
+FAST_DATA_ZERO_INIT static LogDelayFunc g_DelayCallback = NULL;
+FAST_DATA static LogLevel g_LogLevel
 #if defined(THETAGP_CFG_LOG_LEVEL)
     = LOG_LV(THETAGP_CFG_LOG_LEVEL);
 #else
