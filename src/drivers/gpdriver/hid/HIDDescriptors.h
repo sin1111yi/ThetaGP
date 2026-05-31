@@ -36,7 +36,6 @@
 // INF file is needed to load the driver.  These numbers need to
 // match the INF file.
 #define VENDOR_ID         0xcafe
-#define PRODUCT_ID        0x0100
 
 /**************************************************************************
  *
@@ -102,7 +101,7 @@ static const uint8_t *hid_string_descriptors[]
                                hid_string_product, hid_string_version,
                                hid_string_cdc};
 
-static const uint8_t hid_device_descriptor[] = {
+static uint8_t hid_device_descriptor[] = {
     18, // bLength
     1,  // bDescriptorType
     0x00,
@@ -113,8 +112,8 @@ static const uint8_t hid_device_descriptor[] = {
     HID_ENDPOINT_SIZE, // bMaxPacketSize0
     LSB(VENDOR_ID),
     MSB(VENDOR_ID), // idVendor
-    LSB(PRODUCT_ID),
-    MSB(PRODUCT_ID), // idProduct
+    0x00,
+    0x01, // idProduct placeholder — patched at runtime
     0x00,
     0x01, // bcdDevice
     1,    // iManufacturer

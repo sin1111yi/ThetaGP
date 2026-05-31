@@ -23,6 +23,7 @@
 #include "build_info.h"
 #include "drivers/gpdriver/hid/HIDDescriptors.h"
 #include "drivers/gpdriver/shared/driverhelper.h"
+#include "drivers/gpdriver/gpdriver.h"
 
 #include "gamepad/gamepad.h"
 
@@ -55,6 +56,12 @@ void HIDDriver::initialize() {
       .r_x_axis = HID_JOYSTICK_MID,
       .r_y_axis = HID_JOYSTICK_MID,
   };
+
+  // Derive USB product ID from board name (hash → lower 16 bits)
+  uint16_t pid = static_cast<uint16_t>(
+      GPDriver::get_string_hash_u32(BOARD_NAME) & 0xFFFF);
+  hid_device_descriptor[10] = pid & 0xFF;
+  hid_device_descriptor[11] = (pid >> 8) & 0xFF;
 
   class_driver = {
 #if CFG_TUSB_DEBUG >= 2
