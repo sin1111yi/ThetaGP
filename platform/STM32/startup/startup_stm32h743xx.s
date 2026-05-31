@@ -59,6 +59,12 @@ defined in linker script */
 .word  _sdtcmram_code
 /* end address for the .dtcmram_code section. defined in linker script */
 .word  _edtcmram_code
+/* start address for the initialization values of the .itcmram_code section */
+.word  _siitcmram_code
+/* start address for the .itcmram_code section. defined in linker script */
+.word  _sitcmram_code
+/* end address for the .itcmram_code section. defined in linker script */
+.word  _eitcmram_code
 /* start address for the initialization values of the .ram_data section */
 .word  _siram_data
 /* start address for the .ram_data section. defined in linker script */
@@ -199,6 +205,23 @@ LoopCopyDtcmramCodeInit:
   adds r4, r0, r3
   cmp r4, r1
   bcc CopyDtcmramCodeInit
+
+/* Copy the itcmram_code segment initializers from flash to ITCMRAM */
+  ldr r0, =_sitcmram_code
+  ldr r1, =_eitcmram_code
+  ldr r2, =_siitcmram_code
+  movs r3, #0
+  b LoopCopyItcmramCodeInit
+
+CopyItcmramCodeInit:
+  ldr r4, [r2, r3]
+  str r4, [r0, r3]
+  adds r3, r3, #4
+
+LoopCopyItcmramCodeInit:
+  adds r4, r0, r3
+  cmp r4, r1
+  bcc CopyItcmramCodeInit
 
 /* Zero fill the bss segment. */
   ldr r2, =_sbss

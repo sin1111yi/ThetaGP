@@ -39,7 +39,7 @@ extern "C" {
 
 #define FAST_DATA            DTCM_RAM_DATA
 #define FAST_DATA_ZERO_INIT  DTCM_RAM_BSS
-#define FAST_CODE            DTCM_RAM_CODE
+#define FAST_CODE            ITCM_RAM_CODE
 #define FAST_CODE_PREF       /* reserved — code placement TBD */
 #define FAST_CODE_NOINLINE   FAST_CODE __attribute__((noinline))
 

@@ -225,6 +225,20 @@ SECTIONS
   /* Load address of .dtcmram_code section in FLASH */
   _sidtcmram_code = LOADADDR(.dtcmram_code);
 
+  /* Hot-path function code in ITCMRAM (copied from Flash at boot) */
+  .itcmram_code :
+  {
+    . = ALIGN(4);
+    _sitcmram_code = .;
+    *(.itcmram_code)
+    *(.itcmram_code*)
+    . = ALIGN(4);
+    _eitcmram_code = .;
+  } >ITCMRAM AT> FLASH
+
+  /* Load address of .itcmram_code section in FLASH */
+  _siitcmram_code = LOADADDR(.itcmram_code);
+
   /* Stack section in DTCMRAM (heap no longer here) */
   ._user_stack :
   {
@@ -274,17 +288,17 @@ SECTIONS
   /* Load address of .ram_d2_data section in FLASH */
   _siram_d2_data = LOADADDR(.ram_d2_data);
 
-  /* Heap in RAM_D2 (moved from DTCMRAM for DTCM savings + DMA safety) */
-  .ram_d2_heap (NOLOAD) :
+  /* Heap in RAM (AXI SRAM, DMA-safe) */
+  .ram_heap (NOLOAD) :
   {
     . = ALIGN(8);
-    _sram_d2_heap = .;
+    _sram_heap = .;
     PROVIDE ( end = . );
     PROVIDE ( _end = . );
     . = . + _Min_Heap_Size;
     . = ALIGN(8);
-    _eram_d2_heap = .;
-  } >RAM_D2
+    _eram_heap = .;
+  } >RAM
 
   /* ── RAM_D3 sections ── */
 
