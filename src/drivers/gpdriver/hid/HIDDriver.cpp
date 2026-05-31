@@ -20,6 +20,7 @@
  */
 
 #include "drivers/gpdriver/hid/HIDDriver.h"
+#include "build_info.h"
 #include "drivers/gpdriver/hid/HIDDescriptors.h"
 #include "drivers/gpdriver/shared/driverhelper.h"
 
@@ -33,7 +34,7 @@ namespace ThetaGP::Drivers::GPDriver {
 HIDDriver::HIDDriver() {}
 
 // --- HIDReport hook (listener/callback, defaults to no-op) ---
-static HIDDriver::HIDReportHook g_hidReportHook = nullptr;
+FAST_DATA_ZERO_INIT static HIDDriver::HIDReportHook g_hidReportHook = nullptr;
 
 void HIDDriver::registerHIDReportHook(HIDReportHook hook) {
   g_hidReportHook = hook;

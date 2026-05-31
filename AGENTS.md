@@ -11,6 +11,9 @@ This document standardizes AI agent behavior. Read the corresponding section onl
 5. [Query Priority](#4-query-priority)
 6. [Build & Flash](#5-build--flash)
 7. [Hardware Platform Constraints](#6-hardware-platform-constraints)
+   - [Memory section classification](#memory-section-classification)
+   - [System RAM access properties](#system-ram-access-properties)
+   - [PERSISTENT data (survives warm reset)](#persistent-data-survives-warm-reset)
 8. [Device Driver Architecture](#7-device-driver-architecture)
 9. [Configuration System](#8-configuration-system)
 10. [Review Focus Areas](#9-review-focus-areas)
@@ -202,15 +205,123 @@ See `docs/cdc-json-protocol.md` for the full protocol specification and
 - STM32H743 (Cortex-M7 r1p1, 400MHz)
 - Flash: 2MB (dual bank), RAM: 1MB (distributed across DTCM, AXI SRAM, SRAMs)
 
-### Memory layout (critical)
+### Memory section classification
 
-| Region | Address | DMA accessible? | Use |
-|--------|---------|-----------------|-----|
-| DTCMRAM | 0x20000000 | **NO** | Stack, hot data |
-| AXI SRAM (`.ram_data`) | 0x24000000 | **YES** | DMA buffers, USB descriptors |
-| SRAM1/2/3 | 0x30000000 | YES | General purpose |
+Macro chain (defined in `build_info.h` + `target_platform.h`):
+```
+DMA_DATA              → RAM_DATA → __attribute__((section(".ram_data"), aligned(32)))            → DMA-safe system RAM (e.g. AXI SRAM)
+DMA_BSS               → RAM_BSS  → __attribute__((section(".ram_bss"), aligned(32)))             → DMA-safe system RAM, NOLOAD (zero-init, no Flash copy)
+FAST_DATA             → DTCM_RAM_DATA → __attribute__((section(".dtcmram_data")))                → fast CPU-local RAM (DTCM), initialized
+FAST_DATA_ZERO_INIT   → DTCM_RAM_BSS  → __attribute__((section(".dtcmram_bss")))                 → fast CPU-local RAM (DTCM), NOLOAD (zero-init, no Flash copy)
+FAST_CODE             → reserved — function in fast instruction memory (ITCM/DTCM)
+FAST_CODE_PREF        → reserved — prefer fast RAM, fallback to Flash
+FAST_CODE_NOINLINE    → __attribute__((noinline))
+DMA_DATA_AUTO         → Convenience: `static DMA_DATA` (shorthand for `static DMA_DATA ...`)
+```
 
-**Rule:** All DMA buffers must be placed in AXI SRAM via `COMMON_CODE` / `__attribute__((section(".ram_data")))`. Buffers in DTCMRAM will silently fail DMA transfers.
+Three kinds of memory are available for variables:
+- **Fast RAM (FAST_DATA / FAST_DATA_ZERO_INIT)** — low-latency, CPU-private (DTCM). **Not accessible by DMA.** Use for hot-path data.
+- **System RAM (DMA_DATA / DMA_BSS)** — larger, DMA-accessible (AXI SRAM). Use for buffers and cold data.
+- **DTCMRAM stack** — CPU stack (8 KB), placed at top of DTCM.
+
+Which memory maps to which physical region depends on the target platform. Check `target_platform.h` in the platform directory for the exact mapping.
+
+#### MUST use `DMA_DATA` / `DMA_BSS`
+
+Variables that are either DMA-accessed, or large/cold enough to justify saving fast RAM.
+
+| Condition | Macro | Examples |
+|-----------|-------|----------|
+| **DMA buffers** (fast RAM is not DMA-accessible) | `DMA_BSS` | CDC buffers, USB descriptors, memory pools |
+| **ISR dispatch tables** (low-frequency ISRs) | `DMA_BSS` | DMA/SPI/UART/TIM ISR callback tables |
+| **Large pools** (accessed on alloc/free only) | `DMA_BSS` | Task pool memory, mempool entries |
+| **Log/infrastructure buffers** (slow path) | `DMA_BSS` | Log ring buffer |
+| **Peripheral config tables** (constructor-initialized) | `DMA_DATA` | SPI/UART bus descriptor arrays |
+| **Init-once, rarely-touched values** | `DMA_BSS` | CPU frequency cache, config sizes, USB state |
+| **Low-frequency volatile flags** (ISR-safe with Non-Cacheable RAM) | `DMA_BSS` | Mounted/suspended flags |
+
+Rules:
+- **`DMA_BSS`** — variable is zero-initialized (NOLOAD section, no Flash copy). Use for any variable with no initializer, `= {}`, `= 0`, or `= NULL`.
+- **`DMA_DATA`** — variable has non-zero initial value or constructor. Uses Flash load image.
+- **`DMA_DATA_AUTO`** — shorthand for `static DMA_DATA`.
+- **`aligned(32)`** — automatically applied by both DMA macros for cache line alignment.
+- **`FAST_DATA_ZERO_INIT`** — hot path variable, zero-initialized in DTCM (NOLOAD, no Flash copy).
+- **`FAST_DATA`** — hot path variable with initial value, initialized from Flash load image into DTCM.
+
+Usage:
+```cpp
+// DMA-safe (AXI SRAM)
+DMA_BSS static uint8_t s_buffer[1024];     // zero-init, no Flash overhead
+DMA_DATA static MyObj obj = { .val = 42 }; // has initial value, Flash load
+DMA_DATA_AUTO uint32_t counters[8];        // shorthand
+
+// Fast CPU-local (DTCMRAM)
+FAST_DATA_ZERO_INIT static uint32_t usTicks = 0;           // zero-init hot path
+FAST_DATA static MyObj hotObj = { .val = 42 };             // initialized hot path
+```
+
+#### MUST NOT use `DMA_DATA` / `DMA_BSS`
+
+**const/constexpr data** belongs in Flash/ROM, not in RAM:
+```cpp
+// WRONG — forces constexpr data from Flash into RAM
+DMA_BSS static constexpr uint32_t lookup[] = { ... };
+
+// RIGHT — stays in Flash
+static constexpr uint32_t lookup[] = { ... };
+static const std::array<Type, N> table = { ... };
+```
+
+**Hot path variables** belong in fast RAM (0-wait or minimal latency) — use `FAST_DATA` / `FAST_DATA_ZERO_INIT`:
+| Variable type | Reason |
+|---------------|--------|
+| Timing bases (`usTicks`, `sysTickUptime`, etc.) | Read on every `micros()`/`delay_us()` call |
+| Hooks called from poll loops | Gamepad poll / HID send hot path |
+| Scheduler records | Dispatched every tick |
+| Gamepad state variables | Updated every 1-2ms |
+| Singleton instances | Accessed frequently through call chains |
+
+#### SHOULD stay in fast RAM by default
+
+Unmarked `static` variables land in `.data`/`.bss` (fast RAM). This is fine for:
+- Small counters and flags accessed on hot paths
+- Singleton instances
+- Callback pointers called frequently
+
+Do NOT add `FAST_DATA`/`FAST_DATA_ZERO_INIT` speculatively. Only move to one of these when a variable meets the hot-path criteria above.
+
+Do NOT add `DMA_DATA`/`DMA_BSS` speculatively. Only move to one of these when a variable meets the MUST criteria above.
+
+### System RAM access properties
+
+The system RAM used for DMA_DATA/DMA_BSS may run under different cache/memory-order properties depending on the target. Two common configurations possible with MPU:
+
+- **Non-cacheable** — writes are visible immediately; `volatile` semantics work correctly with no special handling; no DMA coherency issues
+- **Cacheable write-back** — better read performance; requires explicit cache maintenance (D-cache clean/invalidate) for DMA buffers; volatile reads may return stale cached data
+
+Check the board's MPU setup in the system startup (`target_stm32h7xx.c` or equivalent) to confirm which configuration applies.
+
+### PERSISTENT data (survives warm reset)
+
+BetaFlight defines a `.persistent_data` section for data that must survive a warm (software) reset but not a cold (power cycle) reset:
+
+```c
+// BetaFlight implementation
+#define PERSISTENT __attribute__((section(".persistent_data"), aligned(4)))
+```
+
+This is placed in a dedicated RAM region that the startup code does NOT zero on warm reset (only on cold boot). Uses:
+- **Calibration values** (accelerometer offsets, gyro temperature coefficients)
+- **Boot counters** (detect crash loops)
+- **Config that must survive a MCU reset without Flash write**
+
+For ThetaGP, we haven't implemented this yet. To add it, you'd need:
+1. Reserve a RAM region in the linker script (e.g. a section in backup SRAM or the end of AXI SRAM)
+2. Modify the startup code to skip zeroing this section on warm reset
+3. Detect warm vs cold reset via the RCC reset flags register (`RCC->CSR`)
+4. Define the `PERSISTENT` macro and place data in that section
+
+If you need this, a good starting point is the backup SRAM (`.ram_d3_data`, 0x38000000, 64KB) which retains data during standby — it only needs a RTC backup battery.
 
 ### UART DMA pattern
 

@@ -19,6 +19,7 @@
 
 #include <string.h>
 
+#include "build_info.h"
 #include "utils/log/log.h"
 
 #if THETAGP_CFG_LOG_ENABLE
@@ -95,7 +96,7 @@ void LogPrint(LogLevel level, const char *file, uint16_t line,
   const char *level_str = LogLevelHint(level);
   const char *relative_file = LogRelativePath(file);
 
-  static char buffer[LOG_BUFFER_SIZE];
+  DMA_BSS static char buffer[LOG_BUFFER_SIZE];
   memset(buffer, 0, sizeof(buffer));
 
   int prefix_len = 0;

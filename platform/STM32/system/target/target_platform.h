@@ -51,15 +51,27 @@ extern "C" {
 #define USB_RAM_D2
 #define USB_RAM_D3
 
+// ── Section attributes (platform memory regions) ──
+// DTCMRAM: CPU-local fast RAM, 0-wait, not DMA-accessible
+// RAM (AXI SRAM): system RAM, DMA-accessible
+// RAM_BSS: same as RAM but NOLOAD (zero-init at boot, no Flash copy)
+// RAM_D2 / RAM_D3: peripheral/backup RAM domains
+
 #define DTCM_RAM_DATA __attribute__((section(".dtcmram_data")))
+#define DTCM_RAM_BSS  __attribute__((section(".dtcmram_bss")))
 #define RAM_DATA      __attribute__((section(".ram_data")))
+#define RAM_BSS       __attribute__((section(".ram_bss")))
 #define RAM_D2_DATA   __attribute__((section(".ram_d2_data")))
 #define RAM_D3_DATA   __attribute__((section(".ram_d3_data")))
 
 #else
 
+// Non-H7 fallback: all section attrs are no-ops
+// Variables land in default .data/.bss (usually DTCM or main SRAM)
 #define DTCM_RAM_DATA
+#define DTCM_RAM_BSS
 #define RAM_DATA
+#define RAM_BSS
 #define RAM_D2_DATA
 #define RAM_D3_DATA
 

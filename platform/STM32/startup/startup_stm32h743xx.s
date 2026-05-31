@@ -49,6 +49,10 @@ defined in linker script */
 .word  _sdtcmram_data
 /* end address for the .dtcmram_data section. defined in linker script */
 .word  _edtcmram_data
+/* start address for the .dtcmram_bss section. defined in linker script */
+.word  _sdtcmram_bss
+/* end address for the .dtcmram_bss section. defined in linker script */
+.word  _edtcmram_bss
 /* start address for the initialization values of the .ram_data section */
 .word  _siram_data
 /* start address for the .ram_data section. defined in linker script */
@@ -186,6 +190,34 @@ FillZerobss:
 LoopFillZerobss:
   cmp r2, r4
   bcc FillZerobss
+
+/* Zero fill the dtcmram_bss segment. */
+  ldr r2, =_sdtcmram_bss
+  ldr r4, =_edtcmram_bss
+  movs r3, #0
+  b LoopFillZeroDtcmramBss
+
+FillZeroDtcmramBss:
+  str  r3, [r2]
+  adds r2, r2, #4
+
+LoopFillZeroDtcmramBss:
+  cmp r2, r4
+  bcc FillZeroDtcmramBss
+
+/* Zero fill the ram_bss segment. */
+  ldr r2, =_sram_bss
+  ldr r4, =_eram_bss
+  movs r3, #0
+  b LoopFillZeroRamBss
+
+FillZeroRamBss:
+  str  r3, [r2]
+  adds r2, r2, #4
+
+LoopFillZeroRamBss:
+  cmp r2, r4
+  bcc FillZeroRamBss
 
 /* Call static constructors */
   bl __libc_init_array

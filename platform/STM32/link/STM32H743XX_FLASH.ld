@@ -1,7 +1,7 @@
 /*
 ******************************************************************************
 **
-
+**
 **  File        : LinkerScript.ld
 **
 **  Author		: STM32CubeMX
@@ -56,7 +56,7 @@ ENTRY(Reset_Handler)
 _estack = ORIGIN(DTCMRAM) + LENGTH(DTCMRAM);    /* end of RAM */
 /* Generate a link error if heap and stack don't fit into RAM */
 _Min_Heap_Size = 0x4000;      /* required amount of heap  */
-_Min_Stack_Size = 0x4000;     /* required amount of stack */
+_Min_Stack_Size = 0x2000;     /* required amount of stack (8KB) */
 
 /* Specify the memory areas */
 MEMORY
@@ -72,6 +72,8 @@ FLASH (rx)         : ORIGIN = 0x8000000, LENGTH = 2048K
 /* Define output sections */
 SECTIONS
 {
+  /* ── FLASH sections ── */
+
   /* The startup code goes first into FLASH */
   .isr_vector :
   {
@@ -151,6 +153,8 @@ SECTIONS
     . = ALIGN(4);
   } >FLASH
 
+  /* ── DTCMRAM sections (fast, 0-wait, NOT DMA-accessible) ── */
+
   /* used by the startup to initialize data */
   _sidata = LOADADDR(.data);
 
@@ -197,6 +201,26 @@ SECTIONS
   /* Load address of .dtcmram_data section in FLASH */
   _sidtcmram_data = LOADADDR(.dtcmram_data);
 
+  .dtcmram_bss (NOLOAD) :
+  {
+    . = ALIGN(4);
+    _sdtcmram_bss = .;
+    *(.dtcmram_bss)
+    *(.dtcmram_bss*)
+    . = ALIGN(4);
+    _edtcmram_bss = .;
+  } >DTCMRAM
+
+  /* Stack section in DTCMRAM (heap no longer here) */
+  ._user_stack :
+  {
+    . = ALIGN(8);
+    . = . + _Min_Stack_Size;
+    . = ALIGN(8);
+  } >DTCMRAM
+
+  /* ── AXI SRAM sections (DMA-accessible) ── */
+
   .ram_data :
   {
     . = ALIGN(4);
@@ -209,7 +233,20 @@ SECTIONS
   
   /* Load address of .ram_data section in FLASH */
   _siram_data = LOADADDR(.ram_data);
-  
+
+  /* Zero-initialized DMA-safe memory (NOLOAD, no Flash copy) */
+  .ram_bss (NOLOAD) :
+  {
+    . = ALIGN(4);
+    _sram_bss = .;
+    *(.ram_bss)
+    *(.ram_bss*)
+    . = ALIGN(4);
+    _eram_bss = .;
+  } >RAM
+
+  /* ── RAM_D2 sections ── */
+
   .ram_d2_data :
   {
     . = ALIGN(4);
@@ -222,7 +259,21 @@ SECTIONS
   
   /* Load address of .ram_d2_data section in FLASH */
   _siram_d2_data = LOADADDR(.ram_d2_data);
-  
+
+  /* Heap in RAM_D2 (moved from DTCMRAM for DTCM savings + DMA safety) */
+  .ram_d2_heap (NOLOAD) :
+  {
+    . = ALIGN(8);
+    _sram_d2_heap = .;
+    PROVIDE ( end = . );
+    PROVIDE ( _end = . );
+    . = . + _Min_Heap_Size;
+    . = ALIGN(8);
+    _eram_d2_heap = .;
+  } >RAM_D2
+
+  /* ── RAM_D3 sections ── */
+
   .ram_d3_data :
   {
     . = ALIGN(4);
@@ -236,16 +287,7 @@ SECTIONS
   /* Load address of .ram_d3_data section in FLASH */
   _siram_d3_data = LOADADDR(.ram_d3_data);
 
-  /* User_heap_stack section, used to check that there is enough RAM left */
-  ._user_heap_stack :
-  {
-    . = ALIGN(8);
-    PROVIDE ( end = . );
-    PROVIDE ( _end = . );
-    . = . + _Min_Heap_Size;
-    . = . + _Min_Stack_Size;
-    . = ALIGN(8);
-  } >DTCMRAM
+  /* ── End ── */
 
   /* Remove information from the standard libraries */
   /DISCARD/ :

@@ -1,20 +1,18 @@
 /**
  * This file is a part of ThetaGP.
  *
- * ThetaGP is free software: you can redistribute it
- * and/or modify it under the terms of the GNU General
- * Public License as published by the Free Software
- * Foundation, either version 3 of the License, or (at your
- * option) any later version.
+ * ThetaGP is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * ThetaGP is distributed in the hope that it will be
- * useful, but WITHOUT ANY WARRANTY; without even the
- * implied warranty of MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE. See the GNU General Public License
- * for more details.
+ * ThetaGP is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public
- * License along with this program.
+ * You should have received a copy of the GNU General Public License
+ * along with this program.
  *
  * If not, see <https://www.gnu.org/licenses/>.
  */
@@ -29,8 +27,25 @@
 extern "C" {
 #endif
 
-#define FAST_CODE   DTCM_RAM_DATA
-#define COMMON_CODE RAM_DATA
+// ── Abstract memory partition macros ──
+// Composed from base section attributes in target/target_platform.h.
+// New platforms: redefine DTCM_RAM_DATA / DTCM_RAM_BSS / RAM_DATA / RAM_BSS there.
+//
+// FAST_DATA            → fast CPU-local RAM (DTCM), initialized (Flash load image)
+// FAST_DATA_ZERO_INIT  → fast CPU-local RAM (DTCM), zero-init (NOLOAD, no Flash copy)
+// FAST_CODE            → reserved — function in fast instruction memory (ITCM/DTCM)
+// FAST_CODE_PREF       → reserved — prefer fast RAM, fallback to Flash
+// FAST_CODE_NOINLINE   → function in fast RAM, no inlining
+
+#define FAST_DATA            DTCM_RAM_DATA
+#define FAST_DATA_ZERO_INIT  DTCM_RAM_BSS
+#define FAST_CODE            /* reserved — code placement TBD */
+#define FAST_CODE_PREF       /* reserved — code placement TBD */
+#define FAST_CODE_NOINLINE   __attribute__((noinline))
+
+#define DMA_DATA       RAM_DATA __attribute__((aligned(32)))
+#define DMA_BSS        RAM_BSS __attribute__((aligned(32)))
+#define DMA_DATA_AUTO  static DMA_DATA
 
 #ifdef __cplusplus
 }

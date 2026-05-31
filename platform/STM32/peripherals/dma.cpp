@@ -45,17 +45,18 @@ struct DmaIsrEntry {
   void *context;
 };
 
-static DmaIsrEntry dmaIsrTable[DMA_STREAM_TOTAL] = {{nullptr, nullptr}};
+DMA_BSS static DmaIsrEntry dmaIsrTable[DMA_STREAM_TOTAL] = {{nullptr, nullptr}};
 
 // ── Stream resource tables ──
 
 #if defined(STM32H7)
 
-static constexpr DMA_Stream_TypeDef *streamInstances[DMA_STREAM_TOTAL] = {
-    DMA1_Stream0, DMA1_Stream1, DMA1_Stream2, DMA1_Stream3,
-    DMA1_Stream4, DMA1_Stream5, DMA1_Stream6, DMA1_Stream7,
-    DMA2_Stream0, DMA2_Stream1, DMA2_Stream2, DMA2_Stream3,
-    DMA2_Stream4, DMA2_Stream5, DMA2_Stream6, DMA2_Stream7,
+static constexpr DMA_Stream_TypeDef
+    *streamInstances[DMA_STREAM_TOTAL] = {
+        DMA1_Stream0, DMA1_Stream1, DMA1_Stream2, DMA1_Stream3,
+        DMA1_Stream4, DMA1_Stream5, DMA1_Stream6, DMA1_Stream7,
+        DMA2_Stream0, DMA2_Stream1, DMA2_Stream2, DMA2_Stream3,
+        DMA2_Stream4, DMA2_Stream5, DMA2_Stream6, DMA2_Stream7,
 };
 
 static constexpr DMA_TypeDef *dmaControllers[DMA_STREAM_TOTAL] = {

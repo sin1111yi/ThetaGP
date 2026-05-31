@@ -19,11 +19,12 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "build_info.h"
 #include "utils/mempool/mempoolmanager.h"
 
 using namespace ThetaGP::Mempool;
 
-MempoolEntry MempoolManager::_entries[MAX_POOLS]{};
+DMA_BSS MempoolEntry MempoolManager::_entries[MAX_POOLS]{};
 bool MempoolManager::_initialized = false;
 
 void MempoolManager::init() {

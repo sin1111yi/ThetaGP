@@ -29,6 +29,9 @@
 
 #include <cstdint>
 
+// CDC RX buffer in AXI SRAM (declared in usbdriver.cpp)
+extern DMA_BSS uint8_t s_cdc_buffer[256];
+
 namespace ThetaGP::USB {
 
 class USBDriver {
@@ -58,14 +61,13 @@ public:
     UNUSED(itf);
 
     while (tud_cdc_available()) {
-      static uint8_t buffer[CDC_BUFFER_SIZE];
-      uint32_t len = tud_cdc_read(buffer, sizeof(buffer));
+      uint32_t len = tud_cdc_read(s_cdc_buffer, sizeof(s_cdc_buffer));
 #if 0
-      tud_cdc_write(buffer, len);
+      tud_cdc_write(s_cdc_buffer, len);
       tud_cdc_write_flush();
 #endif
       if (_cdcRxCallback) {
-        _cdcRxCallback(buffer, len);
+        _cdcRxCallback(s_cdc_buffer, len);
       }
     }
   }

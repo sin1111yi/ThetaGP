@@ -88,7 +88,7 @@ static uint8_t lookupUartAf(UartInstance uart, Port port, Pin pin) {
 }
 
 #if defined(STM32H7)
-static std::array<UartBus *, UART_IRQ_GROUPS> uartBusInstance = {};
+DMA_BSS static std::array<UartBus *, UART_IRQ_GROUPS> uartBusInstance = {};
 
 constexpr std::array<USART_TypeDef *, UART_IRQ_GROUPS> uartInstance = {
     USART1, USART2, USART3, UART4, UART5, USART6, UART7, UART8,
@@ -120,16 +120,17 @@ static constexpr uint32_t uartInstanceIndex(UartInstance uart) noexcept {
 #if defined(STM32H7)
 void enableBusUartClock(UartInstance uartx) {
   using ClockFunc = void (*)();
-  static const std::array<ClockFunc, UART_IRQ_GROUPS> clockEnableTable = {{
-      []() { __HAL_RCC_USART1_CLK_ENABLE(); },
-      []() { __HAL_RCC_USART2_CLK_ENABLE(); },
-      []() { __HAL_RCC_USART3_CLK_ENABLE(); },
-      []() { __HAL_RCC_UART4_CLK_ENABLE(); },
-      []() { __HAL_RCC_UART5_CLK_ENABLE(); },
-      []() { __HAL_RCC_USART6_CLK_ENABLE(); },
-      []() { __HAL_RCC_UART7_CLK_ENABLE(); },
-      []() { __HAL_RCC_UART8_CLK_ENABLE(); },
-  }};
+  static const std::array<ClockFunc, UART_IRQ_GROUPS>
+      clockEnableTable = {{
+          []() { __HAL_RCC_USART1_CLK_ENABLE(); },
+          []() { __HAL_RCC_USART2_CLK_ENABLE(); },
+          []() { __HAL_RCC_USART3_CLK_ENABLE(); },
+          []() { __HAL_RCC_UART4_CLK_ENABLE(); },
+          []() { __HAL_RCC_UART5_CLK_ENABLE(); },
+          []() { __HAL_RCC_USART6_CLK_ENABLE(); },
+          []() { __HAL_RCC_UART7_CLK_ENABLE(); },
+          []() { __HAL_RCC_UART8_CLK_ENABLE(); },
+      }};
 
   const auto index = uartInstanceIndex(uartx);
   if (index < clockEnableTable.size()) {

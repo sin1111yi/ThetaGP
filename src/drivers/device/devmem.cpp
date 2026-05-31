@@ -27,7 +27,7 @@ using ThetaGP::Result;
 
 #define DEV_MEMPOOL_SIZE (2048 + 2048 + 16)
 
-COMMON_CODE static uint8_t s_DevMempool[DEV_MEMPOOL_SIZE];
+DMA_BSS static uint8_t s_DevMempool[DEV_MEMPOOL_SIZE];
 
 Result DevMem::init() {
   _poolId = ThetaGP::Mempool::MempoolManager::createPool(

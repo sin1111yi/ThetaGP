@@ -336,7 +336,8 @@ void TestCmdHandler::handle(const char *cmd, JsonDocument &doc) {
 
 #else
 
-void TestCmdHandler::registerHandlers() {}
+// All methods are inlined in testcmds.h for production mode
+// (empty class stub with no-op implementations)
 
 #endif // THETAGP_ENABLE_TEST_API
 

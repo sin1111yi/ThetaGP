@@ -39,7 +39,7 @@ struct HalTimer {
 #if defined(STM32H7)
 
 // Static registry for ISR dispatch
-static std::array<HardwareTimer *, TIM_IRQ_GROUPS> hwTimerInstance = {};
+DMA_BSS static std::array<HardwareTimer *, TIM_IRQ_GROUPS> hwTimerInstance = {};
 
 const std::array<TIM_TypeDef *, TIM_IRQ_GROUPS> timerInstance = {
     TIM1,  TIM2,  TIM3,  TIM4,  TIM5,  TIM6,    TIM7,    TIM8,   TIM12,

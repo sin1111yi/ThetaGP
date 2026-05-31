@@ -37,7 +37,7 @@ namespace ThetaGP::Test {
 static constexpr const char *THETAGP_FW_VERSION = "0.1.1";
 
 // NVIC_SystemReset from CMSIS core
-#include "stm32h7xx.h"
+#include "build_info.h"
 
 SysHandler &SysHandler::getInstance() {
     static SysHandler instance;
@@ -120,7 +120,8 @@ void SysHandler::handle(const char *cmd, JsonDocument &doc) {
 
 #else
 
-void SysHandler::registerHandlers() {}
+// All methods are inlined in testsys.h for production mode
+// (empty class stub with no-op implementations)
 
 #endif // THETAGP_ENABLE_TEST_API
 

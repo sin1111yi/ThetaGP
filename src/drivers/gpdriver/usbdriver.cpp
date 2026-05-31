@@ -32,8 +32,9 @@
 using namespace ThetaGP::USB;
 using namespace ThetaGP::Drivers::GPDriver;
 
-COMMON_CODE static uint8_t s_config_descriptor[1024];
-static uint16_t s_config_size;
+DMA_BSS static uint8_t s_config_descriptor[1024];
+DMA_BSS static uint16_t s_config_size;
+DMA_BSS uint8_t s_cdc_buffer[256];
 
 // Bulk endpoint max packet size: 512 for HS, 64 for FS
 static constexpr uint8_t CDC_BULK_EPSIZE_LO = THETAGP_USB_HIGH_SPEED ? 0x00 : 0x40;
@@ -130,8 +131,8 @@ const uint8_t *USBDriver::getConfigurationDescriptor(uint8_t index) {
 
 extern "C" {
 
-static bool usb_mounted;
-static bool usb_suspended;
+DMA_BSS static bool usb_mounted;
+DMA_BSS static bool usb_suspended;
 
 bool get_usb_mounted(void) { return usb_mounted; }
 

@@ -113,7 +113,7 @@ static uint8_t lookupSpiAf(SpiInstance spi, Port port, Pin pin) {
 }
 
 #if defined(STM32H7)
-static std::array<SpiBus *, SPI_IRQ_GROUPS> spiBusInstance = {};
+DMA_BSS static std::array<SpiBus *, SPI_IRQ_GROUPS> spiBusInstance = {};
 
 const std::array<SPI_TypeDef *, SPI_IRQ_GROUPS> spiInstance = {
     SPI1, SPI2, SPI3, SPI4, SPI5, SPI6};
@@ -150,7 +150,6 @@ SpiBus::SpiBus(SpiInstance spix, PinDesc clk, PinDesc mosi, PinDesc miso,
   _desc.busPinDesc[static_cast<uint32_t>(SpiBusIO::MOSI)] = mosi;
   _desc.busPinDesc[static_cast<uint32_t>(SpiBusIO::MISO)] = miso;
   _desc.ncs = ncs;
-
 }
 
 SpiBus::SpiBus(const SpiDesc &desc) {
@@ -293,7 +292,8 @@ Result SpiBus::readSync(uint8_t *data, uint16_t num) {
   while (offset < num) {
     uint16_t remaining = num - offset;
     uint16_t thisLen = (remaining < _bufSize) ? remaining : _bufSize;
-    if (HAL_SPI_Receive(&HANDLE, data + offset, thisLen, HAL_MAX_DELAY) != HAL_OK)
+    if (HAL_SPI_Receive(&HANDLE, data + offset, thisLen, HAL_MAX_DELAY) !=
+        HAL_OK)
       return Result::Error;
     offset += thisLen;
   }
@@ -343,8 +343,8 @@ Result SpiBus::transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len) {
       }
     } else if (rxData != nullptr) {
       // RX only (send dummy 0xFF to clock in data)
-      if (HAL_SPI_Receive(&HANDLE, rxData + offset, thisLen,
-                          HAL_MAX_DELAY) != HAL_OK) {
+      if (HAL_SPI_Receive(&HANDLE, rxData + offset, thisLen, HAL_MAX_DELAY) !=
+          HAL_OK) {
         ncs.set();
         return Result::Error;
       }

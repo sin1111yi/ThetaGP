@@ -109,7 +109,7 @@ extern "C" {
  * - CFG_TUSB_MEM_ALIGN   : __attribute__ ((aligned(4)))
  */
 #ifndef CFG_TUSB_MEM_SECTION
-#define CFG_TUSB_MEM_SECTION COMMON_CODE
+#define CFG_TUSB_MEM_SECTION DMA_BSS
 #endif
 
 #ifndef CFG_TUSB_MEM_ALIGN

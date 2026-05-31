@@ -21,6 +21,7 @@
 
 #include "gamepad/gamepad.h"
 
+#include "build_info.h"
 #include "utils/log/log.h"
 
 #include "drivers/device/keypad.h"
@@ -87,7 +88,7 @@ void Gamepad::setButtonMappings() {
 }
 
 // --- GamepadRawInput hook (listener/callback, defaults to no-op) ---
-static Gamepad::GamepadRawInputHook g_gamepadRawInputHook = nullptr;
+FAST_DATA_ZERO_INIT static Gamepad::GamepadRawInputHook g_gamepadRawInputHook = nullptr;
 
 void Gamepad::registerGamepadRawInputHook(GamepadRawInputHook hook) {
   g_gamepadRawInputHook = hook;
