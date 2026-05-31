@@ -33,7 +33,7 @@ extern "C" {
 //
 // FAST_DATA            → fast CPU-local RAM (DTCM), initialized (Flash load image)
 // FAST_DATA_ZERO_INIT  → fast CPU-local RAM (DTCM), zero-init (NOLOAD, no Flash copy)
-// FAST_CODE            → function in fast RAM (DTCM .RamFunc, requires Flash copy)
+// FAST_CODE            → reserved — function in fast instruction memory (ITCM/DTCM)
 // FAST_CODE_PREF       → reserved — prefer fast RAM, fallback to Flash
 // FAST_CODE_NOINLINE   → function in fast RAM, no inlining
 
