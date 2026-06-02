@@ -25,6 +25,7 @@
 #include "test/testsys.h"
 #include "test/testcmds.h"
 #include "test/testinjector.h"
+#include "test/flash_wl_handler.h"
 
 #include "gamepad/gamepad.h"
 #include "drivers/gpdriver/hid/HIDDriver.h"
@@ -39,6 +40,7 @@ void initTestSystem() {
     // Each domain handler self-registers
     SysHandler::registerHandlers();
     TestCmdHandler::registerHandlers();
+    FlashWlHandler::registerHandlers();
 
     // Wire frame-complete callback -> dispatcher
     framelayer.setFrameCallback(Dispatcher::dispatch);

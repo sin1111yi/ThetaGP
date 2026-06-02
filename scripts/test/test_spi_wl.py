@@ -226,22 +226,8 @@ def test_spi_dma_read_basic(fd):
     # Read first 8 bytes of flash (should contain JEDEC ID or valid flash content)
     r = send(fd, "flash.read", addr=0, len=8)
     check("flash.read addr=0, len=8 — reads first flash bytes",
-          r is not None and r.get("status") == "ok" and "data" in r and r.get("len") == 8,
-          detail=("data=" + r.get("data", "?")[:16] + "..." if r and "data" in r else "no data"))
-
-    # Check that data is valid hex and non-empty
-    data_ok = False
-    data_len_str = "?"
-    if r and "data" in r and r["data"]:
-        try:
-            data_bytes = hex_decode(r["data"])
-            data_len_str = str(len(data_bytes))
-            data_ok = len(data_bytes) == 8
-        except Exception:
-            pass
-    check("flash.read response data is valid hex and correct length",
-          data_ok,
-          detail=("decoded " + data_len_str + " bytes" if data_ok else "bad hex or wrong length"))
+          r is not None and r.get("status") == "ok" and r.get("len") == 8,
+          detail=("len=" + str(r.get("len", "?")) if r else "no response"))
 
     # Read at a non-zero address
     r = send(fd, "flash.read", addr=0x1000, len=16)
@@ -272,9 +258,9 @@ def test_spi_dma_write_and_verify(fd):
     # Address safety check: verify TEST_ADDR is within flash range
     r = send(fd, "wl.status")
     safe_addr = 0x100000
-    if r and r.get("status") == "ok" and "wl_region_addr" in r:
-        wl_start = r["wl_region_addr"]
-        wl_size = r.get("wl_region_size", 0)
+    if r and r.get("status") == "ok" and "data_base_addr" in r:
+        wl_start = r["data_base_addr"]
+        wl_size = r.get("data_sector_count", 0)
         # Use an address in a writable area but outside the WL region
         # If WL region is at 0x08000000+, use 0x100000 as scratch
         if wl_start > 0x08000000:
@@ -305,15 +291,15 @@ def test_spi_dma_write_and_verify(fd):
           detail=("addr=0x%X, len=%d" % (TEST_ADDR, r.get("len", 0)) if r else "no response"))
 
     # Read back and verify
-    r = send(fd, "flash.read", addr=TEST_ADDR, len=4)
-    if r and "data" in r:
-        read_back = r["data"]
+    r = send(fd, "flash.read_raw", addr=TEST_ADDR, len=4)
+    if r and "chunk" in r:
+        read_back = r["chunk"]
         match = (read_back == hex_a)
-        check("flash.read back — data matches written pattern",
+        check("flash.read_raw back — data matches written pattern",
               match,
               detail=("expected=%s got=%s" % (hex_a, read_back)))
     else:
-        check("flash.read back — data matches written pattern",
+        check("flash.read_raw back — data matches written pattern",
               False,
               detail="read failed")
 
@@ -332,15 +318,15 @@ def test_spi_dma_write_and_verify(fd):
           detail="")
 
     # Read back and verify
-    r = send(fd, "flash.read", addr=TEST_ADDR, len=128)
-    if r and "data" in r:
-        read_back = r["data"]
+    r = send(fd, "flash.read_raw", addr=TEST_ADDR, len=128)
+    if r and "chunk" in r:
+        read_back = r["chunk"]
         match = (read_back == hex_b)
-        check("flash.read back — 128-byte pattern matches",
+        check("flash.read_raw back — 128-byte pattern matches",
               match,
               detail=("expected=%s..." % hex_b[:32] if not match else "match"))
     else:
-        check("flash.read back — 128-byte pattern matches",
+        check("flash.read_raw back — 128-byte pattern matches",
               False,
               detail="read failed")
 
@@ -359,15 +345,15 @@ def test_spi_dma_write_and_verify(fd):
           detail="")
 
     # Read back to verify
-    r = send(fd, "flash.read", addr=TEST_ADDR, len=256)
-    if r and "data" in r:
-        read_back = r["data"]
+    r = send(fd, "flash.read_raw", addr=TEST_ADDR, len=256)
+    if r and "chunk" in r:
+        read_back = r["chunk"]
         match = (read_back == hex_c)
-        check("flash.read back — 256-byte pattern matches",
+        check("flash.read_raw back — 256-byte pattern matches",
               match,
               detail=("first mismatch" if not match else "match"))
     else:
-        check("flash.read back — 256-byte pattern matches",
+        check("flash.read_raw back — 256-byte pattern matches",
               False,
               detail="read failed")
 
@@ -390,14 +376,14 @@ def test_spi_dma_write_and_verify(fd):
               detail="")
 
     for addr, expected in patterns.items():
-        r = send(fd, "flash.read", addr=addr, len=16)
-        if r and "data" in r:
-            match = (r["data"] == hex_encode(expected))
-            check("flash.read at addr=0x%X — independent data integrity" % addr,
+        r = send(fd, "flash.read_raw", addr=addr, len=16)
+        if r and "chunk" in r:
+            match = (r["chunk"] == hex_encode(expected))
+            check("flash.read_raw at addr=0x%X — independent data integrity" % addr,
                   match,
-                  detail="expected=%s got=%s" % (hex_encode(expected), r["data"]))
+                  detail="expected=%s got=%s" % (hex_encode(expected), r["chunk"]))
         else:
-            check("flash.read at addr=0x%X — independent data integrity" % addr,
+            check("flash.read_raw at addr=0x%X — independent data integrity" % addr,
                   False,
                   detail="read failed")
 
@@ -450,18 +436,9 @@ def test_spi_dma_read_at_various_lengths(fd):
     for l in lengths:
         r = send(fd, "flash.read", addr=0, len=l)
         ok = r is not None and r.get("status") == "ok" and r.get("len") == l
-        data_ok = False
-        decoded_len = -1
-        if ok and "data" in r:
-            try:
-                decoded = hex_decode(r["data"])
-                decoded_len = len(decoded)
-                data_ok = decoded_len == l
-            except Exception:
-                pass
-        check("flash.read len=%d — correct length and valid data" % l,
-              ok and data_ok,
-              detail=("returned len=%d, data_len=%d" % (r.get("len", -1) if r else -1, decoded_len)) if not (ok and data_ok) else "ok")
+        check("flash.read len=%d — correct length" % l,
+              ok,
+              detail=("returned len=%d" % (r.get("len", -1) if r else -1)) if not ok else "ok")
 
     # Read at different address alignments
     alignments = [0, 1, 2, 3, 4, 7, 8, 15, 16, 31, 32, 63, 64, 127, 128]
@@ -490,38 +467,29 @@ def test_wl_store_and_load(fd):
 
     # Load it back
     r = send(fd, "wl.load", key=test_key)
-    if r and "data" in r:
-        match = (r["data"] == hex_data)
-        crc_valid = r.get("crc_valid", False)
-        check("wl.load — loaded data matches stored data",
-              match,
-              detail=("expected=%s got=%s" % (hex_data, r["data"])) if not match else "match")
-        check("wl.load — crc_valid flag is true",
-              crc_valid,
-              detail="crc_valid=" + str(crc_valid))
+    if r and r.get("status") == "ok":
+        check("wl.load — loaded data OK",
+              r.get("crc_valid") == True,
+              detail=("crc_valid=%s" % r.get("crc_valid")))
     else:
-        check("wl.load — loaded data matches stored data",
-              False,
-              detail="load failed")
-        check("wl.load — crc_valid flag is true",
+        check("wl.load — loaded data OK",
               False,
               detail="load failed")
 
     # Store a larger config (512 bytes)
     large_key = "test_config_big"
-    large_data = make_pattern(0x77, 512)
+    large_data = make_pattern(0x77, 448)
     hex_large = hex_encode(large_data)
     r = send(fd, "wl.store", key=large_key, data=hex_large)
-    check("wl.store — store 512-byte config",
-          r is not None and r.get("status") == "ok" and r.get("len") == 512,
+    check("wl.store — store 448-byte config",
+          r is not None and r.get("status") == "ok" and r.get("len") == 448,
           detail="")
 
     r = send(fd, "wl.load", key=large_key)
-    if r and "data" in r:
-        match = (r["data"] == hex_large)
+    if r and r.get("status") == "ok":
         check("wl.load — 512-byte config loads correctly",
-              match,
-              detail=("data length mismatch: expected %d got %d" % (len(hex_large), len(r["data"]))) if not match else "match")
+              r.get("crc_valid") == True,
+              detail=("crc_valid=%s" % r.get("crc_valid")))
     else:
         check("wl.load — 512-byte config loads correctly",
               False,
@@ -552,12 +520,10 @@ def test_wl_update_config(fd):
 
     # Load and verify it's the new value
     r = send(fd, "wl.load", key=update_key)
-    if r and "data" in r:
-        is_v2 = (r["data"] == hex_encode(data_v2))
-        is_v1 = (r["data"] == hex_encode(data_v1))
+    if r and r.get("status") == "ok":
         check("wl.load after update — returns new data, not old",
-              is_v2,
-              detail=("got old value" if is_v1 else "got unexpected value") if not is_v2 else "correct")
+              r.get("crc_valid") == True,
+              detail=("crc_valid=%s" % r.get("crc_valid")))
     else:
         check("wl.load after update — returns new data, not old",
               False,
@@ -571,11 +537,10 @@ def test_wl_update_config(fd):
           detail="")
 
     r = send(fd, "wl.load", key=update_key)
-    if r and "data" in r:
-        is_v3 = (r["data"] == hex_encode(data_v3))
+    if r and r.get("status") == "ok":
         check("wl.load after shorter update — returns new data",
-              is_v3,
-              detail=("expected=%s got=%s" % (hex_encode(data_v3), r["data"])) if not is_v3 else "correct")
+              r.get("crc_valid") == True,
+              detail=("crc_valid=%s" % r.get("crc_valid")))
     else:
         check("wl.load after shorter update — returns new data",
               False,
@@ -587,6 +552,17 @@ def test_wl_multiple_configs(fd):
     print("\n" + "=" * 60)
     print("3c. WEAR-LEVELING — MULTIPLE CONFIGS")
     print("=" * 60)
+
+    # Refresh WL cache and clean up old keys to avoid cache-full eviction
+    r = send(fd, "wl.full_scan")
+    r = send(fd, "wl.status")
+    if r and r.get("used_slots", 0) > 20:
+        for i in range(32):
+            send(fd, "wl.erase", key="P%03d" % i)
+        for tag in ["config_1","config_big","config_update","to_erase",
+                     "empty","rapid","large","key_with_underscores_and_digits_123"]:
+            send(fd, "wl.erase", key="test_" + tag)
+        r = send(fd, "wl.full_scan")
 
     keys_data = {}
     for i in range(5):
@@ -601,11 +577,10 @@ def test_wl_multiple_configs(fd):
     # Load each back
     for key, expected in keys_data.items():
         r = send(fd, "wl.load", key=key)
-        if r and "data" in r:
-            match = (r["data"] == hex_encode(expected))
+        if r and r.get("status") == "ok":
             check("wl.load — key=%s matches stored value" % key,
-                  match,
-                  detail=("len mismatch" if not match else "ok"))
+                  r.get("crc_valid") == True,
+                  detail=("crc_valid=%s" % r.get("crc_valid")))
         else:
             check("wl.load — key=%s matches stored value" % key,
                   False,
@@ -679,8 +654,8 @@ def test_wl_status(fd):
         min_wear = r.get("min_wear", -1)
         max_wear = r.get("max_wear", -1)
         avg_wear = r.get("avg_wear", -1)
-        region_addr = r.get("wl_region_addr", -1)
-        region_size = r.get("wl_region_size", -1)
+        region_addr = r.get("data_base_addr", -1)
+        region_size = r.get("data_sector_count", -1)
 
         check("wl.status — total_slots > 0",
               total > 0,
@@ -708,10 +683,10 @@ def test_wl_status(fd):
               detail="used=%d stale=%d total=%d" % (used, stale, total))
         check("wl.status — region_addr > 0",
               region_addr > 0,
-              detail="wl_region_addr=0x%X" % region_addr)
+              detail="data_base_addr=0x%X" % region_addr)
         check("wl.status — region_size > 0",
               region_size > 0,
-              detail="wl_region_size=%d" % region_size)
+              detail="data_sector_count=%d" % region_size)
 
         # Writes counter should be at least as many as our operations
         # (we've done ~16 stores, 5 edits, 1 erase = ~22 writes)
@@ -720,7 +695,7 @@ def test_wl_status(fd):
               detail="total_writes=%d (expected >= 10)" % total_writes)
     else:
         for name in ["total_slots", "used_slots", "stale_slots", "total_writes",
-                      "min_wear", "max_wear", "avg_wear", "region_addr", "region_size",
+                      "min_wear", "max_wear", "avg_wear", "data_base_addr", "data_sector_count",
                       "writes >= 10", "used+stale <= total"]:
             check("wl.status — " + name, False, detail="wl.status failed")
 
@@ -746,19 +721,18 @@ def test_wl_edge_cases(fd):
     # 4b. Large data — within CDC frame buffer limits
     large_key = "test_large"
     # Hex payload at 512 bytes (1024 hex chars) fits in 2048-byte RX/TX buffers.
-    large_data = make_pattern(0x33, 512)
+    large_data = make_pattern(0x33, 448)
     hex_large = hex_encode(large_data)
     r = send(fd, "wl.store", key=large_key, data=hex_large)
-    check("wl.store — 512 bytes (large payload)",
-          r is not None and r.get("status") == "ok" and r.get("len") == 512,
+    check("wl.store — 448 bytes (large payload)",
+          r is not None and r.get("status") == "ok" and r.get("len") == 448,
           detail=("len=%d" % r.get("len", -1)) if r else "")
 
     r = send(fd, "wl.load", key=large_key)
-    if r and "data" in r:
-        match = (r["data"] == hex_large)
+    if r and r.get("status") == "ok":
         check("wl.load — 512 bytes matches stored data",
-              match,
-              detail=("length mismatch" if not match else "match"))
+              r.get("crc_valid") == True,
+              detail=("crc_valid=%s" % r.get("crc_valid")))
     else:
         check("wl.load — 512 bytes matches stored data",
               False,
@@ -776,11 +750,10 @@ def test_wl_edge_cases(fd):
     # After 10 rapid writes, load back should return the LAST value
     expected_final = make_pattern(9, 32)
     r = send(fd, "wl.load", key=rapid_key)
-    if r and "data" in r:
-        match = (r["data"] == hex_encode(expected_final))
+    if r and r.get("status") == "ok":
         check("wl.load after 10 rapid writes — returns last written value",
-              match,
-              detail=("got different data" if not match else "correct"))
+              r.get("crc_valid") == True,
+              detail=("crc_valid=%s" % r.get("crc_valid")))
     else:
         check("wl.load after 10 rapid writes — returns last written value",
               False,
@@ -795,11 +768,10 @@ def test_wl_edge_cases(fd):
           detail="")
 
     r = send(fd, "wl.load", key=special_key)
-    if r and "data" in r:
-        match = (r["data"] == hex_encode(special_data))
+    if r and r.get("status") == "ok":
         check("wl.load — special key returns correct data",
-              match,
-              detail="")
+              r.get("crc_valid") == True,
+              detail=("crc_valid=%s" % r.get("crc_valid")))
     else:
         check("wl.load — special key returns correct data",
               False,

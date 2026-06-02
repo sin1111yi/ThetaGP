@@ -176,6 +176,9 @@ void W25qxxFlash::init() {
   _info.deviceId = chipId & 0xFF;
 
   _initialized = true;
+
+  // Initialize wear-leveling controller (always call, handles first-boot)
+  (void)_wl.init();
 }
 
 // ── read ──────────────────────────────────────────────────────

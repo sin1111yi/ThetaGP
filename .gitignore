@@ -27,3 +27,5 @@ lib/ArduinoJson
 protocol/proto.h
 protocol/proto.rs
 protocol/types.ts
+
+*/test/__pycache__

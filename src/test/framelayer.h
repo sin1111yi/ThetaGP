@@ -72,12 +72,12 @@ public:
     enum class RxState { IDLE, DATA, CR };
 
   RxState _rxState = RxState::IDLE;
-  char _rxBuf[512];
+  char _rxBuf[1024];
   uint16_t _rxLen = 0;
   FrameCallback _frameCallback = nullptr;
 
   // TX pending buffer — defer tud_cdc_write to main loop
-  char _txPendingBuf[512];
+  char _txPendingBuf[1024];
   uint16_t _txPendingLen = 0;
   uint16_t _txPendingSent = 0;
   bool _txPending = false;
