@@ -68,6 +68,10 @@ M.BoardConfig = {
                 }
             }
         },
+
+        flash = {
+            chip = "w25qxx"
+        }
     },
 }
 

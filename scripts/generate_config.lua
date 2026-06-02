@@ -145,6 +145,15 @@ if not ok then
 end
 log.print_info("  SPI flash: ", #spi_lines, " macros generated")
 
+-- Generate flash chip selection macros
+log.print_info("Generating flash chip macros...")
+local ok, flash_lines = pcall(generators.flash.generate, necessary_config.flash)
+if not ok then
+    log.print_error("Flash chip generation failed: ", flash_lines)
+    os.exit(1)
+end
+log.print_info("  Flash: ", #flash_lines, " macros generated")
+
 -- =============================================================================
 -- Generate output files
 -- =============================================================================
@@ -160,7 +169,8 @@ local header_content = generators.header.generate_content(
     keypad_lines,
     usb_lines,
     uart_lines,
-    spi_lines
+    spi_lines,
+    flash_lines
 )
 
 -- Generate CMake content

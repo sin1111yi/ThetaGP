@@ -36,10 +36,10 @@ namespace ThetaGP::Drivers::Device {
  * Uses SpiBus::transfer() for all SPI communication (full-duplex).
  * Buffers are allocated via MempoolManager + DevMem at init time.
  */
-class W25qxxFlash : public FlashBase {
+class FlashW25qxx : public FlashBase {
 public:
-  static W25qxxFlash &getInstance() {
-    static W25qxxFlash instance;
+  static FlashW25qxx &getInstance() {
+    static FlashW25qxx instance;
     return instance;
   }
 
@@ -54,7 +54,7 @@ public:
   [[nodiscard]] bool isBusy() override;
 
 private:
-  W25qxxFlash();
+  FlashW25qxx();
 
   // ── W25QXX instruction set (private constexpr) ─────────────
   static constexpr uint8_t I_WRITE_EN = 0x06U;

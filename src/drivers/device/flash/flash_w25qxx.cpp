@@ -34,20 +34,20 @@ namespace ThetaGP::Drivers::Device {
 
 // ── Constructor ───────────────────────────────────────────────
 
-W25qxxFlash::W25qxxFlash()
+FlashW25qxx::FlashW25qxx()
     : FlashBase("w25qxx",
-        Drivers::Peripheral::PeripheralsManager::getInstance().spiBus(FLASH_SPI)) {
-}
+                Drivers::Peripheral::PeripheralsManager::getInstance().spiBus(
+                    FLASH_SPI)) {}
 
 // ── Internal helpers ──────────────────────────────────────────
 
-void W25qxxFlash::reset() {
+void FlashW25qxx::reset() {
   // Enable Reset + Reset Device sequence
   uint8_t tx[2] = {I_ENABLE_RESET, I_RESET_DEVICE};
   (void)_spi.transfer(tx, nullptr, sizeof(tx));
 }
 
-uint8_t W25qxxFlash::readStatusReg(uint8_t idx) {
+uint8_t FlashW25qxx::readStatusReg(uint8_t idx) {
   uint8_t cmd = 0;
   switch (idx) {
   case 1:
@@ -69,18 +69,18 @@ uint8_t W25qxxFlash::readStatusReg(uint8_t idx) {
   return rx[1];
 }
 
-void W25qxxFlash::writeEnable() {
+void FlashW25qxx::writeEnable() {
   uint8_t tx[1] = {I_WRITE_EN};
   (void)_spi.transfer(tx, nullptr, sizeof(tx));
   waitWhileBusy();
 }
 
-void W25qxxFlash::waitWhileBusy() {
+void FlashW25qxx::waitWhileBusy() {
   while (isBusy()) {
   }
 }
 
-void W25qxxFlash::set4ByteAddrMode(bool enable) {
+void FlashW25qxx::set4ByteAddrMode(bool enable) {
   uint8_t tx[1] = {enable ? I_ENTER_4B_ADDR_MODE : I_EXIT_4B_ADDR_MODE};
   (void)_spi.transfer(tx, nullptr, sizeof(tx));
   _addrMode4Byte = enable;
@@ -88,13 +88,11 @@ void W25qxxFlash::set4ByteAddrMode(bool enable) {
 
 // ── isBusy ────────────────────────────────────────────────────
 
-bool W25qxxFlash::isBusy() {
-  return (readStatusReg(1) & SR1_BUSY) != 0;
-}
+bool FlashW25qxx::isBusy() { return (readStatusReg(1) & SR1_BUSY) != 0; }
 
 // ── readId ────────────────────────────────────────────────────
 
-uint32_t W25qxxFlash::readId() {
+uint32_t FlashW25qxx::readId() {
   // Manufacturer/Device ID command (0x90): cmd + 3-byte address (0x000000)
   uint8_t tx[6] = {I_MANUF_DEV_ID, 0x00, 0x00, 0x00, 0x00, 0x00};
   uint8_t rx[6] = {0};
@@ -105,15 +103,13 @@ uint32_t W25qxxFlash::readId() {
 
 // ── init ──────────────────────────────────────────────────────
 
-void W25qxxFlash::init() {
+void FlashW25qxx::init() {
   // Allocate DMA-safe buffers from DevMem pool via MempoolManager
   constexpr uint32_t BUF_SIZE = 512;
-  _txBuf = static_cast<uint8_t *>(
-      ThetaGP::Mempool::MempoolManager::alloc(
-          ThetaGP::Drivers::Device::DevMem::getInstance().poolId(), BUF_SIZE));
-  _rxBuf = static_cast<uint8_t *>(
-      ThetaGP::Mempool::MempoolManager::alloc(
-          ThetaGP::Drivers::Device::DevMem::getInstance().poolId(), BUF_SIZE));
+  _txBuf = static_cast<uint8_t *>(ThetaGP::Mempool::MempoolManager::alloc(
+      ThetaGP::Drivers::Device::DevMem::getInstance().poolId(), BUF_SIZE));
+  _rxBuf = static_cast<uint8_t *>(ThetaGP::Mempool::MempoolManager::alloc(
+      ThetaGP::Drivers::Device::DevMem::getInstance().poolId(), BUF_SIZE));
 
   _spi.setBuffers(_txBuf, _rxBuf, BUF_SIZE);
   _spi.init();
@@ -183,7 +179,7 @@ void W25qxxFlash::init() {
 
 // ── read ──────────────────────────────────────────────────────
 
-bool W25qxxFlash::read(uint32_t addr, uint8_t *data, uint32_t len) {
+bool FlashW25qxx::read(uint32_t addr, uint8_t *data, uint32_t len) {
   if (!_initialized || data == nullptr || len == 0) {
     return false;
   }
@@ -253,7 +249,7 @@ bool W25qxxFlash::read(uint32_t addr, uint8_t *data, uint32_t len) {
 
 // ── write ─────────────────────────────────────────────────────
 
-bool W25qxxFlash::write(uint32_t addr, const uint8_t *data, uint32_t len) {
+bool FlashW25qxx::write(uint32_t addr, const uint8_t *data, uint32_t len) {
   if (!_initialized || data == nullptr || len == 0) {
     return false;
   }
@@ -312,7 +308,7 @@ bool W25qxxFlash::write(uint32_t addr, const uint8_t *data, uint32_t len) {
 
 // ── eraseSector ───────────────────────────────────────────────
 
-bool W25qxxFlash::eraseSector(uint32_t addr) {
+bool FlashW25qxx::eraseSector(uint32_t addr) {
   if (!_initialized) {
     return false;
   }
@@ -351,7 +347,7 @@ bool W25qxxFlash::eraseSector(uint32_t addr) {
 
 // ── eraseChip ─────────────────────────────────────────────────
 
-bool W25qxxFlash::eraseChip() {
+bool FlashW25qxx::eraseChip() {
   if (!_initialized) {
     return false;
   }
@@ -371,13 +367,14 @@ bool W25qxxFlash::eraseChip() {
 
 // ── getInfo ───────────────────────────────────────────────────
 
-const FlashInfo &W25qxxFlash::getInfo() const {
-  return _info;
-}
+const FlashInfo &FlashW25qxx::getInfo() const { return _info; }
 
-// FlashBase singleton delegates to concrete flash driver
 FlashBase &FlashBase::getInstance() {
-  return W25qxxFlash::getInstance();
+#if defined(FLASH_CHIP_W25QXX)
+  return FlashW25qxx::getInstance();
+#else
+  #error "No flash chip selected. Add flash = { chip = \"...\" } to BoardConfig.lua"
+#endif
 }
 
 } // namespace ThetaGP::Drivers::Device
