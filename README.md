@@ -33,6 +33,17 @@ Adding support for a new MCU family requires:
 - Static memory pool allocator (no malloc/free)
 - ArduinoJson v7.4.3 for JSON serialization
 
+## Hardware Requirements
+
+| Component | Requirement | Notes |
+|-----------|-------------|-------|
+| **SPI Flash** | **Required** | W25Q128 (16MB) or compatible. Used for WearLevel config storage and OTA staging. Must be wired to the MCU's SPI bus. |
+| MCU | STM32H7 series | Other families may work with platform porting |
+| USB Connector | USB-C or USB Micro-B | For HID + CDC communication |
+| Debug Probe | SWD (CMSIS-DAP / ST-Link / J-Link) | Required for flashing and debug |
+
+The SPI flash is mandatory — the firmware stores persistent configuration (button mappings, device settings) and OTA firmware images on it via the WearLevel controller. Without an SPI flash, the firmware will fail to initialize.
+
 ## Prerequisites
 
 - CMake 3.22+
