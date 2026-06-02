@@ -120,6 +120,10 @@ public:
   const GPIO::PinDesc &ncsPinDesc() const { return _desc.ncs; }
   uint8_t *rxBuf() const { return _rxBuf; }
 
+  bool isBusy() const;
+  bool isTxBusy() const;
+  bool isRxBusy() const;
+
   // ── DMA state (accessed by static ISR callbacks in .cpp) ──
   DMA::DmaChannel *_dmaTx = nullptr;
   DMA::DmaChannel *_dmaRx = nullptr;

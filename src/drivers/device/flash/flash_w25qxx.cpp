@@ -177,14 +177,6 @@ void FlashW25qxx::init() {
   (void)_wl.init();
 }
 
-// ── DMA completion callback for transferAsync ──
-static void flashReadDmaDone(void *context) {
-  auto *flash = static_cast<FlashW25qxx *>(context);
-  if (flash) {
-    flash->_dmaDone = true;
-  }
-}
-
 // ── read ──────────────────────────────────────────────────────
 
 bool FlashW25qxx::read(uint32_t addr, uint8_t *data, uint32_t len) {
@@ -230,14 +222,13 @@ bool FlashW25qxx::read(uint32_t addr, uint8_t *data, uint32_t len) {
     }
 
     // Two-phase DMA: polling CMD+ADDR, then 10µs delay, then DMA data transfer
-    _dmaDone = false;
     if (_spi.transferAsync(txCmd, cmdLen, currentData, chunkLen, 10,
-                           flashReadDmaDone, this) != Result::Ok) {
+                           nullptr, nullptr) != Result::Ok) {
       return false;
     }
 
-    // Wait for DMA completion
-    while (!_dmaDone) {
+    // Wait for DMA completion (isBusy checks DMA stream enable status)
+    while (_spi.isBusy()) {
       __NOP();
     }
 
