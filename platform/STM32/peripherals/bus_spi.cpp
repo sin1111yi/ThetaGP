@@ -30,10 +30,16 @@
 
 #include "drivers/peripherals/bus/bus.h"
 #include "drivers/peripherals/bus/bus_spi.h"
+#include "drivers/peripherals/dma.h"
+#include "drivers/peripherals/dma_manager.h"
 #include "drivers/peripherals/gpio.h"
+#include "drivers/peripherals/nvic.h"
+#include "drivers/peripherals/nvic_exti.h"
+#include "utils/log/log.h"
 
 #include <array>
 #include <cstring>
+
 
 #if defined(STM32H7)
 #define SPI_IRQ_GROUPS 6
@@ -122,6 +128,14 @@ constexpr std::array<IRQn_Type, SPI_IRQ_GROUPS> spiGroupIRQn = {
     SPI1_IRQn, SPI2_IRQn, SPI3_IRQn, SPI4_IRQn, SPI5_IRQn, SPI6_IRQn};
 #endif
 
+// ── DMA completion callbacks (forward decl for init()) ──
+static void spiTxDmaComplete(void *context);
+static void spiRxDmaComplete(void *context);
+
+// ── DMAMUX request ID lookup (forward decl) ──
+static bool spiDmaRequestIds(SpiInstance spix, uint32_t &txReq,
+                             uint32_t &rxReq);
+
 void enableBusSPIClock(SpiInstance spix) {
   using ClockFunc = void (*)();
   static const std::array<ClockFunc, 6> clockEnableTable = {{
@@ -159,6 +173,16 @@ SpiBus::SpiBus(const SpiDesc &desc) {
 }
 
 SpiBus::~SpiBus() {
+  if (_dmaTx) {
+    (void)_dmaTx->deinit();
+    delete _dmaTx;
+    _dmaTx = nullptr;
+  }
+  if (_dmaRx) {
+    (void)_dmaRx->deinit();
+    delete _dmaRx;
+    _dmaRx = nullptr;
+  }
   if (_halHandle) {
     delete static_cast<HalSpi *>(_halHandle);
     _halHandle = nullptr;
@@ -252,6 +276,18 @@ void SpiBus::init() {
   HANDLE.Init.MasterInterDataIdleness = SPI_MASTER_INTERDATA_IDLENESS_00CYCLE;
   HANDLE.Init.MasterReceiverAutoSusp = SPI_MASTER_RX_AUTOSUSP_DISABLE;
   HAL_SPI_Init(&HANDLE);
+
+  if (spiIdx < spiBusInstance.size()) {
+    if (spiBusInstance[spiIdx] != nullptr) {
+      LOG_WARN("SPI%u already initialized, overwriting", spiIdx + 1);
+    }
+    spiBusInstance[spiIdx] = this;
+  }
+  const auto spiPrio =
+      static_cast<uint32_t>(NVIC_EXTI::NvicPriority::PriorityMedium);
+  HAL_NVIC_SetPriority(spiGroupIRQn[spiIdx], NVIC_PRIORITY_BASE(spiPrio),
+                       NVIC_PRIORITY_SUB(spiPrio));
+  HAL_NVIC_EnableIRQ(spiGroupIRQn[spiIdx]);
 #endif
 
   Bus::init();
@@ -369,5 +405,224 @@ Result SpiBus::transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len) {
   (void)rxData;
   (void)len;
   return Result::Error;
+#endif
+}
+
+// ── Simple microsecond delay for post-CMD spacing ──
+// Calibrated for 400 MHz CPU: ~4 cycles per NOP + loop overhead.
+static void spiDelayUs(uint32_t us) {
+  // Each loop iteration approximates 10 CPU cycles ~ 25ns at 400MHz
+  // so for 1µs we need ~40 iterations.  Scale linearly.
+  uint32_t count = us * 40;
+  while (count--) {
+    __NOP();
+  }
+}
+
+// ── Two-phase asynchronous transfer ──
+// Phase 1: CMD via polling (HAL_SPI_Transmit)
+// Phase 2: Data via DMA (TX dummy 0xFF, RX into caller buffer)
+
+Result SpiBus::transferAsync(const uint8_t *cmdBuf, uint16_t cmdLen,
+                             uint8_t *rxBuf, uint16_t dataLen,
+                             uint8_t postCmdDelayUs,
+                             void (*callback)(void *context), void *context) {
+#if defined(STM32H7)
+  if (!_initialized || !cmdBuf || cmdLen == 0 || !rxBuf || dataLen == 0) {
+    return Result::InvalidParam;
+  }
+  if (dataLen > _bufSize || dataLen > static_cast<uint32_t>(Bus::_bufSize)) {
+    return Result::InvalidParam;
+  }
+
+  // Check that a transfer is not already in flight
+  if ((_dmaTx && _dmaTx->isBusy()) || (_dmaRx && _dmaRx->isBusy()) ||
+      _transferCb != nullptr) {
+    return Result::Busy;
+  }
+
+  // Validate SPI6 — uses BDMA, not supported by DmaManager
+  uint32_t txReq = 0, rxReq = 0;
+  if (!spiDmaRequestIds(_desc.spix, txReq, rxReq)) {
+    return Result::Unsupported;
+  }
+
+  // Lazy-allocate DMA channels on first use
+  if (!_dmaTx) {
+    _dmaTx = DMA::DmaManager::getInstance().allocate(
+        DMA::Controller::Dma2, txReq);
+    if (!_dmaTx) return Result::Error;
+    _dmaTx->configure({
+        .direction = DMA::Direction::MemoryToPeripheral,
+        .srcDataWidth = DMA::DataWidth::Byte,
+        .destDataWidth = DMA::DataWidth::Byte,
+        .priority = DMA::Priority::Medium,
+        .srcIncrement = true,
+        .destIncrement = false,
+    });
+    _dmaTx->setCallback(spiTxDmaComplete, this);
+    (void)_dmaTx->init();
+  }
+  if (!_dmaRx) {
+    _dmaRx = DMA::DmaManager::getInstance().allocate(
+        DMA::Controller::Dma2, rxReq);
+    if (!_dmaRx) return Result::Error;
+    _dmaRx->configure({
+        .direction = DMA::Direction::PeripheralToMemory,
+        .srcDataWidth = DMA::DataWidth::Byte,
+        .destDataWidth = DMA::DataWidth::Byte,
+        .priority = DMA::Priority::Medium,
+        .srcIncrement = false,
+        .destIncrement = true,
+    });
+    _dmaRx->setCallback(spiRxDmaComplete, this);
+    (void)_dmaRx->init();
+  }
+
+  // Save caller state
+  _readDmaBuf = rxBuf;
+  _readDmaLen = dataLen;
+  _transferCb = callback;
+  _transferCtx = context;
+
+  // Assert NCS
+  Gpio ncs(_desc.ncs);
+  ncs.reset();
+
+  // Phase 1: Send CMD+ADDR via polling
+  if (HAL_SPI_Transmit(&HANDLE, const_cast<uint8_t *>(cmdBuf), cmdLen,
+                       HAL_MAX_DELAY) != HAL_OK) {
+    ncs.set();
+    return Result::Error;
+  }
+
+  // Phase 2: Inter-command delay
+  if (postCmdDelayUs > 0) {
+    spiDelayUs(postCmdDelayUs);
+  }
+
+  // Phase 3: DMA data transfer — fill TX buffer with 0xFF dummy bytes
+  std::memset(_txBuf, 0xFF, dataLen);
+
+  auto *spix = HANDLE.Instance;
+
+  // Start RX DMA first (peripheral → memory)
+  (void)_dmaRx->start(reinterpret_cast<uint32_t>(&spix->RXDR),
+                       reinterpret_cast<uint32_t>(_rxBuf), dataLen);
+
+  // Then TX DMA (memory → peripheral, dummy bytes)
+  (void)_dmaTx->start(reinterpret_cast<uint32_t>(_txBuf),
+                       reinterpret_cast<uint32_t>(&spix->TXDR), dataLen);
+
+  // Enable DMA requests in SPI CFG1
+  spix->CFG1 |= (SPI_CFG1_TXDMAEN | SPI_CFG1_RXDMAEN);
+
+  return Result::Ok;
+#else
+  (void)cmdBuf;
+  (void)cmdLen;
+  (void)rxBuf;
+  (void)dataLen;
+  (void)postCmdDelayUs;
+  (void)callback;
+  (void)context;
+  return Result::Error;
+#endif
+}
+
+// ── DMAMUX request ID lookup for SPI DMA ──
+// Returns DMAMUX request IDs for TX/RX on the given SPI instance.
+// SPI6 uses BDMA (DMAMUX2) which is not supported by DmaManager;
+// callers should check for SPI6 and return Unsupported.
+static bool spiDmaRequestIds(SpiInstance spix, uint32_t &txReq,
+                             uint32_t &rxReq) {
+  switch (spix) {
+  case SpiInstance::Spi1: txReq = DMA_REQUEST_SPI1_TX; rxReq = DMA_REQUEST_SPI1_RX; return true;
+  case SpiInstance::Spi2: txReq = DMA_REQUEST_SPI2_TX; rxReq = DMA_REQUEST_SPI2_RX; return true;
+  case SpiInstance::Spi3: txReq = DMA_REQUEST_SPI3_TX; rxReq = DMA_REQUEST_SPI3_RX; return true;
+  case SpiInstance::Spi4: txReq = DMA_REQUEST_SPI4_TX; rxReq = DMA_REQUEST_SPI4_RX; return true;
+  case SpiInstance::Spi5: txReq = DMA_REQUEST_SPI5_TX; rxReq = DMA_REQUEST_SPI5_RX; return true;
+  // SPI6 uses BDMA — not supported by DmaManager
+  default: return false;
+  }
+}
+
+// ── DMA completion callbacks ──
+
+static void spiTxDmaComplete(void *context) {
+  auto *spi = static_cast<SpiBus *>(context);
+  if (!spi) return;
+
+  auto *hspi = &static_cast<HalSpi *>(spi->halHandle())->handle;
+  hspi->Instance->CFG1 &= ~SPI_CFG1_TXDMAEN;
+}
+
+static void spiRxDmaComplete(void *context) {
+  auto *spi = static_cast<SpiBus *>(context);
+  if (!spi) return;
+
+  auto *hspi = &static_cast<HalSpi *>(spi->halHandle())->handle;
+  hspi->Instance->CFG1 &= ~(SPI_CFG1_TXDMAEN | SPI_CFG1_RXDMAEN);
+
+  // Copy from DMA-safe _rxBuf to caller buffer (may be in DTCM)
+  if (spi->_readDmaBuf && spi->_readDmaLen > 0) {
+    std::memcpy(spi->_readDmaBuf, spi->rxBuf(), spi->_readDmaLen);
+  }
+
+  // De-assert NCS
+  Gpio ncs(spi->ncsPinDesc());
+  ncs.set();
+
+  // Save and clear callback state before invoking
+  auto cb = spi->_transferCb;
+  auto ctx = spi->_transferCtx;
+  spi->_readDmaBuf = nullptr;
+  spi->_readDmaLen = 0;
+  spi->_transferCb = nullptr;
+  spi->_transferCtx = nullptr;
+
+  if (cb) {
+    cb(ctx);
+  }
+}
+
+extern "C" {
+
+#if defined(STM32H7)
+
+static void SPIx_IRQHandler(uint32_t spiIdx) {
+  auto *instance = spiBusInstance[spiIdx];
+  if (!instance) {
+    return;
+  }
+
+  auto *SPIx = spiInstance[spiIdx];
+  uint32_t sr = SPIx->SR;
+
+  // ── Error handling ──
+  // Clear OVR (overrun) and MODF (mode fault) error flags in IFCR
+  if (sr & (SPI_SR_OVR | SPI_SR_MODF)) {
+    uint32_t ifcrMask = 0;
+    if (sr & SPI_SR_OVR)  ifcrMask |= SPI_IFCR_OVRC;
+    if (sr & SPI_SR_MODF) ifcrMask |= SPI_IFCR_MODFC;
+    SPIx->IFCR = ifcrMask;
+  }
+
+  // TODO: Handle data transfer interrupts (TXP, RXP, DXP) once
+  //       interrupt-driven SPI is implemented alongside DMA.
+  //       For now, polling mode handles all data movement.
+}
+
+#define spiIrqHandler(name, idx)                                               \
+  void name(void) { SPIx_IRQHandler(idx); }                                    \
+  struct dummy
+
+spiIrqHandler(SPI1_IRQHandler, 0);
+spiIrqHandler(SPI2_IRQHandler, 1);
+spiIrqHandler(SPI3_IRQHandler, 2);
+spiIrqHandler(SPI4_IRQHandler, 3);
+spiIrqHandler(SPI5_IRQHandler, 4);
+spiIrqHandler(SPI6_IRQHandler, 5);
+
 #endif
 }

@@ -53,6 +53,9 @@ public:
   [[nodiscard]] const FlashInfo &getInfo() const override;
   [[nodiscard]] bool isBusy() override;
 
+  // ── DMA completion flag (set from static ISR callback) ──
+  volatile bool _dmaDone = false;
+
 private:
   FlashW25qxx();
 

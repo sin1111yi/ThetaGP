@@ -25,6 +25,10 @@
 #include <cstdint>
 #include <sys/types.h>
 
+namespace ThetaGP::Drivers::Peripheral::DMA {
+class DmaChannel;
+}
+
 namespace ThetaGP {
 namespace Drivers {
 namespace Peripheral {
@@ -59,21 +63,14 @@ struct SpiDesc {
 
 class SpiBus : public Bus {
 private:
-  uint32_t _bufSize = 16;
   SpiDesc _desc;
   void *_halHandle = nullptr;
 
   void configPins();
 
-  void enableTxDMA();
-  void enableRxDMA();
-
-  // ── Subclass hooks (refactored: only Sync implemented) ──
+  // ── Subclass hooks (SPI is always full-duplex, uses transfer/transferAsync) ──
   Result writeSync(const uint8_t *data, uint16_t num) override;
   Result readSync(uint8_t *data, uint16_t num) override;
-
-  // DMA stubs removed — default Bus::writeAsync/readAsync return Unsupported.
-  // When DMA support is needed, override writeAsync/readAsync here.
 
 public:
   SpiBus(SpiInstance spix, GPIO::PinDesc clk, GPIO::PinDesc mosi,
@@ -83,6 +80,9 @@ public:
 
   SpiBus(const SpiBus &) = delete;
   SpiBus &operator=(const SpiBus &) = delete;
+
+  void init() override;
+  void enableClock() override;
 
   void configBufSize(uint32_t txBufSize, uint32_t rxBufSize);
 
@@ -95,8 +95,38 @@ public:
    */
   Result transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len);
 
-  void init() override;
-  void enableClock() override;
+  /**
+   * @brief Two-phase asynchronous SPI transfer
+   *
+   * Phase 1: CMD+ADDR sent via polling (blocking HAL_SPI_Transmit)
+   * Phase 2: data phase via DMA (TX dummy bytes, RX into caller buffer)
+   *
+   * NCS is asserted before Phase 1 and de-asserted after DMA completion.
+   *
+   * @param cmdBuf        Command/address buffer (sent via polling)
+   * @param cmdLen        Length of cmdBuf in bytes
+   * @param rxBuf         Caller's receive buffer (may be DTCM — memcpy'd)
+   * @param dataLen       Number of data bytes to transfer via DMA
+   * @param postCmdDelayUs  Busy-wait delay after CMD phase (µs)
+   * @param callback      Called from ISR on completion or error
+   * @param context       Opaque context for callback
+   */
+  Result transferAsync(const uint8_t *cmdBuf, uint16_t cmdLen, uint8_t *rxBuf,
+                       uint16_t dataLen, uint8_t postCmdDelayUs,
+                       void (*callback)(void *context), void *context);
+
+  // ── Public accessors for static ISR callbacks ──
+  void *halHandle() const { return _halHandle; }
+  const GPIO::PinDesc &ncsPinDesc() const { return _desc.ncs; }
+  uint8_t *rxBuf() const { return _rxBuf; }
+
+  // ── DMA state (accessed by static ISR callbacks in .cpp) ──
+  DMA::DmaChannel *_dmaTx = nullptr;
+  DMA::DmaChannel *_dmaRx = nullptr;
+  uint8_t *_readDmaBuf = nullptr;
+  uint16_t _readDmaLen = 0;
+  void (*_transferCb)(void *) = nullptr;
+  void *_transferCtx = nullptr;
 };
 
 } // namespace BUS

@@ -27,9 +27,8 @@
 #include "drivers/peripherals/gpio.h"
 #include "drivers/peripherals/nvic.h"
 #include "drivers/peripherals/nvic_exti.h"
-
-#include "utils/log/log.h"
 #include "drivers/peripherals/systick.h"
+#include "utils/log/log.h"
 
 #include <array>
 #include <cstring>
@@ -507,9 +506,6 @@ static void UARTx_IRQHandler(uint32_t uartIdx) {
     if (isr & USART_ISR_NE) icrMask |= USART_ICR_NECF;
     if (isr & USART_ISR_ORE) icrMask |= USART_ICR_ORECF;
     UARTx->ICR = icrMask;
-    LOG_WARN("UART error: PE=%d FE=%d NE=%d ORE=%d",
-             !!(isr & USART_ISR_PE), !!(isr & USART_ISR_FE),
-             !!(isr & USART_ISR_NE), !!(isr & USART_ISR_ORE));
   }
 
   // ── Data transfer (ISR context) ──

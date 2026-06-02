@@ -177,6 +177,14 @@ void FlashW25qxx::init() {
   (void)_wl.init();
 }
 
+// ── DMA completion callback for transferAsync ──
+static void flashReadDmaDone(void *context) {
+  auto *flash = static_cast<FlashW25qxx *>(context);
+  if (flash) {
+    flash->_dmaDone = true;
+  }
+}
+
 // ── read ──────────────────────────────────────────────────────
 
 bool FlashW25qxx::read(uint32_t addr, uint8_t *data, uint32_t len) {
@@ -207,37 +215,31 @@ bool FlashW25qxx::read(uint32_t addr, uint8_t *data, uint32_t len) {
   while (remaining > 0) {
     uint32_t chunkLen = (remaining < chunkSize) ? remaining : chunkSize;
 
-    // Build tx buffer: cmd + addr + dummy bytes
-    // We'll use a local buffer and call transfer multiple times if the chunk
-    // is small enough. For larger reads, we rely on the SPI buffer being
-    // configured large enough (512 bytes in init).
-    uint16_t totalLen = cmdLen + chunkLen;
-
-    // Allocate on stack if small enough, otherwise... use a pattern
-    // Since cmdLen <= 5 and chunkLen <= 256, totalLen <= 261 fits in configured
-    // buffer of 512
-    uint8_t txBuf[261];
-    uint8_t rxBuf[261];
-
-    txBuf[0] = _addrMode4Byte ? I_READ_DATA_4B : I_READ_DATA;
+    // Build CMD+ADDR buffer (only cmd+addr, no dummy bytes)
+    uint8_t txCmd[5]; // max: 1 cmd + 4 addr bytes
+    txCmd[0] = _addrMode4Byte ? I_READ_DATA_4B : I_READ_DATA;
     if (_addrMode4Byte) {
-      txBuf[1] = static_cast<uint8_t>((currentAddr >> 24) & 0xFF);
-      txBuf[2] = static_cast<uint8_t>((currentAddr >> 16) & 0xFF);
-      txBuf[3] = static_cast<uint8_t>((currentAddr >> 8) & 0xFF);
-      txBuf[4] = static_cast<uint8_t>(currentAddr & 0xFF);
+      txCmd[1] = static_cast<uint8_t>((currentAddr >> 24) & 0xFF);
+      txCmd[2] = static_cast<uint8_t>((currentAddr >> 16) & 0xFF);
+      txCmd[3] = static_cast<uint8_t>((currentAddr >> 8) & 0xFF);
+      txCmd[4] = static_cast<uint8_t>(currentAddr & 0xFF);
     } else {
-      txBuf[1] = static_cast<uint8_t>((currentAddr >> 16) & 0xFF);
-      txBuf[2] = static_cast<uint8_t>((currentAddr >> 8) & 0xFF);
-      txBuf[3] = static_cast<uint8_t>(currentAddr & 0xFF);
+      txCmd[1] = static_cast<uint8_t>((currentAddr >> 16) & 0xFF);
+      txCmd[2] = static_cast<uint8_t>((currentAddr >> 8) & 0xFF);
+      txCmd[3] = static_cast<uint8_t>(currentAddr & 0xFF);
     }
-    // Fill remaining with dummy (0x00) — already zero from stack initialization
 
-    if (_spi.transfer(txBuf, rxBuf, totalLen) != Result::Ok) {
+    // Two-phase DMA: polling CMD+ADDR, then 10µs delay, then DMA data transfer
+    _dmaDone = false;
+    if (_spi.transferAsync(txCmd, cmdLen, currentData, chunkLen, 10,
+                           flashReadDmaDone, this) != Result::Ok) {
       return false;
     }
 
-    // Copy received data (skip command + address bytes in rx)
-    std::memcpy(currentData, &rxBuf[cmdLen], chunkLen);
+    // Wait for DMA completion
+    while (!_dmaDone) {
+      __NOP();
+    }
 
     currentAddr += chunkLen;
     currentData += chunkLen;
