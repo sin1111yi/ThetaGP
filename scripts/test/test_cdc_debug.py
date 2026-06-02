@@ -1,5 +1,31 @@
 #!/usr/bin/env python3
-"""Debug CDC: try to send and receive bytes."""
+# This file is a part of ThetaGP.
+#
+# ThetaGP is free software: you can redistribute it
+# and/or modify it under the terms of the GNU General
+# Public License as published by the Free Software
+# Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# ThetaGP is distributed in the hope that it will be
+# useful, but WITHOUT ANY WARRANTY; without even the
+# implied warranty of MERCHANTABILITY or FITNESS FOR A
+# PARTICULAR PURPOSE. See the GNU General Public License
+# for more details.
+#
+# You should have received a copy of the GNU General Public
+# License along with this program.
+#
+# If not, see <https://www.gnu.org/licenses/>.
+#
+# Test: Quick CDC connectivity check
+# Target: CDC ACM virtual serial port (ttyACM1)
+# Method: Opens raw serial at 115200 baud, sends a sys.ping command,
+#         reads raw bytes for 5 seconds, dumps all received data.
+# Expect: Device responds with a JSON line containing status:"ok".
+#         Script prints total bytes received and their hex representation.
+# Error:  No data within 5 seconds indicates the device is not connected,
+#         not running, or the CDC channel is not functional.
 
 import os, termios, time, select, json
 

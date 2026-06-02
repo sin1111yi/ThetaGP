@@ -1,5 +1,35 @@
 #!/usr/bin/env python3
-"""CDC JSON protocol test for ThetaGP — Stage 1 + Stage 2."""
+# This file is a part of ThetaGP.
+#
+# ThetaGP is free software: you can redistribute it
+# and/or modify it under the terms of the GNU General
+# Public License as published by the Free Software
+# Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# ThetaGP is distributed in the hope that it will be
+# useful, but WITHOUT ANY WARRANTY; without even the
+# implied warranty of MERCHANTABILITY or FITNESS FOR A
+# PARTICULAR PURPOSE. See the GNU General Public License
+# for more details.
+#
+# You should have received a copy of the GNU General Public
+# License along with this program.
+#
+# If not, see <https://www.gnu.org/licenses/>.
+#
+# Test: CDC JSON protocol — Stage 1 (sys domain) + Stage 2 (test mode)
+# Target: CDC ACM virtual serial port (ttyACM1) on firmware built with
+#         -DTHETAGP_ENABLE_TEST_API=ON
+# Method: Sends JSON commands via raw serial, parses JSON responses.
+#         Tests sys.ping, sys.get_fw_version, unknown-cmd error handling,
+#         test.set_mode/get_mode, inject_gamepad_state, inject_hid_report,
+#         set_override, clear_inject, get_status, get_history, clear_history,
+#         reset, and mode persistence after reset.
+# Expect: All commands return status:"ok" with valid fields. Reset restores
+#         PASS_THRU mode. Unknown commands return status:"error" error_code:1.
+# Error:  Timeout returns None and marks that test case as FAIL.
+#         Unexpected cmd mismatch or garbage data are logged and retried.
 
 import os, termios, time, select, json
 

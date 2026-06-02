@@ -194,7 +194,7 @@ cat /dev/ttyACM1
 ```
 
 See `docs/cdc-json-protocol.md` for the full protocol specification and
-`test_cdc.py` for an automated test suite.
+`scripts/test/test_cdc.py` for an automated test suite.
 
 ---
 

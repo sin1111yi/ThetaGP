@@ -1,5 +1,32 @@
 #!/usr/bin/env python3
-"""Debug: test each sys command individually with longer timeout."""
+# This file is a part of ThetaGP.
+#
+# ThetaGP is free software: you can redistribute it
+# and/or modify it under the terms of the GNU General
+# Public License as published by the Free Software
+# Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# ThetaGP is distributed in the hope that it will be
+# useful, but WITHOUT ANY WARRANTY; without even the
+# implied warranty of MERCHANTABILITY or FITNESS FOR A
+# PARTICULAR PURPOSE. See the GNU General Public License
+# for more details.
+#
+# You should have received a copy of the GNU General Public
+# License along with this program.
+#
+# If not, see <https://www.gnu.org/licenses/>.
+#
+# Test: Individual sys command debug with longer timeout
+# Target: CDC ACM virtual serial port (ttyACM1)
+# Method: Sends sys.ping, sys.get_fw_version, and a nonexistent command
+#         (test.nope) one at a time with 5-second per-command timeout.
+#         Flushes stale input between commands. Prints raw responses.
+# Expect: sys.ping returns status:"ok". sys.get_fw_version returns version
+#         string. test.nope returns status:"error".
+# Error:  Timeout returns None and prints the buffered bytes for diagnosis.
+#         Useful for isolating which command hangs.
 
 import os, termios, time, select, json
 
