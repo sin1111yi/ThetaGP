@@ -28,22 +28,18 @@
 using namespace ThetaGP::Drivers::Device;
 using ThetaGP::Drivers::Peripheral::BUS::Mode;
 
-static constexpr uint16_t LOG_BUF_SIZE = 256;
-
 Logger::Logger()
     : Device("logger"),
       _uart(Drivers::Peripheral::PeripheralsManager::getInstance().uartBus(
           LOGGER_UART)) {}
 
 void Logger::init() {
-  _txBuf = static_cast<uint8_t *>(
-      Mempool::MempoolManager::alloc(
-          Drivers::Device::DevMem::getInstance().poolId(), LOG_BUF_SIZE));
-  _rxBuf = static_cast<uint8_t *>(
-      Mempool::MempoolManager::alloc(
-          Drivers::Device::DevMem::getInstance().poolId(), LOG_BUF_SIZE));
+  _txBuf = static_cast<uint8_t *>(Mempool::MempoolManager::alloc(
+      Drivers::Device::DevMem::getInstance().poolId(), _uart.MAX_BUF_SIZE));
+  _rxBuf = static_cast<uint8_t *>(Mempool::MempoolManager::alloc(
+      Drivers::Device::DevMem::getInstance().poolId(), _uart.MAX_BUF_SIZE));
 
-  _uart.setBuffers(_txBuf, _rxBuf, LOG_BUF_SIZE);
+  _uart.setBuffers(_txBuf, _rxBuf, _uart.MAX_BUF_SIZE);
   _uart.setMode(Mode::Synchronous);
   _uart.init();
   _initialized = true;

@@ -104,32 +104,40 @@ constexpr std::array<IRQn_Type, UART_IRQ_GROUPS> uartGroupIRQn = {
 // ── Safe enum-to-array-index mapping ──
 static constexpr uint32_t uartInstanceIndex(UartInstance uart) noexcept {
   switch (uart) {
-  case UartInstance::Uart1: return 0;
-  case UartInstance::Uart2: return 1;
-  case UartInstance::Uart3: return 2;
-  case UartInstance::Uart4: return 3;
-  case UartInstance::Uart5: return 4;
-  case UartInstance::Uart6: return 5;
-  case UartInstance::Uart7: return 6;
-  case UartInstance::Uart8: return 7;
-  default:              return UINT32_MAX;
+  case UartInstance::Uart1:
+    return 0;
+  case UartInstance::Uart2:
+    return 1;
+  case UartInstance::Uart3:
+    return 2;
+  case UartInstance::Uart4:
+    return 3;
+  case UartInstance::Uart5:
+    return 4;
+  case UartInstance::Uart6:
+    return 5;
+  case UartInstance::Uart7:
+    return 6;
+  case UartInstance::Uart8:
+    return 7;
+  default:
+    return UINT32_MAX;
   }
 }
 
 #if defined(STM32H7)
 void enableBusUartClock(UartInstance uartx) {
   using ClockFunc = void (*)();
-  static const std::array<ClockFunc, UART_IRQ_GROUPS>
-      clockEnableTable = {{
-          []() { __HAL_RCC_USART1_CLK_ENABLE(); },
-          []() { __HAL_RCC_USART2_CLK_ENABLE(); },
-          []() { __HAL_RCC_USART3_CLK_ENABLE(); },
-          []() { __HAL_RCC_UART4_CLK_ENABLE(); },
-          []() { __HAL_RCC_UART5_CLK_ENABLE(); },
-          []() { __HAL_RCC_USART6_CLK_ENABLE(); },
-          []() { __HAL_RCC_UART7_CLK_ENABLE(); },
-          []() { __HAL_RCC_UART8_CLK_ENABLE(); },
-      }};
+  static const std::array<ClockFunc, UART_IRQ_GROUPS> clockEnableTable = {{
+      []() { __HAL_RCC_USART1_CLK_ENABLE(); },
+      []() { __HAL_RCC_USART2_CLK_ENABLE(); },
+      []() { __HAL_RCC_USART3_CLK_ENABLE(); },
+      []() { __HAL_RCC_UART4_CLK_ENABLE(); },
+      []() { __HAL_RCC_UART5_CLK_ENABLE(); },
+      []() { __HAL_RCC_USART6_CLK_ENABLE(); },
+      []() { __HAL_RCC_UART7_CLK_ENABLE(); },
+      []() { __HAL_RCC_UART8_CLK_ENABLE(); },
+  }};
 
   const auto index = uartInstanceIndex(uartx);
   if (index < clockEnableTable.size()) {
@@ -138,7 +146,8 @@ void enableBusUartClock(UartInstance uartx) {
 }
 #endif
 
-UartBus::UartBus(UartInstance uartx, PinDesc tx, PinDesc rx, uint32_t baudrate) {
+UartBus::UartBus(UartInstance uartx, PinDesc tx, PinDesc rx,
+                 uint32_t baudrate) {
   _halHandle = new HalUart();
   setType(Type::Uart);
 
@@ -181,10 +190,17 @@ void UartBus::enableClock() {
     periphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USART16;
     periphClkInitStruct.Usart16ClockSelection = RCC_USART16CLKSOURCE_D2PCLK2;
     break;
-  default:
+  case UartInstance::Uart2:
+  case UartInstance::Uart3:
+  case UartInstance::Uart4:
+  case UartInstance::Uart5:
+  case UartInstance::Uart7:
+  case UartInstance::Uart8:
     periphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USART234578;
     periphClkInitStruct.Usart234578ClockSelection =
         RCC_USART234578CLKSOURCE_D2PCLK1;
+    break;
+  default:
     break;
   }
 
@@ -245,10 +261,12 @@ void UartBus::init() {
     LOG_ERROR("UART%u init failed", uartIdx + 1);
     return;
   }
-  if (HAL_UARTEx_SetTxFifoThreshold(&UART_HANDLE, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK) {
+  if (HAL_UARTEx_SetTxFifoThreshold(&UART_HANDLE, UART_TXFIFO_THRESHOLD_1_8) !=
+      HAL_OK) {
     LOG_ERROR("UART%u TX FIFO config failed", uartIdx + 1);
   }
-  if (HAL_UARTEx_SetRxFifoThreshold(&UART_HANDLE, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK) {
+  if (HAL_UARTEx_SetRxFifoThreshold(&UART_HANDLE, UART_RXFIFO_THRESHOLD_1_8) !=
+      HAL_OK) {
     LOG_ERROR("UART%u RX FIFO config failed", uartIdx + 1);
   }
   if (HAL_UARTEx_DisableFifoMode(&UART_HANDLE) != HAL_OK) {
@@ -272,21 +290,47 @@ void UartBus::init() {
     uint32_t txRequestId = 0;
     uint32_t rxRequestId = 0;
     switch (_desc.uartx) {
-    case UartInstance::Uart1: txRequestId = DMA_REQUEST_USART1_TX; rxRequestId = DMA_REQUEST_USART1_RX; break;
-    case UartInstance::Uart2: txRequestId = DMA_REQUEST_USART2_TX; rxRequestId = DMA_REQUEST_USART2_RX; break;
-    case UartInstance::Uart3: txRequestId = DMA_REQUEST_USART3_TX; rxRequestId = DMA_REQUEST_USART3_RX; break;
-    case UartInstance::Uart4: txRequestId = DMA_REQUEST_UART4_TX;  rxRequestId = DMA_REQUEST_UART4_RX;  break;
-    case UartInstance::Uart5: txRequestId = DMA_REQUEST_UART5_TX;  rxRequestId = DMA_REQUEST_UART5_RX;  break;
-    case UartInstance::Uart6: txRequestId = DMA_REQUEST_USART6_TX; rxRequestId = DMA_REQUEST_USART6_RX; break;
-    case UartInstance::Uart7: txRequestId = DMA_REQUEST_UART7_TX;  rxRequestId = DMA_REQUEST_UART7_RX;  break;
-    case UartInstance::Uart8: txRequestId = DMA_REQUEST_UART8_TX;  rxRequestId = DMA_REQUEST_UART8_RX;  break;
-    default: break;
+    case UartInstance::Uart1:
+      txRequestId = DMA_REQUEST_USART1_TX;
+      rxRequestId = DMA_REQUEST_USART1_RX;
+      break;
+    case UartInstance::Uart2:
+      txRequestId = DMA_REQUEST_USART2_TX;
+      rxRequestId = DMA_REQUEST_USART2_RX;
+      break;
+    case UartInstance::Uart3:
+      txRequestId = DMA_REQUEST_USART3_TX;
+      rxRequestId = DMA_REQUEST_USART3_RX;
+      break;
+    case UartInstance::Uart4:
+      txRequestId = DMA_REQUEST_UART4_TX;
+      rxRequestId = DMA_REQUEST_UART4_RX;
+      break;
+    case UartInstance::Uart5:
+      txRequestId = DMA_REQUEST_UART5_TX;
+      rxRequestId = DMA_REQUEST_UART5_RX;
+      break;
+    case UartInstance::Uart6:
+      txRequestId = DMA_REQUEST_USART6_TX;
+      rxRequestId = DMA_REQUEST_USART6_RX;
+      break;
+    case UartInstance::Uart7:
+      txRequestId = DMA_REQUEST_UART7_TX;
+      rxRequestId = DMA_REQUEST_UART7_RX;
+      break;
+    case UartInstance::Uart8:
+      txRequestId = DMA_REQUEST_UART8_TX;
+      rxRequestId = DMA_REQUEST_UART8_RX;
+      break;
+    default:
+      break;
     }
 
     // TX
-    _dmaTx = DMA::DmaManager::getInstance().allocate(
-        DMA::Controller::Dma1, txRequestId);
-    if (!_dmaTx) { /* handle error */ }
+    _dmaTx = DMA::DmaManager::getInstance().allocate(DMA::Controller::Dma1,
+                                                     txRequestId);
+    if (!_dmaTx) { /* handle error */
+    }
     _dmaTx->configure({
         .direction = DMA::Direction::MemoryToPeripheral,
         .srcDataWidth = DMA::DataWidth::Byte,
@@ -299,9 +343,10 @@ void UartBus::init() {
     (void)_dmaTx->init();
 
     // RX
-    _dmaRx = DMA::DmaManager::getInstance().allocate(
-        DMA::Controller::Dma1, rxRequestId);
-    if (!_dmaRx) { /* handle error */ }
+    _dmaRx = DMA::DmaManager::getInstance().allocate(DMA::Controller::Dma1,
+                                                     rxRequestId);
+    if (!_dmaRx) { /* handle error */
+    }
     _dmaRx->configure({
         .direction = DMA::Direction::PeripheralToMemory,
         .srcDataWidth = DMA::DataWidth::Byte,
@@ -394,7 +439,8 @@ void UartBus::setTxCallback(UartCallbackFunc cb, void *context) {
 
 static void uartTxDmaComplete(void *context) {
   auto *uart = static_cast<UartBus *>(context);
-  if (!uart) return;
+  if (!uart)
+    return;
 
   auto *huart = &static_cast<HalUart *>(uart->halHandle())->handle;
   huart->Instance->CR3 &= ~USART_CR3_DMAT;
@@ -404,7 +450,8 @@ static void uartTxDmaComplete(void *context) {
 
 static void uartRxDmaComplete(void *context) {
   auto *uart = static_cast<UartBus *>(context);
-  if (!uart) return;
+  if (!uart)
+    return;
 
   auto *huart = &static_cast<HalUart *>(uart->halHandle())->handle;
   huart->Instance->CR3 &= ~USART_CR3_DMAR;
@@ -423,14 +470,15 @@ static void uartRxDmaComplete(void *context) {
 // ── writeAsync (DMA write via LL CR3 DMAT control) ──
 Result UartBus::writeAsync(const uint8_t *data, uint16_t len) {
 #if defined(STM32H7)
-  if (_initialized && _dmaTx && data && len > 0 && len <= _bufSize && _txBuf != nullptr) {
+  if (_initialized && _dmaTx && data && len > 0 && len <= _bufSize &&
+      _txBuf != nullptr) {
     if (isTxBusy()) {
       return Result::Busy;
     }
     std::memcpy(_txBuf, data, len);
     auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
     (void)_dmaTx->start(reinterpret_cast<uint32_t>(_txBuf),
-                  reinterpret_cast<uint32_t>(&huart->Instance->TDR), len);
+                        reinterpret_cast<uint32_t>(&huart->Instance->TDR), len);
     huart->Instance->CR3 |= USART_CR3_DMAT;
     return Result::Ok;
   }
@@ -441,7 +489,8 @@ Result UartBus::writeAsync(const uint8_t *data, uint16_t len) {
 // ── readAsync (DMA read + idle line detection, LL CR3 DMAR/CR1 IDLEIE) ──
 Result UartBus::readAsync(uint8_t *data, uint16_t len) {
 #if defined(STM32H7)
-  if (_initialized && _dmaRx && data && len > 0 && len <= _bufSize && _rxBuf != nullptr) {
+  if (_initialized && _dmaRx && data && len > 0 && len <= _bufSize &&
+      _rxBuf != nullptr) {
     if (isRxBusy()) {
       return Result::Busy;
     }
@@ -450,7 +499,7 @@ Result UartBus::readAsync(uint8_t *data, uint16_t len) {
     _idleDetectionEnabled = true;
     auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
     (void)_dmaRx->start(reinterpret_cast<uint32_t>(&huart->Instance->RDR),
-                  reinterpret_cast<uint32_t>(_rxBuf), len);
+                        reinterpret_cast<uint32_t>(_rxBuf), len);
     huart->Instance->CR3 |= USART_CR3_DMAR;
     huart->Instance->CR1 |= USART_CR1_IDLEIE;
     return Result::Ok;
@@ -501,10 +550,14 @@ static void UARTx_IRQHandler(uint32_t uartIdx) {
 
   if (isr & (USART_ISR_PE | USART_ISR_FE | USART_ISR_NE | USART_ISR_ORE)) {
     uint32_t icrMask = 0;
-    if (isr & USART_ISR_PE) icrMask |= USART_ICR_PECF;
-    if (isr & USART_ISR_FE) icrMask |= USART_ICR_FECF;
-    if (isr & USART_ISR_NE) icrMask |= USART_ICR_NECF;
-    if (isr & USART_ISR_ORE) icrMask |= USART_ICR_ORECF;
+    if (isr & USART_ISR_PE)
+      icrMask |= USART_ICR_PECF;
+    if (isr & USART_ISR_FE)
+      icrMask |= USART_ICR_FECF;
+    if (isr & USART_ISR_NE)
+      icrMask |= USART_ICR_NECF;
+    if (isr & USART_ISR_ORE)
+      icrMask |= USART_ICR_ORECF;
     UARTx->ICR = icrMask;
   }
 

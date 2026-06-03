@@ -87,6 +87,7 @@ private:
   Result readAsync(uint8_t *data, uint16_t len) override;
 
 public:
+  static constexpr uint32_t MAX_BUF_SIZE = _bufSize;
   UartBus(UartInstance uartx, GPIO::PinDesc tx, GPIO::PinDesc rx,
           uint32_t baudrate = 115200);
   explicit UartBus(const UartDesc &desc);
