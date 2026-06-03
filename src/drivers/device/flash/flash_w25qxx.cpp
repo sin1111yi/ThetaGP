@@ -44,7 +44,7 @@ FlashW25qxx::FlashW25qxx()
 void FlashW25qxx::reset() {
   // Enable Reset + Reset Device sequence
   uint8_t tx[2] = {I_ENABLE_RESET, I_RESET_DEVICE};
-  (void)_spi.transfer(tx, nullptr, sizeof(tx));
+  (void)_spi.transfer(tx, nullptr, sizeof(tx), sizeof(tx));
 }
 
 uint8_t FlashW25qxx::readStatusReg(uint8_t idx) {
@@ -65,13 +65,13 @@ uint8_t FlashW25qxx::readStatusReg(uint8_t idx) {
 
   uint8_t tx[2] = {cmd, 0x00};
   uint8_t rx[2] = {0};
-  (void)_spi.transfer(tx, rx, sizeof(tx));
+  (void)_spi.transfer(tx, rx, sizeof(tx), sizeof(tx));
   return rx[1];
 }
 
 void FlashW25qxx::writeEnable() {
   uint8_t tx[1] = {I_WRITE_EN};
-  (void)_spi.transfer(tx, nullptr, sizeof(tx));
+  (void)_spi.transfer(tx, nullptr, sizeof(tx), sizeof(tx));
   waitWhileBusy();
 }
 
@@ -82,7 +82,7 @@ void FlashW25qxx::waitWhileBusy() {
 
 void FlashW25qxx::set4ByteAddrMode(bool enable) {
   uint8_t tx[1] = {enable ? I_ENTER_4B_ADDR_MODE : I_EXIT_4B_ADDR_MODE};
-  (void)_spi.transfer(tx, nullptr, sizeof(tx));
+  (void)_spi.transfer(tx, nullptr, sizeof(tx), sizeof(tx));
   _addrMode4Byte = enable;
 }
 
@@ -96,7 +96,7 @@ uint32_t FlashW25qxx::readId() {
   // Manufacturer/Device ID command (0x90): cmd + 3-byte address (0x000000)
   uint8_t tx[6] = {I_MANUF_DEV_ID, 0x00, 0x00, 0x00, 0x00, 0x00};
   uint8_t rx[6] = {0};
-  (void)_spi.transfer(tx, rx, sizeof(tx));
+  (void)_spi.transfer(tx, rx, sizeof(tx), sizeof(tx));
   // rx[4] = manufacturer ID, rx[5] = device ID
   return (static_cast<uint32_t>(rx[4]) << 8) | static_cast<uint32_t>(rx[5]);
 }
@@ -229,7 +229,7 @@ bool FlashW25qxx::read(uint32_t addr, uint8_t *data, uint32_t len) {
     std::memset(txBuf + cmdLen, 0xFF, chunkLen);
 
     // Full-duplex LL polling transfer: send cmd+addr+dummy, receive all
-    if (_spi.transfer(txBuf, rxBuf, totalLen) != Result::Ok) {
+    if (_spi.transfer(txBuf, rxBuf, totalLen, totalLen) != Result::Ok) {
       return false;
     }
 
@@ -289,7 +289,7 @@ bool FlashW25qxx::write(uint32_t addr, const uint8_t *data, uint32_t len) {
     std::memcpy(&txBuf[cmdLen], currentData, writeLen);
 
     // Full-duplex transfer: send command + addr + data, discard rx
-    if (_spi.transfer(txBuf, rxBuf, totalLen) != Result::Ok) {
+    if (_spi.transfer(txBuf, rxBuf, totalLen, totalLen) != Result::Ok) {
       return false;
     }
 
@@ -334,7 +334,7 @@ bool FlashW25qxx::eraseSector(uint32_t addr) {
     txBuf[3] = static_cast<uint8_t>(addr & 0xFF);
   }
 
-  if (_spi.transfer(txBuf, rxBuf, totalLen) != Result::Ok) {
+  if (_spi.transfer(txBuf, rxBuf, totalLen, totalLen) != Result::Ok) {
     return false;
   }
 
@@ -354,7 +354,7 @@ bool FlashW25qxx::eraseChip() {
   uint8_t tx[1] = {I_CHIP_ERASE};
   uint8_t rx[1] = {0};
 
-  if (_spi.transfer(tx, rx, sizeof(tx)) != Result::Ok) {
+  if (_spi.transfer(tx, rx, sizeof(tx), sizeof(tx)) != Result::Ok) {
     return false;
   }
 

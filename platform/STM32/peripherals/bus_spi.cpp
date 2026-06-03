@@ -356,75 +356,83 @@ void SpiBus::init() {
 // ── Synchronous write (delegates to transfer) ──
 
 Result SpiBus::writeSync(const uint8_t *data, uint16_t num) {
-  return transfer(data, nullptr, num);
+  return transfer(data, nullptr, num, num);
 }
 
 // ── Synchronous read (delegates to transfer) ──
 
 Result SpiBus::readSync(uint8_t *data, uint16_t num) {
-  return transfer(nullptr, data, num);
+  return transfer(nullptr, data, num, num);
 }
 
-// ── Full-duplex transfer (LL polling) ──
-Result SpiBus::transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len) {
+// ── Full-duplex transfer (LL polling, auto-chunked) ──
+Result SpiBus::transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len,
+                        uint16_t chunkLen) {
 #if defined(STM32H7)
-  if (!_initialized || len == 0)
+  if (!_initialized || len == 0 || chunkLen == 0 || chunkLen > _bufSize)
     return Result::InvalidParam;
 
   _desc.ncs.reset();
 
   auto *SPIx = SPI_HANDLE.Instance;
 
-  // ── Stage TX data into internal buffer ──
-  // If txData is provided, copy into _txBuf; otherwise fill with 0xFF.
-  if (txData != nullptr) {
-    (void)std::memcpy(_txBuf, txData, len);
-  } else {
-    (void)std::memset(_txBuf, 0xFF, len);
-  }
+  uint16_t remaining = len;
+  const uint8_t *txSrc = txData;
+  uint8_t *rxDst = rxData;
 
-  // ── Enhanced mode: TSIZE + SPE + CSTART ──
-  MODIFY_REG(SPIx->CR2, SPI_CR2_TSIZE, len);
-  SET_BIT(SPIx->CR1, SPI_CR1_SPE);
-  SET_BIT(SPIx->CR1, SPI_CR1_CSTART);
+  while (remaining > 0) {
+    uint16_t curChunk = (remaining > chunkLen) ? chunkLen : remaining;
 
-  uint16_t txCnt = len;
-  uint16_t rxCnt = len;
-  const uint8_t *txSrc = _txBuf;
-  uint8_t *rxDst = _rxBuf;
-
-  // FIFO depth for STM32H7 high-end SPI (all instances): 16 data items
-  constexpr uint16_t kSpiFifoDepth = 16U;
-
-  while (txCnt > 0U || rxCnt > 0U) {
-    // ── TX path ──
-    if (LL_SPI_IsActiveFlag_TXP(SPIx) && txCnt > 0U &&
-        (rxCnt < txCnt + kSpiFifoDepth)) {
-      LL_SPI_TransmitData8(SPIx, *txSrc);
-      txSrc++;
-      txCnt--;
+    // ── Stage TX data into internal buffer ──
+    if (txSrc != nullptr) {
+      (void)std::memcpy(_txBuf, txSrc, curChunk);
+      txSrc += curChunk;
+    } else {
+      (void)std::memset(_txBuf, 0xFF, curChunk);
     }
 
-    // ── RX path ──
-    if (rxCnt > 0U && LL_SPI_IsActiveFlag_RXP(SPIx)) {
-      *rxDst = LL_SPI_ReceiveData8(SPIx);
-      rxDst++;
-      rxCnt--;
+    // ── Enhanced mode: TSIZE + SPE + CSTART ──
+    MODIFY_REG(SPIx->CR2, SPI_CR2_TSIZE, curChunk);
+    SET_BIT(SPIx->CR1, SPI_CR1_SPE);
+    SET_BIT(SPIx->CR1, SPI_CR1_CSTART);
+
+    uint16_t txCnt = curChunk;
+    uint16_t rxCnt = curChunk;
+    const uint8_t *txBufPtr = _txBuf;
+    uint8_t *rxBufPtr = _rxBuf;
+
+    // FIFO depth for STM32H7 high-end SPI: 16 data items
+    constexpr uint16_t kSpiFifoDepth = 16U;
+
+    while (txCnt > 0U || rxCnt > 0U) {
+      if (LL_SPI_IsActiveFlag_TXP(SPIx) && txCnt > 0U &&
+          (rxCnt < txCnt + kSpiFifoDepth)) {
+        LL_SPI_TransmitData8(SPIx, *txBufPtr);
+        txBufPtr++;
+        txCnt--;
+      }
+
+      if (rxCnt > 0U && LL_SPI_IsActiveFlag_RXP(SPIx)) {
+        *rxBufPtr = LL_SPI_ReceiveData8(SPIx);
+        rxBufPtr++;
+        rxCnt--;
+      }
     }
-  }
 
-  // Wait for End-of-Transfer
-  while (!LL_SPI_IsActiveFlag_EOT(SPIx)) {
-  }
+    while (!LL_SPI_IsActiveFlag_EOT(SPIx)) {
+    }
 
-  // ── Cleanup ──
-  LL_SPI_ClearFlag_EOT(SPIx);
-  LL_SPI_ClearFlag_TXTF(SPIx);
-  CLEAR_BIT(SPIx->CR1, SPI_CR1_SPE);
+    LL_SPI_ClearFlag_EOT(SPIx);
+    LL_SPI_ClearFlag_TXTF(SPIx);
+    CLEAR_BIT(SPIx->CR1, SPI_CR1_SPE);
 
-  // ── Copy received data back to caller (if requested) ──
-  if (rxData != nullptr) {
-    (void)std::memcpy(rxData, _rxBuf, len);
+    // ── Copy chunk back to caller ──
+    if (rxDst != nullptr) {
+      (void)std::memcpy(rxDst, _rxBuf, curChunk);
+      rxDst += curChunk;
+    }
+
+    remaining -= curChunk;
   }
 
   _desc.ncs.set();
@@ -433,6 +441,7 @@ Result SpiBus::transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len) {
   (void)txData;
   (void)rxData;
   (void)len;
+  (void)chunkLen;
   return Result::Error;
 #endif
 }

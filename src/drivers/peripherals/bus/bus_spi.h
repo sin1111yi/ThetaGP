@@ -87,11 +87,17 @@ public:
   /**
    * @brief Full-duplex SPI transfer (MOSI + MISO simultaneously)
    *
-   * This is SPI-specific and not part of the base Bus interface.
+   * Transfers @p len bytes in total, split into chunks of @p chunkLen.
+   * Each chunk copies data through the internal _txBuf/_rxBuf buffers
+   * (must be ≤ _bufSize). NCS is held asserted for the entire multi-
+   * chunk transfer.
+   *
    * Pass txData=nullptr to send dummy bytes (0xFF).
    * Pass rxData=nullptr to discard received bytes.
+   * chunkLen must be > 0 and ≤ _bufSize.
    */
-  Result transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len);
+  Result transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len,
+                  uint16_t chunkLen);
 
   /**
    * @brief Two-phase asynchronous SPI transfer
