@@ -58,7 +58,7 @@ struct SpiDesc {
   SpiInstance spix;
 
   GPIO::PinDesc busPinDesc[3];
-  GPIO::PinDesc ncs;
+  GPIO::Gpio ncs;
 };
 
 class SpiBus : public Bus {
@@ -83,8 +83,6 @@ public:
 
   void init() override;
   void enableClock() override;
-
-  void configBufSize(uint32_t txBufSize, uint32_t rxBufSize);
 
   /**
    * @brief Full-duplex SPI transfer (MOSI + MISO simultaneously)
@@ -117,7 +115,6 @@ public:
 
   // ── Public accessors for static ISR callbacks ──
   void *halHandle() const { return _halHandle; }
-  const GPIO::PinDesc &ncsPinDesc() const { return _desc.ncs; }
   uint8_t *rxBuf() const { return _rxBuf; }
 
   bool isBusy() const;

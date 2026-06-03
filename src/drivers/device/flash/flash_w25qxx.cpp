@@ -207,30 +207,34 @@ bool FlashW25qxx::read(uint32_t addr, uint8_t *data, uint32_t len) {
   while (remaining > 0) {
     uint32_t chunkLen = (remaining < chunkSize) ? remaining : chunkSize;
 
-    // Build CMD+ADDR buffer (only cmd+addr, no dummy bytes)
-    uint8_t txCmd[5]; // max: 1 cmd + 4 addr bytes
-    txCmd[0] = _addrMode4Byte ? I_READ_DATA_4B : I_READ_DATA;
-    if (_addrMode4Byte) {
-      txCmd[1] = static_cast<uint8_t>((currentAddr >> 24) & 0xFF);
-      txCmd[2] = static_cast<uint8_t>((currentAddr >> 16) & 0xFF);
-      txCmd[3] = static_cast<uint8_t>((currentAddr >> 8) & 0xFF);
-      txCmd[4] = static_cast<uint8_t>(currentAddr & 0xFF);
-    } else {
-      txCmd[1] = static_cast<uint8_t>((currentAddr >> 16) & 0xFF);
-      txCmd[2] = static_cast<uint8_t>((currentAddr >> 8) & 0xFF);
-      txCmd[3] = static_cast<uint8_t>(currentAddr & 0xFF);
-    }
+    // Build CMD+ADDR and dummy data in a single TX buffer
+    // Full-duplex transfer: send cmd+addr then 0xFF dummy bytes to clock in data
+    // Max: 5 (1 cmd + 4 addr) + 256 (chunk) = 261 bytes
+    uint8_t txBuf[261];
+    uint8_t rxBuf[261];
+    uint16_t totalLen = cmdLen + chunkLen;
 
-    // Two-phase DMA: polling CMD+ADDR, then 10µs delay, then DMA data transfer
-    if (_spi.transferAsync(txCmd, cmdLen, currentData, chunkLen, 10,
-                           nullptr, nullptr) != Result::Ok) {
+    txBuf[0] = _addrMode4Byte ? I_READ_DATA_4B : I_READ_DATA;
+    if (_addrMode4Byte) {
+      txBuf[1] = static_cast<uint8_t>((currentAddr >> 24) & 0xFF);
+      txBuf[2] = static_cast<uint8_t>((currentAddr >> 16) & 0xFF);
+      txBuf[3] = static_cast<uint8_t>((currentAddr >> 8) & 0xFF);
+      txBuf[4] = static_cast<uint8_t>(currentAddr & 0xFF);
+    } else {
+      txBuf[1] = static_cast<uint8_t>((currentAddr >> 16) & 0xFF);
+      txBuf[2] = static_cast<uint8_t>((currentAddr >> 8) & 0xFF);
+      txBuf[3] = static_cast<uint8_t>(currentAddr & 0xFF);
+    }
+    // Fill dummy bytes to clock out data
+    std::memset(txBuf + cmdLen, 0xFF, chunkLen);
+
+    // Full-duplex LL polling transfer: send cmd+addr+dummy, receive all
+    if (_spi.transfer(txBuf, rxBuf, totalLen) != Result::Ok) {
       return false;
     }
 
-    // Wait for DMA completion (isBusy checks DMA stream enable status)
-    while (_spi.isBusy()) {
-      __NOP();
-    }
+    // Actual data starts at offset cmdLen in rxBuf (garbage before that)
+    std::memcpy(currentData, rxBuf + cmdLen, chunkLen);
 
     currentAddr += chunkLen;
     currentData += chunkLen;
