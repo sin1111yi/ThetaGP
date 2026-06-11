@@ -23,10 +23,9 @@
 
 #include <cstdint>
 #include <ArduinoJson.h>
+#include "build_info.h"
 
 namespace ThetaGP::Test {
-
-#ifdef THETAGP_ENABLE_TEST_API
 
 /**
  * FrameLayer -- CDC frame transport layer.
@@ -49,6 +48,15 @@ public:
     static void cdcRxHandler(void *buffer, uint16_t len);
 
     /**
+     * Process command queue from main loop context.
+     * Must be called periodically from a non-ISR task.
+     * Handles:
+     *   1. Deferred RAW capture completion callbacks
+     *   2. Dispatch of enqueued command frames via _frameCallback
+     */
+    void processCommandQueue();
+
+    /**
      * Process a single received byte through the \r\n state machine.
      * Accumulates bytes in _rxBuf until a complete frame is received.
      */
@@ -62,41 +70,55 @@ public:
     /** Callback type invoked when a complete frame is received. */
     using FrameCallback = void (*)(const char *jsonLine);
 
+    /** Callback type invoked when a raw capture completes. */
+    using RawCaptureCallback = void (*)(const uint8_t *buf, uint16_t len);
+
     /**
      * Register the callback that will be called for each complete frame.
      */
     void setFrameCallback(FrameCallback cb);
 
+    /**
+     * Start raw byte capture mode.
+     *
+     * In RAW state, processByte() accumulates bytes into buf until
+     * len bytes are received, then calls the callback and returns to IDLE.
+     */
+    void startRawCapture(uint8_t *buf, uint16_t len, RawCaptureCallback cb);
+
     void flushTx();
     /** \r\n frame delimiter state machine states. */
-    enum class RxState { IDLE, DATA, CR };
+    enum class RxState { IDLE, DATA, CR, RAW };
 
-  RxState _rxState = RxState::IDLE;
-  char _rxBuf[1024];
-  uint16_t _rxLen = 0;
-  FrameCallback _frameCallback = nullptr;
+    RxState _rxState = RxState::IDLE;
+    char _rxBuf[8192];
+    uint16_t _rxLen = 0;
+    FrameCallback _frameCallback = nullptr;
 
-  // TX pending buffer — defer tud_cdc_write to main loop
-  char _txPendingBuf[1024];
-  uint16_t _txPendingLen = 0;
-  uint16_t _txPendingSent = 0;
-  bool _txPending = false;
+    // TX pending buffer — defer tud_cdc_write to main loop
+    char _txPendingBuf[4096];
+    uint16_t _txPendingLen = 0;
+    uint16_t _txPendingSent = 0;
+    bool _txPending = false;
+
+    // RAW capture support
+    uint8_t *_rawBuf = nullptr;
+    uint16_t _rawTargetLen = 0;
+    RawCaptureCallback _rawCallback = nullptr;
+
+    // ── Command queue (ISR → main loop decoupling) ──
+    static constexpr uint8_t CMD_QUEUE_SIZE = 8;
+    static constexpr uint16_t CMD_QUEUE_FRAME_MAX = 256;
+
+    COMMON_ZERO_INIT static char _cmdQueue[CMD_QUEUE_SIZE][CMD_QUEUE_FRAME_MAX];
+    COMMON_ZERO_INIT static volatile uint8_t _cmdHead;   // ISR writes (producer)
+    static uint8_t _cmdTail;                     // main loop reads (consumer)
+
+    // ── Deferred RAW completion (ISR → main loop) ──
+    COMMON_ZERO_INIT static volatile bool _rawDone;
+    COMMON_ZERO_INIT static volatile uint16_t _rawDoneLen;
+    COMMON_ZERO_INIT static uint8_t *_rawDoneBuf;
+    COMMON_ZERO_INIT static RawCaptureCallback _rawDoneCallback;
 };
-
-#else
-
-/** Production-mode no-op stub. */
-class FrameLayer {
-public:
-    static FrameLayer &getInstance() { static FrameLayer i; return i; }
-    static void cdcRxHandler(void *, uint16_t) {}
-    void processByte(uint8_t) {}
-    void sendResponse(const JsonDocument &) {}
-    using FrameCallback = void (*)(const char *);
-    void setFrameCallback(FrameCallback) {}
-    void flushTx() {}
-};
-
-#endif
 
 } // namespace ThetaGP::Test

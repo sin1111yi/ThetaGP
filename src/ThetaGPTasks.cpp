@@ -28,9 +28,7 @@
 
 #include "ThetaGP.h"
 
-#ifdef THETAGP_ENABLE_TEST_API
 #include "test/framelayer.h"
-#endif
 
 using namespace ThetaGP;
 using namespace ThetaGP::Gamepad;
@@ -39,13 +37,17 @@ FAST_CODE static void taskGamepadCore(uint32_t currentTimeUs) {
   UNUSED(currentTimeUs);
 
   Gamepad::Gamepad::getInstance().process();
-#ifdef THETAGP_ENABLE_TEST_API
   ThetaGP::Test::FrameLayer::getInstance().flushTx();
-#endif
   tud_task();
+}
+
+FAST_CODE static void taskCmdProc(uint32_t) {
+  ThetaGP::Test::FrameLayer::getInstance().processCommandQueue();
 }
 
 void ThetaGP::ThetaGamepad::registerTasks(void) {
   TaskManager::registerTask("GAMEPAD", "CORE", taskGamepadCore,
                             TASK_PERIOD_HZ(1000), TaskPriority::Realtime);
+  TaskManager::registerTask("TEST", "CMD_PROC", taskCmdProc,
+                            1000, TaskPriority::Medium);
 }

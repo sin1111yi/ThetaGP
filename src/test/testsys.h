@@ -25,8 +25,6 @@
 
 namespace ThetaGP::Test {
 
-#ifdef THETAGP_ENABLE_TEST_API
-
 /**
  * SysHandler -- handles commands in the `sys.` domain.
  *
@@ -46,17 +44,5 @@ public:
     static void handle(const char *cmd, JsonDocument &doc);
     static void registerHandlers();
 };
-
-#else
-
-/** Production-mode no-op stub. */
-class SysHandler {
-public:
-    static SysHandler &getInstance() { static SysHandler i; return i; }
-    static void handle(const char *, JsonDocument &) {}
-    static void registerHandlers() {}
-};
-
-#endif
 
 } // namespace ThetaGP::Test

@@ -31,8 +31,6 @@
 
 namespace ThetaGP::Test {
 
-#ifdef THETAGP_ENABLE_TEST_API
-
 // Firmware version string (matches CMake THETAGP_VERSION)
 static constexpr const char *THETAGP_FW_VERSION = "0.1.1";
 
@@ -117,12 +115,5 @@ void SysHandler::handle(const char *cmd, JsonDocument &doc) {
     LOG_DEBUG("SysHandler: cmd='%s' queued=%d", cmd, queued);
     Proto::dispatch(cmd, doc);
 }
-
-#else
-
-// All methods are inlined in testsys.h for production mode
-// (empty class stub with no-op implementations)
-
-#endif // THETAGP_ENABLE_TEST_API
 
 } // namespace ThetaGP::Test

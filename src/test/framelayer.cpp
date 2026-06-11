@@ -28,7 +28,18 @@
 
 namespace ThetaGP::Test {
 
-#ifdef THETAGP_ENABLE_TEST_API
+// ── Static member definitions ──
+
+COMMON_ZERO_INIT char FrameLayer::_cmdQueue[CMD_QUEUE_SIZE][CMD_QUEUE_FRAME_MAX]{};
+COMMON_ZERO_INIT volatile uint8_t FrameLayer::_cmdHead = 0;
+uint8_t FrameLayer::_cmdTail = 0;
+
+COMMON_ZERO_INIT volatile bool FrameLayer::_rawDone = false;
+COMMON_ZERO_INIT volatile uint16_t FrameLayer::_rawDoneLen = 0;
+COMMON_ZERO_INIT uint8_t *FrameLayer::_rawDoneBuf = nullptr;
+COMMON_ZERO_INIT FrameLayer::RawCaptureCallback FrameLayer::_rawDoneCallback = nullptr;
+
+// ── FrameLayer implementation ──
 
 FrameLayer &FrameLayer::getInstance() {
     static FrameLayer instance;
@@ -46,8 +57,40 @@ void FrameLayer::cdcRxHandler(void *buffer, uint16_t len) {
 
 void FrameLayer::processByte(uint8_t byte) {
     switch (_rxState) {
+    case RxState::RAW: {
+        // RAW capture mode: accumulate bytes without interpretation
+        if (_rawBuf && _rxLen < _rawTargetLen) {
+            _rawBuf[_rxLen++] = byte;
+            if (_rxLen >= _rawTargetLen) {
+                // Capture complete — defer callback to main loop
+                _rawDone = true;
+                _rawDoneLen = _rxLen;
+                _rawDoneBuf = _rawBuf;
+                _rawDoneCallback = _rawCallback;
+                _rxLen = 0;
+                _rxState = RxState::IDLE;
+                _rawBuf = nullptr;
+                _rawTargetLen = 0;
+                // NOTE: _rawCallback intentionally NOT cleared here —
+                //       processCommandQueue reads it via _rawDoneCallback
+            }
+        } else {
+            // Safety fallback
+            _rxLen = 0;
+            _rxState = RxState::IDLE;
+            _rawBuf = nullptr;
+            _rawTargetLen = 0;
+            _rawCallback = nullptr;
+        }
+        break;
+    }
+
     case RxState::IDLE: {
-        // Any byte starts a new frame
+        // Skip stray CR/LF — these are just leftover terminators
+        if (byte == '\n' || byte == '\r') {
+            break;
+        }
+        // Any other byte starts a new frame
         _rxLen = 0;
         _rxBuf[_rxLen++] = static_cast<char>(byte);
         _rxState = RxState::DATA;
@@ -58,12 +101,18 @@ void FrameLayer::processByte(uint8_t byte) {
         if (byte == '\r') {
             _rxState = RxState::CR;
         } else if (byte == '\n') {
-            // Frame complete
+            // Frame complete — enqueue instead of calling callback directly
             _rxBuf[_rxLen] = '\0';
-            if (_frameCallback && _rxLen > 0) {
+            if (_rxLen > 0) {
                 LOG_DEBUG("FrameLayer: RX frame (%uB): %.*s",
                        _rxLen, _rxLen > 60 ? 60 : _rxLen, _rxBuf);
-                _frameCallback(_rxBuf);
+                uint8_t next = (_cmdHead + 1) & (CMD_QUEUE_SIZE - 1);
+                if (next != _cmdTail) {
+                    memcpy(_cmdQueue[_cmdHead], _rxBuf, _rxLen + 1);
+                    _cmdHead = next;
+                } else {
+                    LOG_WARN("FrameLayer: command queue full, dropping frame");
+                }
             }
             _rxLen = 0;
             _rxState = RxState::IDLE;
@@ -81,12 +130,18 @@ void FrameLayer::processByte(uint8_t byte) {
 
     case RxState::CR: {
         if (byte == '\n') {
-            // CRLF complete
+            // CRLF complete — enqueue instead of calling callback directly
             _rxBuf[_rxLen] = '\0';
-            if (_frameCallback && _rxLen > 0) {
+            if (_rxLen > 0) {
                 LOG_DEBUG("FrameLayer: RX frame (%uB): %.*s",
                        _rxLen, _rxLen > 60 ? 60 : _rxLen, _rxBuf);
-                _frameCallback(_rxBuf);
+                uint8_t next = (_cmdHead + 1) & (CMD_QUEUE_SIZE - 1);
+                if (next != _cmdTail) {
+                    memcpy(_cmdQueue[_cmdHead], _rxBuf, _rxLen + 1);
+                    _cmdHead = next;
+                } else {
+                    LOG_WARN("FrameLayer: command queue full, dropping frame");
+                }
             }
             _rxLen = 0;
             _rxState = RxState::IDLE;
@@ -104,6 +159,32 @@ void FrameLayer::processByte(uint8_t byte) {
         }
         break;
     }
+    }
+}
+
+void FrameLayer::processCommandQueue() {
+    // 1. Process deferred RAW capture completion callback
+    if (_rawDone) {
+        _rawDone = false;
+        auto *cb = _rawDoneCallback;
+        auto len = _rawDoneLen;
+        auto *buf = _rawDoneBuf;
+        _rawDoneCallback = nullptr;
+        _rawDoneBuf = nullptr;
+        _rawDoneLen = 0;
+        if (cb) {
+            LOG_DEBUG("FrameLayer: RAW deferred callback len=%u", len);
+            cb(buf, len);
+        }
+    }
+
+    // 2. Dispatch all enqueued command frames
+    while (_cmdHead != _cmdTail) {
+        if (_frameCallback) {
+            LOG_DEBUG("FrameLayer: dispatching queued cmd");
+            _frameCallback(_cmdQueue[_cmdTail]);
+        }
+        _cmdTail = (_cmdTail + 1) & (CMD_QUEUE_SIZE - 1);
     }
 }
 
@@ -145,6 +226,13 @@ void FrameLayer::setFrameCallback(FrameCallback cb) {
     _frameCallback = cb;
 }
 
-#endif // THETAGP_ENABLE_TEST_API
+void FrameLayer::startRawCapture(uint8_t *buf, uint16_t len, RawCaptureCallback cb) {
+    LOG_DEBUG("FrameLayer: startRawCapture len=%u", len);
+    _rawBuf = buf;
+    _rawTargetLen = len;
+    _rawCallback = cb;
+    _rxLen = 0;
+    _rxState = RxState::RAW;
+}
 
 } // namespace ThetaGP::Test

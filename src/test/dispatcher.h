@@ -26,8 +26,6 @@
 
 namespace ThetaGP::Test {
 
-#ifdef THETAGP_ENABLE_TEST_API
-
 /**
  * Dispatcher -- routes incoming JSON commands to domain handlers.
  *
@@ -73,18 +71,5 @@ private:
     /** Internal dispatch implementation called by the static wrapper. */
     void dispatchImpl(const char *jsonLine);
 };
-
-#else
-
-/** Production-mode no-op stub. */
-class Dispatcher {
-public:
-    static Dispatcher &getInstance() { static Dispatcher i; return i; }
-    static void dispatch(const char *) {}
-    using DomainHandler = void (*)(const char *, JsonDocument &);
-    void registerHandler(const char *, DomainHandler) {}
-};
-
-#endif
 
 } // namespace ThetaGP::Test

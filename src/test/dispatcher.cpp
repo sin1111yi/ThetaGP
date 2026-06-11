@@ -22,13 +22,12 @@
 #include "test/dispatcher.h"
 #include "test/framelayer.h"
 
+#include "build_info.h"
 #include "utils/log/log.h"
 
 #include <cstring>
 
 namespace ThetaGP::Test {
-
-#ifdef THETAGP_ENABLE_TEST_API
 
 Dispatcher &Dispatcher::getInstance() {
     static Dispatcher instance;
@@ -41,8 +40,8 @@ void Dispatcher::dispatch(const char *jsonLine) {
 
 void Dispatcher::dispatchImpl(const char *jsonLine) {
     LOG_DEBUG("Dispatcher: dispatch '%s'", jsonLine);
-    // 1. Parse JSON
-    JsonDocument doc;
+    // 1. Parse JSON — stack-local doc (safe in main loop context)
+    StaticJsonDocument<2048> doc;
     DeserializationError error = deserializeJson(doc, jsonLine);
 
     if (error) {
@@ -112,7 +111,5 @@ void Dispatcher::registerHandler(const char *domain, DomainHandler handler) {
     _handlerCount++;
     LOG_DEBUG("Dispatcher: Registered handler for domain '%s'", domain);
 }
-
-#endif // THETAGP_ENABLE_TEST_API
 
 } // namespace ThetaGP::Test

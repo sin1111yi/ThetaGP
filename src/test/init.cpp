@@ -25,7 +25,7 @@
 #include "test/testsys.h"
 #include "test/testcmds.h"
 #include "test/testinjector.h"
-#include "test/flash_wl_handler.h"
+#include "test/profile_cmd_handler.h"
 
 #include "gamepad/gamepad.h"
 #include "drivers/gpdriver/hid/HIDDriver.h"
@@ -37,10 +37,9 @@ namespace ThetaGP::Test {
 void initTestSystem() {
     FrameLayer &framelayer = FrameLayer::getInstance();
 
-    // Each domain handler self-registers
+    // Always registered handlers
     SysHandler::registerHandlers();
-    TestCmdHandler::registerHandlers();
-    FlashWlHandler::registerHandlers();
+    ProfileCmdHandler::registerHandlers();
 
     // Wire frame-complete callback -> dispatcher
     framelayer.setFrameCallback(Dispatcher::dispatch);
@@ -50,11 +49,15 @@ void initTestSystem() {
 
     // Register hooks into production code via listener/callback pattern
 #ifdef THETAGP_ENABLE_TEST_API
+    // Test-only handlers
+    TestCmdHandler::registerHandlers();
+
+    // Register hooks into production code via listener/callback pattern
     Gamepad::Gamepad::registerGamepadRawInputHook(TestInjector::gamepadRawInputHook);
     ThetaGP::Drivers::GPDriver::HIDDriver::registerHIDReportHook(TestInjector::hidReportHook);
 #endif
 
-    LOG_INFO("Test API system initialized [THETAGP_ENABLE_TEST_API]");
+    LOG_INFO("Test API system initialized");
 }
 
 } // namespace ThetaGP::Test

@@ -43,9 +43,7 @@
 
 #include "ThetaGP.h"
 
-#ifdef THETAGP_ENABLE_TEST_API
 #include "test/init.h"
-#endif
 
 using namespace ThetaGP;
 
@@ -87,9 +85,7 @@ void ThetaGamepad::setup() {
       &Drivers::Device::Keypad::getInstance());
   Gamepad::Gamepad::getInstance().setButtonMappings();
 
-#ifdef THETAGP_ENABLE_TEST_API
   ThetaGP::Test::initTestSystem();
-#endif
 }
 
 void ThetaGamepad::bootup() {
