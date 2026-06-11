@@ -79,7 +79,7 @@ void PeripheralsManager::initPeripherals() {
 
 void PeripheralsManager::initSpiBuses() {
 #if defined(SPI_DESC_DATA)
-  DMA_DATA static BUS::SpiBus g_buses[] = { BUS::SpiBus{ SPI_DESC_DATA } };
+  COMMON_DATA static BUS::SpiBus g_buses[] = { BUS::SpiBus{ SPI_DESC_DATA } };
   _spiBuses = g_buses;
   _spiCount = sizeof(g_buses) / sizeof(g_buses[0]);
 #else
@@ -90,7 +90,7 @@ void PeripheralsManager::initSpiBuses() {
 
 void PeripheralsManager::initUartBuses() {
 #if defined(UART_DESC_DATA)
-  DMA_DATA static BUS::UartBus g_buses[] = { BUS::UartBus{ UART_DESC_DATA } };
+  COMMON_DATA static BUS::UartBus g_buses[] = { BUS::UartBus{ UART_DESC_DATA } };
   _uartBuses = g_buses;
   _uartCount = sizeof(g_buses) / sizeof(g_buses[0]);
 #else
@@ -100,7 +100,7 @@ void PeripheralsManager::initUartBuses() {
 }
 
 BUS::SpiBus &PeripheralsManager::spiBus(int idx) {
-  DMA_DATA static BUS::SpiBus s_dummy(
+  COMMON_DATA static BUS::SpiBus s_dummy(
       BUS::SpiInstance::SpiNone,
       {GPIO::Port::PortNone, GPIO::Pin::PinNone},
       {GPIO::Port::PortNone, GPIO::Pin::PinNone},
@@ -112,7 +112,7 @@ BUS::SpiBus &PeripheralsManager::spiBus(int idx) {
 }
 
 BUS::UartBus &PeripheralsManager::uartBus(int idx) {
-  DMA_DATA static BUS::UartBus s_dummy(
+  COMMON_DATA static BUS::UartBus s_dummy(
       BUS::UartInstance::UartNone,
       {GPIO::Port::PortNone, GPIO::Pin::PinNone},
       {GPIO::Port::PortNone, GPIO::Pin::PinNone},

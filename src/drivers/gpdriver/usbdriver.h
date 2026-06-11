@@ -30,7 +30,7 @@
 #include <cstdint>
 
 // CDC RX buffer in AXI SRAM (declared in usbdriver.cpp)
-extern DMA_BSS uint8_t s_cdc_buffer[256];
+extern COMMON_ZERO_INIT uint8_t s_cdc_buffer[256];
 
 namespace ThetaGP::USB {
 

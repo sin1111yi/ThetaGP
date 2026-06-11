@@ -43,9 +43,9 @@ extern "C" {
 #define FAST_CODE_PREF       /* reserved — code placement TBD */
 #define FAST_CODE_NOINLINE   FAST_CODE __attribute__((noinline))
 
-#define DMA_DATA       RAM_DATA __attribute__((aligned(32)))
-#define DMA_BSS        RAM_BSS __attribute__((aligned(32)))
-#define DMA_DATA_AUTO  static DMA_DATA
+#define COMMON_DATA       RAM_DATA __attribute__((aligned(32)))
+#define COMMON_ZERO_INIT  RAM_BSS __attribute__((aligned(32)))
+#define COMMON_DATA_AUTO  static COMMON_DATA
 
 #ifdef __cplusplus
 }

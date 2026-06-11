@@ -209,41 +209,41 @@ See `docs/cdc-json-protocol.md` for the full protocol specification and
 
 Macro chain (defined in `build_info.h` + `target_platform.h`):
 ```
-DMA_DATA              → RAM_DATA → __attribute__((section(".ram_data"), aligned(32)))            → DMA-safe system RAM (e.g. AXI SRAM)
-DMA_BSS               → RAM_BSS  → __attribute__((section(".ram_bss"), aligned(32)))             → DMA-safe system RAM, NOLOAD (zero-init, no Flash copy)
+COMMON_DATA              → RAM_DATA → __attribute__((section(".ram_data"), aligned(32)))            → System RAM (DMA-accessible) (e.g. AXI SRAM)
+COMMON_ZERO_INIT               → RAM_BSS  → __attribute__((section(".ram_bss"), aligned(32)))             → System RAM (DMA-accessible), NOLOAD (zero-init, no Flash copy)
 FAST_DATA             → DTCM_RAM_DATA → __attribute__((section(".dtcmram_data")))                → fast CPU-local RAM (DTCM), initialized
 FAST_DATA_ZERO_INIT   → DTCM_RAM_BSS  → __attribute__((section(".dtcmram_bss")))                 → fast CPU-local RAM (DTCM), NOLOAD (zero-init, no Flash copy)
 FAST_CODE             → DTCM_RAM_CODE → __attribute__((section(".dtcmram_code")))                   → hot-path function in DTCM RAM (0-wait, copied from Flash)
 FAST_CODE_PREF        → reserved — prefer fast RAM, fallback to Flash
 FAST_CODE_NOINLINE    → FAST_CODE + __attribute__((noinline))
-DMA_DATA_AUTO         → Convenience: `static DMA_DATA` (shorthand for `static DMA_DATA ...`)
+COMMON_DATA_AUTO         → Convenience: `static COMMON_DATA` (shorthand for `static COMMON_DATA ...`)
 ```
 
 Three kinds of memory are available for variables:
 - **Fast RAM (FAST_DATA / FAST_DATA_ZERO_INIT)** — low-latency, CPU-private (DTCM). **Not accessible by DMA.** Use for hot-path data.
-- **System RAM (DMA_DATA / DMA_BSS)** — larger, DMA-accessible (AXI SRAM). Use for buffers and cold data.
+- **System RAM (COMMON_DATA / COMMON_ZERO_INIT)** — larger, DMA-accessible (AXI SRAM). Use for buffers and cold data.
 - **DTCMRAM stack** — CPU stack (8 KB), placed at top of DTCM.
 
 Which memory maps to which physical region depends on the target platform. Check `target_platform.h` in the platform directory for the exact mapping.
 
-#### MUST use `DMA_DATA` / `DMA_BSS`
+#### MUST use `COMMON_DATA` / `COMMON_ZERO_INIT`
 
 Variables that are either DMA-accessed, or large/cold enough to justify saving fast RAM.
 
 | Condition | Macro | Examples |
 |-----------|-------|----------|
-| **DMA buffers** (fast RAM is not DMA-accessible) | `DMA_BSS` | CDC buffers, USB descriptors, memory pools |
-| **ISR dispatch tables** (low-frequency ISRs) | `DMA_BSS` | DMA/SPI/UART/TIM ISR callback tables |
-| **Large pools** (accessed on alloc/free only) | `DMA_BSS` | Task pool memory, mempool entries |
-| **Log/infrastructure buffers** (slow path) | `DMA_BSS` | Log ring buffer |
-| **Peripheral config tables** (constructor-initialized) | `DMA_DATA` | SPI/UART bus descriptor arrays |
-| **Init-once, rarely-touched values** | `DMA_BSS` | CPU frequency cache, config sizes, USB state |
-| **Low-frequency volatile flags** (ISR-safe with Non-Cacheable RAM) | `DMA_BSS` | Mounted/suspended flags |
+| **DMA buffers** (fast RAM is not DMA-accessible) | `COMMON_ZERO_INIT` | CDC buffers, USB descriptors, memory pools |
+| **ISR dispatch tables** (low-frequency ISRs) | `COMMON_ZERO_INIT` | DMA/SPI/UART/TIM ISR callback tables |
+| **Large pools** (accessed on alloc/free only) | `COMMON_ZERO_INIT` | Task pool memory, mempool entries |
+| **Log/infrastructure buffers** (slow path) | `COMMON_ZERO_INIT` | Log ring buffer |
+| **Peripheral config tables** (constructor-initialized) | `COMMON_DATA` | SPI/UART bus descriptor arrays |
+| **Init-once, rarely-touched values** | `COMMON_ZERO_INIT` | CPU frequency cache, config sizes, USB state |
+| **Low-frequency volatile flags** (ISR-safe with Non-Cacheable RAM) | `COMMON_ZERO_INIT` | Mounted/suspended flags |
 
 Rules:
-- **`DMA_BSS`** — variable is zero-initialized (NOLOAD section, no Flash copy). Use for any variable with no initializer, `= {}`, `= 0`, or `= NULL`.
-- **`DMA_DATA`** — variable has non-zero initial value or constructor. Uses Flash load image.
-- **`DMA_DATA_AUTO`** — shorthand for `static DMA_DATA`.
+- **`COMMON_ZERO_INIT`** — variable is zero-initialized (NOLOAD section, no Flash copy). Use for any variable with no initializer, `= {}`, `= 0`, or `= NULL`.
+- **`COMMON_DATA`** — variable has non-zero initial value or constructor. Uses Flash load image.
+- **`COMMON_DATA_AUTO`** — shorthand for `static COMMON_DATA`.
 - **`aligned(32)`** — automatically applied by both DMA macros for cache line alignment.
 - **`FAST_DATA_ZERO_INIT`** — hot path variable, zero-initialized in DTCM (NOLOAD, no Flash copy).
 - **`FAST_DATA`** — hot path variable with initial value, initialized from Flash load image into DTCM.
@@ -251,21 +251,21 @@ Rules:
 Usage:
 ```cpp
 // DMA-safe (AXI SRAM)
-DMA_BSS static uint8_t s_buffer[1024];     // zero-init, no Flash overhead
-DMA_DATA static MyObj obj = { .val = 42 }; // has initial value, Flash load
-DMA_DATA_AUTO uint32_t counters[8];        // shorthand
+COMMON_ZERO_INIT static uint8_t s_buffer[1024];     // zero-init, no Flash overhead
+COMMON_DATA static MyObj obj = { .val = 42 }; // has initial value, Flash load
+COMMON_DATA_AUTO uint32_t counters[8];        // shorthand
 
 // Fast CPU-local (DTCMRAM)
 FAST_DATA_ZERO_INIT static uint32_t usTicks = 0;           // zero-init hot path
 FAST_DATA static MyObj hotObj = { .val = 42 };             // initialized hot path
 ```
 
-#### MUST NOT use `DMA_DATA` / `DMA_BSS`
+#### MUST NOT use `COMMON_DATA` / `COMMON_ZERO_INIT`
 
 **const/constexpr data** belongs in Flash/ROM, not in RAM:
 ```cpp
 // WRONG — forces constexpr data from Flash into RAM
-DMA_BSS static constexpr uint32_t lookup[] = { ... };
+COMMON_ZERO_INIT static constexpr uint32_t lookup[] = { ... };
 
 // RIGHT — stays in Flash
 static constexpr uint32_t lookup[] = { ... };
@@ -290,11 +290,11 @@ Unmarked `static` variables land in `.data`/`.bss` (fast RAM). This is fine for:
 
 Do NOT add `FAST_DATA`/`FAST_DATA_ZERO_INIT` speculatively. Only move to one of these when a variable meets the hot-path criteria above.
 
-Do NOT add `DMA_DATA`/`DMA_BSS` speculatively. Only move to one of these when a variable meets the MUST criteria above.
+Do NOT add `COMMON_DATA`/`COMMON_ZERO_INIT` speculatively. Only move to one of these when a variable meets the MUST criteria above.
 
 ### System RAM access properties
 
-The system RAM used for DMA_DATA/DMA_BSS may run under different cache/memory-order properties depending on the target. Two common configurations possible with MPU:
+The system RAM used for COMMON_DATA/COMMON_ZERO_INIT may run under different cache/memory-order properties depending on the target. Two common configurations possible with MPU:
 
 - **Non-cacheable** — writes are visible immediately; `volatile` semantics work correctly with no special handling; no DMA coherency issues
 - **Cacheable write-back** — better read performance; requires explicit cache maintenance (D-cache clean/invalidate) for DMA buffers; volatile reads may return stale cached data

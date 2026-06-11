@@ -38,7 +38,7 @@ namespace ThetaGP::Gamepad {
 
 FAST_DATA_ZERO_INIT Scheduler *TaskManager::scheduler = nullptr;
 Mempool::PoolID TaskManager::taskPoolId = Mempool::INVALID_POOL_ID;
-DMA_BSS uint8_t TaskManager::taskPoolMemory[TASK_POOL_SIZE]{};
+COMMON_ZERO_INIT uint8_t TaskManager::taskPoolMemory[TASK_POOL_SIZE]{};
 FAST_DATA_ZERO_INIT TaskManager::TaskRecord TaskManager::records[MAX_TASKS]{};
 size_t TaskManager::taskCount = 0;
 uint16_t TaskManager::averageSystemLoadPercent = 0;

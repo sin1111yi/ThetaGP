@@ -96,7 +96,7 @@ void LogPrint(LogLevel level, const char *file, uint16_t line,
   const char *level_str = LogLevelHint(level);
   const char *relative_file = LogRelativePath(file);
 
-  DMA_BSS static char buffer[LOG_BUFFER_SIZE];
+  COMMON_ZERO_INIT static char buffer[LOG_BUFFER_SIZE];
   memset(buffer, 0, sizeof(buffer));
 
   int prefix_len = 0;

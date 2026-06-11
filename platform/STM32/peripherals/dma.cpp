@@ -45,7 +45,7 @@ struct DmaIsrEntry {
   void *context;
 };
 
-DMA_BSS static DmaIsrEntry dmaIsrTable[DMA_STREAM_TOTAL] = {{nullptr, nullptr}};
+COMMON_ZERO_INIT static DmaIsrEntry dmaIsrTable[DMA_STREAM_TOTAL] = {{nullptr, nullptr}};
 
 // ── Stream resource tables ──
 

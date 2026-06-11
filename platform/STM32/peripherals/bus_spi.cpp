@@ -122,7 +122,7 @@ static uint8_t lookupSpiAf(SpiInstance spi, Port port, Pin pin) {
 }
 
 #if defined(STM32H7)
-DMA_BSS static std::array<SpiBus *, SPI_IRQ_GROUPS> spiBusInstance = {};
+COMMON_ZERO_INIT static std::array<SpiBus *, SPI_IRQ_GROUPS> spiBusInstance = {};
 
 const std::array<SPI_TypeDef *, SPI_IRQ_GROUPS> spiInstance = {
     SPI1, SPI2, SPI3, SPI4, SPI5, SPI6};

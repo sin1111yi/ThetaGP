@@ -35,7 +35,7 @@ FAST_DATA_ZERO_INIT static float usTicksInv = 0.0f;
 // after 49 days. hopefully we won't care.
 FAST_DATA_ZERO_INIT static volatile uint32_t sysTickUptime = 0;
 FAST_DATA_ZERO_INIT static volatile uint32_t sysTickValStamp = 0;
-DMA_BSS static uint32_t cpuClockFrequency = 0;
+COMMON_ZERO_INIT static uint32_t cpuClockFrequency = 0;
 
 FAST_DATA_ZERO_INIT static volatile int sysTickPending = 0;
 

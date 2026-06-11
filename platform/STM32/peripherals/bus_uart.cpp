@@ -87,7 +87,7 @@ static uint8_t lookupUartAf(UartInstance uart, Port port, Pin pin) {
 }
 
 #if defined(STM32H7)
-DMA_BSS static std::array<UartBus *, UART_IRQ_GROUPS> uartBusInstance = {};
+COMMON_ZERO_INIT static std::array<UartBus *, UART_IRQ_GROUPS> uartBusInstance = {};
 
 constexpr std::array<USART_TypeDef *, UART_IRQ_GROUPS> uartInstance = {
     USART1, USART2, USART3, UART4, UART5, USART6, UART7, UART8,

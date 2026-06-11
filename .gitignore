@@ -30,4 +30,6 @@ protocol/types.ts
 
 */test/__pycache__
 
+.codegraph
+
 example

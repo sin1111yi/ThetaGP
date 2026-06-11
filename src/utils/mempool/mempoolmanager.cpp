@@ -24,7 +24,7 @@
 
 using namespace ThetaGP::Mempool;
 
-DMA_BSS MempoolEntry MempoolManager::_entries[MAX_POOLS]{};
+COMMON_ZERO_INIT MempoolEntry MempoolManager::_entries[MAX_POOLS]{};
 bool MempoolManager::_initialized = false;
 
 void MempoolManager::init() {
