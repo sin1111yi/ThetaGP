@@ -47,6 +47,12 @@ import json
 
 PORT = "/dev/ttyACM1"
 
+# Try to find CDC port via stable symlink
+import glob
+_candidates = glob.glob("/dev/serial/by-id/usb-ThetaGamepad*if01*")
+if _candidates:
+    PORT = _candidates[0]
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # Serial I/O helpers (same pattern as test_cdc.py)
