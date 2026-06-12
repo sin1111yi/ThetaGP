@@ -50,7 +50,7 @@ static uint16_t crc16Ccitt(const uint8_t *data, uint16_t len) {
 // ── Slot index helpers (ring buffer wraparound) ──
 
 static uint16_t bootMetaSlotIndex() {
-  auto &flash = W25qxxFlash::getInstance();
+  auto &flash = FlashW25qxx::getInstance();
   for (uint16_t i = 0; i < BOOTMETA_SLOTS; ++i) {
     uint32_t slotAddr = BOOTMETA_BASE + i * sizeof(BootMeta);
     BootMeta meta;
@@ -65,7 +65,7 @@ static uint16_t bootMetaSlotIndex() {
 }
 
 static uint16_t addressRingSlotIndex() {
-  auto &flash = W25qxxFlash::getInstance();
+  auto &flash = FlashW25qxx::getInstance();
   for (uint16_t i = 0; i < ADDR_RING_SLOTS; ++i) {
     uint32_t slotAddr = ADDR_RING_BASE + i * sizeof(AddressEntry);
     AddressEntry entry;
@@ -97,7 +97,7 @@ uint16_t ProfileStore::crc16BootMeta(const BootMeta *meta) const {
 bool ProfileStore::init() {
   LOG_INFO("ProfileStore: init");
 
-  auto &flash = W25qxxFlash::getInstance();
+  auto &flash = FlashW25qxx::getInstance();
   if (!flash.isInitialized()) {
     LOG_ERROR("ProfileStore: flash not initialized");
     return false;
@@ -110,7 +110,72 @@ bool ProfileStore::init() {
   scanAddressRing();
   bool hasFactoryProfile = (_profileAddresses[0] != 0);
 
+  // Check for fresh flash: no valid BootMeta AND the Profile0 area is erased
   if (!found) {
+    bool profile0Erased = true;
+    flash.read(PROFILE0_ADDR, s_staging, PROFILE_JSON_MAX);
+    for (uint16_t i = 0; i < 16; ++i) {
+      if (s_staging[i] != 0xFF) { profile0Erased = false; break; }
+    }
+
+    if (profile0Erased && !hasFactoryProfile) {
+      LOG_INFO("ProfileStore: fresh flash detected, writing default Profile0");
+      // Build minimal default config JSON
+      JsonDocument doc;
+      doc["map"]["socd"]     = 0;
+      doc["map"]["four_way"] = 0;
+      doc["map"]["dpad"]     = 0;
+      doc["map"]["inv_x"]    = 0;
+      doc["map"]["inv_y"]    = 0;
+      doc["map"]["inv_rx"]   = 0;
+      doc["map"]["inv_ry"]   = 0;
+      doc["map"]["swap"]     = 0;
+      JsonArray btnArr = doc["map"]["btn_map"].to<JsonArray>();
+      for (int i = 0; i < 32; ++i) btnArr.add(i);
+      doc["stick"]["lx_dz"]   = 0;
+      doc["stick"]["ly_dz"]   = 0;
+      doc["stick"]["rx_dz"]   = 0;
+      doc["stick"]["ry_dz"]   = 0;
+      doc["stick"]["lx_sens"] = 128;
+      doc["stick"]["ly_sens"] = 128;
+      doc["stick"]["rx_sens"] = 128;
+      doc["stick"]["ry_sens"] = 128;
+      doc["stick"]["curve"]   = 0;
+      doc["stick"]["ema"]     = 0;
+      doc["trig"]["lt_dz"]    = 0;
+      doc["trig"]["rt_dz"]    = 0;
+      doc["usb"]["poll"]      = 1;
+      doc["led"]["bri"]       = 50;
+      doc["led"]["mode"]      = 1;
+      doc["led"]["hue"]       = 0;
+      doc["led"]["sat"]       = 255;
+      doc["led"]["spd"]       = 50;
+      doc["sys"]["log"]       = 1;
+      doc["sys"]["deb_samp"]  = 3;
+      doc["sys"]["deb_thr"]   = 5;
+      doc["cal"]["lx_c"]      = 0;
+      doc["cal"]["ly_c"]      = 0;
+      doc["cal"]["rx_c"]      = 0;
+      doc["cal"]["ry_c"]      = 0;
+
+      uint16_t jsonLen = serializeJson(doc, s_staging, PROFILE_JSON_MAX);
+      if (jsonLen > 0 && jsonLen < PROFILE_JSON_MAX) {
+        writeFactoryProfile(reinterpret_cast<const char *>(s_staging), jsonLen);
+        // Re-scan after writing factory Profile0 — init is complete
+        scanBootMeta(&activeId, &activeAddr);
+        scanAddressRing();
+        _activeProfileId = activeId;
+        _activeAddress = activeAddr;
+        _nextAddr = findNextAddr();
+        _profileCount = 0;
+        for (uint16_t i = 0; i <= PROFILE_MAX_ID; ++i) {
+          if (_profileAddresses[i] != 0) _profileCount++;
+        }
+        LOG_INFO("ProfileStore: auto-init done, active=%u, addr=0x%06lX, next=0x%06lX, count=%u",
+                 _activeProfileId, _activeAddress, _nextAddr, _profileCount);
+        return true;
+      }
+    }
     LOG_WARN("ProfileStore: no valid BootMeta, fallback to Profile0");
     activeId = 0;
     activeAddr = PROFILE0_ADDR;
@@ -136,7 +201,7 @@ bool ProfileStore::init() {
 }
 
 bool ProfileStore::scanBootMeta(uint16_t *outActiveId, uint32_t *outAddress) {
-  auto &flash = W25qxxFlash::getInstance();
+  auto &flash = FlashW25qxx::getInstance();
 
   uint16_t maxSeq = 0;
   uint16_t bestId = 0;
@@ -182,7 +247,7 @@ bool ProfileStore::scanBootMeta(uint16_t *outActiveId, uint32_t *outAddress) {
 }
 
 bool ProfileStore::scanAddressRing() {
-  auto &flash = W25qxxFlash::getInstance();
+  auto &flash = FlashW25qxx::getInstance();
 
   for (uint16_t i = 0; i <= PROFILE_MAX_ID; ++i) {
     _profileAddresses[i] = 0;
@@ -225,7 +290,7 @@ bool ProfileStore::scanAddressRing() {
 }
 
 uint32_t ProfileStore::findNextAddr() const {
-  auto &flash = W25qxxFlash::getInstance();
+  auto &flash = FlashW25qxx::getInstance();
   const auto &info = flash.getInfo();
   uint32_t flashSize = info.sizeBytes;
 
@@ -264,7 +329,7 @@ bool ProfileStore::writeFactoryProfile(const char *json, uint16_t len) {
     return false;
   }
 
-  auto &flash = W25qxxFlash::getInstance();
+  auto &flash = FlashW25qxx::getInstance();
 
   if (!flash.write(PROFILE0_ADDR, reinterpret_cast<const uint8_t *>(json), len)) {
     LOG_ERROR("ProfileStore: failed to write Profile0 primary");
@@ -302,6 +367,19 @@ bool ProfileStore::writeFactoryProfile(const char *json, uint16_t len) {
   _profileCount = 1;
 
   LOG_INFO("ProfileStore: factory profile written");
+
+  // Also write Address Ring entry for profile0 so scanAddressRing finds it
+  AddressEntry addrEntry;
+  addrEntry.profileId = 0;
+  addrEntry.address = PROFILE0_ADDR;
+  addrEntry.seq = 1;
+  _addressRingSeq = 1;
+  if (!flash.write(ADDR_RING_BASE,
+                   reinterpret_cast<const uint8_t *>(&addrEntry),
+                   sizeof(AddressEntry))) {
+    LOG_WARN("ProfileStore: failed to write Address entry for profile0");
+  }
+
   return true;
 }
 
@@ -328,7 +406,7 @@ bool ProfileStore::createProfile(const char *json, uint16_t len, uint16_t *newId
     return false;
   }
 
-  auto &flash = W25qxxFlash::getInstance();
+  auto &flash = FlashW25qxx::getInstance();
   const auto &info = flash.getInfo();
 
   if (_nextAddr >= info.sizeBytes) {
@@ -409,7 +487,7 @@ bool ProfileStore::modifyProfile(uint16_t id, const char *json, uint16_t len) {
     return false;
   }
 
-  auto &flash = W25qxxFlash::getInstance();
+  auto &flash = FlashW25qxx::getInstance();
   const auto &info = flash.getInfo();
 
   if (_nextAddr >= info.sizeBytes) {
@@ -466,7 +544,7 @@ bool ProfileStore::deleteProfile(uint16_t id) {
     return false;
   }
 
-  auto &flash = W25qxxFlash::getInstance();
+  auto &flash = FlashW25qxx::getInstance();
 
   // Mark deleted: write Address Ring entry with address=0, seq=high
   _addressRingSeq++;
@@ -531,7 +609,7 @@ bool ProfileStore::selectProfile(uint16_t id) {
     return false;
   }
 
-  auto &flash = W25qxxFlash::getInstance();
+  auto &flash = FlashW25qxx::getInstance();
 
   uint32_t address = (id == 0) ? PROFILE0_ADDR : _profileAddresses[id];
 
@@ -564,7 +642,7 @@ bool ProfileStore::selectProfile(uint16_t id) {
 bool ProfileStore::loadActive(uint8_t *buf, uint16_t *outLen) {
   LOG_DEBUG("ProfileStore: loadActive");
 
-  auto &flash = W25qxxFlash::getInstance();
+  auto &flash = FlashW25qxx::getInstance();
 
   if (!buf) {
     buf = s_staging;
@@ -606,7 +684,7 @@ ProfileStatus ProfileStore::getStatus() const {
   status.bootMetaSeq = _bootMetaSeq;
   status.addressRingSeq = _addressRingSeq;
 
-  auto &flash = W25qxxFlash::getInstance();
+  auto &flash = FlashW25qxx::getInstance();
   const auto &info = flash.getInfo();
 
   status.totalSectors = info.sizeBytes / 4096;
@@ -623,7 +701,7 @@ ProfileStatus ProfileStore::getStatus() const {
 bool ProfileStore::compaction() {
   LOG_INFO("ProfileStore: compaction start");
 
-  auto &flash = W25qxxFlash::getInstance();
+  auto &flash = FlashW25qxx::getInstance();
 
   // 1. Collect valid profiles (address != 0), ordered by profileId
   struct ValidProfile {
@@ -723,7 +801,7 @@ bool ProfileStore::compaction() {
 bool ProfileStore::resetSector0() {
   LOG_INFO("ProfileStore: resetSector0");
 
-  auto &flash = W25qxxFlash::getInstance();
+  auto &flash = FlashW25qxx::getInstance();
 
   // Backup current BootMeta
   BootMeta activeBootMeta;
@@ -785,7 +863,7 @@ bool ProfileStore::resetSector0() {
 
 bool ProfileStore::eraseSector0Range(uint32_t addr, uint32_t len) {
   (void)len;
-  auto &flash = W25qxxFlash::getInstance();
+  auto &flash = FlashW25qxx::getInstance();
 
   if (addr < 0x1000) {
     return flash.eraseSector(0x000000);
