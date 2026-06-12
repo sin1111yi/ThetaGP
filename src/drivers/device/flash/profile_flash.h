@@ -28,7 +28,7 @@
 namespace ThetaGP::Drivers::Device {
 
 // ── Forward declarations ──
-class W25qxxFlash;
+class FlashW25qxx;
 
 // ── Constants ──
 // Layout: Sector 0 = BootMeta Ring (64x16B) + Address Ring (128x8B) + Profile0

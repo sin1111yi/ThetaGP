@@ -24,6 +24,8 @@
 #include "test/testinjector.h"
 #include "test/framelayer.h"
 
+#include "drivers/device/flash/flash_w25qxx.h"
+
 #include "gamepad/gamepadstate.h"
 
 #include "utils/log/log.h"
@@ -306,6 +308,23 @@ static void handleReset(const char *cmd, JsonDocument &doc) {
     FrameLayer::getInstance().sendResponse(resp);
 }
 
+// ── Flash chip erase (for testing only) ──
+
+static void handleChipErase(const char *cmd, JsonDocument &doc) {
+    auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+    bool ok = flash.eraseChip();
+    JsonDocument resp;
+    resp["status"] = ok ? "ok" : "error";
+    resp["cmd"] = cmd;
+    int queued = doc["queued"].as<int>();
+    resp["queued"] = queued + 1;
+    if (!ok) {
+        resp["error_code"] = 1;
+        resp["reason"] = "eraseChip failed";
+    }
+    FrameLayer::getInstance().sendResponse(resp);
+}
+
 // ---------------------------------------------------------------------------
 // registerHandlers — self-register with the Dispatcher and Proto
 // ---------------------------------------------------------------------------
@@ -331,6 +350,13 @@ void TestCmdHandler::registerHandlers() {
 void TestCmdHandler::handle(const char *cmd, JsonDocument &doc) {
     int queued = doc["queued"].as<int>();
     LOG_DEBUG("TestCmdHandler: cmd='%s' queued=%d", cmd, queued);
+
+    // Non-protocol commands handled directly
+    if (strcmp(cmd, "test.chip_erase") == 0) {
+        handleChipErase(cmd, doc);
+        return;
+    }
+
     Proto::dispatch(cmd, doc);
 }
 

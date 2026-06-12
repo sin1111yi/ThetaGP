@@ -62,7 +62,7 @@ static uint16_t hexDecode(const char *hex, uint8_t *buf, uint16_t maxLen) {
 
 static void sendError(const char *cmd, JsonDocument &doc,
                       int errorCode, const char *reason) {
-  StaticJsonDocument<256> resp;
+  JsonDocument resp;
   resp["cmd"] = cmd;
   resp["queued"] = doc["queued"].as<int>() + 1;
   resp["status"] = "error";
@@ -72,7 +72,7 @@ static void sendError(const char *cmd, JsonDocument &doc,
 }
 
 static uint16_t serializeConfigToStaging() {
-  StaticJsonDocument<2048> doc;
+  JsonDocument doc;
   JsonObject map = doc["map"].to<JsonObject>();
   map["socd"]     = s_config.socd_mode;
   map["four_way"] = s_config.four_way_mode;
@@ -135,7 +135,7 @@ static bool findProfileAddress(uint16_t profileId, uint32_t &outAddr,
                                uint16_t &outLen) {
   if (profileId == 0) {
     outAddr = PROFILE0_ADDR;
-    auto &flash = W25qxxFlash::getInstance();
+    auto &flash = FlashW25qxx::getInstance();
     flash.read(PROFILE0_ADDR, s_staging, PROFILE_JSON_MAX);
     uint16_t len = 0;
     for (uint16_t i = 0; i < PROFILE_JSON_MAX; i++) {
@@ -146,7 +146,7 @@ static bool findProfileAddress(uint16_t profileId, uint32_t &outAddr,
     return (len > 0);
   }
 
-  auto &flash = W25qxxFlash::getInstance();
+  auto &flash = FlashW25qxx::getInstance();
   uint16_t bestSeq = 0;
   uint32_t addr = 0;
 
@@ -188,7 +188,7 @@ static bool findProfileAddress(uint16_t profileId, uint32_t &outAddr,
 // vs createProfile (id=1-15).
 
 static void onStagingDone(const uint8_t *buf, uint16_t len) {
-  StaticJsonDocument<256> resp;
+  JsonDocument resp;
   resp["cmd"] = "profile.start";
   resp["queued"] = 0;
 
@@ -238,7 +238,7 @@ static void handleProfileStart(const char *cmd, JsonDocument &doc) {
 
   s_pendingProfileId = profileId;
 
-  StaticJsonDocument<256> ack;
+  JsonDocument ack;
   ack["cmd"] = cmd;
   ack["queued"] = doc["queued"].as<int>() + 1;
   ack["status"] = "ok";
@@ -265,7 +265,7 @@ static void handleProfileGet(const char *cmd, JsonDocument &doc) {
     return;
   }
 
-  StaticJsonDocument<256> hdr;
+  JsonDocument hdr;
   hdr["cmd"] = "profile.start";
   hdr["len"] = dataLen;
   char hdrBuf[128];
@@ -286,7 +286,7 @@ static void handleProfileGet(const char *cmd, JsonDocument &doc) {
   }
   tud_cdc_write_flush();
 
-  StaticJsonDocument<256> trailer;
+  JsonDocument trailer;
   trailer["cmd"] = "profile.end";
   trailer["id"] = profileId;
   FrameLayer::getInstance().sendResponse(trailer);
@@ -295,7 +295,7 @@ static void handleProfileGet(const char *cmd, JsonDocument &doc) {
 // ── profile.list ──
 
 static void handleProfileList(const char *cmd, JsonDocument &doc) {
-  StaticJsonDocument<256> resp;
+  JsonDocument resp;
   resp["cmd"] = cmd;
   resp["queued"] = doc["queued"].as<int>() + 1;
 
@@ -303,7 +303,7 @@ static void handleProfileList(const char *cmd, JsonDocument &doc) {
   resp["status"] = "ok";
   resp["active"] = status.activeId;
 
-  auto &flash = W25qxxFlash::getInstance();
+  auto &flash = FlashW25qxx::getInstance();
   JsonArray profiles = resp["profiles"].to<JsonArray>();
 
   uint32_t addrMap[16] = {0};
@@ -362,7 +362,7 @@ static void handleProfileCreate(const char *cmd, JsonDocument &doc) {
     return;
   }
 
-  StaticJsonDocument<256> resp;
+  JsonDocument resp;
   resp["cmd"] = cmd;
   resp["queued"] = doc["queued"].as<int>() + 1;
   resp["status"] = "ok";
@@ -385,7 +385,7 @@ static void handleProfileDelete(const char *cmd, JsonDocument &doc) {
     return;
   }
 
-  StaticJsonDocument<256> resp;
+  JsonDocument resp;
   resp["cmd"] = cmd;
   resp["queued"] = doc["queued"].as<int>() + 1;
   resp["status"] = "ok";
@@ -410,7 +410,7 @@ static void handleProfileSelect(const char *cmd, JsonDocument &doc) {
   uint16_t dataLen = 0;
   ProfileStore::getInstance().loadActive(nullptr, &dataLen);
 
-  StaticJsonDocument<256> resp;
+  JsonDocument resp;
   resp["cmd"] = cmd;
   resp["queued"] = doc["queued"].as<int>() + 1;
   resp["status"] = "ok";
@@ -423,7 +423,7 @@ static void handleProfileSelect(const char *cmd, JsonDocument &doc) {
 static void handleProfileStatus(const char *cmd, JsonDocument &doc) {
   ProfileStatus status = ProfileStore::getInstance().getStatus();
 
-  StaticJsonDocument<512> resp;
+  JsonDocument resp;
   resp["cmd"] = cmd;
   resp["queued"] = doc["queued"].as<int>() + 1;
   resp["status"] = "ok";
@@ -461,7 +461,7 @@ static void handleProfileSave(const char *cmd, JsonDocument &doc) {
     return;
   }
 
-  StaticJsonDocument<256> resp;
+  JsonDocument resp;
   resp["cmd"] = cmd;
   resp["queued"] = doc["queued"].as<int>() + 1;
   resp["status"] = "ok";
@@ -495,7 +495,7 @@ static void handleProfileLoad(const char *cmd, JsonDocument &doc) {
     return;
   }
 
-  StaticJsonDocument<256> resp;
+  JsonDocument resp;
   resp["cmd"] = cmd;
   resp["queued"] = doc["queued"].as<int>() + 1;
   resp["status"] = "ok";
@@ -528,7 +528,7 @@ void ProfileCmdHandler::handleProfile(const char *cmd, JsonDocument &doc) {
   } else if (strcmp(cmd, "profile.load") == 0) {
     handleProfileLoad(cmd, doc);
   } else {
-    StaticJsonDocument<256> resp;
+    JsonDocument resp;
     resp["cmd"] = cmd;
     resp["queued"] = doc["queued"].as<int>() + 1;
     resp["status"] = "error";
