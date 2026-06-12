@@ -128,7 +128,7 @@ private:
   // ── Internal helpers ────────────────────────────────────────
   uint8_t readStatusReg(uint8_t idx);
   void writeEnable();
-  void waitWhileBusy();
+  void waitWhileBusy(uint32_t timeoutMs = 30000);
   void set4ByteAddrMode(bool enable);
   void reset();
 

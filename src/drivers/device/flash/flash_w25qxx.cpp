@@ -75,8 +75,13 @@ void FlashW25qxx::writeEnable() {
   waitWhileBusy();
 }
 
-void FlashW25qxx::waitWhileBusy() {
+void FlashW25qxx::waitWhileBusy(uint32_t timeoutMs) {
+  uint32_t start = millis();
   while (isBusy()) {
+    if (millis() - start >= timeoutMs) {
+      LOG_WARN("FLASH: waitWhileBusy timeout after %ums", timeoutMs);
+      break;
+    }
   }
 }
 

@@ -92,6 +92,18 @@ uint16_t ProfileStore::crc16BootMeta(const BootMeta *meta) const {
   return crc16Ccitt(reinterpret_cast<const uint8_t *>(meta), 14);
 }
 
+// ── seqBeforeIncrement: check seq overflow before incrementing ──
+// When BootMeta or Address Ring seq hits 65535, Sector 0 is erased and
+// rebuilt with seq=1. This prevents uint16_t overflow that would cause
+// the highest-seq lookup to pick the wrong entry.
+void ProfileStore::seqBeforeIncrement() {
+  if (_bootMetaSeq >= 65534 || _addressRingSeq >= 65534) {
+    LOG_WARN("ProfileStore: seq near overflow (%u/%u), resetting Sector 0",
+             _bootMetaSeq, _addressRingSeq);
+    resetSector0();
+  }
+}
+
 // ── init() ──
 
 bool ProfileStore::init() {
@@ -425,6 +437,7 @@ bool ProfileStore::createProfile(const char *json, uint16_t len, uint16_t *newId
 
   _nextAddr = ((dataAddr & ~0xFFF) + 0x1000);
 
+  seqBeforeIncrement();
   _addressRingSeq++;
   AddressEntry addrEntry;
   addrEntry.profileId = id;
@@ -437,6 +450,7 @@ bool ProfileStore::createProfile(const char *json, uint16_t len, uint16_t *newId
     return false;
   }
 
+  seqBeforeIncrement();
   _bootMetaSeq++;
   BootMeta bootMeta;
   bootMeta.magic = BOOTMETA_MAGIC;
@@ -506,6 +520,7 @@ bool ProfileStore::modifyProfile(uint16_t id, const char *json, uint16_t len) {
 
   _nextAddr = ((dataAddr & ~0xFFF) + 0x1000);
 
+  seqBeforeIncrement();
   _addressRingSeq++;
   AddressEntry addrEntry;
   addrEntry.profileId = id;
@@ -547,6 +562,7 @@ bool ProfileStore::deleteProfile(uint16_t id) {
   auto &flash = FlashW25qxx::getInstance();
 
   // Mark deleted: write Address Ring entry with address=0, seq=high
+  seqBeforeIncrement();
   _addressRingSeq++;
   AddressEntry addrEntry;
   addrEntry.profileId = id;
@@ -574,6 +590,7 @@ bool ProfileStore::deleteProfile(uint16_t id) {
     }
 
     // Write BootMeta entry for fallback
+    seqBeforeIncrement();
     _bootMetaSeq++;
     BootMeta bootMeta;
     bootMeta.magic = BOOTMETA_MAGIC;
@@ -614,6 +631,7 @@ bool ProfileStore::selectProfile(uint16_t id) {
   uint32_t address = (id == 0) ? PROFILE0_ADDR : _profileAddresses[id];
 
   // Write BootMeta entry
+  seqBeforeIncrement();
   _bootMetaSeq++;
   BootMeta bootMeta;
   bootMeta.magic = BOOTMETA_MAGIC;
@@ -740,6 +758,7 @@ bool ProfileStore::compaction() {
       return false;
     }
 
+    seqBeforeIncrement();
     _addressRingSeq++;
     AddressEntry addrEntry;
     addrEntry.profileId = valid[i].id;
@@ -760,6 +779,7 @@ bool ProfileStore::compaction() {
 
   // 3. Reset BootMeta for the active profile
   _bootMetaSeq = 0;
+  seqBeforeIncrement();
   _bootMetaSeq++;
   BootMeta bootMeta;
   bootMeta.magic = BOOTMETA_MAGIC;

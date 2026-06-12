@@ -29,6 +29,7 @@
 #include "utils/mempool/mempoolmanager.h"
 
 #include "gamepad/gamepad.h"
+#include "gamepad/config/configmgr.h"
 #include "taskmanager.h"
 
 #include "drivers/device/devicemgr.h"
@@ -84,6 +85,9 @@ void ThetaGamepad::setup() {
   Gamepad::Gamepad::getInstance().registerKeypadDevice(
       &Drivers::Device::Keypad::getInstance());
   Gamepad::Gamepad::getInstance().setButtonMappings();
+
+  // initialize configuration system (ProfileStore + ConfigManager)
+  Gamepad::Config::ConfigManager::getInstance().init();
 
   ThetaGP::Test::initTestSystem();
 }

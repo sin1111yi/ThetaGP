@@ -134,6 +134,7 @@ private:
   // ── Internal helpers ──
   bool resetSector0();
   uint16_t crc16BootMeta(const BootMeta *meta) const;
+  void seqBeforeIncrement();
   bool scanBootMeta(uint16_t *outActiveId, uint32_t *outAddress);
   bool scanAddressRing();
   uint32_t findNextAddr() const;
