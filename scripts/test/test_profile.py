@@ -219,7 +219,7 @@ def raw_upload_profile(fd, profile_id, json_bytes, timeout=5):
         if obj.get("status") == "async":
             print(f"[async] {resp}")
             continue
-        if obj.get("cmd") == "profile.start" and "profile_id" in obj:
+        if obj.get("cmd") == "profile.start" and (obj.get("status") == "ok" or obj.get("status") == "error"):
             done = obj
             print(f"<<< [done] {resp}")
             break
@@ -317,7 +317,30 @@ def make_profile_json(tag, distinguish_field="bri"):
 def main():
     global _queued
     fd = open_serial(PORT)
-    time.sleep(1)         # Allow device to settle after DTR assertion
+    time.sleep(1)
+    _queued = 0
+
+    # ── Prerequisite: erase SPI flash + reboot for clean state ──
+    # lua tool.lua flash only erases MCU internal flash, not the external
+    # SPI flash (W25Q64). Old BootMeta/Address Ring data causes data corruption.
+    print("=== Prerequisite: Erase SPI flash + reboot ===")
+    s = send(fd, "test.chip_erase")
+    if s and s.get("status") == "ok":
+        print("  chip_erase OK, rebooting...")
+        send(fd, "sys.reset")
+    os.close(fd)
+    time.sleep(4)
+
+    # Reopen after reboot
+    fd = open_serial(PORT)
+    time.sleep(2)
+
+    # Drain stale data from boot messages
+    for _ in range(5):
+        r = readline(fd, 1)
+        if r: print(f"  [boot] {r[:80]}")
+        else: break
+    print("  Ready")
     _queued = 0
     passed, failed, skipped = 0, 0, 0
 
@@ -393,9 +416,13 @@ def main():
           r and r.get("status") == "ok" and r.get("id") == 1)
 
     # profile.get returns streaming header+body+trailer
-    r = send(fd, "profile.get", id=1)
-    check("profile.get ack/send", r is None)  # send() times out on streaming, expected
-    # Manually receive the streaming response
+    # Don't use send() — it expects a single JSON response line.
+    # Send raw command, then manually receive the 3-part stream.
+    req = {"cmd": "profile.get", "queued": _queued, "id": 1}
+    line = json.dumps(req, separators=(",", ":")) + "\r\n"
+    print(f">>> {line.strip()}")
+    os.write(fd, line.encode())
+    _queued += 1
     hdr, body, trailer = recv_profile_get(fd)
     body_ok = (body is not None and len(body) > 0)
     trailer_ok = (trailer is not None and trailer.get("status") == "ok" and
