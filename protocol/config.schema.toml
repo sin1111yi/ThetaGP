@@ -1,0 +1,516 @@
+# =============================================================================
+# ThetaGP Config Schema Definition
+# =============================================================================
+# This file is the SINGLE SOURCE OF TRUTH for all runtime-configurable
+# parameters. The Python code generator (scripts/gen_config.py) reads this
+# file and produces:
+#   - C++   struct  (src/gamepad/config/config_store.h)   — device side
+#   - C++   serde   (src/gamepad/config/config_store.cpp)  — ArduinoJson v7
+#   - Rust  types   (protocol/config_types.rs)             — Tauri backend
+#   - TS    types   (protocol/config_types.ts)             — frontend
+#
+# The config commands in protocol/protocol.toml (config.set_key,
+# config.get_key, etc.) refer to keys whose names and types are defined here.
+#
+# Key naming convention:
+#   group.key_name    (dot-separated, snake_case, lowercase)
+#   JSON representation: group-level camelCase keys (see json field per key)
+#
+# Format overview:
+#   [meta]               — schema metadata
+#   [codegen]            — code generation settings
+#   [[group]]            — a logical group of config keys
+#     group.keys[]       — individual key definitions
+#     group.enums[]      — enum definitions referenced by keys in this group
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Meta
+# ---------------------------------------------------------------------------
+[meta]
+name = "ThetaGP Config Schema"
+version = "1"
+description = "Runtime-configurable parameters for ThetaGP gamepad firmware"
+protocol_ref = "protocol.toml@config domain"
+doc_ref = "docs/cdc-config-schema.md"
+
+# ---------------------------------------------------------------------------
+# Codegen settings
+# ---------------------------------------------------------------------------
+[codegen]
+c_struct_header = "src/gamepad/config/config_store.h"
+c_serde_source = "src/gamepad/config/config_store.cpp"
+c_namespace = "ThetaGP::Gamepad::Config"
+rust_module = "protocol/config_types.rs"
+ts_module = "protocol/config_types.ts"
+cpp_type_map = { u8 = "uint8_t", u16 = "uint16_t", u32 = "uint32_t", s16 = "int16_t", bool = "uint8_t", array = "void *" }
+rust_type_map = { u8 = "u8", u16 = "u16", u32 = "u32", s16 = "i16", bool = "bool", array = "Vec<u16>" }
+ts_type_map = { u8 = "number", u16 = "number", u32 = "number", s16 = "number", bool = "boolean", array = "number[]" }
+json_group_names = { map = "map", stick = "stick", trig = "trig", usb = "usb", led = "led", sys = "sys", cal = "cal" }
+
+# ---------------------------------------------------------------------------
+# Group: map  —  Button/axis mapping and SOCD cleaning
+# ---------------------------------------------------------------------------
+[[group]]
+name = "map"
+description = "Button/axis mapping and SOCD cleaning"
+
+[group.enums]
+socd_mode = { type = "SOCDMode", values = [
+  { name = "UpPriority",          value = 0, description = "Up+Down = Up, Left+Right = Neutral" },
+  { name = "Neutral",             value = 1, description = "Opposing directions cancel to neutral" },
+  { name = "SecondInputPriority", value = 2, description = "Last input wins (LIFO)" },
+  { name = "FirstInputPriority",  value = 3, description = "First input holds priority" },
+  { name = "Bypass",              value = 4, description = "No SOCD cleaning (pass-through)" },
+] }
+dpad_mode = { type = "DpadMode", values = [
+  { name = "Dpad",       value = 0, description = "Native D-pad output" },
+  { name = "LeftAnalog", value = 1, description = "D-pad → left analog stick" },
+  { name = "RightAnalog",value = 2, description = "D-pad → right analog stick" },
+] }
+
+[[group.keys]]
+name = "socd_mode"
+type = "u8"
+range = [0, 4]
+default = 0
+json = "socd"
+c_field = "socd_mode"
+description = "SOCD cleaning mode (0=UpPriority, 1=Neutral, 2=SecondInputPriority, 3=FirstInputPriority, 4=Bypass)"
+reboot = false
+affects = "SOCD cleaner pipeline"
+
+[[group.keys]]
+name = "four_way_mode"
+type = "bool"
+range = [0, 1]
+default = 0
+json = "four_way"
+c_field = "four_way_mode"
+description = "Restrict D-pad to 4-way mode (no diagonal output)"
+reboot = false
+affects = "D-pad filter"
+
+[[group.keys]]
+name = "dpad_mode"
+type = "u8"
+range = [0, 2]
+default = 0
+json = "dpad"
+c_field = "dpad_mode"
+description = "D-pad output mode (0=Dpad, 1=LeftAnalog, 2=RightAnalog)"
+reboot = false
+affects = "D-pad → analog routing"
+
+[[group.keys]]
+name = "invert_x"
+type = "bool"
+range = [0, 1]
+default = 0
+json = "inv_x"
+c_field = "inv_x"
+description = "Invert left stick X axis"
+reboot = false
+affects = "Left analog X polarity"
+
+[[group.keys]]
+name = "invert_y"
+type = "bool"
+range = [0, 1]
+default = 0
+json = "inv_y"
+c_field = "inv_y"
+description = "Invert left stick Y axis"
+reboot = false
+affects = "Left analog Y polarity"
+
+[[group.keys]]
+name = "invert_rx"
+type = "bool"
+range = [0, 1]
+default = 0
+json = "inv_rx"
+c_field = "inv_rx"
+description = "Invert right stick X axis"
+reboot = false
+affects = "Right analog X polarity"
+
+[[group.keys]]
+name = "invert_ry"
+type = "bool"
+range = [0, 1]
+default = 0
+json = "inv_ry"
+c_field = "inv_ry"
+description = "Invert right stick Y axis"
+reboot = false
+affects = "Right analog Y polarity"
+
+[[group.keys]]
+name = "swap_sticks"
+type = "bool"
+range = [0, 1]
+default = 0
+json = "swap"
+c_field = "swap_sticks"
+description = "Swap left and right analog axes"
+reboot = false
+affects = "Analog axis routing"
+
+[[group.keys]]
+name = "btn_map"
+type = "array"
+array_type = "u16"
+array_size = 32
+default = "null"
+json = "btn_map"
+c_field = "btn_map"
+description = "Physical pin to logical button mapping array (32 entries, 0xFFFF = unassigned)"
+reboot = false
+affects = "Button input processor"
+
+# ---------------------------------------------------------------------------
+# Group: stick  —  Analog stick parameters
+# ---------------------------------------------------------------------------
+[[group]]
+name = "stick"
+description = "Analog stick deadzones, sensitivity, response curves, and axis inversion"
+
+[[group.keys]]
+name = "lx_deadzone"
+type = "u16"
+range = [0, 32767]
+default = 512
+json = "lx_dz"
+c_field = "lx_dz"
+description = "Left stick X circular deadzone (ADC units)"
+reboot = false
+affects = "Analog processing pipe (pre-curve)"
+
+[[group.keys]]
+name = "ly_deadzone"
+type = "u16"
+range = [0, 32767]
+default = 512
+json = "ly_dz"
+c_field = "ly_dz"
+description = "Left stick Y circular deadzone (ADC units)"
+reboot = false
+affects = "Analog processing pipe (pre-curve)"
+
+[[group.keys]]
+name = "rx_deadzone"
+type = "u16"
+range = [0, 32767]
+default = 512
+json = "rx_dz"
+c_field = "rx_dz"
+description = "Right stick X circular deadzone (ADC units)"
+reboot = false
+affects = "Analog processing pipe (pre-curve)"
+
+[[group.keys]]
+name = "ry_deadzone"
+type = "u16"
+range = [0, 32767]
+default = 512
+json = "ry_dz"
+c_field = "ry_dz"
+description = "Right stick Y circular deadzone (ADC units)"
+reboot = false
+affects = "Analog processing pipe (pre-curve)"
+
+[[group.keys]]
+name = "lx_sensitivity"
+type = "u8"
+range = [0, 255]
+default = 128
+json = "lx_sens"
+c_field = "lx_sens"
+description = "Left stick X sensitivity multiplier (128 = 1.0x linear)"
+reboot = false
+affects = "Analog processing pipe"
+
+[[group.keys]]
+name = "ly_sensitivity"
+type = "u8"
+range = [0, 255]
+default = 128
+json = "ly_sens"
+c_field = "ly_sens"
+description = "Left stick Y sensitivity multiplier (128 = 1.0x linear)"
+reboot = false
+affects = "Analog processing pipe"
+
+[[group.keys]]
+name = "rx_sensitivity"
+type = "u8"
+range = [0, 255]
+default = 128
+json = "rx_sens"
+c_field = "rx_sens"
+description = "Right stick X sensitivity multiplier (128 = 1.0x linear)"
+reboot = false
+affects = "Analog processing pipe"
+
+[[group.keys]]
+name = "ry_sensitivity"
+type = "u8"
+range = [0, 255]
+default = 128
+json = "ry_sens"
+c_field = "ry_sens"
+description = "Right stick Y sensitivity multiplier (128 = 1.0x linear)"
+reboot = false
+affects = "Analog processing pipe"
+
+[[group.keys]]
+name = "response_curve"
+type = "u8"
+range = [0, 2]
+default = 0
+json = "curve"
+c_field = "curve"
+description = "Response curve type (0=Linear, 1=Quadratic, 2=Custom LUT)"
+reboot = false
+affects = "Analog curve application (post-deadzone)"
+
+[[group.keys]]
+name = "ema_alpha"
+type = "u8"
+range = [0, 255]
+default = 0
+json = "ema"
+c_field = "ema"
+description = "EMA smoothing factor (0=off, 255=full, formula: smoothed = (alpha*raw + (255-alpha)*prev)/255)"
+reboot = false
+affects = "Analog smoothing (pre-SOCD)"
+
+# ---------------------------------------------------------------------------
+# Group: trig  —  Trigger parameters
+# ---------------------------------------------------------------------------
+[[group]]
+name = "trig"
+description = "Trigger deadzone and analog mode settings"
+
+[[group.keys]]
+name = "lt_deadzone"
+type = "u8"
+range = [0, 127]
+default = 8
+json = "lt_dz"
+c_field = "lt_dz"
+description = "Left trigger lower-bound deadzone (clamps near-zero to 0)"
+reboot = false
+affects = "Trigger processing pipe"
+
+[[group.keys]]
+name = "rt_deadzone"
+type = "u8"
+range = [0, 127]
+default = 8
+json = "rt_dz"
+c_field = "rt_dz"
+description = "Right trigger lower-bound deadzone (clamps near-zero to 0)"
+reboot = false
+affects = "Trigger processing pipe"
+
+# ---------------------------------------------------------------------------
+# Group: usb  —  USB/HID parameters (reboot-required)
+# ---------------------------------------------------------------------------
+[[group]]
+name = "usb"
+description = "USB polling rate, input mode, and VID/PID overrides"
+
+[group.enums]
+poll_rate = { type = "PollRate", values = [
+  { name = "125Hz",  value = 0, description = "8 ms SOF interval" },
+  { name = "250Hz",  value = 1, description = "4 ms SOF interval" },
+  { name = "500Hz",  value = 2, description = "2 ms SOF interval (default)" },
+  { name = "1000Hz", value = 3, description = "1 ms SOF interval" },
+] }
+
+[[group.keys]]
+name = "poll_rate"
+type = "u8"
+range = [0, 3]
+default = 2
+json = "poll"
+c_field = "poll_rate"
+description = "USB polling rate (0=125Hz, 1=250Hz, 2=500Hz, 3=1000Hz)"
+reboot = true
+affects = "USB SOF interval, TinyUSB descriptor timing"
+
+# ---------------------------------------------------------------------------
+# Group: led  —  RGB LED parameters
+# ---------------------------------------------------------------------------
+[[group]]
+name = "led"
+description = "RGB LED brightness, mode, color, and animation speed"
+
+[group.enums]
+led_mode = { type = "LEDMode", values = [
+  { name = "Off",       value = 0, description = "LED off" },
+  { name = "Static",    value = 1, description = "Static color (uses hue/saturation)" },
+  { name = "Pulse",     value = 2, description = "Breathing/pulse animation (uses speed)" },
+  { name = "Rainbow",   value = 3, description = "Color cycling animation (uses speed)" },
+  { name = "Battery",   value = 4, description = "Battery level indicator (reserved)" },
+] }
+
+[[group.keys]]
+name = "brightness"
+type = "u8"
+range = [0, 255]
+default = 128
+json = "bri"
+c_field = "led_brightness"
+description = "RGB LED PWM brightness"
+reboot = false
+affects = "LED PWM duty cycle"
+
+[[group.keys]]
+name = "mode"
+type = "u8"
+range = [0, 4]
+default = 0
+json = "mode"
+c_field = "led_mode"
+description = "LED animation mode (0=Off, 1=Static, 2=Pulse, 3=Rainbow, 4=Battery)"
+reboot = false
+affects = "LED animation state machine"
+
+[[group.keys]]
+name = "hue"
+type = "u16"
+range = [0, 360]
+default = 180
+json = "hue"
+c_field = "led_hue"
+description = "Static LED hue in degrees (0-360, 180=cyan)"
+reboot = false
+affects = "LED color (mode=1 Static)"
+
+[[group.keys]]
+name = "saturation"
+type = "u8"
+range = [0, 255]
+default = 255
+json = "sat"
+c_field = "led_saturation"
+description = "Static LED saturation (0=white, 255=full color)"
+reboot = false
+affects = "LED color (mode=1 Static)"
+
+[[group.keys]]
+name = "speed"
+type = "u8"
+range = [0, 255]
+default = 128
+json = "spd"
+c_field = "led_speed"
+description = "LED animation speed (pulse/rainbow rate)"
+reboot = false
+affects = "LED animation (mode=2 Pulse, mode=3 Rainbow)"
+
+# ---------------------------------------------------------------------------
+# Group: sys  —  System/debug parameters
+# ---------------------------------------------------------------------------
+[[group]]
+name = "sys"
+description = "System logging, debounce, and startup configuration"
+
+[group.enums]
+log_level = { type = "LogLevel", values = [
+  { name = "Error", value = 0, description = "Only error messages" },
+  { name = "Warn",  value = 1, description = "Errors + warnings" },
+  { name = "Info",  value = 2, description = "Errors + warnings + info" },
+  { name = "Debug", value = 3, description = "All log messages" },
+] }
+
+[[group.keys]]
+name = "log_level"
+type = "u8"
+range = [0, 3]
+default = 1
+json = "log"
+c_field = "log_level"
+description = "Logger verbosity filter (0=Error, 1=Warn, 2=Info, 3=Debug)"
+reboot = false
+affects = "Global log filter, Logger::setLevel()"
+
+[[group.keys]]
+name = "debounce_samples"
+type = "u8"
+range = [4, 64]
+default = 16
+json = "deb_samp"
+c_field = "debounce_samples"
+description = "Keypad debounce sample count (number of consecutive consistent reads)"
+reboot = false
+affects = "Keypad input processor"
+
+[[group.keys]]
+name = "debounce_threshold"
+type = "u8"
+range = [1, 64]
+default = 12
+json = "deb_thr"
+c_field = "debounce_threshold"
+description = "Keypad debounce press threshold (samples needed to confirm press/release)"
+reboot = false
+affects = "Keypad input processor"
+
+# ---------------------------------------------------------------------------
+# Group: cal  —  Calibration offsets
+# ---------------------------------------------------------------------------
+[[group]]
+name = "cal"
+description = "Analog stick center calibration offsets (applied pre-deadzone)"
+
+[[group.keys]]
+name = "lx_center"
+type = "s16"
+range = [-1024, 1024]
+default = 0
+json = "lx_c"
+c_field = "cal_lx"
+description = "Left stick X center offset added to raw ADC before deadzone/curve"
+reboot = false
+affects = "Analog processing pipe (first transform)"
+
+[[group.keys]]
+name = "ly_center"
+type = "s16"
+range = [-1024, 1024]
+default = 0
+json = "ly_c"
+c_field = "cal_ly"
+description = "Left stick Y center offset added to raw ADC before deadzone/curve"
+reboot = false
+affects = "Analog processing pipe (first transform)"
+
+[[group.keys]]
+name = "rx_center"
+type = "s16"
+range = [-1024, 1024]
+default = 0
+json = "rx_c"
+c_field = "cal_rx"
+description = "Right stick X center offset added to raw ADC before deadzone/curve"
+reboot = false
+affects = "Analog processing pipe (first transform)"
+
+[[group.keys]]
+name = "ry_center"
+type = "s16"
+range = [-1024, 1024]
+default = 0
+json = "ry_c"
+c_field = "cal_ry"
+description = "Right stick Y center offset added to raw ADC before deadzone/curve"
+reboot = false
+affects = "Analog processing pipe (first transform)"
+
+# ===========================================================================
+# End of config.schema.toml
+# ===========================================================================
