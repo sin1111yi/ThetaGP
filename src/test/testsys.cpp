@@ -28,6 +28,7 @@
 #include "protocol/proto.h"
 
 #include <cstring>
+#include "tusb.h"
 
 namespace ThetaGP::Test {
 
@@ -42,58 +43,62 @@ SysHandler &SysHandler::getInstance() {
     return instance;
 }
 
+// Staging buffer for building response JSON
+static COMMON_ZERO_INIT char s_sysRespBuf[2048];
+
 // ---------------------------------------------------------------------------
 // Handler functions (CommandHandler signature)
 // ---------------------------------------------------------------------------
 
 static void handleSysPing([[maybe_unused]] const char *cmd,
-                          [[maybe_unused]] JsonDocument &doc) {
-    JsonDocument resp;
-    resp["status"] = "ok";
-    resp["cmd"] = "sys.ping";
-    int queued = doc["queued"].as<int>();
-    resp["queued"] = queued + 1;
-    FrameLayer::getInstance().sendResponse(resp);
+                          [[maybe_unused]] const Json &json) {
+    int queued = json.getInt("queued");
+    Json resp;
+    resp.beginWrite(s_sysRespBuf, sizeof(s_sysRespBuf));
+    resp.printf("{status:%Q,cmd:%Q,queued:%d}",
+                "ok", "sys.ping", queued + 1);
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
 static void handleSysGetFwVersion([[maybe_unused]] const char *cmd,
-                                  [[maybe_unused]] JsonDocument &doc) {
-    JsonDocument resp;
-    resp["status"] = "ok";
-    resp["cmd"] = "sys.get_fw_version";
-    int queued = doc["queued"].as<int>();
-    resp["queued"] = queued + 1;
-    resp["board"] = BOARD_NAME;
-    resp["version"] = THETAGP_FW_VERSION;
-    resp["build_date"] = __DATE__;
-    resp["build_time"] = __TIME__;
-    FrameLayer::getInstance().sendResponse(resp);
+                                  [[maybe_unused]] const Json &json) {
+    int queued = json.getInt("queued");
+    Json resp;
+    resp.beginWrite(s_sysRespBuf, sizeof(s_sysRespBuf));
+    resp.printf("{status:%Q,cmd:%Q,queued:%d,board:%Q,version:%Q,"
+                "build_date:%Q,build_time:%Q}",
+                "ok", "sys.get_fw_version", queued + 1,
+                BOARD_NAME, THETAGP_FW_VERSION, __DATE__, __TIME__);
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
 [[noreturn]] static void handleSysReset([[maybe_unused]] const char *cmd,
-                                         [[maybe_unused]] JsonDocument &doc) {
-    JsonDocument resp;
-    resp["status"] = "ok";
-    resp["cmd"] = "sys.reset";
-    int queued = doc["queued"].as<int>();
-    resp["queued"] = queued + 1;
-    resp["info"] = "resetting...";
-    FrameLayer::getInstance().sendResponse(resp);
+                                         [[maybe_unused]] const Json &json) {
+    int queued = json.getInt("queued");
+    Json resp;
+    resp.beginWrite(s_sysRespBuf, sizeof(s_sysRespBuf));
+    resp.printf("{status:%Q,cmd:%Q,queued:%d,info:%Q}",
+                "ok", "sys.reset", queued + 1, "resetting...");
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
     // Small delay to allow the response to be sent
     for (volatile uint32_t i = 0; i < 100000; ++i) {}
     NVIC_SystemReset();
 }
 
 static void handleSysEnterDfu([[maybe_unused]] const char *cmd,
-                              [[maybe_unused]] JsonDocument &doc) {
-    JsonDocument resp;
-    resp["status"] = "error";
-    resp["cmd"] = "sys.enter_dfu";
-    int queued = doc["queued"].as<int>();
-    resp["queued"] = queued + 1;
-    resp["error_code"] = static_cast<uint8_t>(Proto::ErrorCode::ERR_NOT_SUPPORTED);
-    resp["reason"] = "DFU not yet implemented";
-    FrameLayer::getInstance().sendResponse(resp);
+                              [[maybe_unused]] const Json &json) {
+    int queued = json.getInt("queued");
+    Json resp;
+    resp.beginWrite(s_sysRespBuf, sizeof(s_sysRespBuf));
+    resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,reason:%Q}",
+                "error", "sys.enter_dfu", queued + 1,
+                static_cast<int>(Proto::ErrorCode::ERR_NOT_SUPPORTED),
+                "DFU not yet implemented");
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
 // ---------------------------------------------------------------------------
@@ -110,10 +115,19 @@ void SysHandler::registerHandlers() {
 // ---------------------------------------------------------------------------
 // Main dispatch — delegates to Proto-generated dispatch table
 // ---------------------------------------------------------------------------
-void SysHandler::handle(const char *cmd, JsonDocument &doc) {
-    int queued = doc["queued"].as<int>();
-    LOG_DEBUG("SysHandler: cmd='%s' queued=%d", cmd, queued);
-    Proto::dispatch(cmd, doc);
+void SysHandler::handle(const char *cmd, const Json &json) {
+    LOG_DEBUG("SysHandler: cmd='%s'", cmd);
+
+    // Direct dispatch, bypass Proto generated table
+    if (strcmp(cmd, "sys.ping") == 0) {
+        handleSysPing(cmd, json);
+    } else if (strcmp(cmd, "sys.get_fw_version") == 0) {
+        handleSysGetFwVersion(cmd, json);
+    } else if (strcmp(cmd, "sys.reset") == 0) {
+        handleSysReset(cmd, json);
+    } else if (strcmp(cmd, "sys.enter_dfu") == 0) {
+        handleSysEnterDfu(cmd, json);
+    }
 }
 
 } // namespace ThetaGP::Test

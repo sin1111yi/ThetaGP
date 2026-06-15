@@ -168,7 +168,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     PRIVATE
     HalDriver
     CRC32
-    ArduinoJson
+    frozen
 )
 
 target_compile_definitions(${CMAKE_PROJECT_NAME}

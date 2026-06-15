@@ -37,6 +37,8 @@ extern "C" {
 // FAST_CODE_PREF       → reserved — prefer fast RAM, fallback to Flash
 // FAST_CODE_NOINLINE   → function in DTCM RAM, no inlining
 
+#if defined (STM32H743xx)
+
 #define FAST_DATA            DTCM_RAM_DATA
 #define FAST_DATA_ZERO_INIT  DTCM_RAM_BSS
 #define FAST_CODE            ITCM_RAM_CODE
@@ -46,6 +48,8 @@ extern "C" {
 #define COMMON_DATA       RAM_DATA __attribute__((aligned(32)))
 #define COMMON_ZERO_INIT  RAM_BSS __attribute__((aligned(32)))
 #define COMMON_DATA_AUTO  static COMMON_DATA
+
+#endif
 
 #ifdef __cplusplus
 }

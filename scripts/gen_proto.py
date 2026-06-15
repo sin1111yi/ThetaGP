@@ -141,7 +141,7 @@ def gen_cpp(proto: dict, out: Optional[Path] = None) -> str:
     w(f"// Generated: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     w("// =============================================================================")
     w("#pragma once")
-    w("#include <ArduinoJson.h>")
+    w('#include "utils/json/json.h"')
     w("#include <cstdint>")
     w("#include <cstring>")
 
@@ -308,16 +308,9 @@ def gen_cpp(proto: dict, out: Optional[Path] = None) -> str:
         w(f"        {name} = {info['code']}, // {sanitize_cpp_comment(info['description'])}")
     w("    };")
     w()
-    w("    // Command handler signature")
-    w("    using Handler = void (*)(const char *cmd, JsonDocument &doc);")
+    w("    // Command handler signature (new: uses our own Json class)")
+    w("    using Handler = void (*)(const char *cmd, const Json &json);")
     w()
-
-    # Serialize/deserialize helpers
-    w("    // ── Serialize helpers ──")
-    for sw_line in _serialize_lines:
-        w(sw_line)
-
-    # Registration functions + handler variables
     w("    // ── Handler registration ──")
     for cmd_info in commands:
         domain = cmd_info["domain"]
@@ -326,15 +319,15 @@ def gen_cpp(proto: dict, out: Optional[Path] = None) -> str:
         w(f"    inline static void {func_name}(Handler h) {{ {var_name} = h; }}")
     w()
     w("    // ── Dispatch ──")
-    w("    inline static void dispatch(const char *cmd, JsonDocument &doc) {")
+    w("    inline static void dispatch(const char *cmd, const Json &json) {")
     for i, cmd_info in enumerate(commands):
         domain = cmd_info["domain"]
         full_name = f"{domain}.{cmd_info['name']}"
         var_name = f"_{domain}{to_pascal(cmd_info['name'])}Handler"
         if i == 0:
-            w(f'        if (strcmp(cmd, "{full_name}") == 0)              {{ if ({var_name}) {var_name}(cmd, doc); }}')
+            w(f'        if (strcmp(cmd, "{full_name}") == 0)              {{ if ({var_name}) {var_name}(cmd, json); }}')
         else:
-            w(f'        else if (strcmp(cmd, "{full_name}") == 0) {{ if ({var_name}) {var_name}(cmd, doc); }}')
+            w(f'        else if (strcmp(cmd, "{full_name}") == 0) {{ if ({var_name}) {var_name}(cmd, json); }}')
     w("        // Unknown command — silently ignored")
     w("    }")
     w()

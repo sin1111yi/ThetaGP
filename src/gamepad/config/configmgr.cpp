@@ -20,15 +20,18 @@
  */
 
 #include "gamepad/config/configmgr.h"
-#include "drivers/device/flash/profile_flash.h"
 #include "gamepad/config/config_store.h"
+#include "gamepad/profile/profile_store.h"
+
 #include "utils/log/log.h"
+
+#include "utils/json/json.h"
 
 namespace ThetaGP::Gamepad::Config {
 
-using Drivers::Device::ProfileStore;
-using Drivers::Device::s_staging;
-using Drivers::Device::PROFILE_JSON_MAX;
+using Profile::PROFILE_JSON_MAX;
+using Profile::ProfileStore;
+using Profile::s_staging;
 
 ConfigManager &ConfigManager::getInstance() {
   static ConfigManager instance;
@@ -41,7 +44,7 @@ bool ConfigManager::init() {
     return false;
   }
 
-  Drivers::Device::ProfileStatus status = ProfileStore::getInstance().getStatus();
+  Profile::ProfileStatus status = ProfileStore::getInstance().getStatus();
   _activeId = status.activeId;
 
   uint16_t dataLen = 0;
@@ -50,18 +53,30 @@ bool ConfigManager::init() {
     return false;
   }
 
-  LOG_INFO("ConfigManager: init OK, active=%u count=%u", _activeId, status.profileCount);
+  // Parse raw JSON from s_staging into _config
+  if (dataLen > 0) {
+    s_staging[dataLen] = '\0';
+    parseProfile(reinterpret_cast<const char *>(s_staging), &_config);
+  }
+
+  LOG_INFO("ConfigManager: init OK, active=%u count=%u", _activeId,
+           status.profileCount);
   return true;
 }
 
 bool ConfigManager::loadProfile(uint16_t profileId) {
   ProfileStore &store = ProfileStore::getInstance();
   if (profileId != _activeId) {
-    if (!store.selectProfile(profileId)) return false;
+    if (!store.selectProfile(profileId))
+      return false;
     _activeId = profileId;
   }
   uint16_t dataLen = 0;
   bool ok = store.loadActive(nullptr, &dataLen);
+  if (ok && dataLen > 0) {
+    s_staging[dataLen] = '\0';
+    parseProfile(reinterpret_cast<const char *>(s_staging), &_config);
+  }
   LOG_INFO("ConfigManager: load id=%u %s", profileId, ok ? "OK" : "FAIL");
   return ok;
 }
@@ -73,63 +88,55 @@ bool ConfigManager::saveProfile() {
     return false;
   }
 
-  StaticJsonDocument<2048> doc;
+  // Build JSON using frozen printf
+  Json doc;
+  doc.beginWrite(reinterpret_cast<char *>(s_staging), PROFILE_JSON_MAX);
 
-  JsonObject map = doc["map"].to<JsonObject>();
-  map["socd"]     = s_config.socd_mode;
-  map["four_way"] = s_config.four_way_mode;
-  map["dpad"]     = s_config.dpad_mode;
-  map["inv_x"]    = s_config.inv_x;
-  map["inv_y"]    = s_config.inv_y;
-  map["inv_rx"]   = s_config.inv_rx;
-  map["inv_ry"]   = s_config.inv_ry;
-  map["swap"]     = s_config.swap_sticks;
-
-  JsonArray btnArr = map["btn_map"].to<JsonArray>();
+  // ── map ──
+  doc.printf("{ver:1,map:{socd:%d,four_way:%d,dpad:%d,"
+             "inv_x:%B,inv_y:%B,inv_rx:%B,inv_ry:%B,swap:%B,btn_map:[",
+             _config.socd_mode, _config.four_way_mode, _config.dpad_mode,
+             _config.inv_x, _config.inv_y, _config.inv_rx, _config.inv_ry,
+             _config.swap_sticks);
   for (uint8_t i = 0; i < 32; i++) {
-    btnArr.add(s_config.btn_map[i]);
+    if (i > 0) doc.printf(",");
+    doc.printf("%d", _config.btn_map[i]);
   }
+  doc.printf("]");
 
-  JsonObject stick = doc["stick"].to<JsonObject>();
-  stick["lx_dz"]   = s_config.lx_dz;
-  stick["ly_dz"]   = s_config.ly_dz;
-  stick["rx_dz"]   = s_config.rx_dz;
-  stick["ry_dz"]   = s_config.ry_dz;
-  stick["lx_sens"] = s_config.lx_sens;
-  stick["ly_sens"] = s_config.ly_sens;
-  stick["rx_sens"] = s_config.rx_sens;
-  stick["ry_sens"] = s_config.ry_sens;
-  stick["curve"]   = s_config.curve;
-  stick["ema"]     = s_config.ema;
+  // ── stick ──
+  doc.printf(",stick:{lx_dz:%d,ly_dz:%d,rx_dz:%d,ry_dz:%d,"
+             "lx_sens:%d,ly_sens:%d,rx_sens:%d,ry_sens:%d,curve:%d,ema:%d}",
+             _config.lx_dz, _config.ly_dz, _config.rx_dz, _config.ry_dz,
+             _config.lx_sens, _config.ly_sens, _config.rx_sens, _config.ry_sens,
+             _config.curve, _config.ema);
 
-  JsonObject trig = doc["trig"].to<JsonObject>();
-  trig["lt_dz"] = s_config.lt_dz;
-  trig["rt_dz"] = s_config.rt_dz;
+  // ── trig ──
+  doc.printf(",trig:{lt_dz:%d,rt_dz:%d}", _config.lt_dz, _config.rt_dz);
 
-  JsonObject usb = doc["usb"].to<JsonObject>();
-  usb["poll"] = s_config.poll_rate;
+  // ── usb ──
+  doc.printf(",usb:{poll:%d}", _config.poll_rate);
 
-  JsonObject led = doc["led"].to<JsonObject>();
-  led["bri"]  = s_config.led_brightness;
-  led["mode"] = s_config.led_mode;
-  led["hue"]  = s_config.led_hue;
-  led["sat"]  = s_config.led_saturation;
-  led["spd"]  = s_config.led_speed;
+  // ── led ──
+  doc.printf(",led:{bri:%d,mode:%d,hue:%d,sat:%d,spd:%d}",
+             _config.led_brightness, _config.led_mode,
+             _config.led_hue, _config.led_saturation, _config.led_speed);
 
-  JsonObject sys = doc["sys"].to<JsonObject>();
-  sys["log"]      = s_config.log_level;
-  sys["deb_samp"] = s_config.debounce_samples;
-  sys["deb_thr"]  = s_config.debounce_threshold;
+  // ── sys ──
+  doc.printf(",sys:{log:%d,deb_samp:%d,deb_thr:%d}",
+             _config.log_level, _config.debounce_samples,
+             _config.debounce_threshold);
 
-  JsonObject cal = doc["cal"].to<JsonObject>();
-  cal["lx_c"] = s_config.cal_lx;
-  cal["ly_c"] = s_config.cal_ly;
-  cal["rx_c"] = s_config.cal_rx;
-  cal["ry_c"] = s_config.cal_ry;
+  // ── cal ──
+  doc.printf(",cal:{lx_c:%d,ly_c:%d,rx_c:%d,ry_c:%d}",
+             _config.cal_lx, _config.cal_ly, _config.cal_rx, _config.cal_ry);
 
-  uint16_t jsonLen = serializeJson(doc, reinterpret_cast<char *>(s_staging), PROFILE_JSON_MAX);
+  doc.printf("}");  // close root
 
-  if (!store.modifyProfile(_activeId, reinterpret_cast<const char *>(s_staging), jsonLen)) {
+  uint16_t jsonLen = static_cast<uint16_t>(doc.end());
+
+  if (!store.modifyProfile(_activeId, reinterpret_cast<const char *>(s_staging),
+                           jsonLen)) {
     LOG_ERROR("ConfigManager: save failed id=%u", _activeId);
     return false;
   }
@@ -138,23 +145,15 @@ bool ConfigManager::saveProfile() {
   return true;
 }
 
-uint16_t ConfigManager::activeProfileId() const {
-  return _activeId;
-}
+uint16_t ConfigManager::activeProfileId() const { return _activeId; }
 
 uint8_t ConfigManager::profileCount() const {
   return ProfileStore::getInstance().getStatus().profileCount;
 }
 
-ConfigStore &ConfigManager::config() {
-  return s_config;
-}
+bool ConfigManager::selectProfile(uint16_t pid) { return loadProfile(pid); }
 
-bool ConfigManager::selectProfile(uint16_t pid) {
-  return loadProfile(pid);
-}
-
-Drivers::Device::ProfileStatus ConfigManager::getStatus() const {
+Profile::ProfileStatus ConfigManager::getStatus() const {
   return ProfileStore::getInstance().getStatus();
 }
 

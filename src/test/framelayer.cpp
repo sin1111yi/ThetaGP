@@ -188,14 +188,15 @@ void FrameLayer::processCommandQueue() {
     }
 }
 
-void FrameLayer::sendResponse(const JsonDocument &doc) {
-    _txPendingLen = serializeJson(doc, _txPendingBuf, sizeof(_txPendingBuf) - 2);
-    if (_txPendingLen >= sizeof(_txPendingBuf) - 2) {
+void FrameLayer::sendResponse(const char *data, uint16_t len) {
+    if (len > sizeof(_txPendingBuf) - 2) {
         _txPendingLen = 0;
         _txPending = false;
         LOG_WARN("FrameLayer: Response too large for TX buffer");
         return;
     }
+    memcpy(_txPendingBuf, data, len);
+    _txPendingLen = len;
     _txPendingBuf[_txPendingLen++] = '\r';
     _txPendingBuf[_txPendingLen++] = '\n';
     _txPending = true;

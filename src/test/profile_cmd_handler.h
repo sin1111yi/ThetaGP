@@ -21,13 +21,13 @@
 
 #pragma once
 
-#include <ArduinoJson.h>
+#include "utils/json/json.h"
 
 namespace ThetaGP::Test {
 
 /**
  * Handles the `profile.` domain commands over the CDC ACM test channel.
- * Delegates to ProfileStore and ConfigStore for storage and serialization.
+ * Delegates to ConfigManager and ProfileStore for storage and serialization.
  */
 class ProfileCmdHandler {
 public:
@@ -36,7 +36,7 @@ public:
   ProfileCmdHandler &operator=(const ProfileCmdHandler &) = delete;
 
   static ProfileCmdHandler &getInstance();
-  static void handleProfile(const char *cmd, JsonDocument &doc);
+  static void handleProfile(const char *cmd, const Json &json);
   static void registerHandlers();
 };
 

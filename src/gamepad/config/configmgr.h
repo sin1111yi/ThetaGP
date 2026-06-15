@@ -21,9 +21,10 @@
 
 #pragma once
 
-#include <cstdint>
-#include "drivers/device/flash/profile_flash.h"
 #include "gamepad/config/config_store.h"
+#include "gamepad/profile/profile_store.h"
+
+#include <cstdint>
 
 namespace ThetaGP::Gamepad::Config {
 
@@ -36,13 +37,22 @@ public:
   bool saveProfile();
   uint16_t activeProfileId() const;
   uint8_t profileCount() const;
-  ConfigStore &config();
+
+  /** Get const reference to active configuration. */
+  const ConfigStore &config() const { return _config; }
+  /** Get mutable reference to active configuration (internal use). */
+  ConfigStore &configMut() { return _config; }
+
   bool selectProfile(uint16_t profileId);
-  Drivers::Device::ProfileStatus getStatus() const;
-  Drivers::Device::ProfileStore &store() { return Drivers::Device::ProfileStore::getInstance(); }
+  Profile::ProfileStatus getStatus() const;
+
+  Profile::ProfileStore &store() {
+    return Profile::ProfileStore::getInstance();
+  }
 
 private:
   ConfigManager() = default;
+  ConfigStore _config;
   uint16_t _activeId = 0;
 };
 

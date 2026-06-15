@@ -19,14 +19,14 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "drivers/device/flash/profile_flash.h"
-#include "gamepad/config/config_store.h"
+#include "gamepad/profile/profile_store.h"
 #include "drivers/device/flash/flash_w25qxx.h"
 #include "utils/log/log.h"
 
+#include "utils/json/json.h"
 #include <cstring>
 
-namespace ThetaGP::Drivers::Device {
+namespace ThetaGP::Gamepad::Profile {
 
 COMMON_ZERO_INIT uint8_t s_staging[4096];
 
@@ -50,11 +50,12 @@ static uint16_t crc16Ccitt(const uint8_t *data, uint16_t len) {
 // ── Slot index helpers (ring buffer wraparound) ──
 
 static uint16_t bootMetaSlotIndex() {
-  auto &flash = FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
   for (uint16_t i = 0; i < BOOTMETA_SLOTS; ++i) {
     uint32_t slotAddr = BOOTMETA_BASE + i * sizeof(BootMeta);
     BootMeta meta;
-    if (!flash.read(slotAddr, reinterpret_cast<uint8_t *>(&meta), sizeof(BootMeta))) {
+    if (!flash.read(slotAddr, reinterpret_cast<uint8_t *>(&meta),
+                    sizeof(BootMeta))) {
       return 0;
     }
     if (meta.magic != BOOTMETA_MAGIC) {
@@ -65,11 +66,12 @@ static uint16_t bootMetaSlotIndex() {
 }
 
 static uint16_t addressRingSlotIndex() {
-  auto &flash = FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
   for (uint16_t i = 0; i < ADDR_RING_SLOTS; ++i) {
     uint32_t slotAddr = ADDR_RING_BASE + i * sizeof(AddressEntry);
     AddressEntry entry;
-    if (!flash.read(slotAddr, reinterpret_cast<uint8_t *>(&entry), sizeof(AddressEntry))) {
+    if (!flash.read(slotAddr, reinterpret_cast<uint8_t *>(&entry),
+                    sizeof(AddressEntry))) {
       return 0;
     }
     if (entry.profileId == PROFILE_ID_NONE) {
@@ -109,7 +111,7 @@ void ProfileStore::seqBeforeIncrement() {
 bool ProfileStore::init() {
   LOG_INFO("ProfileStore: init");
 
-  auto &flash = FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
   if (!flash.isInitialized()) {
     LOG_ERROR("ProfileStore: flash not initialized");
     return false;
@@ -127,50 +129,38 @@ bool ProfileStore::init() {
     bool profile0Erased = true;
     flash.read(PROFILE0_ADDR, s_staging, PROFILE_JSON_MAX);
     for (uint16_t i = 0; i < 16; ++i) {
-      if (s_staging[i] != 0xFF) { profile0Erased = false; break; }
+      if (s_staging[i] != 0xFF) {
+        profile0Erased = false;
+        break;
+      }
     }
 
     if (profile0Erased && !hasFactoryProfile) {
       LOG_INFO("ProfileStore: fresh flash detected, writing default Profile0");
-      // Build minimal default config JSON
-      JsonDocument doc;
-      doc["map"]["socd"]     = 0;
-      doc["map"]["four_way"] = 0;
-      doc["map"]["dpad"]     = 0;
-      doc["map"]["inv_x"]    = 0;
-      doc["map"]["inv_y"]    = 0;
-      doc["map"]["inv_rx"]   = 0;
-      doc["map"]["inv_ry"]   = 0;
-      doc["map"]["swap"]     = 0;
-      JsonArray btnArr = doc["map"]["btn_map"].to<JsonArray>();
-      for (int i = 0; i < 32; ++i) btnArr.add(i);
-      doc["stick"]["lx_dz"]   = 0;
-      doc["stick"]["ly_dz"]   = 0;
-      doc["stick"]["rx_dz"]   = 0;
-      doc["stick"]["ry_dz"]   = 0;
-      doc["stick"]["lx_sens"] = 128;
-      doc["stick"]["ly_sens"] = 128;
-      doc["stick"]["rx_sens"] = 128;
-      doc["stick"]["ry_sens"] = 128;
-      doc["stick"]["curve"]   = 0;
-      doc["stick"]["ema"]     = 0;
-      doc["trig"]["lt_dz"]    = 0;
-      doc["trig"]["rt_dz"]    = 0;
-      doc["usb"]["poll"]      = 1;
-      doc["led"]["bri"]       = 50;
-      doc["led"]["mode"]      = 1;
-      doc["led"]["hue"]       = 0;
-      doc["led"]["sat"]       = 255;
-      doc["led"]["spd"]       = 50;
-      doc["sys"]["log"]       = 1;
-      doc["sys"]["deb_samp"]  = 3;
-      doc["sys"]["deb_thr"]   = 5;
-      doc["cal"]["lx_c"]      = 0;
-      doc["cal"]["ly_c"]      = 0;
-      doc["cal"]["rx_c"]      = 0;
-      doc["cal"]["ry_c"]      = 0;
-
-      uint16_t jsonLen = serializeJson(doc, s_staging, PROFILE_JSON_MAX);
+      // Build minimal default config JSON using frozen printf
+      Json doc;
+      doc.beginWrite(reinterpret_cast<char *>(s_staging), PROFILE_JSON_MAX);
+      doc.printf("{ver:1,map:{socd:%d,four_way:%d,dpad:%d,"
+                 "inv_x:%d,inv_y:%d,inv_rx:%d,inv_ry:%d,swap:%d,btn_map:[",
+                 0, 0, 0, 0, 0, 0, 0, 0);
+      for (int i = 0; i < 32; ++i) {
+        if (i > 0) doc.printf(",");
+        doc.printf("%d", i);
+      }
+      doc.printf("],stick:{lx_dz:%d,ly_dz:%d,rx_dz:%d,ry_dz:%d,"
+                 "lx_sens:%d,ly_sens:%d,rx_sens:%d,ry_sens:%d,curve:%d,ema:%d},"
+                 "trig:{lt_dz:%d,rt_dz:%d},usb:{poll:%d},"
+                 "led:{bri:%d,mode:%d,hue:%d,sat:%d,spd:%d},"
+                 "sys:{log:%d,deb_samp:%d,deb_thr:%d},"
+                 "cal:{lx_c:%d,ly_c:%d,rx_c:%d,ry_c:%d}}",
+                 0, 0, 0, 0,
+                 128, 128, 128, 128, 0, 0,
+                 0, 0,
+                 1,
+                 50, 1, 0, 255, 50,
+                 1, 3, 5,
+                 0, 0, 0, 0);
+      uint16_t jsonLen = static_cast<uint16_t>(doc.end());
       if (jsonLen > 0 && jsonLen < PROFILE_JSON_MAX) {
         writeFactoryProfile(reinterpret_cast<const char *>(s_staging), jsonLen);
         // Re-scan after writing factory Profile0 — init is complete
@@ -181,9 +171,11 @@ bool ProfileStore::init() {
         _nextAddr = findNextAddr();
         _profileCount = 0;
         for (uint16_t i = 0; i <= PROFILE_MAX_ID; ++i) {
-          if (_profileAddresses[i] != 0) _profileCount++;
+          if (_profileAddresses[i] != 0)
+            _profileCount++;
         }
-        LOG_INFO("ProfileStore: auto-init done, active=%u, addr=0x%06lX, next=0x%06lX, count=%u",
+        LOG_INFO("ProfileStore: auto-init done, active=%u, addr=0x%06lX, "
+                 "next=0x%06lX, count=%u",
                  _activeProfileId, _activeAddress, _nextAddr, _profileCount);
         return true;
       }
@@ -207,13 +199,14 @@ bool ProfileStore::init() {
     }
   }
 
-  LOG_INFO("ProfileStore: init done, active=%u, addr=0x%06lX, next=0x%06lX, count=%u",
+  LOG_INFO("ProfileStore: init done, active=%u, addr=0x%06lX, next=0x%06lX, "
+           "count=%u",
            _activeProfileId, _activeAddress, _nextAddr, _profileCount);
   return true;
 }
 
 bool ProfileStore::scanBootMeta(uint16_t *outActiveId, uint32_t *outAddress) {
-  auto &flash = FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
 
   uint16_t maxSeq = 0;
   uint16_t bestId = 0;
@@ -223,7 +216,8 @@ bool ProfileStore::scanBootMeta(uint16_t *outActiveId, uint32_t *outAddress) {
     uint32_t slotAddr = BOOTMETA_BASE + i * sizeof(BootMeta);
 
     BootMeta meta;
-    if (!flash.read(slotAddr, reinterpret_cast<uint8_t *>(&meta), sizeof(BootMeta))) {
+    if (!flash.read(slotAddr, reinterpret_cast<uint8_t *>(&meta),
+                    sizeof(BootMeta))) {
       LOG_ERROR("ProfileStore: BootMeta read fail at slot %u", i);
       continue;
     }
@@ -254,12 +248,13 @@ bool ProfileStore::scanBootMeta(uint16_t *outActiveId, uint32_t *outAddress) {
 
   *outActiveId = bestId;
   *outAddress = bestAddr;
-  LOG_INFO("ProfileStore: BootMeta active=%u, addr=0x%06lX, seq=%u", bestId, bestAddr, maxSeq);
+  LOG_INFO("ProfileStore: BootMeta active=%u, addr=0x%06lX, seq=%u", bestId,
+           bestAddr, maxSeq);
   return true;
 }
 
 bool ProfileStore::scanAddressRing() {
-  auto &flash = FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
 
   for (uint16_t i = 0; i <= PROFILE_MAX_ID; ++i) {
     _profileAddresses[i] = 0;
@@ -272,7 +267,8 @@ bool ProfileStore::scanAddressRing() {
     uint32_t slotAddr = ADDR_RING_BASE + i * sizeof(AddressEntry);
 
     AddressEntry entry;
-    if (!flash.read(slotAddr, reinterpret_cast<uint8_t *>(&entry), sizeof(AddressEntry))) {
+    if (!flash.read(slotAddr, reinterpret_cast<uint8_t *>(&entry),
+                    sizeof(AddressEntry))) {
       LOG_ERROR("ProfileStore: Address entry read fail at slot %u", i);
       continue;
     }
@@ -282,13 +278,15 @@ bool ProfileStore::scanAddressRing() {
     }
 
     if (entry.profileId > PROFILE_MAX_ID) {
-      LOG_WARN("ProfileStore: invalid profileId %u at slot %u", entry.profileId, i);
+      LOG_WARN("ProfileStore: invalid profileId %u at slot %u", entry.profileId,
+               i);
       continue;
     }
 
     if (entry.seq > _profileSeqs[entry.profileId]) {
       _profileSeqs[entry.profileId] = entry.seq;
-      _profileAddresses[entry.profileId] = (entry.address == 0) ? 0 : entry.address;
+      _profileAddresses[entry.profileId] =
+          (entry.address == 0) ? 0 : entry.address;
     }
 
     if (entry.seq > maxSeq) {
@@ -302,7 +300,7 @@ bool ProfileStore::scanAddressRing() {
 }
 
 uint32_t ProfileStore::findNextAddr() const {
-  auto &flash = FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
   const auto &info = flash.getInfo();
   uint32_t flashSize = info.sizeBytes;
 
@@ -341,9 +339,10 @@ bool ProfileStore::writeFactoryProfile(const char *json, uint16_t len) {
     return false;
   }
 
-  auto &flash = FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
 
-  if (!flash.write(PROFILE0_ADDR, reinterpret_cast<const uint8_t *>(json), len)) {
+  if (!flash.write(PROFILE0_ADDR, reinterpret_cast<const uint8_t *>(json),
+                   len)) {
     LOG_ERROR("ProfileStore: failed to write Profile0 primary");
     return false;
   }
@@ -352,7 +351,8 @@ bool ProfileStore::writeFactoryProfile(const char *json, uint16_t len) {
     LOG_ERROR("ProfileStore: failed to erase Profile0 backup sector");
     return false;
   }
-  if (!flash.write(PROFILE0_BACKUP, reinterpret_cast<const uint8_t *>(json), len)) {
+  if (!flash.write(PROFILE0_BACKUP, reinterpret_cast<const uint8_t *>(json),
+                   len)) {
     LOG_ERROR("ProfileStore: failed to write Profile0 backup");
     return false;
   }
@@ -366,7 +366,8 @@ bool ProfileStore::writeFactoryProfile(const char *json, uint16_t len) {
   meta.crc16 = 0;
   meta.crc16 = crc16BootMeta(&meta);
 
-  if (!flash.write(BOOTMETA_BASE, reinterpret_cast<const uint8_t *>(&meta), sizeof(BootMeta))) {
+  if (!flash.write(BOOTMETA_BASE, reinterpret_cast<const uint8_t *>(&meta),
+                   sizeof(BootMeta))) {
     LOG_ERROR("ProfileStore: failed to write BootMeta slot 0");
     return false;
   }
@@ -397,7 +398,8 @@ bool ProfileStore::writeFactoryProfile(const char *json, uint16_t len) {
 
 // ── createProfile() ──
 
-bool ProfileStore::createProfile(const char *json, uint16_t len, uint16_t *newId) {
+bool ProfileStore::createProfile(const char *json, uint16_t len,
+                                 uint16_t *newId) {
   LOG_INFO("ProfileStore: createProfile, len=%u", len);
 
   if (!json || len == 0 || len > PROFILE_JSON_MAX) {
@@ -418,7 +420,7 @@ bool ProfileStore::createProfile(const char *json, uint16_t len, uint16_t *newId
     return false;
   }
 
-  auto &flash = FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
   const auto &info = flash.getInfo();
 
   if (_nextAddr >= info.sizeBytes) {
@@ -444,8 +446,10 @@ bool ProfileStore::createProfile(const char *json, uint16_t len, uint16_t *newId
   addrEntry.address = dataAddr;
   addrEntry.seq = _addressRingSeq;
 
-  uint32_t addrSlot = ADDR_RING_BASE + (addressRingSlotIndex() * sizeof(AddressEntry));
-  if (!flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&addrEntry), sizeof(AddressEntry))) {
+  uint32_t addrSlot =
+      ADDR_RING_BASE + (addressRingSlotIndex() * sizeof(AddressEntry));
+  if (!flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&addrEntry),
+                   sizeof(AddressEntry))) {
     LOG_ERROR("ProfileStore: failed to write Address entry");
     return false;
   }
@@ -461,8 +465,10 @@ bool ProfileStore::createProfile(const char *json, uint16_t len, uint16_t *newId
   bootMeta.crc16 = 0;
   bootMeta.crc16 = crc16BootMeta(&bootMeta);
 
-  uint32_t bootMetaSlot = BOOTMETA_BASE + (bootMetaSlotIndex() * sizeof(BootMeta));
-  if (!flash.write(bootMetaSlot, reinterpret_cast<const uint8_t *>(&bootMeta), sizeof(BootMeta))) {
+  uint32_t bootMetaSlot =
+      BOOTMETA_BASE + (bootMetaSlotIndex() * sizeof(BootMeta));
+  if (!flash.write(bootMetaSlot, reinterpret_cast<const uint8_t *>(&bootMeta),
+                   sizeof(BootMeta))) {
     LOG_ERROR("ProfileStore: failed to write BootMeta");
     return false;
   }
@@ -501,7 +507,7 @@ bool ProfileStore::modifyProfile(uint16_t id, const char *json, uint16_t len) {
     return false;
   }
 
-  auto &flash = FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
   const auto &info = flash.getInfo();
 
   if (_nextAddr >= info.sizeBytes) {
@@ -527,8 +533,10 @@ bool ProfileStore::modifyProfile(uint16_t id, const char *json, uint16_t len) {
   addrEntry.address = dataAddr;
   addrEntry.seq = _addressRingSeq;
 
-  uint32_t addrSlot = ADDR_RING_BASE + (addressRingSlotIndex() * sizeof(AddressEntry));
-  if (!flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&addrEntry), sizeof(AddressEntry))) {
+  uint32_t addrSlot =
+      ADDR_RING_BASE + (addressRingSlotIndex() * sizeof(AddressEntry));
+  if (!flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&addrEntry),
+                   sizeof(AddressEntry))) {
     LOG_ERROR("ProfileStore: failed to write Address entry for modify");
     return false;
   }
@@ -559,7 +567,7 @@ bool ProfileStore::deleteProfile(uint16_t id) {
     return false;
   }
 
-  auto &flash = FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
 
   // Mark deleted: write Address Ring entry with address=0, seq=high
   seqBeforeIncrement();
@@ -569,8 +577,10 @@ bool ProfileStore::deleteProfile(uint16_t id) {
   addrEntry.address = 0;
   addrEntry.seq = _addressRingSeq;
 
-  uint32_t addrSlot = ADDR_RING_BASE + (addressRingSlotIndex() * sizeof(AddressEntry));
-  if (!flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&addrEntry), sizeof(AddressEntry))) {
+  uint32_t addrSlot =
+      ADDR_RING_BASE + (addressRingSlotIndex() * sizeof(AddressEntry));
+  if (!flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&addrEntry),
+                   sizeof(AddressEntry))) {
     LOG_ERROR("ProfileStore: failed to write deletion Address entry");
     return false;
   }
@@ -581,7 +591,8 @@ bool ProfileStore::deleteProfile(uint16_t id) {
 
   // If deleting active profile, fallback to Profile0
   if (_activeProfileId == id) {
-    LOG_WARN("ProfileStore: deleting active profile %u, fallback to Profile0", id);
+    LOG_WARN("ProfileStore: deleting active profile %u, fallback to Profile0",
+             id);
     _activeProfileId = 0;
     _activeAddress = PROFILE0_ADDR;
 
@@ -601,8 +612,10 @@ bool ProfileStore::deleteProfile(uint16_t id) {
     bootMeta.crc16 = 0;
     bootMeta.crc16 = crc16BootMeta(&bootMeta);
 
-    uint32_t bootMetaSlot = BOOTMETA_BASE + (bootMetaSlotIndex() * sizeof(BootMeta));
-    if (!flash.write(bootMetaSlot, reinterpret_cast<const uint8_t *>(&bootMeta), sizeof(BootMeta))) {
+    uint32_t bootMetaSlot =
+        BOOTMETA_BASE + (bootMetaSlotIndex() * sizeof(BootMeta));
+    if (!flash.write(bootMetaSlot, reinterpret_cast<const uint8_t *>(&bootMeta),
+                     sizeof(BootMeta))) {
       LOG_WARN("ProfileStore: fallback BootMeta write failed (non-critical)");
     }
   }
@@ -626,7 +639,7 @@ bool ProfileStore::selectProfile(uint16_t id) {
     return false;
   }
 
-  auto &flash = FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
 
   uint32_t address = (id == 0) ? PROFILE0_ADDR : _profileAddresses[id];
 
@@ -642,8 +655,10 @@ bool ProfileStore::selectProfile(uint16_t id) {
   bootMeta.crc16 = 0;
   bootMeta.crc16 = crc16BootMeta(&bootMeta);
 
-  uint32_t bootMetaSlot = BOOTMETA_BASE + (bootMetaSlotIndex() * sizeof(BootMeta));
-  if (!flash.write(bootMetaSlot, reinterpret_cast<const uint8_t *>(&bootMeta), sizeof(BootMeta))) {
+  uint32_t bootMetaSlot =
+      BOOTMETA_BASE + (bootMetaSlotIndex() * sizeof(BootMeta));
+  if (!flash.write(bootMetaSlot, reinterpret_cast<const uint8_t *>(&bootMeta),
+                   sizeof(BootMeta))) {
     LOG_ERROR("ProfileStore: failed to write BootMeta for select");
     return false;
   }
@@ -656,18 +671,20 @@ bool ProfileStore::selectProfile(uint16_t id) {
 }
 
 // ── loadActive() ──
+// Reads raw JSON into buf. Caller (ConfigManager) is responsible for parsing.
 
 bool ProfileStore::loadActive(uint8_t *buf, uint16_t *outLen) {
   LOG_DEBUG("ProfileStore: loadActive");
 
-  auto &flash = FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
 
   if (!buf) {
     buf = s_staging;
   }
 
   if (!flash.read(_activeAddress, buf, PROFILE_JSON_MAX)) {
-    LOG_ERROR("ProfileStore: failed to read active profile at 0x%06lX", _activeAddress);
+    LOG_ERROR("ProfileStore: failed to read active profile at 0x%06lX",
+              _activeAddress);
     return false;
   }
 
@@ -679,10 +696,7 @@ bool ProfileStore::loadActive(uint8_t *buf, uint16_t *outLen) {
     actualLen = i + 1;
   }
 
-  if (actualLen > 0) {
-    buf[actualLen] = '\0';
-    parseProfile(reinterpret_cast<const char *>(buf), &ThetaGP::Gamepad::Config::s_config);
-  }
+  // No parse here — caller (ConfigManager) drives the parse
 
   if (outLen) {
     *outLen = actualLen;
@@ -702,7 +716,7 @@ ProfileStatus ProfileStore::getStatus() const {
   status.bootMetaSeq = _bootMetaSeq;
   status.addressRingSeq = _addressRingSeq;
 
-  auto &flash = FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
   const auto &info = flash.getInfo();
 
   status.totalSectors = info.sizeBytes / 4096;
@@ -719,7 +733,7 @@ ProfileStatus ProfileStore::getStatus() const {
 bool ProfileStore::compaction() {
   LOG_INFO("ProfileStore: compaction start");
 
-  auto &flash = FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
 
   // 1. Collect valid profiles (address != 0), ordered by profileId
   struct ValidProfile {
@@ -749,7 +763,8 @@ bool ProfileStore::compaction() {
   for (uint8_t i = 0; i < validCount; ++i) {
     memset(s_staging, 0xFF, PROFILE_JSON_MAX);
     if (!flash.read(valid[i].oldAddr, s_staging, PROFILE_JSON_MAX)) {
-      LOG_ERROR("ProfileStore: compaction read fail at 0x%06lX", valid[i].oldAddr);
+      LOG_ERROR("ProfileStore: compaction read fail at 0x%06lX",
+                valid[i].oldAddr);
       return false;
     }
 
@@ -766,7 +781,8 @@ bool ProfileStore::compaction() {
     addrEntry.seq = _addressRingSeq;
 
     uint32_t addrSlot = ADDR_RING_BASE + i * sizeof(AddressEntry);
-    if (!flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&addrEntry), sizeof(AddressEntry))) {
+    if (!flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&addrEntry),
+                     sizeof(AddressEntry))) {
       LOG_ERROR("ProfileStore: compaction Address write fail");
       return false;
     }
@@ -795,7 +811,8 @@ bool ProfileStore::compaction() {
     return false;
   }
 
-  if (!flash.write(BOOTMETA_BASE, reinterpret_cast<const uint8_t *>(&bootMeta), sizeof(BootMeta))) {
+  if (!flash.write(BOOTMETA_BASE, reinterpret_cast<const uint8_t *>(&bootMeta),
+                   sizeof(BootMeta))) {
     LOG_ERROR("ProfileStore: compaction BootMeta write fail");
     return false;
   }
@@ -807,7 +824,8 @@ bool ProfileStore::compaction() {
     empty.address = 0;
     empty.seq = 0;
     uint32_t addrSlot = ADDR_RING_BASE + i * sizeof(AddressEntry);
-    (void)flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&empty), sizeof(AddressEntry));
+    (void)flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&empty),
+                      sizeof(AddressEntry));
   }
 
   _nextAddr = writeAddr;
@@ -821,7 +839,7 @@ bool ProfileStore::compaction() {
 bool ProfileStore::resetSector0() {
   LOG_INFO("ProfileStore: resetSector0");
 
-  auto &flash = FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
 
   // Backup current BootMeta
   BootMeta activeBootMeta;
@@ -854,15 +872,20 @@ bool ProfileStore::resetSector0() {
   // Restore Profile0 from Sector 1 backup
   memset(s_staging, 0, PROFILE_JSON_MAX);
   if (!flash.read(PROFILE0_BACKUP, s_staging, PROFILE_JSON_MAX)) {
-    LOG_WARN("ProfileStore: failed to read Profile0 backup, writing minimal default");
+    LOG_WARN("ProfileStore: failed to read Profile0 backup, writing minimal "
+             "default");
     const char *emptyProfile = "{\"ver\":1}";
-    (void)flash.write(PROFILE0_ADDR, reinterpret_cast<const uint8_t *>(emptyProfile), strlen(emptyProfile));
+    (void)flash.write(PROFILE0_ADDR,
+                      reinterpret_cast<const uint8_t *>(emptyProfile),
+                      strlen(emptyProfile));
   } else {
     (void)flash.write(PROFILE0_ADDR, s_staging, PROFILE_JSON_MAX);
   }
 
   // Write BootMeta slot 0
-  if (!flash.write(BOOTMETA_BASE, reinterpret_cast<const uint8_t *>(&activeBootMeta), sizeof(BootMeta))) {
+  if (!flash.write(BOOTMETA_BASE,
+                   reinterpret_cast<const uint8_t *>(&activeBootMeta),
+                   sizeof(BootMeta))) {
     LOG_ERROR("ProfileStore: failed to write BootMeta after Sector 0 reset");
     return false;
   }
@@ -870,7 +893,9 @@ bool ProfileStore::resetSector0() {
   // Write valid Address entries (best-effort)
   for (uint8_t i = 0; i < entryCount; ++i) {
     uint32_t slotAddr = ADDR_RING_BASE + i * sizeof(AddressEntry);
-    if (!flash.write(slotAddr, reinterpret_cast<const uint8_t *>(&validEntries[i]), sizeof(AddressEntry))) {
+    if (!flash.write(slotAddr,
+                     reinterpret_cast<const uint8_t *>(&validEntries[i]),
+                     sizeof(AddressEntry))) {
       LOG_WARN("ProfileStore: Address entry restore failed at slot %u", i);
     }
   }
@@ -883,7 +908,7 @@ bool ProfileStore::resetSector0() {
 
 bool ProfileStore::eraseSector0Range(uint32_t addr, uint32_t len) {
   (void)len;
-  auto &flash = FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
 
   if (addr < 0x1000) {
     return flash.eraseSector(0x000000);
@@ -893,4 +918,4 @@ bool ProfileStore::eraseSector0Range(uint32_t addr, uint32_t len) {
   return false;
 }
 
-} // namespace ThetaGP::Drivers::Device
+} // namespace ThetaGP::Gamepad::Profile

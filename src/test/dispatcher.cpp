@@ -40,40 +40,42 @@ void Dispatcher::dispatch(const char *jsonLine) {
 
 void Dispatcher::dispatchImpl(const char *jsonLine) {
     LOG_DEBUG("Dispatcher: dispatch '%s'", jsonLine);
-    // 1. Parse JSON — stack-local doc (safe in main loop context)
-    StaticJsonDocument<2048> doc;
-    DeserializationError error = deserializeJson(doc, jsonLine);
+    // 1. Parse JSON using our own Json class
+    Json cmdJson;
+    cmdJson.parse(jsonLine);
 
-    if (error) {
-        LOG_WARN("Dispatcher: JSON parse error: %s", error.c_str());
-        JsonDocument resp;
-        resp["status"] = "error";
-        resp["error_code"] = 2;
-        resp["reason"] = "JSON parse error";
-        FrameLayer::getInstance().sendResponse(resp);
-        return;
-    }
-
-    // 2. Extract cmd field
-    const char *cmd = doc["cmd"];
-    if (!cmd || strlen(cmd) == 0) {
+    // 2. Extract cmd field and null-terminate it (getStr returns pointer INTO
+    //    the original JSON string which is NOT null-terminated)
+    int cmdLen = 0;
+    const char *cmdRaw = cmdJson.getStr("cmd", &cmdLen);
+    if (!cmdRaw || cmdLen <= 0) {
         LOG_WARN("Dispatcher: Missing or empty 'cmd' field");
-        JsonDocument resp;
-        resp["status"] = "error";
-        resp["error_code"] = 2;
-        resp["reason"] = "missing 'cmd' field";
-        FrameLayer::getInstance().sendResponse(resp);
+        Json resp;
+        resp.beginWrite(_respBuf, sizeof(_respBuf));
+        resp.printf("{status:%Q,error_code:%d,reason:%Q}",
+                    "error", 2, "missing 'cmd' field");
+        uint16_t len = resp.end();
+        FrameLayer::getInstance().sendResponse(resp.c_str(), len);
         return;
     }
+    // Copy cmd into local buffer and null-terminate for safe %Q / strcmp usage
+    constexpr uint8_t CMD_BUF_MAX = 64;
+    char cmdBuf[CMD_BUF_MAX];
+    if (static_cast<uint16_t>(cmdLen) >= CMD_BUF_MAX) cmdLen = CMD_BUF_MAX - 1;
+    memcpy(cmdBuf, cmdRaw, cmdLen);
+    cmdBuf[cmdLen] = '\0';
+    const char *cmd = cmdBuf;
 
     // 3. Extract and validate queued field
-    if (!doc["queued"].is<int>()) {
+    int queued = cmdJson.getInt("queued", -1);
+    if (queued < 0) {
         LOG_WARN("Dispatcher: Missing or invalid 'queued' field");
-        JsonDocument resp;
-        resp["status"] = "error";
-        resp["error_code"] = 2;
-        resp["reason"] = "missing or invalid 'queued' field";
-        FrameLayer::getInstance().sendResponse(resp);
+        Json resp;
+        resp.beginWrite(_respBuf, sizeof(_respBuf));
+        resp.printf("{status:%Q,error_code:%d,reason:%Q}",
+                    "error", 2, "missing or invalid 'queued' field");
+        uint16_t len = resp.end();
+        FrameLayer::getInstance().sendResponse(resp.c_str(), len);
         return;
     }
 
@@ -85,20 +87,19 @@ void Dispatcher::dispatchImpl(const char *jsonLine) {
         if (strncmp(cmd, prefix, prefixLen) == 0 && cmd[prefixLen] == '.') {
             LOG_DEBUG("Dispatcher: route '%s' -> handler[%u] '%s'",
                       cmd, i, prefix);
-            _handlers[i].handler(cmd, doc);
+            _handlers[i].handler(cmd, cmdJson);
             return;
         }
     }
 
     // 5. No handler found -- return unknown command error
     LOG_WARN("Dispatcher: Unknown command: %s", cmd);
-    JsonDocument resp;
-    resp["status"] = "error";
-    resp["error_code"] = 1;
-    resp["reason"] = "unknown command";
-    resp["cmd"] = cmd;
-    resp["queued"] = doc["queued"].as<int>() + 1;
-    FrameLayer::getInstance().sendResponse(resp);
+    Json resp;
+    resp.beginWrite(_respBuf, sizeof(_respBuf));
+    resp.printf("{cmd:%Q,queued:%d,status:%Q,error_code:%d,reason:%Q}",
+                cmd, queued + 1, "error", 1, "unknown command");
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
 void Dispatcher::registerHandler(const char *domain, DomainHandler handler) {

@@ -21,4 +21,16 @@
 # This file exists for future extensions and module organization
 
 add_subdirectory(CRC32)
-add_subdirectory(ArduinoJson)
+
+# frozen: lightweight JSON parser/generator (C)
+add_library(frozen STATIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/frozen/frozen.c
+)
+target_include_directories(frozen
+    PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/frozen
+)
+target_compile_definitions(frozen
+    PRIVATE
+    JSON_MINIMAL=1
+)

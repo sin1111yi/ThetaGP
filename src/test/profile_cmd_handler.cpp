@@ -23,8 +23,8 @@
 #include "test/dispatcher.h"
 #include "test/framelayer.h"
 
-#include "drivers/device/flash/profile_flash.h"
-#include "gamepad/config/config_store.h"
+#include "gamepad/config/configmgr.h"
+#include "gamepad/profile/profile_store.h"
 #include "drivers/device/flash/flash_w25qxx.h"
 
 #include "utils/log/log.h"
@@ -35,11 +35,14 @@
 
 namespace ThetaGP::Test {
 
-using namespace ThetaGP::Drivers::Device;
-using namespace ThetaGP::Gamepad::Config;
+using namespace ThetaGP::Gamepad::Profile;
+using ConfigMgr = ThetaGP::Gamepad::Config::ConfigManager;
 
 // Static context for RAW capture callback
 static uint16_t s_pendingProfileId = 0;
+
+// Staging buffer for building response JSON
+static COMMON_ZERO_INIT char s_profRespBuf[2048];
 
 // ── Helpers ──
 
@@ -50,9 +53,8 @@ static uint8_t hexNibble(char c) {
   return 0;
 }
 
-static uint16_t hexDecode(const char *hex, uint8_t *buf, uint16_t maxLen) {
-  if (!hex || !buf) return 0;
-  size_t hexLen = strlen(hex);
+static uint16_t hexDecode(const char *hex, uint8_t *buf, uint16_t hexLen, uint16_t maxLen) {
+  if (!hex || !buf || hexLen == 0) return 0;
   uint16_t byteLen = (hexLen / 2 < maxLen) ? (hexLen / 2) : maxLen;
   for (uint16_t i = 0; i < byteLen; i++) {
     buf[i] = (hexNibble(hex[i * 2]) << 4) | hexNibble(hex[i * 2 + 1]);
@@ -60,73 +62,15 @@ static uint16_t hexDecode(const char *hex, uint8_t *buf, uint16_t maxLen) {
   return byteLen;
 }
 
-static void sendError(const char *cmd, JsonDocument &doc,
+static void sendError(const char *cmd, const Json &json,
                       int errorCode, const char *reason) {
-  JsonDocument resp;
-  resp["cmd"] = cmd;
-  resp["queued"] = doc["queued"].as<int>() + 1;
-  resp["status"] = "error";
-  resp["error_code"] = errorCode;
-  resp["reason"] = reason;
-  FrameLayer::getInstance().sendResponse(resp);
-}
-
-static uint16_t serializeConfigToStaging() {
-  JsonDocument doc;
-  JsonObject map = doc["map"].to<JsonObject>();
-  map["socd"]     = s_config.socd_mode;
-  map["four_way"] = s_config.four_way_mode;
-  map["dpad"]     = s_config.dpad_mode;
-  map["inv_x"]    = s_config.inv_x;
-  map["inv_y"]    = s_config.inv_y;
-  map["inv_rx"]   = s_config.inv_rx;
-  map["inv_ry"]   = s_config.inv_ry;
-  map["swap"]     = s_config.swap_sticks;
-
-  JsonArray btnArr = map["btn_map"].to<JsonArray>();
-  for (uint8_t i = 0; i < 32; i++) {
-    btnArr.add(s_config.btn_map[i]);
-  }
-
-  JsonObject stick = doc["stick"].to<JsonObject>();
-  stick["lx_dz"]   = s_config.lx_dz;
-  stick["ly_dz"]   = s_config.ly_dz;
-  stick["rx_dz"]   = s_config.rx_dz;
-  stick["ry_dz"]   = s_config.ry_dz;
-  stick["lx_sens"] = s_config.lx_sens;
-  stick["ly_sens"] = s_config.ly_sens;
-  stick["rx_sens"] = s_config.rx_sens;
-  stick["ry_sens"] = s_config.ry_sens;
-  stick["curve"]   = s_config.curve;
-  stick["ema"]     = s_config.ema;
-
-  JsonObject trig = doc["trig"].to<JsonObject>();
-  trig["lt_dz"] = s_config.lt_dz;
-  trig["rt_dz"] = s_config.rt_dz;
-
-  JsonObject usb = doc["usb"].to<JsonObject>();
-  usb["poll"] = s_config.poll_rate;
-
-  JsonObject led = doc["led"].to<JsonObject>();
-  led["bri"]  = s_config.led_brightness;
-  led["mode"] = s_config.led_mode;
-  led["hue"]  = s_config.led_hue;
-  led["sat"]  = s_config.led_saturation;
-  led["spd"]  = s_config.led_speed;
-
-  JsonObject sys = doc["sys"].to<JsonObject>();
-  sys["log"]      = s_config.log_level;
-  sys["deb_samp"] = s_config.debounce_samples;
-  sys["deb_thr"]  = s_config.debounce_threshold;
-
-  JsonObject cal = doc["cal"].to<JsonObject>();
-  cal["lx_c"] = s_config.cal_lx;
-  cal["ly_c"] = s_config.cal_ly;
-  cal["rx_c"] = s_config.cal_rx;
-  cal["ry_c"] = s_config.cal_ry;
-
-  return static_cast<uint16_t>(
-      serializeJson(doc, reinterpret_cast<char *>(s_staging), PROFILE_JSON_MAX));
+  int q = json.getInt("queued");
+  Json resp;
+  resp.beginWrite(s_profRespBuf, sizeof(s_profRespBuf));
+  resp.printf("{cmd:%Q,queued:%d,status:%Q,error_code:%d,reason:%Q}",
+              cmd, q + 1, "error", errorCode, reason);
+  uint16_t len = resp.end();
+  FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
 // ── findProfileAddress ──
@@ -135,7 +79,7 @@ static bool findProfileAddress(uint16_t profileId, uint32_t &outAddr,
                                uint16_t &outLen) {
   if (profileId == 0) {
     outAddr = PROFILE0_ADDR;
-    auto &flash = FlashW25qxx::getInstance();
+    auto &flash = Drivers::Device::FlashW25qxx::getInstance();
     flash.read(PROFILE0_ADDR, s_staging, PROFILE_JSON_MAX);
     uint16_t len = 0;
     for (uint16_t i = 0; i < PROFILE_JSON_MAX; i++) {
@@ -146,7 +90,7 @@ static bool findProfileAddress(uint16_t profileId, uint32_t &outAddr,
     return (len > 0);
   }
 
-  auto &flash = FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
   uint16_t bestSeq = 0;
   uint32_t addr = 0;
 
@@ -188,97 +132,100 @@ static bool findProfileAddress(uint16_t profileId, uint32_t &outAddr,
 // vs createProfile (id=1-15).
 
 static void onStagingDone(const uint8_t *buf, uint16_t len) {
-  JsonDocument resp;
-  resp["cmd"] = "profile.start";
-  resp["queued"] = 0;
-
   const char *json = reinterpret_cast<const char *>(buf);
+
+  Json resp;
+  resp.beginWrite(s_profRespBuf, sizeof(s_profRespBuf));
 
   if (s_pendingProfileId == 0) {
     if (!ProfileStore::getInstance().writeFactoryProfile(json, len)) {
-      resp["status"] = "error";
-      resp["reason"] = "writeFactoryProfile failed";
-      FrameLayer::getInstance().sendResponse(resp);
+      resp.printf("{cmd:%Q,queued:%d,status:%Q,reason:%Q}",
+                  "profile.start", 0, "error", "writeFactoryProfile failed");
+      uint16_t rlen = resp.end();
+      FrameLayer::getInstance().sendResponse(resp.c_str(), rlen);
       LOG_ERROR("ProfileCmdHandler: writeFactoryProfile failed");
       return;
     }
-    resp["status"] = "ok";
-    resp["profile_id"] = 0;
+    resp.printf("{cmd:%Q,queued:%d,status:%Q,profile_id:%d}",
+                "profile.start", 0, "ok", 0);
   } else {
     uint16_t newId = 0;
     if (!ProfileStore::getInstance().createProfile(json, len, &newId)) {
-      resp["status"] = "error";
-      resp["reason"] = "createProfile failed";
-      FrameLayer::getInstance().sendResponse(resp);
+      resp.printf("{cmd:%Q,queued:%d,status:%Q,reason:%Q}",
+                  "profile.start", 0, "error", "createProfile failed");
+      uint16_t rlen = resp.end();
+      FrameLayer::getInstance().sendResponse(resp.c_str(), rlen);
       LOG_ERROR("ProfileCmdHandler: createProfile failed");
       return;
     }
-    resp["status"] = "ok";
-    resp["profile_id"] = newId;
+    resp.printf("{cmd:%Q,queued:%d,status:%Q,profile_id:%d}",
+                "profile.start", 0, "ok", newId);
   }
 
+  uint16_t rlen = resp.end();
   LOG_INFO("ProfileCmdHandler: profile.start done, id=%u", s_pendingProfileId);
-  FrameLayer::getInstance().sendResponse(resp);
+  FrameLayer::getInstance().sendResponse(resp.c_str(), rlen);
 }
 
 // ── profile.start ──
 
-static void handleProfileStart(const char *cmd, JsonDocument &doc) {
-  uint16_t rawLen = doc["len"] | 0;
-  if (rawLen == 0 || rawLen > 2048) {
-    sendError(cmd, doc, 1, "invalid or missing len (1-2048)");
+static void handleProfileStart(const char *cmd, const Json &json) {
+  int rawLen = json.getInt("len", 0);
+  if (rawLen <= 0 || rawLen > 2048) {
+    sendError(cmd, json, 1, "invalid or missing len (1-2048)");
     return;
   }
 
-  uint16_t profileId = doc["profileId"] | 0;
-  if (profileId > 15) {
-    sendError(cmd, doc, 1, "profileId out of range (0-15)");
+  int profileId = json.getInt("profileId", 0);
+  if (profileId < 0 || profileId > 15) {
+    sendError(cmd, json, 1, "profileId out of range (0-15)");
     return;
   }
 
-  s_pendingProfileId = profileId;
+  s_pendingProfileId = static_cast<uint16_t>(profileId);
+  int q = json.getInt("queued");
 
-  JsonDocument ack;
-  ack["cmd"] = cmd;
-  ack["queued"] = doc["queued"].as<int>() + 1;
-  ack["status"] = "ok";
-  ack["len"] = rawLen;
-  ack["profileId"] = profileId;
-  FrameLayer::getInstance().sendResponse(ack);
+  Json ack;
+  ack.beginWrite(s_profRespBuf, sizeof(s_profRespBuf));
+  ack.printf("{cmd:%Q,queued:%d,status:%Q,len:%d,profileId:%d}",
+             cmd, q + 1, "ok", rawLen, profileId);
+  uint16_t len = ack.end();
+  FrameLayer::getInstance().sendResponse(ack.c_str(), len);
 
-  FrameLayer::getInstance().startRawCapture(s_staging, rawLen, onStagingDone);
+  FrameLayer::getInstance().startRawCapture(
+      reinterpret_cast<uint8_t *>(ThetaGP::Gamepad::Profile::s_staging),
+      static_cast<uint16_t>(rawLen), onStagingDone);
 }
 
 // ── profile.get ──
 
-static void handleProfileGet(const char *cmd, JsonDocument &doc) {
-  uint16_t profileId = doc["id"] | 0xFFFF;
-  if (profileId > 15) {
-    sendError(cmd, doc, 1, "invalid or missing id (0-15)");
+static void handleProfileGet(const char *cmd, const Json &json) {
+  int profileId = json.getInt("id", -1);
+  if (profileId < 0 || profileId > 15) {
+    sendError(cmd, json, 1, "invalid or missing id (0-15)");
     return;
   }
 
   uint32_t addr = 0;
   uint16_t dataLen = 0;
-  if (!findProfileAddress(profileId, addr, dataLen) || dataLen == 0) {
-    sendError(cmd, doc, 1, "profile not found or empty");
+  if (!findProfileAddress(static_cast<uint16_t>(profileId), addr, dataLen) || dataLen == 0) {
+    sendError(cmd, json, 1, "profile not found or empty");
     return;
   }
 
-  JsonDocument hdr;
-  hdr["cmd"] = "profile.start";
-  hdr["len"] = dataLen;
+  // Send header with raw binary length
   char hdrBuf[128];
-  uint16_t hdrLen = serializeJson(hdr, hdrBuf, sizeof(hdrBuf) - 2);
-  hdrBuf[hdrLen++] = '\r';
-  hdrBuf[hdrLen++] = '\n';
-  tud_cdc_write(hdrBuf, hdrLen);
+  int n = snprintf(hdrBuf, sizeof(hdrBuf) - 2,
+                   "{\"cmd\":\"profile.start\",\"len\":%u}\r\n", dataLen);
+  tud_cdc_write(hdrBuf, static_cast<uint16_t>(n));
   tud_cdc_write_flush();
 
+  // Send raw bytes from staging
   uint16_t sent = 0;
   while (sent < dataLen) {
     uint16_t chunk = (dataLen - sent < 64) ? (dataLen - sent) : 64;
-    uint32_t written = tud_cdc_write(s_staging + sent, chunk);
+    uint32_t written = tud_cdc_write(
+        ThetaGP::Gamepad::Profile::s_staging + sent, chunk);
     sent += static_cast<uint16_t>(written);
     if (written < chunk) {
       tud_cdc_write_flush();
@@ -286,25 +233,21 @@ static void handleProfileGet(const char *cmd, JsonDocument &doc) {
   }
   tud_cdc_write_flush();
 
-  JsonDocument trailer;
-  trailer["cmd"] = "profile.end";
-  trailer["id"] = profileId;
-  FrameLayer::getInstance().sendResponse(trailer);
+  // Send trailer
+  Json trailer;
+  trailer.beginWrite(s_profRespBuf, sizeof(s_profRespBuf));
+  trailer.printf("{cmd:%Q,id:%d}", "profile.end", profileId);
+  uint16_t tlen = trailer.end();
+  FrameLayer::getInstance().sendResponse(trailer.c_str(), tlen);
 }
 
 // ── profile.list ──
 
-static void handleProfileList(const char *cmd, JsonDocument &doc) {
-  JsonDocument resp;
-  resp["cmd"] = cmd;
-  resp["queued"] = doc["queued"].as<int>() + 1;
-
+static void handleProfileList(const char *cmd, const Json &json) {
+  int q = json.getInt("queued");
   ProfileStatus status = ProfileStore::getInstance().getStatus();
-  resp["status"] = "ok";
-  resp["active"] = status.activeId;
 
-  auto &flash = FlashW25qxx::getInstance();
-  JsonArray profiles = resp["profiles"].to<JsonArray>();
+  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
 
   uint32_t addrMap[16] = {0};
   uint16_t seqMap[16] = {0};
@@ -324,30 +267,47 @@ static void handleProfileList(const char *cmd, JsonDocument &doc) {
     }
   }
 
+  // Build a comma-separated list of profiles
+  char profilesBuf[512];
+  int pos = 0;
+  pos += snprintf(profilesBuf + pos, sizeof(profilesBuf) - static_cast<size_t>(pos),
+                  "[");
+  bool first = true;
   for (uint16_t id = 0; id <= 15; id++) {
     if (id == 0 || addrMap[id] != 0) {
-      JsonObject p = profiles.add<JsonObject>();
-      p["id"] = id;
-      p["active"] = (id == status.activeId);
+      if (!first) {
+        pos += snprintf(profilesBuf + pos, sizeof(profilesBuf) - static_cast<size_t>(pos),
+                        ",");
+      }
+      pos += snprintf(profilesBuf + pos, sizeof(profilesBuf) - static_cast<size_t>(pos),
+                      "{id:%d,active:%B}", id, (id == status.activeId));
+      first = false;
     }
   }
+  snprintf(profilesBuf + pos, sizeof(profilesBuf) - static_cast<size_t>(pos), "]");
 
-  FrameLayer::getInstance().sendResponse(resp);
+  Json resp;
+  resp.beginWrite(s_profRespBuf, sizeof(s_profRespBuf));
+  resp.printf("{cmd:%Q,queued:%d,status:%Q,active:%d,profiles:%s}",
+              cmd, q + 1, "ok", status.activeId, profilesBuf);
+  uint16_t len = resp.end();
+  FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
 // ── profile.create ──
 
-static void handleProfileCreate(const char *cmd, JsonDocument &doc) {
-  const char *dataHex = doc["data_hex"] | "";
+static void handleProfileCreate(const char *cmd, const Json &json) {
+  int dataHexLen = 0;
+  const char *dataHex = json.getStr("data_hex", &dataHexLen);
 
-  if (strlen(dataHex) == 0) {
-    sendError(cmd, doc, 1, "data_hex field required");
+  if (!dataHex || dataHexLen == 0) {
+    sendError(cmd, json, 1, "data_hex field required");
     return;
   }
 
-  uint16_t len = hexDecode(dataHex, s_staging, PROFILE_JSON_MAX);
+  uint16_t len = hexDecode(dataHex, s_staging, dataHexLen, PROFILE_JSON_MAX);
   if (len == 0) {
-    sendError(cmd, doc, 1, "no data decoded from data_hex");
+    sendError(cmd, json, 1, "no data decoded from data_hex");
     return;
   }
 
@@ -358,183 +318,168 @@ static void handleProfileCreate(const char *cmd, JsonDocument &doc) {
   uint16_t newId = 0;
   if (!ProfileStore::getInstance().createProfile(
           reinterpret_cast<const char *>(s_staging), len, &newId)) {
-    sendError(cmd, doc, 1, "createProfile failed");
+    sendError(cmd, json, 1, "createProfile failed");
     return;
   }
 
-  JsonDocument resp;
-  resp["cmd"] = cmd;
-  resp["queued"] = doc["queued"].as<int>() + 1;
-  resp["status"] = "ok";
-  resp["profile_id"] = newId;
-  resp["len"] = len;
-  FrameLayer::getInstance().sendResponse(resp);
+  int q = json.getInt("queued");
+  Json resp;
+  resp.beginWrite(s_profRespBuf, sizeof(s_profRespBuf));
+  resp.printf("{cmd:%Q,queued:%d,status:%Q,profile_id:%d,len:%d}",
+              cmd, q + 1, "ok", newId, len);
+  uint16_t rlen = resp.end();
+  FrameLayer::getInstance().sendResponse(resp.c_str(), rlen);
 }
 
 // ── profile.delete ──
 
-static void handleProfileDelete(const char *cmd, JsonDocument &doc) {
-  uint16_t profileId = doc["id"] | 0xFFFF;
-  if (profileId == 0 || profileId > 15) {
-    sendError(cmd, doc, 1, "invalid id (1-15), cannot delete Profile0");
+static void handleProfileDelete(const char *cmd, const Json &json) {
+  int profileId = json.getInt("id", -1);
+  if (profileId <= 0 || profileId > 15) {
+    sendError(cmd, json, 1, "invalid id (1-15), cannot delete Profile0");
     return;
   }
 
-  if (!ProfileStore::getInstance().deleteProfile(profileId)) {
-    sendError(cmd, doc, 1, "deleteProfile failed (profile may not exist)");
+  if (!ProfileStore::getInstance().deleteProfile(static_cast<uint16_t>(profileId))) {
+    sendError(cmd, json, 1, "deleteProfile failed (profile may not exist)");
     return;
   }
 
-  JsonDocument resp;
-  resp["cmd"] = cmd;
-  resp["queued"] = doc["queued"].as<int>() + 1;
-  resp["status"] = "ok";
-  resp["id"] = profileId;
-  FrameLayer::getInstance().sendResponse(resp);
+  int q = json.getInt("queued");
+  Json resp;
+  resp.beginWrite(s_profRespBuf, sizeof(s_profRespBuf));
+  resp.printf("{cmd:%Q,queued:%d,status:%Q,id:%d}",
+              cmd, q + 1, "ok", profileId);
+  uint16_t len = resp.end();
+  FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
 // ── profile.select ──
 
-static void handleProfileSelect(const char *cmd, JsonDocument &doc) {
-  uint16_t profileId = doc["id"] | 0xFFFF;
-  if (profileId > 15) {
-    sendError(cmd, doc, 1, "invalid or missing id (0-15)");
+static void handleProfileSelect(const char *cmd, const Json &json) {
+  int profileId = json.getInt("id", -1);
+  if (profileId < 0 || profileId > 15) {
+    sendError(cmd, json, 1, "invalid or missing id (0-15)");
     return;
   }
 
-  if (!ProfileStore::getInstance().selectProfile(profileId)) {
-    sendError(cmd, doc, 1, "selectProfile failed");
+  if (!ProfileStore::getInstance().selectProfile(static_cast<uint16_t>(profileId))) {
+    sendError(cmd, json, 1, "selectProfile failed");
     return;
   }
 
   uint16_t dataLen = 0;
   ProfileStore::getInstance().loadActive(nullptr, &dataLen);
 
-  JsonDocument resp;
-  resp["cmd"] = cmd;
-  resp["queued"] = doc["queued"].as<int>() + 1;
-  resp["status"] = "ok";
-  resp["id"] = profileId;
-  FrameLayer::getInstance().sendResponse(resp);
+  int q = json.getInt("queued");
+  Json resp;
+  resp.beginWrite(s_profRespBuf, sizeof(s_profRespBuf));
+  resp.printf("{cmd:%Q,queued:%d,status:%Q,id:%d}",
+              cmd, q + 1, "ok", profileId);
+  uint16_t len = resp.end();
+  FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
 // ── profile.status ──
 
-static void handleProfileStatus(const char *cmd, JsonDocument &doc) {
+static void handleProfileStatus(const char *cmd, const Json &json) {
   ProfileStatus status = ProfileStore::getInstance().getStatus();
+  int q = json.getInt("queued");
 
-  JsonDocument resp;
-  resp["cmd"] = cmd;
-  resp["queued"] = doc["queued"].as<int>() + 1;
-  resp["status"] = "ok";
-  resp["active_profile_id"] = status.activeId;
-  resp["profile_count"] = status.profileCount;
-  resp["next_addr"] = status.nextAddr;
-  resp["boot_meta_seq"] = status.bootMetaSeq;
-  resp["address_ring_seq"] = status.addressRingSeq;
-  resp["total_sectors"] = status.totalSectors;
-  resp["used_sectors"] = status.usedSectors;
-  resp["free_sectors"] = status.freeSectors;
-  FrameLayer::getInstance().sendResponse(resp);
+  Json resp;
+  resp.beginWrite(s_profRespBuf, sizeof(s_profRespBuf));
+  resp.printf("{cmd:%Q,queued:%d,status:%Q,active_profile_id:%d,"
+              "profile_count:%d,next_addr:%lu,boot_meta_seq:%d,"
+              "address_ring_seq:%d,total_sectors:%d,used_sectors:%d,"
+              "free_sectors:%d}",
+              cmd, q + 1, "ok",
+              status.activeId, status.profileCount,
+              (unsigned long)status.nextAddr,
+              status.bootMetaSeq, status.addressRingSeq,
+              status.totalSectors, status.usedSectors,
+              status.freeSectors);
+  uint16_t len = resp.end();
+  FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
 // ── profile.save ──
+// Delegate to ConfigManager::saveProfile()
 
-static void handleProfileSave(const char *cmd, JsonDocument &doc) {
-  ProfileStatus status = ProfileStore::getInstance().getStatus();
-  uint16_t activeId = status.activeId;
-
-  if (activeId == 0) {
-    sendError(cmd, doc, 1, "cannot save to factory Profile0 (read-only)");
+static void handleProfileSave(const char *cmd, const Json &json) {
+  if (!ConfigMgr::getInstance().saveProfile()) {
+    sendError(cmd, json, 1, "saveProfile failed");
     return;
   }
 
-  uint16_t jsonLen = serializeConfigToStaging();
-  if (jsonLen == 0) {
-    sendError(cmd, doc, 1, "serializeConfig failed");
-    return;
-  }
-
-  if (!ProfileStore::getInstance().modifyProfile(
-          activeId, reinterpret_cast<const char *>(s_staging), jsonLen)) {
-    sendError(cmd, doc, 1, "modifyProfile failed");
-    return;
-  }
-
-  JsonDocument resp;
-  resp["cmd"] = cmd;
-  resp["queued"] = doc["queued"].as<int>() + 1;
-  resp["status"] = "ok";
-  resp["id"] = activeId;
-  resp["len"] = jsonLen;
-  FrameLayer::getInstance().sendResponse(resp);
+  int q = json.getInt("queued");
+  Json resp;
+  resp.beginWrite(s_profRespBuf, sizeof(s_profRespBuf));
+  resp.printf("{cmd:%Q,queued:%d,status:%Q,id:%d}",
+              cmd, q + 1, "ok",
+              ConfigMgr::getInstance().activeProfileId());
+  uint16_t len = resp.end();
+  FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
 // ── profile.load ──
+// Delegate to ConfigManager::loadProfile()
 
-static void handleProfileLoad(const char *cmd, JsonDocument &doc) {
-  uint16_t profileId = doc["id"] | 0xFFFF;
+static void handleProfileLoad(const char *cmd, const Json &json) {
+  int profileId = json.getInt("id", -1);
 
-  ProfileStore &store = ProfileStore::getInstance();
-  ProfileStatus status = store.getStatus();
+  ProfileStatus status = ProfileStore::getInstance().getStatus();
 
   if (profileId > 15) {
     profileId = status.activeId;
   }
 
-  if (profileId != status.activeId) {
-    if (!store.selectProfile(profileId)) {
-      sendError(cmd, doc, 1, "selectProfile failed for requested id");
-      return;
-    }
-  }
-
-  uint16_t dataLen = 0;
-  if (!store.loadActive(nullptr, &dataLen)) {
-    sendError(cmd, doc, 1, "loadActive failed");
+  if (!ConfigMgr::getInstance().loadProfile(static_cast<uint16_t>(profileId))) {
+    sendError(cmd, json, 1, "loadProfile failed");
     return;
   }
 
-  JsonDocument resp;
-  resp["cmd"] = cmd;
-  resp["queued"] = doc["queued"].as<int>() + 1;
-  resp["status"] = "ok";
-  resp["id"] = profileId;
-  resp["len"] = dataLen;
-  FrameLayer::getInstance().sendResponse(resp);
+  int q = json.getInt("queued");
+  Json resp;
+  resp.beginWrite(s_profRespBuf, sizeof(s_profRespBuf));
+  resp.printf("{cmd:%Q,queued:%d,status:%Q,id:%d}",
+              cmd, q + 1, "ok", profileId);
+  uint16_t len = resp.end();
+  FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
 // ── Domain Dispatch ──
 
-void ProfileCmdHandler::handleProfile(const char *cmd, JsonDocument &doc) {
+void ProfileCmdHandler::handleProfile(const char *cmd, const Json &json) {
   LOG_DEBUG("ProfileCmdHandler: cmd='%s'", cmd);
 
   if (strcmp(cmd, "profile.start") == 0) {
-    handleProfileStart(cmd, doc);
+    handleProfileStart(cmd, json);
   } else if (strcmp(cmd, "profile.get") == 0) {
-    handleProfileGet(cmd, doc);
+    handleProfileGet(cmd, json);
   } else if (strcmp(cmd, "profile.list") == 0) {
-    handleProfileList(cmd, doc);
+    handleProfileList(cmd, json);
   } else if (strcmp(cmd, "profile.create") == 0) {
-    handleProfileCreate(cmd, doc);
+    handleProfileCreate(cmd, json);
   } else if (strcmp(cmd, "profile.delete") == 0) {
-    handleProfileDelete(cmd, doc);
+    handleProfileDelete(cmd, json);
   } else if (strcmp(cmd, "profile.select") == 0) {
-    handleProfileSelect(cmd, doc);
+    handleProfileSelect(cmd, json);
   } else if (strcmp(cmd, "profile.status") == 0) {
-    handleProfileStatus(cmd, doc);
+    handleProfileStatus(cmd, json);
   } else if (strcmp(cmd, "profile.save") == 0) {
-    handleProfileSave(cmd, doc);
+    handleProfileSave(cmd, json);
   } else if (strcmp(cmd, "profile.load") == 0) {
-    handleProfileLoad(cmd, doc);
+    handleProfileLoad(cmd, json);
   } else {
-    JsonDocument resp;
-    resp["cmd"] = cmd;
-    resp["queued"] = doc["queued"].as<int>() + 1;
-    resp["status"] = "error";
-    resp["error_code"] = static_cast<int>(ThetaGP::Result::Unsupported);
-    resp["reason"] = "unknown profile command";
-    FrameLayer::getInstance().sendResponse(resp);
+    int q = json.getInt("queued");
+    Json resp;
+    resp.beginWrite(s_profRespBuf, sizeof(s_profRespBuf));
+    resp.printf("{cmd:%Q,queued:%d,status:%Q,error_code:%d,reason:%Q}",
+                cmd, q + 1, "error",
+                static_cast<int>(ThetaGP::Result::Unsupported),
+                "unknown profile command");
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
   }
 }
 

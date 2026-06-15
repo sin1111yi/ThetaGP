@@ -38,6 +38,8 @@ namespace ThetaGP::Test {
 
 #ifdef THETAGP_ENABLE_TEST_API
 
+static COMMON_ZERO_INIT char s_testRespBuf[4096];
+
 TestCmdHandler &TestCmdHandler::getInstance() {
     static TestCmdHandler instance;
     return instance;
@@ -47,103 +49,151 @@ TestCmdHandler &TestCmdHandler::getInstance() {
 // Handler functions (CommandHandler signature)
 // ---------------------------------------------------------------------------
 
-static void handleInjectGamepadRawInput(const char *cmd, JsonDocument &doc) {
+static void handleInjectGamepadRawInput(const char *cmd, const Json &json) {
+    // Build GamepadRawInput from json fields
     Gamepad::GamepadRawInput state;
-    Proto::deserializeGamepadRawInput(doc, state);
+    state.buttons = static_cast<uint32_t>(json.getInt("buttons", 0));
+    state.dpad = static_cast<uint8_t>(json.getInt("dpad", 0));
+    state.dpadOriginal = static_cast<uint8_t>(json.getInt("dpad_original", 0));
+    state.lx = static_cast<uint16_t>(json.getInt("lx", GAMEPAD_JOYSTICK_MID));
+    state.ly = static_cast<uint16_t>(json.getInt("ly", GAMEPAD_JOYSTICK_MID));
+    state.rx = static_cast<uint16_t>(json.getInt("rx", GAMEPAD_JOYSTICK_MID));
+    state.ry = static_cast<uint16_t>(json.getInt("ry", GAMEPAD_JOYSTICK_MID));
+    state.lt = static_cast<uint8_t>(json.getInt("lt", 0));
+    state.rt = static_cast<uint8_t>(json.getInt("rt", 0));
+
     auto &inj = TestInjector::getInstance();
     bool ok = inj.injectGamepadRawInput(state);
-    JsonDocument resp;
-    resp["status"] = ok ? "ok" : "error";
-    resp["cmd"] = cmd;
-    int queued = doc["queued"].as<int>();
-    resp["queued"] = queued + 1;
+    int queued = json.getInt("queued");
+
+    Json resp;
+    resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
     if (ok) {
-        resp["queued"] = inj.gamepadRawInputQueueCount();
+        resp.printf("{status:%Q,cmd:%Q,queued:%d}",
+                    "ok", cmd, inj.gamepadRawInputQueueCount());
     } else {
-        resp["error_code"] = static_cast<uint8_t>(Proto::ErrorCode::ERR_QUEUE_FULL);
-        resp["reason"] = "Inject queue is full";
+        resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,reason:%Q}",
+                    "error", cmd, queued + 1,
+                    static_cast<int>(Proto::ErrorCode::ERR_QUEUE_FULL),
+                    "Inject queue is full");
     }
-    FrameLayer::getInstance().sendResponse(resp);
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
-static void handleInjectHIDReport(const char *cmd, JsonDocument &doc) {
+static void handleInjectHIDReport(const char *cmd, const Json &json) {
     HIDReport report{};
-    Proto::deserializeHIDReport(doc, report);
+    report.buttons = static_cast<uint32_t>(json.getInt("buttons", 0));
+    report.direction = static_cast<uint8_t>(json.getInt("dpad", 8));
+    report.l_x_axis = static_cast<uint8_t>(json.getInt("l_x_axis", 128));
+    report.l_y_axis = static_cast<uint8_t>(json.getInt("l_y_axis", 128));
+    report.r_x_axis = static_cast<uint8_t>(json.getInt("r_x_axis", 128));
+    report.r_y_axis = static_cast<uint8_t>(json.getInt("r_y_axis", 128));
+
     auto &inj = TestInjector::getInstance();
     bool ok = inj.injectHIDReport(report);
-    JsonDocument resp;
-    resp["status"] = ok ? "ok" : "error";
-    resp["cmd"] = cmd;
-    int queued = doc["queued"].as<int>();
-    resp["queued"] = queued + 1;
+    int queued = json.getInt("queued");
+
+    Json resp;
+    resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
     if (ok) {
-        resp["queued"] = inj.hidInjectQueueCount();
+        resp.printf("{status:%Q,cmd:%Q,queued:%d}",
+                    "ok", cmd, inj.hidInjectQueueCount());
     } else {
-        resp["error_code"] = static_cast<uint8_t>(Proto::ErrorCode::ERR_QUEUE_FULL);
-        resp["reason"] = "Inject queue is full";
+        resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,reason:%Q}",
+                    "error", cmd, queued + 1,
+                    static_cast<int>(Proto::ErrorCode::ERR_QUEUE_FULL),
+                    "Inject queue is full");
     }
-    FrameLayer::getInstance().sendResponse(resp);
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
-static void handleGetGamepadRawInput(const char *cmd, JsonDocument &doc) {
+static void handleGetGamepadRawInput(const char *cmd, const Json &json) {
     auto &inj = TestInjector::getInstance();
     const auto &state = inj.getCurrentGamepadRawInput();
-    JsonDocument resp;
-    auto obj = resp.to<JsonObject>();
-    Proto::serializeGamepadRawInput(obj, state);
-    obj["status"] = "ok";
-    obj["cmd"] = cmd;
-    int queued = doc["queued"].as<int>();
-    obj["queued"] = queued + 1;
-    FrameLayer::getInstance().sendResponse(resp);
+    int queued = json.getInt("queued");
+
+    Json resp;
+    resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+    resp.printf("{status:%Q,cmd:%Q,queued:%d,buttons:%lu,dpad:%d,"
+                "lx:%d,ly:%d,rx:%d,ry:%d,lt:%d,rt:%d}",
+                "ok", cmd, queued + 1,
+                (unsigned long)state.buttons, state.dpad,
+                state.lx, state.ly, state.rx, state.ry,
+                state.lt, state.rt);
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
-static void handleGetHIDReport(const char *cmd, JsonDocument &doc) {
+static void handleGetHIDReport(const char *cmd, const Json &json) {
     auto &inj = TestInjector::getInstance();
     const auto &report = inj.getCurrentHIDReport();
-    JsonDocument resp;
-    auto obj = resp.to<JsonObject>();
-    Proto::serializeHIDReport(obj, report);
-    obj["status"] = "ok";
-    obj["cmd"] = cmd;
-    int queued = doc["queued"].as<int>();
-    obj["queued"] = queued + 1;
-    FrameLayer::getInstance().sendResponse(resp);
+    int queued = json.getInt("queued");
+
+    Json resp;
+    resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+    resp.printf("{status:%Q,cmd:%Q,queued:%d,buttons:%lu,dpad:%d,"
+                "l_x_axis:%d,l_y_axis:%d,r_x_axis:%d,r_y_axis:%d}",
+                "ok", cmd, queued + 1,
+                (unsigned long)report.buttons, report.direction,
+                report.l_x_axis, report.l_y_axis,
+                report.r_x_axis, report.r_y_axis);
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
-static void handleSetOverride(const char *cmd, JsonDocument &doc) {
-    const char *point = doc["point"] | "";
-    bool enabled = doc["enabled"] | false;
+static void handleSetOverride(const char *cmd, const Json &json) {
+    char pointBuf[32];
+    const char *point = json.getStrCopy("point", pointBuf, sizeof(pointBuf));
+    bool enabled = json.getBool("enabled", false);
     auto &inj = TestInjector::getInstance();
+    int queued = json.getInt("queued");
+
+    if (!point) {
+        Json resp;
+        resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+        resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,reason:%Q}",
+                    "error", cmd, queued + 1,
+                    static_cast<int>(Proto::ErrorCode::ERR_INTERNAL),
+                    "Missing point field");
+        uint16_t len = resp.end();
+        FrameLayer::getInstance().sendResponse(resp.c_str(), len);
+        return;
+    }
+
     if (strcmp(point, "gamepad_state") == 0) {
         inj.setOverrideGamepadRawInput(enabled);
     } else if (strcmp(point, "hid_report") == 0) {
         inj.setOverrideHIDReport(enabled);
     } else {
-        JsonDocument resp;
-        resp["status"] = "error";
-        resp["cmd"] = cmd;
-        int queued = doc["queued"].as<int>();
-        resp["queued"] = queued + 1;
-        resp["error_code"] = static_cast<uint8_t>(Proto::ErrorCode::ERR_INTERNAL);
-        resp["reason"] = "Invalid point value";
-        FrameLayer::getInstance().sendResponse(resp);
+        Json resp;
+        resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+        resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,reason:%Q}",
+                    "error", cmd, queued + 1,
+                    static_cast<int>(Proto::ErrorCode::ERR_INTERNAL),
+                    "Invalid point value");
+        uint16_t len = resp.end();
+        FrameLayer::getInstance().sendResponse(resp.c_str(), len);
         return;
     }
-    JsonDocument resp;
-    resp["status"] = "ok";
-    resp["cmd"] = cmd;
-    int queued = doc["queued"].as<int>();
-    resp["queued"] = queued + 1;
-    resp["point"] = point;
-    resp["enabled"] = enabled;
-    FrameLayer::getInstance().sendResponse(resp);
+
+    Json resp;
+    resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+    resp.printf("{status:%Q,cmd:%Q,queued:%d,point:%Q,enabled:%B}",
+                "ok", cmd, queued + 1, point, enabled);
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
-static void handleClearInject(const char *cmd, JsonDocument &doc) {
-    const char *point = doc["point"] | "all";
+static void handleClearInject(const char *cmd, const Json &json) {
+    char pointBuf[32];
+    const char *point = json.getStrCopy("point", pointBuf, sizeof(pointBuf));
+    if (!point) point = "all";
     auto &inj = TestInjector::getInstance();
     uint8_t cleared = 0;
+    int queued = json.getInt("queued");
+
     if (strcmp(point, "gamepad_state") == 0 || strcmp(point, "all") == 0) {
         cleared += inj.gamepadRawInputQueueCount();
         inj.clearGamepadRawInputQueue();
@@ -152,177 +202,203 @@ static void handleClearInject(const char *cmd, JsonDocument &doc) {
         cleared += inj.hidInjectQueueCount();
         inj.clearHIDInjectQueue();
     }
-    JsonDocument resp;
-    resp["status"] = "ok";
-    resp["cmd"] = cmd;
-    int queued = doc["queued"].as<int>();
-    resp["queued"] = queued + 1;
-    resp["cleared"] = cleared;
-    FrameLayer::getInstance().sendResponse(resp);
+
+    Json resp;
+    resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+    resp.printf("{status:%Q,cmd:%Q,queued:%d,cleared:%d}",
+                "ok", cmd, queued + 1, cleared);
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
-static void handleSetMode(const char *cmd, JsonDocument &doc) {
-    uint8_t modeVal = doc["mode"] | 0;
+static void handleSetMode(const char *cmd, const Json &json) {
+    uint8_t modeVal = static_cast<uint8_t>(json.getInt("mode", 0));
     auto &inj = TestInjector::getInstance();
+    int queued = json.getInt("queued");
+
     if (modeVal > 2) {
-        JsonDocument resp;
-        resp["status"] = "error";
-        resp["cmd"] = cmd;
-        int queued = doc["queued"].as<int>();
-        resp["queued"] = queued + 1;
-        resp["error_code"] = static_cast<uint8_t>(Proto::ErrorCode::ERR_INTERNAL);
-        resp["reason"] = "Invalid mode value";
-        FrameLayer::getInstance().sendResponse(resp);
+        Json resp;
+        resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+        resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,reason:%Q}",
+                    "error", cmd, queued + 1,
+                    static_cast<int>(Proto::ErrorCode::ERR_INTERNAL),
+                    "Invalid mode value");
+        uint16_t len = resp.end();
+        FrameLayer::getInstance().sendResponse(resp.c_str(), len);
         return;
     }
     inj.setMode(static_cast<TestInjector::TestMode>(modeVal));
-    JsonDocument resp;
-    resp["status"] = "ok";
-    resp["cmd"] = cmd;
-    int queued = doc["queued"].as<int>();
-    resp["queued"] = queued + 1;
-    resp["mode"] = modeVal;
-    resp["mode_name"] = TestInjector::modeName(inj.getMode());
-    FrameLayer::getInstance().sendResponse(resp);
+
+    Json resp;
+    resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+    resp.printf("{status:%Q,cmd:%Q,queued:%d,mode:%d,mode_name:%Q}",
+                "ok", cmd, queued + 1, modeVal,
+                TestInjector::modeName(inj.getMode()));
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
-static void handleGetMode(const char *cmd, JsonDocument &doc) {
+static void handleGetMode(const char *cmd, const Json &json) {
     auto &inj = TestInjector::getInstance();
-    JsonDocument resp;
-    resp["status"] = "ok";
-    resp["cmd"] = cmd;
-    int queued = doc["queued"].as<int>();
-    resp["queued"] = queued + 1;
-    resp["mode"] = static_cast<uint8_t>(inj.getMode());
-    resp["mode_name"] = TestInjector::modeName(inj.getMode());
-    FrameLayer::getInstance().sendResponse(resp);
+    int queued = json.getInt("queued");
+
+    Json resp;
+    resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+    resp.printf("{status:%Q,cmd:%Q,queued:%d,mode:%d,mode_name:%Q}",
+                "ok", cmd, queued + 1,
+                static_cast<int>(inj.getMode()),
+                TestInjector::modeName(inj.getMode()));
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
-static void handleGetHistory(const char *cmd, JsonDocument &doc) {
-    const char *historyType = doc["type"] | "gamepad_state";
-    uint8_t count = doc["count"] | 10;
-    if (count > 64) {
-        count = 64;
-    }
+static void handleGetHistory(const char *cmd, const Json &json) {
+    char typeBuf[32];
+    const char *historyType = json.getStrCopy("type", typeBuf, sizeof(typeBuf));
+    if (!historyType) historyType = "gamepad_state";
+    uint8_t count = static_cast<uint8_t>(json.getInt("count", 10));
+    if (count > 64) count = 64;
     auto &inj = TestInjector::getInstance();
-    JsonDocument resp;
-    resp["status"] = "ok";
-    resp["cmd"] = cmd;
-    int queued = doc["queued"].as<int>();
-    resp["queued"] = queued + 1;
-    resp["type"] = historyType;
+    int queued = json.getInt("queued");
+
     if (strcmp(historyType, "gamepad_state") == 0) {
-        // Read from TestInjector's internal history and convert to protocol format
         TestInjector::GamepadRawInputEntry rawEntries[64];
         uint8_t actual = inj.readGamepadHistory(rawEntries, count);
-        resp["count"] = actual;
-        JsonArray entries = resp["entries"].to<JsonArray>();
+
+        // Build JSON output
+        Json resp;
+        resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+        resp.printf("{status:%Q,cmd:%Q,queued:%d,type:%Q,count:%d,entries:[",
+                    "ok", cmd, queued + 1, historyType, actual);
         for (uint8_t i = 0; i < actual; ++i) {
-            ThetaGP::Test::GamepadRawInputEntry protoEntry;
-            protoEntry.index = i;
-            protoEntry.timestampUs = rawEntries[i].timestampUs;
-            protoEntry.buttons = rawEntries[i].state.buttons;
-            protoEntry.dpad = rawEntries[i].state.dpad;
-            protoEntry.lx = rawEntries[i].state.lx;
-            protoEntry.ly = rawEntries[i].state.ly;
-            protoEntry.rx = rawEntries[i].state.rx;
-            protoEntry.ry = rawEntries[i].state.ry;
-            protoEntry.lt = rawEntries[i].state.lt;
-            protoEntry.rt = rawEntries[i].state.rt;
-            JsonObject entryObj = entries.add<JsonObject>();
-            Proto::serializeGamepadRawInputEntry(entryObj, protoEntry);
+            if (i > 0) resp.printf(",");
+            resp.printf("{buttons:%lu,dpad:%d,"
+                        "lx:%d,ly:%d,rx:%d,ry:%d,lt:%d,rt:%d}",
+                        (unsigned long)rawEntries[i].state.buttons,
+                        rawEntries[i].state.dpad,
+                        rawEntries[i].state.lx, rawEntries[i].state.ly,
+                        rawEntries[i].state.rx, rawEntries[i].state.ry,
+                        rawEntries[i].state.lt, rawEntries[i].state.rt);
         }
+        resp.printf("]}");
+        uint16_t len = resp.end();
+        FrameLayer::getInstance().sendResponse(resp.c_str(), len);
+
     } else if (strcmp(historyType, "hid_report") == 0) {
         TestInjector::HIDReportEntry rawEntries[64];
         uint8_t actual = inj.readHIDHistory(rawEntries, count);
-        resp["count"] = actual;
-        JsonArray entries = resp["entries"].to<JsonArray>();
+
+        Json resp;
+        resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+        resp.printf("{status:%Q,cmd:%Q,queued:%d,type:%Q,count:%d,entries:[",
+                    "ok", cmd, queued + 1, historyType, actual);
         for (uint8_t i = 0; i < actual; ++i) {
-            ThetaGP::Test::HIDReportEntry protoEntry;
-            protoEntry.index = i;
-            protoEntry.timestampUs = rawEntries[i].timestampUs;
-            protoEntry.buttons = rawEntries[i].report.buttons;
-            protoEntry.direction = rawEntries[i].report.direction;
-            protoEntry.l_x_axis = rawEntries[i].report.l_x_axis;
-            protoEntry.l_y_axis = rawEntries[i].report.l_y_axis;
-            protoEntry.r_x_axis = rawEntries[i].report.r_x_axis;
-            protoEntry.r_y_axis = rawEntries[i].report.r_y_axis;
-            JsonObject entryObj = entries.add<JsonObject>();
-            Proto::serializeHIDReportEntry(entryObj, protoEntry);
+            if (i > 0) resp.printf(",");
+            resp.printf("{buttons:%lu,dpad:%d,"
+                        "l_x_axis:%d,l_y_axis:%d,r_x_axis:%d,r_y_axis:%d}",
+                        (unsigned long)rawEntries[i].report.buttons,
+                        rawEntries[i].report.direction,
+                        rawEntries[i].report.l_x_axis,
+                        rawEntries[i].report.l_y_axis,
+                        rawEntries[i].report.r_x_axis,
+                        rawEntries[i].report.r_y_axis);
         }
+        resp.printf("]}");
+        uint16_t len = resp.end();
+        FrameLayer::getInstance().sendResponse(resp.c_str(), len);
+
     } else {
-        resp["status"] = "error";
-        resp["error_code"] = static_cast<uint8_t>(Proto::ErrorCode::ERR_INTERNAL);
-        resp["reason"] = "Invalid history type";
+        Json resp;
+        resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+        resp.printf("{status:%Q,cmd:%Q,queued:%d,type:%Q,error_code:%d,"
+                    "reason:%Q}",
+                    "error", cmd, queued + 1, historyType,
+                    static_cast<int>(Proto::ErrorCode::ERR_INTERNAL),
+                    "Invalid history type");
+        uint16_t len = resp.end();
+        FrameLayer::getInstance().sendResponse(resp.c_str(), len);
     }
-    FrameLayer::getInstance().sendResponse(resp);
 }
 
-static void handleClearHistory(const char *cmd, JsonDocument &doc) {
-    const char *historyType = doc["type"] | "gamepad_state";
+static void handleClearHistory(const char *cmd, const Json &json) {
+    char typeBuf[32];
+    const char *historyType = json.getStrCopy("type", typeBuf, sizeof(typeBuf));
+    if (!historyType) historyType = "gamepad_state";
     auto &inj = TestInjector::getInstance();
+    int queued = json.getInt("queued");
+
     if (strcmp(historyType, "gamepad_state") == 0 || strcmp(historyType, "all") == 0) {
         inj.clearGamepadHistory();
     }
     if (strcmp(historyType, "hid_report") == 0 || strcmp(historyType, "all") == 0) {
         inj.clearHIDHistory();
     }
-    JsonDocument resp;
-    resp["status"] = "ok";
-    resp["cmd"] = cmd;
-    int queued = doc["queued"].as<int>();
-    resp["queued"] = queued + 1;
-    resp["type"] = historyType;
-    FrameLayer::getInstance().sendResponse(resp);
+
+    Json resp;
+    resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+    resp.printf("{status:%Q,cmd:%Q,queued:%d,type:%Q}",
+                "ok", cmd, queued + 1, historyType);
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
-static void handleGetStatus(const char *cmd, JsonDocument &doc) {
+static void handleGetStatus(const char *cmd, const Json &json) {
     auto &inj = TestInjector::getInstance();
-    ThetaGP::Test::TestStatus status;
-    status.mode = static_cast<uint8_t>(inj.getMode());
-    status.mode_name = TestInjector::modeName(inj.getMode());
-    status.override_gamepad_state = inj.isOverrideGamepadRawInput();
-    status.override_hid_report = inj.isOverrideHIDReport();
-    status.gamepad_history_count = inj.getGamepadHistoryCount();
-    status.hid_history_count = inj.getHIDHistoryCount();
-    status.gamepad_inject_queued = inj.gamepadRawInputQueueCount();
-    status.hid_inject_queued = inj.hidInjectQueueCount();
-    JsonDocument resp;
-    auto obj = resp.to<JsonObject>();
-    Proto::serializeTestStatus(obj, status);
-    obj["status"] = "ok";
-    obj["cmd"] = cmd;
-    int queued = doc["queued"].as<int>();
-    obj["queued"] = queued + 1;
-    FrameLayer::getInstance().sendResponse(resp);
+    uint8_t mode = static_cast<uint8_t>(inj.getMode());
+    const char *modeName = TestInjector::modeName(inj.getMode());
+    bool overrideGp = inj.isOverrideGamepadRawInput();
+    bool overrideHid = inj.isOverrideHIDReport();
+    uint8_t gpHistCount = inj.getGamepadHistoryCount();
+    uint8_t hidHistCount = inj.getHIDHistoryCount();
+    uint8_t gpQueued = inj.gamepadRawInputQueueCount();
+    uint8_t hidQueued = inj.hidInjectQueueCount();
+    int queued = json.getInt("queued");
+
+    Json resp;
+    resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+    resp.printf("{status:%Q,cmd:%Q,queued:%d,mode:%d,mode_name:%Q,"
+                "override_gamepad_state:%B,override_hid_report:%B,"
+                "gamepad_history_count:%d,hid_history_count:%d,"
+                "gamepad_inject_queued:%d,hid_inject_queued:%d}",
+                "ok", cmd, queued + 1, mode, modeName,
+                overrideGp, overrideHid,
+                gpHistCount, hidHistCount,
+                gpQueued, hidQueued);
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
-static void handleReset(const char *cmd, JsonDocument &doc) {
+static void handleReset(const char *cmd, const Json &json) {
     auto &inj = TestInjector::getInstance();
     inj.reset();
-    JsonDocument resp;
-    resp["status"] = "ok";
-    resp["cmd"] = cmd;
-    int queued = doc["queued"].as<int>();
-    resp["queued"] = queued + 1;
-    FrameLayer::getInstance().sendResponse(resp);
+    int queued = json.getInt("queued");
+
+    Json resp;
+    resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+    resp.printf("{status:%Q,cmd:%Q,queued:%d}",
+                "ok", cmd, queued + 1);
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
 // ── Flash chip erase (for testing only) ──
 
-static void handleChipErase(const char *cmd, JsonDocument &doc) {
+static void handleChipErase(const char *cmd, const Json &json) {
     auto &flash = Drivers::Device::FlashW25qxx::getInstance();
     bool ok = flash.eraseChip();
-    JsonDocument resp;
-    resp["status"] = ok ? "ok" : "error";
-    resp["cmd"] = cmd;
-    int queued = doc["queued"].as<int>();
-    resp["queued"] = queued + 1;
-    if (!ok) {
-        resp["error_code"] = 1;
-        resp["reason"] = "eraseChip failed";
+    int queued = json.getInt("queued");
+
+    Json resp;
+    resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+    if (ok) {
+        resp.printf("{status:%Q,cmd:%Q,queued:%d}",
+                    "ok", cmd, queued + 1);
+    } else {
+        resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,reason:%Q}",
+                    "error", cmd, queued + 1, 1, "eraseChip failed");
     }
-    FrameLayer::getInstance().sendResponse(resp);
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
 // ---------------------------------------------------------------------------
@@ -347,17 +423,17 @@ void TestCmdHandler::registerHandlers() {
 // ---------------------------------------------------------------------------
 // Main dispatch — delegates to Proto-generated dispatch table
 // ---------------------------------------------------------------------------
-void TestCmdHandler::handle(const char *cmd, JsonDocument &doc) {
-    int queued = doc["queued"].as<int>();
+void TestCmdHandler::handle(const char *cmd, const Json &json) {
+    int queued = json.getInt("queued");
     LOG_DEBUG("TestCmdHandler: cmd='%s' queued=%d", cmd, queued);
 
     // Non-protocol commands handled directly
     if (strcmp(cmd, "test.chip_erase") == 0) {
-        handleChipErase(cmd, doc);
+        handleChipErase(cmd, json);
         return;
     }
 
-    Proto::dispatch(cmd, doc);
+    Proto::dispatch(cmd, json);
 }
 
 #else

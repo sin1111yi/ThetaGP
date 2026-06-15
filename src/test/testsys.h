@@ -21,7 +21,7 @@
 
 #pragma once
 
-#include <ArduinoJson.h>
+#include "utils/json/json.h"
 
 namespace ThetaGP::Test {
 
@@ -41,7 +41,7 @@ public:
     SysHandler &operator=(const SysHandler &) = delete;
 
     static SysHandler &getInstance();
-    static void handle(const char *cmd, JsonDocument &doc);
+    static void handle(const char *cmd, const Json &json);
     static void registerHandlers();
 };
 

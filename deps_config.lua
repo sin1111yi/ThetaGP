@@ -48,11 +48,11 @@ DEPENDENCIES = {
         optional = false,
     },
     {
-        name = "ArduinoJson",
+        name = "frozen",
         type = "git",
-        url = "https://github.com/bblanchon/ArduinoJson",
-        tag = "v7.4.3",
-        dest = "lib/ArduinoJson",
+        url = "https://github.com/cesanta/frozen",
+        branch = "master",
+        dest = "lib/frozen",
         optional = false,
     },
 }

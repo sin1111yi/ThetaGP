@@ -22,7 +22,7 @@
 #pragma once
 
 #include <cstdint>
-#include <ArduinoJson.h>
+#include "utils/json/json.h"
 
 namespace ThetaGP::Test {
 
@@ -49,7 +49,7 @@ public:
     static void dispatch(const char *jsonLine);
 
     /** Handler type: receives the full cmd string and the parsed document. */
-    using DomainHandler = void (*)(const char *cmd, JsonDocument &doc);
+    using DomainHandler = void (*)(const char *cmd, const Json &json);
 
     /**
      * Register a handler for a domain prefix.
@@ -67,6 +67,8 @@ private:
 
     HandlerEntry _handlers[MAX_HANDLERS];
     uint8_t _handlerCount = 0;
+    /** Scratch buffer for building response JSON before sendResponse. */
+    char _respBuf[2048];
 
     /** Internal dispatch implementation called by the static wrapper. */
     void dispatchImpl(const char *jsonLine);

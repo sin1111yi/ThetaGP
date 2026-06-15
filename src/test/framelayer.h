@@ -22,7 +22,6 @@
 #pragma once
 
 #include <cstdint>
-#include <ArduinoJson.h>
 #include "build_info.h"
 
 namespace ThetaGP::Test {
@@ -63,9 +62,9 @@ public:
     void processByte(uint8_t byte);
 
     /**
-     * Serialize a JsonDocument and send it as a CDC frame (appends \r\n).
+     * Send a raw JSON string as a CDC frame (appends \r\n).
      */
-    void sendResponse(const JsonDocument &doc);
+    void sendResponse(const char *data, uint16_t len);
 
     /** Callback type invoked when a complete frame is received. */
     using FrameCallback = void (*)(const char *jsonLine);
