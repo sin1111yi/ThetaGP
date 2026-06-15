@@ -44,6 +44,7 @@ import termios
 import time
 import select
 import json
+import fcntl
 
 PORT = "/dev/ttyACM1"
 
@@ -58,8 +59,22 @@ if _candidates:
 # Serial I/O helpers (same pattern as test_cdc.py)
 # ═══════════════════════════════════════════════════════════════════════
 
-def open_serial(port):
-    fd = os.open(port, os.O_RDWR | os.O_NOCTTY)
+def open_serial(port, timeout=5):
+    """Open serial port with timeout. Uses O_NONBLOCK initially to
+    avoid hanging forever when DCD is not asserted (STM32 CDC ACM quirk)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            fd = os.open(port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+            # Clear O_NONBLOCK on the fd after opening
+            flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+            fcntl.fcntl(fd, fcntl.F_SETFL, flags & ~os.O_NONBLOCK)
+            break
+        except BlockingIOError:
+            time.sleep(0.2)
+            continue
+    else:
+        raise TimeoutError(f"Could not open {port} within {timeout}s")
     attrs = termios.tcgetattr(fd)
     for a in range(4):
         if a == 0:
@@ -324,7 +339,20 @@ def main():
     # lua tool.lua flash only erases MCU internal flash, not the external
     # SPI flash (W25Q64). Old BootMeta/Address Ring data causes data corruption.
     print("=== Prerequisite: Erase SPI flash + reboot ===")
-    s = send(fd, "test.chip_erase")
+    req = {"cmd": "test.chip_erase", "queued": _queued}
+    line = json.dumps(req, separators=(",", ":")) + "\r\n"
+    print(f">>> {line.strip()}")
+    os.write(fd, line.encode())
+    _queued += 1
+    # chip_erase blocks for ~40s (SPI flash), use long timeout
+    r = readline(fd, 60)
+    if r:
+        try:
+            s = json.loads(r)
+        except json.JSONDecodeError:
+            s = None
+    else:
+        s = None
     if s and s.get("status") == "ok":
         print("  chip_erase OK, rebooting...")
         send(fd, "sys.reset")

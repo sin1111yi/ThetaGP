@@ -107,7 +107,7 @@ public:
 
     // ── Command queue (ISR → main loop decoupling) ──
     static constexpr uint8_t CMD_QUEUE_SIZE = 8;
-    static constexpr uint16_t CMD_QUEUE_FRAME_MAX = 256;
+    static constexpr uint16_t CMD_QUEUE_FRAME_MAX = 2048;
 
     COMMON_ZERO_INIT static char _cmdQueue[CMD_QUEUE_SIZE][CMD_QUEUE_FRAME_MAX];
     COMMON_ZERO_INIT static volatile uint8_t _cmdHead;   // ISR writes (producer)

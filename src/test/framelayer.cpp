@@ -103,7 +103,7 @@ void FrameLayer::processByte(uint8_t byte) {
         } else if (byte == '\n') {
             // Frame complete — enqueue instead of calling callback directly
             _rxBuf[_rxLen] = '\0';
-            if (_rxLen > 0) {
+            if (_rxLen > 0 && _rxLen <= CMD_QUEUE_FRAME_MAX - 1) {
                 LOG_DEBUG("FrameLayer: RX frame (%uB): %.*s",
                        _rxLen, _rxLen > 60 ? 60 : _rxLen, _rxBuf);
                 uint8_t next = (_cmdHead + 1) & (CMD_QUEUE_SIZE - 1);
@@ -113,6 +113,9 @@ void FrameLayer::processByte(uint8_t byte) {
                 } else {
                     LOG_WARN("FrameLayer: command queue full, dropping frame");
                 }
+            } else if (_rxLen > 0) {
+                LOG_WARN("FrameLayer: frame too large (%uB > %u), dropping",
+                         _rxLen, CMD_QUEUE_FRAME_MAX - 1);
             }
             _rxLen = 0;
             _rxState = RxState::IDLE;
@@ -132,7 +135,7 @@ void FrameLayer::processByte(uint8_t byte) {
         if (byte == '\n') {
             // CRLF complete — enqueue instead of calling callback directly
             _rxBuf[_rxLen] = '\0';
-            if (_rxLen > 0) {
+            if (_rxLen > 0 && _rxLen <= CMD_QUEUE_FRAME_MAX - 1) {
                 LOG_DEBUG("FrameLayer: RX frame (%uB): %.*s",
                        _rxLen, _rxLen > 60 ? 60 : _rxLen, _rxBuf);
                 uint8_t next = (_cmdHead + 1) & (CMD_QUEUE_SIZE - 1);
@@ -142,6 +145,9 @@ void FrameLayer::processByte(uint8_t byte) {
                 } else {
                     LOG_WARN("FrameLayer: command queue full, dropping frame");
                 }
+            } else if (_rxLen > 0) {
+                LOG_WARN("FrameLayer: frame too large (%uB > %u), dropping",
+                         _rxLen, CMD_QUEUE_FRAME_MAX - 1);
             }
             _rxLen = 0;
             _rxState = RxState::IDLE;
