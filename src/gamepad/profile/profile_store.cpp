@@ -62,7 +62,7 @@ static uint16_t bootMetaSlotIndex() {
       return i;
     }
   }
-  return BOOTMETA_SLOTS - 1;
+  return BOOTMETA_SLOTS;
 }
 
 static uint16_t addressRingSlotIndex() {
@@ -78,7 +78,7 @@ static uint16_t addressRingSlotIndex() {
       return i;
     }
   }
-  return ADDR_RING_SLOTS - 1;
+  return ADDR_RING_SLOTS;
 }
 
 // ── Singleton ──
@@ -104,6 +104,30 @@ void ProfileStore::seqBeforeIncrement() {
              _bootMetaSeq, _addressRingSeq);
     resetSector0();
   }
+}
+
+// ── ensureBootMetaSlot / ensureAddressRingSlot ──
+// When the corresponding ring is full, trigger Sector 0 reset (which
+// moves valid data back to slot 0), then return the fresh slot index.
+
+uint16_t ProfileStore::ensureBootMetaSlot() {
+  uint16_t slot = bootMetaSlotIndex();
+  if (slot >= BOOTMETA_SLOTS) {
+    LOG_INFO("ProfileStore: BootMeta Ring full, resetting Sector 0");
+    resetSector0();
+    slot = bootMetaSlotIndex();
+  }
+  return slot;
+}
+
+uint16_t ProfileStore::ensureAddressRingSlot() {
+  uint16_t slot = addressRingSlotIndex();
+  if (slot >= ADDR_RING_SLOTS) {
+    LOG_INFO("ProfileStore: Address Ring full, resetting Sector 0");
+    resetSector0();
+    slot = addressRingSlotIndex();
+  }
+  return slot;
 }
 
 // ── init() ──
@@ -447,7 +471,7 @@ bool ProfileStore::createProfile(const char *json, uint16_t len,
   addrEntry.seq = _addressRingSeq;
 
   uint32_t addrSlot =
-      ADDR_RING_BASE + (addressRingSlotIndex() * sizeof(AddressEntry));
+      ADDR_RING_BASE + (ensureAddressRingSlot() * sizeof(AddressEntry));
   if (!flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&addrEntry),
                    sizeof(AddressEntry))) {
     LOG_ERROR("ProfileStore: failed to write Address entry");
@@ -466,7 +490,7 @@ bool ProfileStore::createProfile(const char *json, uint16_t len,
   bootMeta.crc16 = crc16BootMeta(&bootMeta);
 
   uint32_t bootMetaSlot =
-      BOOTMETA_BASE + (bootMetaSlotIndex() * sizeof(BootMeta));
+      BOOTMETA_BASE + (ensureBootMetaSlot() * sizeof(BootMeta));
   if (!flash.write(bootMetaSlot, reinterpret_cast<const uint8_t *>(&bootMeta),
                    sizeof(BootMeta))) {
     LOG_ERROR("ProfileStore: failed to write BootMeta");
@@ -534,7 +558,7 @@ bool ProfileStore::modifyProfile(uint16_t id, const char *json, uint16_t len) {
   addrEntry.seq = _addressRingSeq;
 
   uint32_t addrSlot =
-      ADDR_RING_BASE + (addressRingSlotIndex() * sizeof(AddressEntry));
+      ADDR_RING_BASE + (ensureAddressRingSlot() * sizeof(AddressEntry));
   if (!flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&addrEntry),
                    sizeof(AddressEntry))) {
     LOG_ERROR("ProfileStore: failed to write Address entry for modify");
@@ -578,7 +602,7 @@ bool ProfileStore::deleteProfile(uint16_t id) {
   addrEntry.seq = _addressRingSeq;
 
   uint32_t addrSlot =
-      ADDR_RING_BASE + (addressRingSlotIndex() * sizeof(AddressEntry));
+      ADDR_RING_BASE + (ensureAddressRingSlot() * sizeof(AddressEntry));
   if (!flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&addrEntry),
                    sizeof(AddressEntry))) {
     LOG_ERROR("ProfileStore: failed to write deletion Address entry");
@@ -613,7 +637,7 @@ bool ProfileStore::deleteProfile(uint16_t id) {
     bootMeta.crc16 = crc16BootMeta(&bootMeta);
 
     uint32_t bootMetaSlot =
-        BOOTMETA_BASE + (bootMetaSlotIndex() * sizeof(BootMeta));
+        BOOTMETA_BASE + (ensureBootMetaSlot() * sizeof(BootMeta));
     if (!flash.write(bootMetaSlot, reinterpret_cast<const uint8_t *>(&bootMeta),
                      sizeof(BootMeta))) {
       LOG_WARN("ProfileStore: fallback BootMeta write failed (non-critical)");
@@ -656,7 +680,7 @@ bool ProfileStore::selectProfile(uint16_t id) {
   bootMeta.crc16 = crc16BootMeta(&bootMeta);
 
   uint32_t bootMetaSlot =
-      BOOTMETA_BASE + (bootMetaSlotIndex() * sizeof(BootMeta));
+      BOOTMETA_BASE + (ensureBootMetaSlot() * sizeof(BootMeta));
   if (!flash.write(bootMetaSlot, reinterpret_cast<const uint8_t *>(&bootMeta),
                    sizeof(BootMeta))) {
     LOG_ERROR("ProfileStore: failed to write BootMeta for select");
@@ -901,6 +925,17 @@ bool ProfileStore::resetSector0() {
   }
 
   LOG_INFO("ProfileStore: Sector 0 reset done");
+
+  // Update cached seq counters to match what was just written to flash
+  _bootMetaSeq = 1;
+  // Address Ring seq: use the max of restored entries, or 0 if none
+  _addressRingSeq = 0;
+  for (uint8_t i = 0; i < entryCount; ++i) {
+    if (validEntries[i].seq > _addressRingSeq) {
+      _addressRingSeq = validEntries[i].seq;
+    }
+  }
+
   return true;
 }
 

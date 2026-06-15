@@ -150,6 +150,8 @@ private:
   bool scanAddressRing();
   uint32_t findNextAddr() const;
   bool eraseSector0Range(uint32_t addr, uint32_t len);
+  uint16_t ensureBootMetaSlot();
+  uint16_t ensureAddressRingSlot();
 
   // ── Cached state (updated by init()) ──
   uint16_t _activeProfileId = 0;
