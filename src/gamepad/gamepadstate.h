@@ -27,8 +27,6 @@
 #pragma once
 
 #include <cstdint>
-#include <list>
-
 #include "gamepad/gamepadenums.h"
 
 /*

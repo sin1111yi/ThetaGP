@@ -19,6 +19,8 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <cstddef>
+
 #include "gamepad/gamepadstate.h"
 
 namespace ThetaGP::Gamepad {
@@ -55,29 +57,49 @@ uint8_t getMaskFromDirection(DpadDirection direction) {
   return dpadMasks[static_cast<size_t>(direction) - 1];
 }
 
+namespace {
+// Four-way mode: press-order LIFO tracking (max 4 directions)
+struct {
+  Enums::DpadDirection order[4] = {};
+  uint8_t count = 0;
+} s_fourWayState;
+
+// SOCD axis-last state
+Enums::DpadDirection lastUD = Enums::DpadDirection::None;
+Enums::DpadDirection lastLR = Enums::DpadDirection::None;
+} // anonymous namespace
+
 uint8_t updateDpad(uint8_t dpad, DpadDirection direction) {
-  static bool inList[] = {
-      false, false, false, false,
-      false};  // correspond to DpadDirection: none, up, down, left, right
-  static std::list<DpadDirection> dpadList;
+  const auto mask = getMaskFromDirection(direction);
+  auto &order = s_fourWayState.order;
+  auto &count = s_fourWayState.count;
 
-  if (dpad & getMaskFromDirection(direction)) {
-    if (!inList[static_cast<size_t>(direction)]) {
-      dpadList.push_back(direction);
-      inList[static_cast<size_t>(direction)] = true;
+  if (dpad & mask) {
+    // Pressed — append to order if not already present
+    bool found = false;
+    for (uint8_t i = 0; i < count; i++) {
+      if (order[i] == direction) {
+        found = true;
+        break;
+      }
+    }
+    if (!found && count < 4) {
+      order[count++] = direction;
     }
   } else {
-    if (inList[static_cast<size_t>(direction)]) {
-      dpadList.remove(direction);
-      inList[static_cast<size_t>(direction)] = false;
+    // Released — remove from order
+    for (uint8_t i = 0; i < count; i++) {
+      if (order[i] == direction) {
+        for (uint8_t j = i; j < count - 1; j++) {
+          order[j] = order[j + 1];
+        }
+        order[--count] = DpadDirection::None;
+        break;
+      }
     }
   }
 
-  if (dpadList.empty()) {
-    return 0;
-  } else {
-    return getMaskFromDirection(dpadList.back());
-  }
+  return (count > 0) ? getMaskFromDirection(order[count - 1]) : 0;
 }
 
 uint8_t filterToFourWayMode(uint8_t dpad) {
@@ -92,8 +114,7 @@ uint8_t runSOCDCleaner(SOCDMode mode, uint8_t dpad) {
     return dpad;
   }
 
-  static DpadDirection lastUD = DpadDirection::None;
-  static DpadDirection lastLR = DpadDirection::None;
+
   uint8_t newDpad = 0;
 
   switch (dpad & (GAMEPAD_MASK_UP | GAMEPAD_MASK_DOWN)) {
