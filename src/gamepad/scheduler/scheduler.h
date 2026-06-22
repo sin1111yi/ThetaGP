@@ -174,7 +174,7 @@ private:
   uint32_t checkCycles = 0;
 
   int32_t cmpTimeCycles(uint32_t t1, uint32_t t2);
-  uint32_t cmpTimeUs(uint32_t t1, uint32_t t2);
+  int32_t cmpTimeUs(uint32_t t1, uint32_t t2);
 
 public:
   Scheduler();

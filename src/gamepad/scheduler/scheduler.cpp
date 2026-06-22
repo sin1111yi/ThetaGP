@@ -250,7 +250,7 @@ FAST_CODE int32_t Scheduler::cmpTimeCycles(uint32_t t1, uint32_t t2) {
   return static_cast<int32_t>(t1 - t2);
 }
 
-FAST_CODE uint32_t Scheduler::cmpTimeUs(uint32_t t1, uint32_t t2) { return t1 - t2; }
+FAST_CODE int32_t Scheduler::cmpTimeUs(uint32_t t1, uint32_t t2) { return static_cast<int32_t>(t1 - t2); }
 
 // ============================================================================
 // Task Queue Management
