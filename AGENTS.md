@@ -41,7 +41,7 @@ This document standardizes AI agent behavior. Read the corresponding section onl
 <body>
 
 Model: <model-name> <model-provider>
-Agent: <agent-name> <agent-email>
+Agent: <agent-name>
 ```
 
 ### Type
@@ -79,7 +79,7 @@ fix(usb): correct clock macros and port configuration
 - Update ULPI, high-speed and full-speed pin initialization macros
 
 Model: MiniMax-M2.7 MiniMax
-Agent: opencode opencode@anomaly.co
+Agent: opencode
 ```
 
 Should I commit this change?
