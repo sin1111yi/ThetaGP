@@ -72,7 +72,7 @@ constexpr std::array<IRQn_Type, TIM_IRQ_GROUPS> timerGroupIRQn = {
 void HardwareTimer::enableClock() const {
   using ClockFunc = void (*)();
 
-  constinit static const std::array<ClockFunc, 17> clockEnableTable = {{
+  static constexpr std::array<ClockFunc, 17> clockEnableTable = {{
 #if defined(STM32H7)
       []() { __HAL_RCC_TIM1_CLK_ENABLE(); },
       []() { __HAL_RCC_TIM2_CLK_ENABLE(); },
