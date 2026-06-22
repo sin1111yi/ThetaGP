@@ -43,7 +43,7 @@ private:
 
   // ── C-style CDC RX callback ──
   typedef void (*CDCRxCallbackFunc)(void *buffer, uint16_t len);
-  CDCRxCallbackFunc _cdcRxCallback;
+  CDCRxCallbackFunc volatile _cdcRxCallback;
 
 public:
   static USBDriver &getInstance() {
