@@ -3,8 +3,10 @@
 .vscode
 .trae
 .cache
+.commit_tmp
 
 .clangd
+.reasonix
 
 .skills
 
