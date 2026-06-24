@@ -6,6 +6,7 @@
 .commit_tmp
 
 .clangd
+.clang-tidy
 .reasonix
 
 .skills
