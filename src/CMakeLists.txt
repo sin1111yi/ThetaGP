@@ -203,3 +203,24 @@ set_target_properties(${CMAKE_PROJECT_NAME}
     LINK_DEPENDS ${PLATFORM_LINK_SCRIPT}
     LINK_FLAGS "-T${PLATFORM_LINK_SCRIPT}"
 )
+
+# =============================================================================
+# Flash target (replaces tool.lua flash)
+# =============================================================================
+# Usage: cmake --build build --target flash
+# Set OPENOCD_CFG to the OpenOCD config file path (can be relative to source dir)
+if(NOT DEFINED OPENOCD_CFG)
+    set(OPENOCD_CFG "${CMAKE_SOURCE_DIR}/openocd/stm32h7x_dual_bank-cmsis-dap.cfg" CACHE FILEPATH "OpenOCD config file")
+endif()
+
+find_program(OPENOCD_EXECUTABLE openocd)
+if(OPENOCD_EXECUTABLE)
+    add_custom_target(flash
+        COMMAND ${OPENOCD_EXECUTABLE}
+            -f "${OPENOCD_CFG}"
+            -c "program \"$<TARGET_FILE:${CMAKE_PROJECT_NAME}>\" verify"
+            -c "reset run" -c "sleep 100" -c "shutdown"
+        DEPENDS ${CMAKE_PROJECT_NAME}
+        COMMENT "Flashing ${CMAKE_PROJECT_NAME}"
+    )
+endif()

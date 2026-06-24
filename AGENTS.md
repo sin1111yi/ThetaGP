@@ -155,23 +155,19 @@ Before any operation, query files in this order:
 ### Building
 
 ```bash
-# Using Lua build script (preferred)
-lua tool.lua build --target BoringTechH743
+# Build
+cmake -B build -DTARGET=BoringTechH743
+cmake --build build
 
 # Build with test API enabled
-# protocol/proto.h is auto-generated during cmake configure
-lua tool.lua config --target BoringTechH743 -DTHETAGP_ENABLE_TEST_API=ON
-lua tool.lua build
-
-# Or CMake directly
-cmake -B build -DTARGET=BoringTechH743
-cmake --build build -- -j$(nproc)
+cmake -B build -DTARGET=BoringTechH743 -DTHETAGP_ENABLE_TEST_API=ON
+cmake --build build
 ```
 
 ### Flashing
 
 ```bash
-lua tool.lua flash --target BoringTechH743 --openocd-cfg openocd/stm32h7x_dual_bank-cmsis-dap.cfg
+cmake --build build --target flash
 ```
 
 The debug adapter is CMSIS-DAP (VID:PID 0d28:0204). Connect via SWD, udev rule at `/etc/udev/rules.d/99-cmsis-dap.rules`.

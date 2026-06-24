@@ -5,7 +5,7 @@
 </p>
 
 Multi-MCU universal gamepad firmware with USB HID + CDC support and
-Lua-based board configuration system.
+TOML-based board configuration system.
 
 ## Supported MCUs
 
@@ -48,7 +48,6 @@ The SPI flash is mandatory — the firmware stores persistent configuration (but
 
 - CMake 3.22+
 - ARM GNU Toolchain (`arm-none-eabi-gcc` 13.3.1+)
-- Lua 5.3+ (for dependency fetching)
 - Python 3.11+ (for protocol and config generation)
 - OpenOCD (for flashing)
 
@@ -58,16 +57,14 @@ The SPI flash is mandatory — the firmware stores persistent configuration (but
 # The following example uses the ThetaGPH7 target (STM32H743)
 
 # Configure and build
-lua tool.lua config build --target ThetaGPH7
+cmake -B build -DTARGET=BoringTechH743
+
+# Build
+cmake --build build
 
 # Flash
-lua tool.lua flash --target ThetaGPH7 --openocd-cfg openocd/stm32h7x_dual_bank-cmsis-dap.cfg
-
-# Or all at once
-lua tool.lua all --target ThetaGPH7 --openocd-cfg openocd/stm32h7x_dual_bank-cmsis-dap.cfg
+cmake --build build --target flash
 ```
-
-Run `lua tool.lua help` for a full list of commands and options.
 
 ## Project Structure
 
@@ -92,9 +89,7 @@ ThetaGP/
 │   └── proto.h                 Generated C++ header (auto-regenerated at configure time)
 ├── scripts/                    Build & configuration tooling
 │   ├── gen_proto.py            Protocol code generator (TOML → C++/Rust/TS)
-│   ├── fetch_deps.lua          Dependency fetcher
-│   ├── generate_config.py      TOML → C macro generator
-│   ├── fetch_deps.lua          Dependency fetcher
+│   └── generate_config.py      TOML → C macro generator
 ├── src/                        Application code
 │   ├── conf/                   TinyUSB configuration
 │   ├── drivers/                Device & gamepad driver abstraction
@@ -106,7 +101,6 @@ ThetaGP/
 │   └── taskmanager.cpp/h       Task lifecycle
 ├── docs/                       Design documentation
 ├── lib/                        Third-party libraries
-├── tool.lua                    Build/configure/flash helper
 ├── AGENTS.md                   AI agent behavior spec
 └── README.md                   This file
 ```
@@ -120,13 +114,13 @@ Board configuration is driven by a TOML-based pipeline:
 - **`scripts/generate_config.py`** — Reads BoardConfig.toml, runs
   validators, and generates `BoardConfig.h` (C macros) and
   `board_config.cmake`
-- **`scripts/fetch_deps.lua`** — Downloads external dependencies
-  (TinyUSB, mbedTLS, ArduinoJson) via git
+Dependencies (TinyUSB, mbedTLS, frozen) are fetched automatically by
+CMake `FetchContent` during configure.
 
 To regenerate after editing `BoardConfig.toml`:
 
 ```bash
-lua tool.lua config --target <TARGET>
+cmake -B build -DTARGET=<TARGET>
 ```
 
 Or simply build — CMake automatically invokes `generate_config.py`

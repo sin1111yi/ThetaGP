@@ -58,27 +58,6 @@ set(THETAGP_PROJECT_NAME "ThetaGP_${TARGET}_${THETAGP_VERSION}_${CMAKE_BUILD_TYP
 set(ENV{TARGET} "${TARGET}")
 set(ENV{THETAGP_SOURCE_DIR} "${CMAKE_SOURCE_DIR}")
 
-# Find Lua interpreter
-find_program(LUA_EXECUTABLE NAMES lua lua5.3 lua5.4 luajit)
-
-if(NOT LUA_EXECUTABLE)
-    message(FATAL_ERROR "Lua interpreter not found. Please install lua.")
-endif()
-
-message(STATUS "Found Lua: ${LUA_EXECUTABLE}")
-
-# Fetch dependencies before configuration
-message(STATUS "Fetching dependencies...")
-execute_process(
-    COMMAND ${LUA_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/fetch_deps.lua
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    RESULT_VARIABLE DEPS_FETCH_RESULT
-)
-
-if(NOT DEPS_FETCH_RESULT EQUAL 0)
-    message(FATAL_ERROR "Failed to fetch dependencies. Please check the error messages above.")
-endif()
-
 # Generate board configuration (Python 3.11+ required for tomllib)
 find_program(PYTHON3_EXECUTABLE NAMES python3 python)
 if(NOT PYTHON3_EXECUTABLE)
