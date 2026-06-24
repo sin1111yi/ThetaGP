@@ -5,7 +5,7 @@
 </p>
 
 Multi-MCU universal gamepad firmware with USB HID + CDC support and
-TOML-based board configuration system.
+TOML-based board configuration.
 
 ## Supported MCUs
 
@@ -13,22 +13,15 @@ TOML-based board configuration system.
 |------------|--------|
 | STM32H7    | ✅ Supported |
 
-Adding support for a new MCU family requires:
-- Platform HAL implementation under `platform/<FAMILY>/peripherals/`
-- Startup file, linker script, and toolchain configuration
-- Enums defined in `src/drivers/peripherals/` are MCU-agnostic;
-  platform-specific mapping tables are in the respective `.cpp` files
-
 ## Features
 
 - USB HID gamepad (GP2040-CE compatible button mapping)
 - Scan-matrix keypad input with debounce
 - Configurable debug log output over UART
-- Configurable button mappings via BoardConfig.toml
+- TOML board configuration with validation
 - **CDC ACM test channel** — JSON protocol over USB virtual serial port
-- **Test API** — inject/observe GamepadRawInput and HIDReport via CDC, with
-  queue injection, history recording, and override mode
-- TinyUSB stack
+- **Test API** — inject/observe GamepadRawInput and HIDReport via CDC
+- TinyUSB stack (auto-fetched, auto-updated)
 - No RTOS — cooperative task scheduler
 - Static memory pool allocator (no malloc/free)
 - ArduinoJson v7.4.3 for JSON serialization
@@ -37,26 +30,23 @@ Adding support for a new MCU family requires:
 
 | Component | Requirement | Notes |
 |-----------|-------------|-------|
-| **SPI Flash** | **Required** | W25Q128 (16MB) or compatible. Used for WearLevel config storage and OTA staging. Must be wired to the MCU's SPI bus. |
+| **SPI Flash** | **Required** | W25Q128 (16MB) or compatible. Used for WearLevel config storage and OTA staging. |
 | MCU | STM32H7 series | Other families may work with platform porting |
 | USB Connector | USB-C or USB Micro-B | For HID + CDC communication |
-| Debug Probe | SWD (CMSIS-DAP / ST-Link / J-Link) | Required for flashing and debug |
-
-The SPI flash is mandatory — the firmware stores persistent configuration (button mappings, device settings) and OTA firmware images on it via the WearLevel controller. Without an SPI flash, the firmware will fail to initialize.
+| Debug Probe | CMSIS-DAP / ST-Link / J-Link | Required for flashing and debug |
 
 ## Prerequisites
 
 - CMake 3.22+
-- ARM GNU Toolchain (`arm-none-eabi-gcc` 13.3.1+)
-- Python 3.11+ (for protocol and config generation)
+- ARM GNU Toolchain (`arm-none-eabi-gcc`)
+- Python 3.11+
 - OpenOCD (for flashing)
+- Git (for dependency fetching)
 
 ## Quick Start
 
 ```bash
-# The following example uses the ThetaGPH7 target (STM32H743)
-
-# Configure and build
+# Configure (fetches dependencies automatically on first run)
 cmake -B build -DTARGET=BoringTechH743
 
 # Build
@@ -71,60 +61,70 @@ cmake --build build --target flash
 ```
 ThetaGP/
 ├── configs/                    Board configurations
+│   ├── CONFIGURATION.md        Configuration authoring guide
 │   └── <TARGET>/
 │       ├── BoardConfig.toml    Input: pins, keypad, USB, UART
 │       ├── BoardConfig.h       Generated: C macros from TOML
 │       └── board_config.cmake  Generated: build variables
 ├── platform/                   MCU-specific code
-│   ├── CMakeLists.txt          CMake platform selection
-│   └── <FAMILY>/
+│   ├── CMakeLists.txt
+│   └── STM32/
 │       ├── cmake/              Toolchain
 │       ├── peripherals/        HAL implementations
-│       ├── startup/            CMSIS startup file
+│       ├── startup/            CMSIS startup
 │       ├── link/               Linker script
 │       └── system/             HAL config, system init, syscalls
-├── openocd/                    OpenOCD configs
+├── openocd/                    OpenOCD flash configs
 ├── protocol/                   Protocol definition & generated code
 │   ├── protocol.toml           Single source of truth (CDC JSON protocol)
-│   └── proto.h                 Generated C++ header (auto-regenerated at configure time)
-├── scripts/                    Build & configuration tooling
-│   ├── gen_proto.py            Protocol code generator (TOML → C++/Rust/TS)
-│   └── generate_config.py      TOML → C macro generator
+│   └── proto.h                 Generated C++ header
+├── scripts/                    Build tooling
+│   ├── generate_config.py      Board config generator (TOML → C macros)
+│   ├── gen_proto.py            Protocol code generator
+│   ├── config/                 Generator modules (validators, generators, pin utils)
+│   └── test/                   Python test suite via CDC ACM
 ├── src/                        Application code
 │   ├── conf/                   TinyUSB configuration
-│   ├── drivers/                Device & gamepad driver abstraction
+│   ├── drivers/                Device & gamepad drivers
 │   ├── gamepad/                Core gamepad logic & scheduler
-│   ├── test/                   Test API (FrameLayer, Dispatcher, TestInjector)
+│   ├── test/                   Test API
 │   ├── utils/                  Memory pool, logging, atomic, time
-│   ├── ThetaGP.cpp             Entry point
-│   ├── ThetaGPTasks.cpp        Task definitions
 │   └── taskmanager.cpp/h       Task lifecycle
+├── lib/                        Third-party libraries (auto-fetched)
+│   └── CMakeLists.txt          Dependency declarations + fetch logic
 ├── docs/                       Design documentation
-├── lib/                        Third-party libraries
 ├── AGENTS.md                   AI agent behavior spec
 └── README.md                   This file
 ```
 
-## Configuration System (TOML)
+## Configuration
 
-Board configuration is driven by a TOML-based pipeline:
+Board configuration uses TOML files under `configs/<TARGET>/BoardConfig.toml`.
+At configure time, `scripts/generate_config.py` validates the config and
+generates `BoardConfig.h` (C `#define` macros) and `board_config.cmake`.
 
-- **`configs/<TARGET>/BoardConfig.toml`** — User-editable configuration file
-  defining pins, keypad matrix, USB settings, UART, and button mappings
-- **`scripts/generate_config.py`** — Reads BoardConfig.toml, runs
-  validators, and generates `BoardConfig.h` (C macros) and
-  `board_config.cmake`
-Dependencies (TinyUSB, mbedTLS, frozen) are fetched automatically by
-CMake `FetchContent` during configure.
+See **[configs/CONFIGURATION.md](configs/CONFIGURATION.md)** for the full
+configuration guide — all fields, valid values, and examples.
 
-To regenerate after editing `BoardConfig.toml`:
+To regenerate after editing:
 
 ```bash
 cmake -B build -DTARGET=<TARGET>
 ```
 
-Or simply build — CMake automatically invokes `generate_config.py`
-during configuration.
+## Dependencies
+
+Third-party libraries are declared in `lib/CMakeLists.txt` and fetched
+automatically during CMake configure:
+
+| Library | Source | Purpose |
+|---------|--------|---------|
+| TinyUSB | github.com/sin1111yi/tinyusb | USB device/host stack |
+| mbedTLS | github.com/Mbed-TLS/mbedtls | Cryptographic library |
+| frozen | github.com/cesanta/frozen | C JSON parser (build-time config) |
+
+On each configure, the build system checks upstream for updates and
+fast-forwards if behind. No manual submodule management needed.
 
 ## Adding an MCU Family
 
@@ -133,49 +133,24 @@ during configuration.
 3. Implement peripheral HALs in `platform/<FAMILY>/peripherals/`
 4. Add CMake condition in `platform/CMakeLists.txt`
 
-The peripheral interface headers in `src/drivers/peripherals/` use
-abstract enums (e.g. `GPIO::Mode::Input`). Each platform's `.cpp`
-provides a mapping table or function (e.g. `Gpio::toHalMode()`) to
-translate to the SDK-specific constants.
+## Adding a New Board
 
-## Architecture Notes
+1. Create `configs/<BOARD>/BoardConfig.toml` (see `CONFIGURATION.md`)
+2. Build with `cmake -B build -DTARGET=<BOARD>`
 
-- **No dynamic allocation**: All memory is static or pool-allocated
-  via `MempoolManager`
-- **Peripheral abstraction**: Enums in headers use MCU-agnostic values;
-  HAL mapping is done in platform `.cpp` files via `toHal*()` static
-  methods
-- **No RTOS**: Cooperative scheduler in `gamepad/scheduler/` driven by
-  `TaskManager` with a periodic timer tick
-- **USB stack**: TinyUSB handles device enumeration and HID class
-  driver registration
+## Architecture
+
+- **No dynamic allocation**: All memory is static or pool-allocated via `MempoolManager`
+- **No RTOS**: Cooperative scheduler in `gamepad/scheduler/` driven by `TaskManager`
+- **USB stack**: TinyUSB handles device enumeration and HID class driver registration
+- **Peripheral abstraction**: MCU-agnostic enums in headers, HAL mapping in platform `.cpp` files
 
 ## Acknowledgements
 
-- **GP2040-CE** — The GPDriver and Manager design pattern in this
-  project is inspired by the GP2040-CE firmware architecture.
+- **GP2040-CE** — GPDriver/Manager design pattern inspiration
   https://github.com/OpenStickCommunity/GP2040-CE
-
-- **Betaflight** — The cooperative task scheduler, interrupt handler
-  structure, NVIC priority macros, atomic primitives, and UART
-  alternate-function lookup approach are derived from the Betaflight
-  flight controller firmware.
+- **Betaflight** — Cooperative scheduler, ISR structure, NVIC/atomic primitives
   https://github.com/betaflight/betaflight
-
-## Support
-
-For bug reports and feature requests, please open an issue on the
-GitHub repository.
-
-## Contact
-
-sin1111yi@foxmail.com
-
-## Contributing
-
-This project is currently in early development. The codebase is still
-evolving, and contribution guidelines will be established as the
-project matures.
 
 ## License
 
