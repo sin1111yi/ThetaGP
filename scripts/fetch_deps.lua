@@ -31,12 +31,43 @@ local project_root = script_dir:gsub("[^/]+/$", "")
 -- Load dependencies configuration
 dofile(project_root .. "deps_config.lua")
 
--- Load shared utilities
-package.path = script_dir .. "config_lib/?.lua;" ..
-               script_dir .. "config_lib/?/?.lua;" ..
-               script_dir .. "config_lib/?/init.lua;" ..
-               package.path
-local log = require("utils.log")
+-- Inline log utilities (avoid external dependency)
+local log = {}
+
+function log.print_info(...)
+    local args = {}
+    for _, v in ipairs({...}) do table.insert(args, tostring(v)) end
+    print("[INFO] " .. table.concat(args, " "))
+end
+
+function log.print_warning(...)
+    local args = {}
+    for _, v in ipairs({...}) do table.insert(args, tostring(v)) end
+    print("[WARNING] " .. table.concat(args, " "))
+end
+
+function log.print_error(...)
+    local args = {}
+    for _, v in ipairs({...}) do table.insert(args, tostring(v)) end
+    print("[ERROR] " .. table.concat(args, " "))
+end
+
+function log.file_exists(path)
+    local f = io.open(path, "r")
+    if f then io.close(f); return true end
+    return false
+end
+
+function log.execute_command(cmd, ignore_error)
+    log.print_info("Executing:", cmd)
+    local ret = os.execute(cmd)
+    local success = (ret == true) or (ret == 0)
+    if not success and not ignore_error then
+        log.print_error("Command failed with exit code:", ret)
+        return false
+    end
+    return true
+end
 
 -- =============================================================================
 -- Utility Functions

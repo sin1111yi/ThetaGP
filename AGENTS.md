@@ -392,15 +392,13 @@ BoardConfig macros (`SPI_2_PERIPHERAL`, `SPI_2_SCLK`, etc.) are generated from `
 ### Pipeline
 
 ```
-BoardConfig.lua → generators/ → BoardConfig.h + board_config.cmake
+BoardConfig.toml → scripts/generate_config.py → BoardConfig.h + board_config.cmake
 ```
 
 ### Adding a new peripheral
 
-1. Add config data to `configs/<target>/BoardConfig.lua` under the appropriate `bus` key
-2. Create a generator in `scripts/config_lib/generators/` following the existing pattern (see `uart.lua` or `spi.lua`)
-3. Register the generator in `generators/init.lua`
-4. Wire it in `scripts/generate_config.lua`
+1. Add config data to `configs/<target>/BoardConfig.toml` under the appropriate `bus` key
+2. Add generator logic to `scripts/generate_config.py` following the existing pattern (see `gen_uart_lines()` or `gen_spi_lines()`)
 
 ### Macro naming convention
 
@@ -409,18 +407,22 @@ BoardConfig.lua → generators/ → BoardConfig.h + board_config.cmake
 - Sub-macros use the instance name as prefix: `UART_1_TX_PIN`, `SPI_2_SCLK`
 - Sub-macros are resolved via `CONTACT3(bind_macro, _, name)`
 
-### UART example (BoardConfig.lua)
+### UART example (BoardConfig.toml)
 
-```lua
-bus = {
-    uart = {
-        { bind = "logger", peripheral = "UART1", tx = "PA9", rx = "PA10" },
-    },
-    spi = {
-        { bind = "flash", peripheral = "SPI2", sclk = "PB13",
-          mosi = "PB15", miso = "PB14", ncs = "PB12" },
-    },
-}
+```toml
+[[bus.uart]]
+bind       = "logger"
+peripheral = "UART1"
+tx         = "PA9"
+rx         = "PA10"
+
+[[bus.spi]]
+bind       = "flash"
+peripheral = "SPI2"
+sclk       = "PB13"
+mosi       = "PB15"
+miso       = "PB14"
+ncs        = "PB12"
 ```
 
 ---

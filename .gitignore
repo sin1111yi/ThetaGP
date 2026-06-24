@@ -13,6 +13,7 @@
 
 BoardConfig.h
 board_config.cmake
+*/config/__pycache__
 
 GP2040-CE
 docs

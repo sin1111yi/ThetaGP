@@ -83,7 +83,7 @@ void Gamepad::setButtonMappings() {
     }
   }
 #else
-#error "necessary.keypad.button_map must be defined in BoardConfig.lua"
+#error "[keypad] button_map is required — see configs/CONFIGURATION.md"
 #endif
 }
 

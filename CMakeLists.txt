@@ -79,9 +79,16 @@ if(NOT DEPS_FETCH_RESULT EQUAL 0)
     message(FATAL_ERROR "Failed to fetch dependencies. Please check the error messages above.")
 endif()
 
-# Generate board configuration
+# Generate board configuration (Python 3.11+ required for tomllib)
+find_program(PYTHON3_EXECUTABLE NAMES python3 python)
+if(NOT PYTHON3_EXECUTABLE)
+    message(FATAL_ERROR "Python 3 not found. Please install Python 3.11+.")
+endif()
+
 execute_process(
-    COMMAND ${LUA_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/generate_config.lua
+    COMMAND ${PYTHON3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/generate_config.py
+        --target ${TARGET}
+        --source-dir ${CMAKE_SOURCE_DIR}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     RESULT_VARIABLE CONFIG_GEN_RESULT
 )

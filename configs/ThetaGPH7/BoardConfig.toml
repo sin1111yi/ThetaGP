@@ -1,0 +1,41 @@
+[board_info]
+identifier  = "ThetaGPH743"
+name        = "ThetaGP-H743_Ver.Ultra"
+mcu         = "STM32H743xx"
+mcu_series  = "STM32H7"
+
+[led0]
+pin        = "PD8"
+active_low = true
+
+[keypad]
+drive_mode  = "scan_matrix"
+active_mode = "none"
+
+drive_pins = ["PD8", "PD9"]
+sense_pins = ["PC4", "PC5"]
+
+key_map = [
+    [0, 1],
+    [2, 3],
+]
+
+button_map = [
+    [0, "B1"],
+    [1, "B2"],
+    [2, "B3"],
+    [3, "B4"],
+]
+
+[usb]
+hw_periph = "ULPI"
+speed     = "high_speed"
+
+[[bus.uart]]
+bind       = "logger"
+peripheral = "UART1"
+tx         = "PB14"
+rx         = "PB15"
+
+[flash]
+chip = "w25qxx"

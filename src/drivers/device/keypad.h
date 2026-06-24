@@ -68,21 +68,21 @@ private:
   Keypad();
 
 #ifndef KEYPAD_KEY_MAP
-#error "necessary.keypad.key_map must be defined in BoardConfig.lua"
+#error "[keypad] key_map is required — see configs/CONFIGURATION.md"
 #endif
 
 #ifndef KEYPAD_DRIVE_MODE
-#error "necessary.keypad.drive_mode must be defined in BoardConfig.lua"
+#error "[keypad] drive_mode is required — see configs/CONFIGURATION.md"
 #endif
 
 #ifndef KEYPAD_ACTIVE_MODE
-#error "necessary.keypad.active_mode must be defined in BoardConfig.lua"
+#error "[keypad] active_mode is required — see configs/CONFIGURATION.md"
 #endif
 
-  static constexpr auto _keyMap =
-      std::array<uint8_t, KEYPAD_KEY_MAP_SIZE>{KEYPAD_KEY_MAP};
   static constexpr size_t DRIVE_PIN_NUM = KEYPAD_DRIVE_PIN_NUM;
   static constexpr size_t SENSE_PIN_NUM = KEYPAD_SENSE_PIN_NUM;
+  static constexpr auto _keyMap =
+      std::array<std::array<uint8_t, SENSE_PIN_NUM>, DRIVE_PIN_NUM>{{KEYPAD_KEY_MAP}};
   static constexpr size_t MAX_KEY_INDEX = KEYPAD_MAX_KEY_INDEX;
   static constexpr size_t MASK_ARRAY_SIZE = 1; // 32 keys = 1 uint32_t
   static constexpr size_t MAX_KEYS = 32;
@@ -130,8 +130,7 @@ public:
   static constexpr uint8_t getKeyId(uint8_t driveIdx, uint8_t senseIdx) {
     if (driveIdx >= DRIVE_PIN_NUM || senseIdx >= SENSE_PIN_NUM)
       return KEYPAD_NO_KEY;
-    const uint8_t physicalIndex = driveIdx * SENSE_PIN_NUM + senseIdx;
-    return _keyMap[physicalIndex];
+    return _keyMap[driveIdx][senseIdx];
   }
 
   static constexpr void getKeyPosition(uint8_t keyId, uint8_t &driveIdx,

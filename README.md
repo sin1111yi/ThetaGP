@@ -24,7 +24,7 @@ Adding support for a new MCU family requires:
 - USB HID gamepad (GP2040-CE compatible button mapping)
 - Scan-matrix keypad input with debounce
 - Configurable debug log output over UART
-- Configurable button mappings via BoardConfig.lua
+- Configurable button mappings via BoardConfig.toml
 - **CDC ACM test channel** — JSON protocol over USB virtual serial port
 - **Test API** — inject/observe GamepadRawInput and HIDReport via CDC, with
   queue injection, history recording, and override mode
@@ -48,7 +48,8 @@ The SPI flash is mandatory — the firmware stores persistent configuration (but
 
 - CMake 3.22+
 - ARM GNU Toolchain (`arm-none-eabi-gcc` 13.3.1+)
-- Lua 5.3+
+- Lua 5.3+ (for dependency fetching)
+- Python 3.11+ (for protocol and config generation)
 - OpenOCD (for flashing)
 
 ## Quick Start
@@ -74,8 +75,8 @@ Run `lua tool.lua help` for a full list of commands and options.
 ThetaGP/
 ├── configs/                    Board configurations
 │   └── <TARGET>/
-│       ├── BoardConfig.lua     Input: pins, keypad, USB, UART
-│       ├── BoardConfig.h       Generated: C macros from Lua
+│       ├── BoardConfig.toml    Input: pins, keypad, USB, UART
+│       ├── BoardConfig.h       Generated: C macros from TOML
 │       └── board_config.cmake  Generated: build variables
 ├── platform/                   MCU-specific code
 │   ├── CMakeLists.txt          CMake platform selection
@@ -92,8 +93,8 @@ ThetaGP/
 ├── scripts/                    Build & configuration tooling
 │   ├── gen_proto.py            Protocol code generator (TOML → C++/Rust/TS)
 │   ├── fetch_deps.lua          Dependency fetcher
-│   ├── generate_config.lua     Lua → C macro generator
-│   └── config_lib/             Generator & validator modules
+│   ├── generate_config.py      TOML → C macro generator
+│   ├── fetch_deps.lua          Dependency fetcher
 ├── src/                        Application code
 │   ├── conf/                   TinyUSB configuration
 │   ├── drivers/                Device & gamepad driver abstraction
@@ -110,29 +111,25 @@ ThetaGP/
 └── README.md                   This file
 ```
 
-## Configuration System (Lua Scripts)
+## Configuration System (TOML)
 
-Board configuration is driven by a Lua-based pipeline:
+Board configuration is driven by a TOML-based pipeline:
 
-- **`configs/<TARGET>/BoardConfig.lua`** — User-editable configuration file
+- **`configs/<TARGET>/BoardConfig.toml`** — User-editable configuration file
   defining pins, keypad matrix, USB settings, UART, and button mappings
-- **`scripts/generate_config.lua`** — Reads BoardConfig.lua, runs
+- **`scripts/generate_config.py`** — Reads BoardConfig.toml, runs
   validators, and generates `BoardConfig.h` (C macros) and
   `board_config.cmake`
-- **`scripts/config_lib/validators/`** — Validates configuration fields
-  (pin format, key map dimensions, button names, etc.)
-- **`scripts/config_lib/generators/`** — Produces `#define` macros from
-  validated configuration data
 - **`scripts/fetch_deps.lua`** — Downloads external dependencies
   (TinyUSB, mbedTLS, ArduinoJson) via git
 
-To regenerate after editing `BoardConfig.lua`:
+To regenerate after editing `BoardConfig.toml`:
 
 ```bash
 lua tool.lua config --target <TARGET>
 ```
 
-Or simply build — CMake automatically invokes `generate_config.lua`
+Or simply build — CMake automatically invokes `generate_config.py`
 during configuration.
 
 ## Adding an MCU Family

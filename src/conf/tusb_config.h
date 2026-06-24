@@ -48,7 +48,7 @@
 #elif defined(USBHW_SPEED_FS)
 #define THETAGP_USB_HIGH_SPEED 0
 #else
-#error "USB speed not configured (define USBHW_SPEED_HS or USBHW_SPEED_FS)"
+#error "[usb] speed not configured — set high_speed or full_speed in BoardConfig.toml (see configs/CONFIGURATION.md)"
 #endif
 
 // USB endpoint 0 max packet size
@@ -91,7 +91,7 @@ extern "C" {
 #elif THETAGP_USB_RHPORT == 1
 #define CFG_TUSB_RHPORT1_MODE (OPT_MODE_DEVICE | BOARD_TUD_MAX_SPEED)
 #else
-#error "Incorrect RHPort configuration"
+#error "[usb] hw_periph must be USB1 or USB2 — see configs/CONFIGURATION.md"
 #endif
 
 //--------------------------------------------------------------------
@@ -118,7 +118,7 @@ extern "C" {
 
 // defined by compiler flags for flexibility
 #ifndef CFG_TUSB_MCU
-#error CFG_TUSB_MCU must be defined
+#error "[board_info] mcu_series must be set (e.g. STM32H7) — see configs/CONFIGURATION.md"
 #endif
 
 #define CFG_TUSB_DEBUG_PRINTF tu_printf

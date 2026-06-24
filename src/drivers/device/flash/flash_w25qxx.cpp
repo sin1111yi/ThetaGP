@@ -372,7 +372,7 @@ FlashBase &FlashBase::getInstance() {
 #if defined(FLASH_CHIP_W25QXX)
   return FlashW25qxx::getInstance();
 #else
-  #error "No flash chip selected. Add flash = { chip = \"...\" } to BoardConfig.lua"
+  #error "No flash chip selected. Add [flash] chip = 'w25qxx' to BoardConfig.toml (see configs/CONFIGURATION.md)"
 #endif
 }
 
