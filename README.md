@@ -52,9 +52,8 @@ cmake -B build -DTARGET=BoringTechH743
 # Build
 cmake --build build
 
-# Flash (requires probe-rs)
-probe-rs download --chip <CHIP> build/ThetaGP_*.elf
-probe-rs reset
+# Flash & Run (requires probe-rs)
+probe-rs run --chip <CHIP> build/ThetaGP_*.elf
 ```
 
 ## Project Structure
