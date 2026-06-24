@@ -167,7 +167,8 @@ cmake --build build
 ### Flashing
 
 ```bash
-cmake --build build --target flash
+probe-rs download --chip STM32H743ZITx build/ThetaGP_*.elf
+probe-rs reset
 ```
 
 The debug adapter is CMSIS-DAP (VID:PID 0d28:0204). Connect via SWD, udev rule at `/etc/udev/rules.d/99-cmsis-dap.rules`.

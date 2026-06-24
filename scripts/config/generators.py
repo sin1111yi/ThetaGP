@@ -376,7 +376,6 @@ def generate_cmake(board_info: dict, target_value: str) -> str:
         f'set(BOARD_NAME "{board_info.get("name", "")}")',
         f'set(BOARD_MCU "{board_info.get("mcu", "")}")',
         f'set(BOARD_MCU_SERIES "{board_info.get("mcu_series", "")}")',
-        f'set(BOARD_PROBE_RS_CHIP "{board_info.get("probe_rs_chip", "")}")',
         f'set(TARGET "{target_value}")',
     ]
     return "\n".join(lines)

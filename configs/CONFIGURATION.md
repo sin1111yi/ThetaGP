@@ -17,7 +17,6 @@ identifier     = "MyBoard"
 name           = "MyBoard Rev.A"
 mcu            = "STM32H743xx"
 mcu_series     = "STM32H7"
-probe_rs_chip  = "STM32H743ZITx"
 
 [led0]
 pin        = "PC0"
@@ -71,7 +70,6 @@ chip = "w25qxx"
 | `name` | string | Human-readable board name. |
 | `mcu` | string | MCU part number, e.g. `STM32H743xx`. |
 | `mcu_series` | string | One of: `STM32H7`, `STM32F4`, `STM32F1`. |
-| `probe_rs_chip` | string | probe-rs chip name for flashing, e.g. `STM32H743ZITx`. |
 
 ### Pin macros — optional
 

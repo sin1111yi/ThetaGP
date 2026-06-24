@@ -204,20 +204,4 @@ set_target_properties(${CMAKE_PROJECT_NAME}
     LINK_FLAGS "-T${PLATFORM_LINK_SCRIPT}"
 )
 
-# =============================================================================
-# Flash target (probe-rs)
-# =============================================================================
-# Usage: cmake --build build --target flash
-# Chip is defined by BOARD_PROBE_RS_CHIP from board_config.cmake
 
-find_program(PROBE_RS_EXECUTABLE probe-rs)
-
-if(PROBE_RS_EXECUTABLE)
-    add_custom_target(flash
-        COMMAND ${PROBE_RS_EXECUTABLE} run
-            --chip ${BOARD_PROBE_RS_CHIP}
-            "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
-        DEPENDS ${CMAKE_PROJECT_NAME}
-        COMMENT "Flashing ${CMAKE_PROJECT_NAME} via probe-rs"
-    )
-endif()
