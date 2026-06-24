@@ -35,6 +35,7 @@
 #include "drivers/device/devicemgr.h"
 #include "drivers/device/flash/flash_base.h"
 #include "drivers/device/keypad.h"
+#include "drivers/device/run_led.h"
 #include "drivers/device/systimer.h"
 #include "drivers/gpdriver/gpdrivermgr.h"
 
@@ -47,8 +48,6 @@
 #include "test/init.h"
 
 using namespace ThetaGP;
-
-using Device = Drivers::Device::Device;
 
 ThetaGamepad::ThetaGamepad() {}
 
@@ -67,6 +66,8 @@ void ThetaGamepad::setup() {
       &Drivers::Device::Keypad::getInstance());
   (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::SystemTimer::getInstance());
+  (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
+      &Drivers::Device::RunLed::getInstance());
 #ifdef LOGGER_UART
   (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::Logger::getInstance());
@@ -76,6 +77,8 @@ void ThetaGamepad::setup() {
 
   Drivers::Device::DeviceManager::getInstance().initDevices();
 
+  Drivers::Device::RunLed::getInstance().setEffect(
+      Drivers::Device::RunLed::Effect::DoubleFlash);
   // setup GP drivers
   Drivers::GPDriver::GPDriverManager::getInstance().setup(
       Drivers::GPDriver::InputMode::HID);
