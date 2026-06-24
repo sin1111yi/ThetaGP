@@ -218,6 +218,26 @@ error_codes = [
   { name = "ERR_NOT_SUPPORTED", code = 6, description = "DFU not yet implemented" },
 ]
 
+[[commands]]
+name = "get_task_info"
+domain = "sys"
+description = "Get task scheduler statistics by TID"
+request = [
+  { name = "tid", type = "i32", json = "tid", required = false, default = 0 },
+]
+response = [
+  { name = "tid",       type = "i32",   json = "tid" },
+  { name = "name",      type = "string", json = "name" },
+  { name = "sub",       type = "string", json = "sub" },
+  { name = "desiredUs",   type = "u32",   json = "desiredUs" },
+  { name = "avgCycleUs",  type = "f32",   json = "avgCycleUs" },
+  { name = "actualHz",    type = "f32",   json = "actualHz" },
+  { name = "maxExecUs",   type = "u32",   json = "maxExecUs" },
+]
+error_codes = [
+  { name = "ERR_INVALID_PARAM", code = 2, description = "Invalid TID" },
+]
+
 # --- test domain ---
 
 [[commands]]

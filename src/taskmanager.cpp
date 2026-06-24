@@ -144,6 +144,29 @@ bool TaskManager::isValidTID(TID tid) {
   return tid >= 0 && static_cast<size_t>(tid) < taskCount && records[tid].inUse;
 }
 
+const TaskInfo *TaskManager::getTaskInfo(TID tid) {
+  if (!isValidTID(tid))
+    return nullptr;
+  Task *t = records[tid].task;
+  TaskAttribute *a = records[tid].attribute;
+  static TaskInfo info;
+  info.taskName = a->taskName;
+  info.subTaskName = a->subTaskName;
+  info.isEnabled = (scheduler->queueContains(t));
+  info.staticPriority = a->staticPriority;
+  info.desiredPeriodUs = a->desiredPeriodUs;
+  info.latestDeltaTimeUs = t->taskLatestDeltaTimeUs;
+  info.maxExecutionTimeUs = t->maxExecutionTimeUs;
+  info.totalExecutionTimeUs = t->totalExecutionTimeUs;
+  info.averageExecutionTime10thUs = t->movingSumExecutionTime10thUs / TASK_STATS_MOVING_SUM_COUNT;
+  info.averageDeltaTime10thUs = t->movingSumDeltaTime10thUs / TASK_STATS_MOVING_SUM_COUNT;
+  info.movingAverageCycleTimeUs = t->movingAverageCycleTimeUs;
+#ifdef USE_LATE_TASK_STATISTICS
+  info.runCount = t->runCount;
+#endif
+  return &info;
+}
+
 FAST_CODE void TaskManager::taskSystemLoad(uint32_t currentTimeUs) {
   FAST_DATA_ZERO_INIT static uint32_t lastExecutedAtUs = 0;
   uint32_t deltaTime = currentTimeUs - lastExecutedAtUs;

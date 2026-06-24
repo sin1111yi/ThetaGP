@@ -62,8 +62,4 @@ Device *DeviceManager::findDevice(const char *name) const {
   return nullptr;
 }
 
-Device *DeviceManager::getDevice(size_t index) const {
-  return (index < _count) ? _devices[index] : nullptr;
-}
-
 } // namespace ThetaGP::Drivers::Device

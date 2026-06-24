@@ -23,6 +23,8 @@
 #include "test/dispatcher.h"
 #include "test/framelayer.h"
 
+#include "taskmanager.h"
+
 #include "utils/log/log.h"
 
 #include "protocol/proto.h"
@@ -88,6 +90,38 @@ static void handleSysGetFwVersion([[maybe_unused]] const char *cmd,
     NVIC_SystemReset();
 }
 
+static void handleSysGetTaskInfo([[maybe_unused]] const char *cmd,
+                                 const Json &json) {
+    int queued = json.getInt("queued");
+    int tid = json.getInt("tid");
+    Json resp;
+    resp.beginWrite(s_sysRespBuf, sizeof(s_sysRespBuf));
+
+    const auto *info = Gamepad::TaskManager::getTaskInfo(tid);
+    if (info) {
+        // ArduinoJson printf does not support float, use integer math
+        uint32_t avgUs = static_cast<uint32_t>(info->movingAverageCycleTimeUs);
+        uint32_t actualHz = (avgUs > 0) ? (1000000U / avgUs) : 0;
+        resp.printf("{status:%Q,cmd:%Q,queued:%d,tid:%d,"
+                    "name:%Q,sub:%Q,desiredUs:%lu,"
+                    "avgCycleUs:%lu,actualHz:%lu,maxExecUs:%lu}",
+                    "ok", "sys.get_task_info", queued + 1, tid,
+                    info->taskName, info->subTaskName,
+                    info->desiredPeriodUs,
+                    (unsigned long)avgUs,
+                    (unsigned long)actualHz,
+                    info->maxExecutionTimeUs);
+    } else {
+        resp.printf("{status:%Q,cmd:%Q,queued:%d,tid:%d,"
+                    "error_code:%d,reason:%Q}",
+                    "error", "sys.get_task_info", queued + 1, tid,
+                    static_cast<int>(Proto::ErrorCode::ERR_INVALID_PARAM),
+                    "invalid TID");
+    }
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
+}
+
 static void handleSysEnterDfu([[maybe_unused]] const char *cmd,
                               [[maybe_unused]] const Json &json) {
     int queued = json.getInt("queued");
@@ -110,6 +144,7 @@ void SysHandler::registerHandlers() {
     Proto::registerSysGetFwVersion(handleSysGetFwVersion);
     Proto::registerSysReset(handleSysReset);
     Proto::registerSysEnterDfu(handleSysEnterDfu);
+    Proto::registerSysGetTaskInfo(handleSysGetTaskInfo);
 }
 
 // ---------------------------------------------------------------------------
@@ -127,6 +162,8 @@ void SysHandler::handle(const char *cmd, const Json &json) {
         handleSysReset(cmd, json);
     } else if (strcmp(cmd, "sys.enter_dfu") == 0) {
         handleSysEnterDfu(cmd, json);
+    } else if (strcmp(cmd, "sys.get_task_info") == 0) {
+        handleSysGetTaskInfo(cmd, json);
     } else {
         // Unknown sys command — return error response
         int queued = json.getInt("queued");

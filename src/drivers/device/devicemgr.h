@@ -47,7 +47,6 @@ public:
   void initDevices();
 
   [[nodiscard]] Device *findDevice(const char *name) const;
-  [[nodiscard]] Device *getDevice(size_t index) const;
   [[nodiscard]] size_t getDeviceCount() const { return _count; }
 };
 

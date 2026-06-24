@@ -72,6 +72,8 @@ public:
   static void destroyTask(TID tid);
 
   static bool isValidTID(TID tid);
+  static const TaskInfo *getTaskInfo(TID tid);
+  static size_t getTaskCount() { return taskCount; }
 };
 
 } // namespace ThetaGP::Gamepad
