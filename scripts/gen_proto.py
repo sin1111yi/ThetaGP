@@ -319,16 +319,16 @@ def gen_cpp(proto: dict, out: Optional[Path] = None) -> str:
         w(f"    inline static void {func_name}(Handler h) {{ {var_name} = h; }}")
     w()
     w("    // ── Dispatch ──")
-    w("    inline static void dispatch(const char *cmd, const Json &json) {")
+    w("    inline static bool dispatch(const char *cmd, const Json &json) {")
     for i, cmd_info in enumerate(commands):
         domain = cmd_info["domain"]
         full_name = f"{domain}.{cmd_info['name']}"
         var_name = f"_{domain}{to_pascal(cmd_info['name'])}Handler"
         if i == 0:
-            w(f'        if (strcmp(cmd, "{full_name}") == 0)              {{ if ({var_name}) {var_name}(cmd, json); }}')
+            w(f'        if (strcmp(cmd, "{full_name}") == 0)              {{ if ({var_name}) {{ {var_name}(cmd, json); return true; }} }}')
         else:
-            w(f'        else if (strcmp(cmd, "{full_name}") == 0) {{ if ({var_name}) {var_name}(cmd, json); }}')
-    w("        // Unknown command — silently ignored")
+            w(f'        else if (strcmp(cmd, "{full_name}") == 0) {{ if ({var_name}) {{ {var_name}(cmd, json); return true; }} }}')
+    w("        return false;")
     w("    }")
     w()
     w("private:")

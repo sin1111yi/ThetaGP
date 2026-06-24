@@ -379,7 +379,7 @@ class Gd25qFlash : public FlashBase {
 };
 ```
 
-BoardConfig macros (`SPI_2_PERIPHERAL`, `SPI_2_SCLK`, etc.) are generated from `BoardConfig.lua` via the SPI generator. The pattern uses `CONTACT3(FLASH_SPI, _, name)` to resolve `FLASH_SPI` → `SPI_2` → `SPI_2_PERIPHERAL`.
+BoardConfig macros (`SPI_2_PERIPHERAL`, `SPI_2_SCLK`, etc.) are generated from `BoardConfig.toml` via the Python config generator. The pattern uses `CONTACT3(FLASH_SPI, _, name)` to resolve `FLASH_SPI` → `SPI_2` → `SPI_2_PERIPHERAL`.
 
 ---
 

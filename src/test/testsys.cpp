@@ -127,6 +127,17 @@ void SysHandler::handle(const char *cmd, const Json &json) {
         handleSysReset(cmd, json);
     } else if (strcmp(cmd, "sys.enter_dfu") == 0) {
         handleSysEnterDfu(cmd, json);
+    } else {
+        // Unknown sys command — return error response
+        int queued = json.getInt("queued");
+        Json resp;
+        resp.beginWrite(s_sysRespBuf, sizeof(s_sysRespBuf));
+        resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,reason:%Q}",
+                    "error", cmd, queued + 1,
+                    static_cast<int>(Proto::ErrorCode::ERR_UNKNOWN_CMD),
+                    "unknown command");
+        uint16_t len = resp.end();
+        FrameLayer::getInstance().sendResponse(resp.c_str(), len);
     }
 }
 

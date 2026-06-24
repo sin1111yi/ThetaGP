@@ -33,15 +33,15 @@ TOML-based board configuration.
 | **SPI Flash** | **Required** | W25Q128 (16MB) or compatible. Used for WearLevel config storage and OTA staging. |
 | MCU | STM32H7 series | Other families may work with platform porting |
 | USB Connector | USB-C or USB Micro-B | For HID + CDC communication |
-| Debug Probe | CMSIS-DAP / ST-Link / J-Link | Required for flashing and debug |
+| Debug Probe | CMSIS-DAP / ST-Link / J-Link | Required for flashing and debug. probe-rs supports all three. |
 
 ## Prerequisites
 
 - CMake 3.22+
 - ARM GNU Toolchain (`arm-none-eabi-gcc`)
 - Python 3.11+
-- OpenOCD (for flashing)
 - Git (for dependency fetching)
+- [probe-rs](https://probe.rs) (for flashing/debugging)
 
 ## Quick Start
 
@@ -74,7 +74,6 @@ ThetaGP/
 │       ├── startup/            CMSIS startup
 │       ├── link/               Linker script
 │       └── system/             HAL config, system init, syscalls
-├── openocd/                    OpenOCD flash configs
 ├── protocol/                   Protocol definition & generated code
 │   ├── protocol.toml           Single source of truth (CDC JSON protocol)
 │   └── proto.h                 Generated C++ header

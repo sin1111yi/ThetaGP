@@ -433,7 +433,18 @@ void TestCmdHandler::handle(const char *cmd, const Json &json) {
         return;
     }
 
-    Proto::dispatch(cmd, json);
+    if (!Proto::dispatch(cmd, json)) {
+        // Unknown test command — return error response
+        int queued = json.getInt("queued");
+        Json resp;
+        resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+        resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,reason:%Q}",
+                    "error", cmd, queued + 1,
+                    static_cast<int>(Proto::ErrorCode::ERR_UNKNOWN_CMD),
+                    "unknown command");
+        uint16_t len = resp.end();
+        FrameLayer::getInstance().sendResponse(resp.c_str(), len);
+    }
 }
 
 #else

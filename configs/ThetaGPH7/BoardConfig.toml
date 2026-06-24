@@ -1,8 +1,9 @@
 [board_info]
-identifier  = "ThetaGPH743"
-name        = "ThetaGP-H743_Ver.Ultra"
-mcu         = "STM32H743xx"
-mcu_series  = "STM32H7"
+identifier     = "ThetaGPH743"
+name           = "ThetaGP-H743_Ver.Ultra"
+mcu            = "STM32H743xx"
+mcu_series     = "STM32H7"
+probe_rs_chip  = "STM32H743VITx"
 
 [led0]
 pin        = "PD8"
