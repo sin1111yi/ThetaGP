@@ -45,8 +45,8 @@ private:
 
 // ── Font instances ──────────────────────────────────────────────────────────
 
-extern const AaFont font8;
-extern const AaFont font12;
-extern const AaFont font16;
+extern const AaFont &font8;
+extern const AaFont &font12;
+extern const AaFont &font16;
 
 } // namespace ThetaGP::Drivers::Device::DisplayDrv
