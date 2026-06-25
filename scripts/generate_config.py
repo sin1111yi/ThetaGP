@@ -19,6 +19,7 @@ from config import (
     gen_uart_lines,
     gen_spi_lines,
     gen_flash_lines,
+    gen_display_lines,
     assemble_header,
     generate_cmake,
 )
@@ -143,9 +144,14 @@ def main() -> None:
     flash_lines = gen_flash_lines(cfg.get("flash"))
     print(f"[INFO]   Flash: {len(flash_lines)} macros generated", file=sys.stderr)
 
+    print("[INFO] Generating display macros...", file=sys.stderr)
+    display_lines = gen_display_lines(cfg.get("display"))
+    print(f"[INFO]   Display: {len(display_lines)} macros generated", file=sys.stderr)
+
     header_content = assemble_header(
         bi.get("mcu_series", ""), bi,
-        pin_lines, keypad_lines, usb_lines, uart_lines, spi_lines, flash_lines,
+        pin_lines, keypad_lines, usb_lines, uart_lines, spi_lines,
+        flash_lines, display_lines,
     )
     cmake_content = generate_cmake(bi, target)
 

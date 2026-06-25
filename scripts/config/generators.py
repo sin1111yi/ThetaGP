@@ -258,6 +258,11 @@ def gen_spi_lines(bus: dict | None) -> list[str]:
             enum_val = SPI_PERIPHERAL_ENUM_MAP.get(
                 f["peripheral"], f"SpiInstance::Spi{i + 1}"
             )
+            for pin_name in ("sclk", "mosi", "miso", "ncs"):
+                if pin_name not in f:
+                    raise ValueError(
+                        f"bus.spi[{i}].{pin_name} is required"
+                    )
             sclk_str = generate_pin_struct(f["sclk"])
             mosi_str = generate_pin_struct(f["mosi"])
             miso_str = generate_pin_struct(f["miso"])
@@ -295,6 +300,18 @@ def gen_flash_lines(flash: dict | None) -> list[str]:
     return [f"#define FLASH_CHIP_{macro_suffix}"]
 
 
+# ── Display ──────────────────────────────────────────────────────────────────
+
+def gen_display_lines(display: dict | None) -> list[str]:
+    """Generate display configuration macros."""
+    if not display or "chip" not in display:
+        return []
+    lines: list[str] = []
+    lines.append(f"#define DISPLAY_CHIP_{display['chip'].upper()}")
+    for name, pin in display.get("pins", {}).items():
+        lines.append(generate_pin_macro(f"DISPLAY_{name.upper()}_PIN", pin))
+    return lines
+
 # ── Header / CMake assembly ──────────────────────────────────────────────────
 
 def assemble_header(
@@ -306,6 +323,7 @@ def assemble_header(
     uart_lines: list[str],
     spi_lines: list[str],
     flash_lines: list[str],
+    display_lines: list[str] | None = None,
 ) -> str:
     """Assemble the full BoardConfig.h content."""
     mcu_header = MCU_HEADER_MAP.get(mcu_series, "")
@@ -364,6 +382,11 @@ def assemble_header(
     if flash_lines:
         content += "\n"
         for line in flash_lines:
+            content += line + "\n"
+
+    if display_lines:
+        content += "\n"
+        for line in display_lines:
             content += line + "\n"
 
     return content

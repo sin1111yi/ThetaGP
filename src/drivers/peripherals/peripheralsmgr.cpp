@@ -20,12 +20,15 @@
  */
 
 #include "drivers/peripherals/bus/bus.h"
+#include "drivers/peripherals/bus/bus_spi.h"
 #include "drivers/peripherals/peripheralsmgr.h"
 #include "drivers/peripherals/systick.h"
 #include "drivers/peripherals/timer.h"
 #include "drivers/peripherals/usbhw.h"
 
 #include "BoardConfig.h"
+
+#include <new>
 
 #include "utils/log/log.h"
 
@@ -79,9 +82,13 @@ void PeripheralsManager::initPeripherals() {
 
 void PeripheralsManager::initSpiBuses() {
 #if defined(SPI_DESC_DATA)
-  COMMON_DATA static BUS::SpiBus g_buses[] = { BUS::SpiBus{ SPI_DESC_DATA } };
-  _spiBuses = g_buses;
-  _spiCount = sizeof(g_buses) / sizeof(g_buses[0]);
+  COMMON_DATA static BUS::SpiDesc g_descs[] = { SPI_DESC_DATA };
+  static constexpr size_t count = sizeof(g_descs) / sizeof(g_descs[0]);
+  COMMON_ZERO_INIT static uint8_t g_spiMem[count * sizeof(BUS::SpiBus)];
+  for (size_t i = 0; i < count; i++)
+    new (g_spiMem + i * sizeof(BUS::SpiBus)) BUS::SpiBus(g_descs[i]);
+  _spiBuses = reinterpret_cast<BUS::SpiBus *>(g_spiMem);
+  _spiCount = count;
 #else
   _spiBuses = nullptr;
   _spiCount = 0;

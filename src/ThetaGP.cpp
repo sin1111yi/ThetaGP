@@ -37,6 +37,9 @@
 #include "drivers/device/keypad.h"
 #include "drivers/device/run_led.h"
 #include "drivers/device/systimer.h"
+#ifdef DISPLAY_SPI
+#include "drivers/device/display/display.h"
+#endif
 #include "drivers/gpdriver/gpdrivermgr.h"
 
 #include "drivers/peripherals/systick.h"
@@ -68,6 +71,10 @@ void ThetaGamepad::setup() {
       &Drivers::Device::SystemTimer::getInstance());
   (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::RunLed::getInstance());
+#ifdef DISPLAY_SPI
+  (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
+      &Drivers::Device::Display::getInstance());
+#endif
 #ifdef LOGGER_UART
   (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::Logger::getInstance());

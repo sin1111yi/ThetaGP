@@ -47,3 +47,19 @@ ncs        = "PB12"
 
 [flash]
 chip = "w25qxx"
+
+[[bus.spi]]
+bind       = "display"
+peripheral = "SPI1"
+sclk       = "PA5"
+miso       = "PA6"
+mosi       = "PA7"
+ncs        = "PA4"
+
+[display]
+chip = "nv3007"
+
+[display.pins]
+res = "PD2"
+dc  = "PB5"
+blk = "PB6"
