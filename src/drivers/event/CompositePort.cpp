@@ -19,27 +19,27 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
-
-#include <cstdint>
-
-#include "drivers/event/event.h"
+#include "drivers/event/CompositePort.h"
 
 namespace ThetaGP::Drivers::Event {
 
-class CompositeEvent : public Event {
-public:
-  enum Mode { OR, AND };
+CompositePort::CompositePort(IEventPort **ports, uint8_t count, Mode mode)
+    : _ports(ports), _count(count), _mode(mode) {}
 
-  CompositeEvent(Event **events, uint8_t count, Mode mode = OR);
+bool CompositePort::anyTriggered() {
+  if (_mode == OR) {
+    for (uint8_t i = 0; i < _count; i++)
+      if (_ports[i]->anyTriggered()) return true;
+    return false;
+  }
+  for (uint8_t i = 0; i < _count; i++)
+    if (!_ports[i]->anyTriggered()) return false;
+  return true;
+}
 
-  bool isTriggered() override;
-  void clear() override;
-
-private:
-  Event **_events;
-  uint8_t _count;
-  Mode _mode;
-};
+void CompositePort::clearAll() {
+  for (uint8_t i = 0; i < _count; i++)
+    _ports[i]->clearAll();
+}
 
 } // namespace ThetaGP::Drivers::Event

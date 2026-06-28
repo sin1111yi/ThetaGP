@@ -55,11 +55,11 @@ void Display::update() {
 
   auto &mgr = Event::EventManager::getInstance();
   bool triggered = _pendingUpdate;
-  for (uint8_t i = 0; i < mgr.eventCount(); i++) {
-    auto *evt = mgr.getEvent(i);
-    if (evt->isTriggered()) {
+  for (uint8_t i = 0; i < mgr.portCount(); i++) {
+    auto *p = mgr.getPort(i);
+    if (p->anyTriggered()) {
       triggered = true;
-      evt->clear();
+      p->clearAll();
     }
   }
   if (!triggered)
@@ -71,10 +71,6 @@ void Display::update() {
 
 void Display::requestUpdate() {
   _pendingUpdate = true;
-}
-
-void Display::registerEvent(Event::Event *evt) {
-  Event::EventManager::getInstance().registerEvent(*evt);
 }
 
 } // namespace ThetaGP::Drivers::Device

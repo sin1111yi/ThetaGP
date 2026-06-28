@@ -19,32 +19,15 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "drivers/event/CompositeEvent.h"
+#pragma once
 
 namespace ThetaGP::Drivers::Event {
 
-CompositeEvent::CompositeEvent(Event **events, uint8_t count, CompositeEvent::Mode mode)
-    : _events(events), _count(count), _mode(mode) {}
-
-bool CompositeEvent::isTriggered() {
-  if (_mode == OR) {
-    for (uint8_t i = 0; i < _count; i++) {
-      if (_events[i]->isTriggered())
-        return true;
-    }
-    return false;
-  }
-  for (uint8_t i = 0; i < _count; i++) {
-    if (!_events[i]->isTriggered())
-      return false;
-  }
-  return true;
-}
-
-void CompositeEvent::clear() {
-  for (uint8_t i = 0; i < _count; i++) {
-    _events[i]->clear();
-  }
-}
+class IEventPort {
+public:
+  virtual ~IEventPort() = default;
+  virtual bool anyTriggered() = 0;
+  virtual void clearAll() = 0;
+};
 
 } // namespace ThetaGP::Drivers::Event

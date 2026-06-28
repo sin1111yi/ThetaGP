@@ -24,7 +24,6 @@
 #include "BoardConfig.h"
 #include "drivers/device/device.h"
 #include "drivers/device/display/driver.h"
-#include "drivers/event/event.h"
 
 namespace ThetaGP::Drivers::Device {
 
@@ -38,10 +37,6 @@ public:
   void init() override;
   void update();
   void requestUpdate();
-
-  /// Convenience: registers an event with the EventManager.
-  /// Display::update() polls all events registered there.
-  void registerEvent(Event::Event *evt);
 
   DisplayDriver *getDriver() { return _driver; }
 

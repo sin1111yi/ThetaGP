@@ -21,14 +21,25 @@
 
 #pragma once
 
+#include "drivers/event/IEventPort.h"
+
+#include <cstdint>
+
 namespace ThetaGP::Drivers::Event {
 
-class Event {
+class CompositePort : public IEventPort {
 public:
-  virtual ~Event() = default;
-  virtual void trigger() {}
-  virtual bool isTriggered() = 0;
-  virtual void clear() = 0;
+  enum Mode { OR, AND };
+
+  CompositePort(IEventPort **ports, uint8_t count, Mode mode = OR);
+
+  bool anyTriggered() override;
+  void clearAll() override;
+
+private:
+  IEventPort **_ports;
+  uint8_t _count;
+  Mode _mode;
 };
 
 } // namespace ThetaGP::Drivers::Event

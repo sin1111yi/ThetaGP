@@ -27,23 +27,36 @@
 
 namespace ThetaGP::Drivers::Event {
 
-class EventManager {
+template<typename E, uint8_t N>
+class EventPort : public IEventPort {
+  volatile uint8_t _flags[N] = {};
+
 public:
-  static EventManager &getInstance();
+  void trigger(E e) { _flags[static_cast<uint8_t>(e)] = 1; }
+  bool isTriggered(E e) const { return _flags[static_cast<uint8_t>(e)] != 0; }
+  void clear(E e) { _flags[static_cast<uint8_t>(e)] = 0; }
 
-  static constexpr uint8_t INVALID_INDEX = 0xFF;
+  template<E... events>
+  bool anyOf() const { return (isTriggered(events) || ...); }
 
-  uint8_t registerPort(IEventPort &port);
+  template<E... events>
+  bool allOf() const { return (isTriggered(events) && ...); }
 
-  uint8_t portCount() const;
-  IEventPort *getPort(uint8_t i) const;
+  template<E... events>
+  void clearOf() { (clear(events), ...); }
 
-private:
-  EventManager() = default;
+  bool anyTriggered() override {
+    for (uint8_t i = 0; i < N; i++)
+      if (_flags[i]) return true;
+    return false;
+  }
 
-  static constexpr uint8_t MAX_PORTS = 8;
-  IEventPort *_ports[MAX_PORTS] = {};
-  uint8_t _count = 0;
+  void clearAll() override {
+    for (uint8_t i = 0; i < N; i++)
+      _flags[i] = 0;
+  }
+
+  uint8_t count() const { return N; }
 };
 
 } // namespace ThetaGP::Drivers::Event
