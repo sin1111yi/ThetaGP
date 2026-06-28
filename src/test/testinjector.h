@@ -28,7 +28,7 @@
 
 namespace ThetaGP::Test {
 
-#ifdef THETAGP_ENABLE_TEST_API
+#ifdef THETAGP_CFG_TEST
 
 /**
  * TestInjector — GamepadRawInput / HIDReport hook for test state injection and capture.
@@ -49,14 +49,14 @@ class TestInjector {
 public:
     static TestInjector &getInstance();
 
-    /// Static wrapper for GamepadRawInputHook registration
-    static void gamepadRawInputHook(Gamepad::GamepadRawInput &state) {
+    /// Static wrapper for GPInputStatHook registration
+    static void gpInputStatHook(Gamepad::GamepadRawInput &state) {
         getInstance().onGamepadRawInput(state);
     }
 
-    /// Static wrapper for HIDReportHook registration
-    static void hidReportHook(HIDReport &report) {
-        getInstance().onHIDReport(report);
+    /// Static wrapper for GPReportHook registration
+    static void gpReportHook(void *report) {
+        getInstance().onHIDReport(*static_cast<HIDReport *>(report));
     }
 
     // Called after Gamepad::read(), can modify state

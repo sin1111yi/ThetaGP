@@ -34,11 +34,11 @@ namespace ThetaGP::Drivers::GPDriver {
 
 HIDDriver::HIDDriver() {}
 
-// --- HIDReport hook (listener/callback, defaults to no-op) ---
-FAST_DATA_ZERO_INIT static HIDDriver::HIDReportHook g_hidReportHook = nullptr;
+// --- Report hook (listener/callback, defaults to no-op) ---
+FAST_DATA_ZERO_INIT static GPReportHook g_reportHook = nullptr;
 
-void HIDDriver::registerHIDReportHook(HIDReportHook hook) {
-  g_hidReportHook = hook;
+void HIDDriver::registerGPReportHook(GPReportHook hook) {
+  g_reportHook = hook;
 }
 
 static bool hid_control_xfer_cb(uint8_t rhport, uint8_t stage,
@@ -149,8 +149,8 @@ bool HIDDriver::process(void *gamepad) {
                       (gp->pressedE7() ? GAMEPAD_MASK_E7 : 0) |
                       (gp->pressedE8() ? GAMEPAD_MASK_E8 : 0);
 
-  if (g_hidReportHook) {
-    g_hidReportHook(hidReport);
+  if (g_reportHook) {
+    g_reportHook(&hidReport);
   }
 
   // Wake up TinyUSB device only when state changes while suspended
