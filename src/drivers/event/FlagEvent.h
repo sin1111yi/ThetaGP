@@ -27,7 +27,7 @@ namespace ThetaGP::Drivers::Event {
 
 class FlagEvent : public Event {
 public:
-  void trigger() { _triggered = true; }
+  void trigger() override { _triggered = true; }
   bool isTriggered() override { return _triggered; }
   void clear() override { _triggered = false; }
 

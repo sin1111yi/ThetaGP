@@ -23,6 +23,7 @@
 
 #ifdef USE_DISPLAY
 #include "drivers/device/display/drivers/nv3007.h"
+#include "drivers/event/EventManager.h"
 #include "drivers/peripherals/gpio.h"
 #include "drivers/peripherals/peripheralsmgr.h"
 
@@ -52,11 +53,13 @@ void Display::update() {
   if (!_driver)
     return;
 
+  auto &mgr = Event::EventManager::getInstance();
   bool triggered = _pendingUpdate;
-  for (uint8_t i = 0; i < _eventCount; i++) {
-    if (_events[i]->isTriggered()) {
+  for (uint8_t i = 0; i < mgr.eventCount(); i++) {
+    auto *evt = mgr.getEvent(i);
+    if (evt->isTriggered()) {
       triggered = true;
-      _events[i]->clear();
+      evt->clear();
     }
   }
   if (!triggered)
@@ -71,9 +74,7 @@ void Display::requestUpdate() {
 }
 
 void Display::registerEvent(Event::Event *evt) {
-  if (_eventCount >= MAX_EVENTS)
-    return;
-  _events[_eventCount++] = evt;
+  Event::EventManager::getInstance().registerEvent(*evt);
 }
 
 } // namespace ThetaGP::Drivers::Device

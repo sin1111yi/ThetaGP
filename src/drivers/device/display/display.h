@@ -38,6 +38,9 @@ public:
   void init() override;
   void update();
   void requestUpdate();
+
+  /// Convenience: registers an event with the EventManager.
+  /// Display::update() polls all events registered there.
   void registerEvent(Event::Event *evt);
 
   DisplayDriver *getDriver() { return _driver; }
@@ -45,10 +48,6 @@ public:
 private:
   Display();
   DisplayDriver *_driver = nullptr;
-
-  static constexpr uint8_t MAX_EVENTS = 4;
-  Event::Event *_events[MAX_EVENTS] = {};
-  uint8_t _eventCount = 0;
   bool _pendingUpdate = false;
 };
 
