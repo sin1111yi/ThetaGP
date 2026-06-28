@@ -24,12 +24,12 @@
 #include "drivers/peripherals/systick.h"
 #include "utils/mempool/mempoolmanager.h"
 
-namespace ThetaGP::Drivers::Device::DisplayDrv {
+namespace ThetaGP::Drivers::Device {
 
 namespace GPIO = Peripheral::GPIO;
 using namespace Peripheral::BUS;
 
-// ── Init command list from LVGL lv_nv3007.c ─────────────────────────────────
+COMMON_ZERO_INIT uint8_t Nv3007::_framebuffer[Nv3007::WIDTH * Nv3007::HEIGHT * 2];
 
 static constexpr uint8_t CMD_DELAY = 0xFF;
 static constexpr uint8_t CMD_EOF   = 0xFE;
@@ -153,24 +153,26 @@ static const uint8_t initCmds[] = {
 };
 
 static const uint8_t initCmds2[] = {
-    0x3a, 1, 0x05,       // COLMOD: 16-bit/pixel
-    0x11, 0,             // SLPOUT
-    CMD_DELAY, 22,       // delay 220ms
-    0x29, 0,             // DISPON
+    0x3a, 1, 0x05,
+    0x11, 0,
+    CMD_DELAY, 22,
+    0x29, 0,
     CMD_EOF,
 };
 
-// ── Constructor ─────────────────────────────────────────────────────────────
+Nv3007 &Nv3007::getInstance(SpiBus &spi, const GPIO::PinDesc &dcPin,
+                            const GPIO::PinDesc &resPin,
+                            const GPIO::PinDesc &blkPin) {
+  static Nv3007 instance(spi, dcPin, resPin, blkPin);
+  return instance;
+}
 
 Nv3007::Nv3007(SpiBus &spi, const GPIO::PinDesc &dcPin,
                const GPIO::PinDesc &resPin, const GPIO::PinDesc &blkPin)
     : _spi(spi), _dc(dcPin), _res(resPin), _blk(blkPin) {
 }
 
-// ── Public API ──────────────────────────────────────────────────────────────
-
 void Nv3007::init() {
-  // Configure GPIOs
   _dc.config(GPIO::Mode::OutputPushPull, GPIO::Pull::NoPull, GPIO::Speed::High);
   _dc.init();
   _dc.write(GPIO::PinState::Reset);
@@ -178,20 +180,29 @@ void Nv3007::init() {
   _blk.config(GPIO::Mode::OutputPushPull, GPIO::Pull::NoPull, GPIO::Speed::Low);
   _blk.init();
 
-  // Allocate DMA-safe SPI buffer
   constexpr uint32_t BUF_SIZE = 256;
   auto *txBuf = static_cast<uint8_t *>(Mempool::MempoolManager::alloc(
       DevMem::getInstance().poolId(), BUF_SIZE));
   _spi.setBuffers(txBuf, nullptr, BUF_SIZE);
   _spi.init();
 
-  // Hardware reset
-  reset();
+  hwReset();
 
-  // Enable backlight
+  sendCommand(0x10); sendData(0x00);
+  delay_ms(10);
+
+  swReset();
+
+  sendCommand(0x11); sendData(0x00);
+  delay_ms(300);
+
+  sendCommand(0x13); sendData(0x00);
+  sendCommand(0x36); sendData(_madctl);
+  sendCommand(0x3A); sendData(0x05);
+  sendCommand(0x29); sendData(0x00);
+
   _blk.write(GPIO::PinState::Set);
 
-  // Send init sequence
   sendCommand(0xFF); sendData(0xA5);
   sendCommandList(initCmds);
   sendCommand(0xFF); sendData(0x00);
@@ -202,15 +213,15 @@ void Nv3007::setWindow(uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
   uint16_t x2 = x + w - 1;
   uint16_t y2 = y + h - 1;
 
-  sendCommand(0x2A);  // CASET
+  sendCommand(0x2A);
   sendData(x >> 8); sendData(x & 0xFF);
   sendData(x2 >> 8); sendData(x2 & 0xFF);
 
-  sendCommand(0x2B);  // RASET
+  sendCommand(0x2B);
   sendData(y >> 8); sendData(y & 0xFF);
   sendData(y2 >> 8); sendData(y2 & 0xFF);
 
-  sendCommand(0x2C);  // RAMWR
+  sendCommand(0x2C);
 }
 
 void Nv3007::writePixels(const uint8_t *data, uint32_t len) {
@@ -218,7 +229,11 @@ void Nv3007::writePixels(const uint8_t *data, uint32_t len) {
   (void)_spi.write(data, len);
 }
 
-// ── Private helpers ─────────────────────────────────────────────────────────
+void Nv3007::setRotation(uint8_t madctl) {
+  _madctl = madctl;
+  sendCommand(0x36);
+  sendData(_madctl);
+}
 
 void Nv3007::sendCommand(uint8_t cmd) {
   _dc.write(GPIO::PinState::Reset);
@@ -246,7 +261,7 @@ void Nv3007::sendCommandList(const uint8_t *list) {
   }
 }
 
-void Nv3007::reset() {
+void Nv3007::hwReset() {
   _res.config(GPIO::Mode::OutputPushPull, GPIO::Pull::NoPull, GPIO::Speed::Low);
   _res.init();
   _res.write(GPIO::PinState::Reset);
@@ -255,4 +270,14 @@ void Nv3007::reset() {
   delay_ms(120);
 }
 
-} // namespace ThetaGP::Drivers::Device::Display
+void Nv3007::swReset() {
+  sendCommand(0x01);
+  delay_ms(200);
+}
+
+void Nv3007::flush() {
+  setWindow(0, 0, WIDTH, HEIGHT);
+  writePixels(_framebuffer, sizeof(_framebuffer));
+}
+
+} // namespace ThetaGP::Drivers::Device
