@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include <stdint.h>
+
 #include "drivers/event/event.h"
 
 namespace ThetaGP::Drivers::Event {

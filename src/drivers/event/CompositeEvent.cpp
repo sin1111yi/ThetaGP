@@ -19,27 +19,32 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
-
-#include <cstdint>
-
-#include "drivers/event/event.h"
+#include "drivers/event/CompositeEvent.h"
 
 namespace ThetaGP::Drivers::Event {
 
-class CompositeEvent : public Event {
-public:
-  enum Mode { OR, AND };
+CompositeEvent::CompositeEvent(Event **events, uint8_t count, CompositeEvent::Mode mode)
+    : _events(events), _count(count), _mode(mode) {}
 
-  CompositeEvent(Event **events, uint8_t count, Mode mode = OR);
+bool CompositeEvent::isTriggered() {
+  if (_mode == OR) {
+    for (uint8_t i = 0; i < _count; i++) {
+      if (_events[i]->isTriggered())
+        return true;
+    }
+    return false;
+  }
+  for (uint8_t i = 0; i < _count; i++) {
+    if (!_events[i]->isTriggered())
+      return false;
+  }
+  return true;
+}
 
-  bool isTriggered() override;
-  void clear() override;
-
-private:
-  Event **_events;
-  uint8_t _count;
-  Mode _mode;
-};
+void CompositeEvent::clear() {
+  for (uint8_t i = 0; i < _count; i++) {
+    _events[i]->clear();
+  }
+}
 
 } // namespace ThetaGP::Drivers::Event
