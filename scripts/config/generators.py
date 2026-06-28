@@ -307,6 +307,7 @@ def gen_display_lines(display: dict | None) -> list[str]:
     if not display or "chip" not in display:
         return []
     lines: list[str] = []
+    lines.append("#define USE_DISPLAY")
     lines.append(f"#define DISPLAY_CHIP_{display['chip'].upper()}")
     for name, pin in display.get("pins", {}).items():
         lines.append(generate_pin_macro(f"DISPLAY_{name.upper()}_PIN", pin))

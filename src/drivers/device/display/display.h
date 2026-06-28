@@ -24,8 +24,7 @@
 #include "BoardConfig.h"
 #include "drivers/device/device.h"
 #include "drivers/device/display/driver.h"
-#include "drivers/peripherals/bus/bus_spi.h"
-#include "drivers/peripherals/gpio.h"
+#include "drivers/event/event.h"
 
 namespace ThetaGP::Drivers::Device {
 
@@ -38,12 +37,19 @@ public:
 
   void init() override;
   void update();
-  DisplayDrv::DisplayDriver *getDriver() { return _driver; }
+  void requestUpdate();
+  void registerEvent(Event::Event *evt);
+
+  DisplayDriver *getDriver() { return _driver; }
 
 private:
   Display();
-  DisplayDrv::DisplayDriver *_driver = nullptr;
-  Peripheral::BUS::SpiBus *_spiBus = nullptr;
+  DisplayDriver *_driver = nullptr;
+
+  static constexpr uint8_t MAX_EVENTS = 4;
+  Event::Event *_events[MAX_EVENTS] = {};
+  uint8_t _eventCount = 0;
+  bool _pendingUpdate = false;
 };
 
 } // namespace ThetaGP::Drivers::Device

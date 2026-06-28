@@ -29,7 +29,7 @@
 #include "ThetaGP.h"
 
 #include "drivers/device/run_led.h"
-#ifdef DISPLAY_SPI
+#ifdef USE_DISPLAY
 #include "drivers/device/display/display.h"
 #endif
 #include "test/framelayer.h"
@@ -54,7 +54,7 @@ FAST_CODE static void taskRunLed(uint32_t currentTimeUs) {
   Drivers::Device::RunLed::getInstance().update(currentTimeUs);
 }
 
-#ifdef DISPLAY_SPI
+#ifdef USE_DISPLAY
 FAST_CODE static void taskDisplay(uint32_t) {
   Drivers::Device::Display::getInstance().update();
 }
@@ -67,8 +67,8 @@ void ThetaGP::ThetaGamepad::registerTasks(void) {
                             TASK_PERIOD_HZ(20), TaskPriority::Medium);
   TaskManager::registerTask("SYSTEM", "RUN_LED", taskRunLed,
                             TASK_PERIOD_HZ(100), TaskPriority::Low);
-#ifdef DISPLAY_SPI
+#ifdef USE_DISPLAY
   TaskManager::registerTask("SYSTEM", "DISPLAY", taskDisplay,
-                            TASK_PERIOD_MS(100), TaskPriority::Low);
+                            TASK_PERIOD_MS(1000), TaskPriority::Low);
 #endif
 }
