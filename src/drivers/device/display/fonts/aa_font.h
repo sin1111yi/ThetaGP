@@ -9,7 +9,7 @@
 
 #include <cstdint>
 
-namespace ThetaGP::Drivers::Device::DisplayDrv {
+namespace ThetaGP::Drivers::Device {
 
 // Glyph metrics
 struct GlyphDesc {
@@ -49,4 +49,4 @@ extern const AaFont &font8;
 extern const AaFont &font12;
 extern const AaFont &font16;
 
-} // namespace ThetaGP::Drivers::Device::DisplayDrv
+} // namespace ThetaGP::Drivers::Device

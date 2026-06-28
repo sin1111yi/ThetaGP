@@ -6,7 +6,7 @@
 
 #include "aa_font.h"
 
-namespace ThetaGP::Drivers::Device::DisplayDrv {
+namespace ThetaGP::Drivers::Device {
 
 AaFont::AaFont(const uint8_t *bitmap, const GlyphDesc *glyphs,
                uint8_t lineHeight, uint8_t baseLine)
@@ -22,4 +22,4 @@ bool AaFont::getGlyph(char c, GlyphDesc &desc) const {
   return true;
 }
 
-} // namespace ThetaGP::Drivers::Device::DisplayDrv
+} // namespace ThetaGP::Drivers::Device
