@@ -28,7 +28,7 @@
 
 namespace ThetaGP::Test {
 
-#ifdef THETAGP_ENABLE_TEST_API
+#ifdef THETAGP_CFG_TEST
 
 TestInjector &TestInjector::getInstance() {
     static TestInjector instance;
@@ -256,6 +256,6 @@ void TestInjector::onHIDReport(HIDReport &report) {
     }
 }
 
-#endif // THETAGP_ENABLE_TEST_API
+#endif // THETAGP_CFG_TEST
 
 } // namespace ThetaGP::Test

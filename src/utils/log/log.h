@@ -46,7 +46,7 @@ typedef enum {
 typedef void (*LogPrintFunc)(uint8_t *data, uint16_t len);
 typedef void (*LogDelayFunc)(uint32_t us);
 
-#if THETAGP_CFG_LOG_ENABLE
+#if THETAGP_CFG_LOG_EN
 
 #if !defined(LOG_BUFFER_SIZE)
 #define LOG_BUFFER_SIZE 256

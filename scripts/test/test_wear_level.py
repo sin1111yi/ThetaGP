@@ -832,10 +832,10 @@ def main():
     # Device detection
     if not os.path.exists(PORT):
         print(f"\n[WARNING] {PORT} not found.")
-        print("  Board may not be connected, or THETAGP_ENABLE_TEST_API not set.")
+        print("  Board may not be connected, or THETAGP_CFG_TEST not set.")
         print("  All tests will be SKIPPED.\n")
         print("  Build with test API:")
-        print("    lua tool.lua config --target BoringTechH743 -DTHETAGP_ENABLE_TEST_API=ON")
+        print("    lua tool.lua config --target BoringTechH743 -DTHETAGP_CFG_TEST=ON")
         print("    lua tool.lua build")
         print("    lua tool.lua flash ...")
         print("  Then connect the device's USB CDC port (not debug probe).")
