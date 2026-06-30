@@ -19,31 +19,27 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#include "drivers/event/CompositePort.h"
 
-#include "BoardConfig.h"
-#include "drivers/device/device.h"
-#include "drivers/device/display/driver.h"
+namespace ThetaGP::Drivers::Event {
 
-namespace ThetaGP::Drivers::Device {
+CompositePort::CompositePort(IEventPort **ports, uint8_t count, Mode mode)
+    : _ports(ports), _count(count), _mode(mode) {}
 
-class Display : public Device {
-public:
-  static Display &getInstance() {
-    static Display instance;
-    return instance;
+bool CompositePort::anyTriggered() {
+  if (_mode == OR) {
+    for (uint8_t i = 0; i < _count; i++)
+      if (_ports[i]->anyTriggered()) return true;
+    return false;
   }
+  for (uint8_t i = 0; i < _count; i++)
+    if (!_ports[i]->anyTriggered()) return false;
+  return true;
+}
 
-  void init() override;
-  void update();
-  void requestUpdate();
+void CompositePort::clearAll() {
+  for (uint8_t i = 0; i < _count; i++)
+    _ports[i]->clearAll();
+}
 
-  DisplayDriver *getDriver() { return _driver; }
-
-private:
-  Display();
-  DisplayDriver *_driver = nullptr;
-  bool _pendingUpdate = false;
-};
-
-} // namespace ThetaGP::Drivers::Device
+} // namespace ThetaGP::Drivers::Event

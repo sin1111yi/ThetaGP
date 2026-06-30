@@ -20,40 +20,31 @@
 cmake_minimum_required(VERSION 3.22)
 
 # =============================================================================
-# Test API Option
-# =============================================================================
-option(THETAGP_ENABLE_TEST_API "Enable test API infrastructure" OFF)
-
-# =============================================================================
 # Protocol Code Generation (configure-time)
 # =============================================================================
-# Run gen_proto.py at configure time to generate protocol/proto.h.
-# Only regenerates when protocol.toml changes (CMake tracks input/output).
+# Run gen_proto.py at configure time to generate protocol/proto.h (C++),
+# protocol/proto.rs (Rust), and protocol/types.ts (TypeScript) from
+# protocol/protocol.toml, as documented in protocol/README.md.
 find_program(PYTHON3 python3)
-if(PYTHON3 AND THETAGP_ENABLE_TEST_API)
+if(PYTHON3)
     set(PROTO_TOML "${CMAKE_SOURCE_DIR}/protocol/protocol.toml")
-    set(PROTO_H "${CMAKE_SOURCE_DIR}/protocol/proto.h")
     if(EXISTS "${PROTO_TOML}")
-        message(STATUS "Generating protocol/proto.h from protocol.toml ...")
+        message(STATUS "Generating protocol files from protocol.toml (cpp, rust, ts) ...")
         execute_process(
             COMMAND ${PYTHON3} "${CMAKE_SOURCE_DIR}/scripts/gen_proto.py"
-                --target cpp
-                --outdir-cpp "${CMAKE_SOURCE_DIR}/protocol"
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
             RESULT_VARIABLE PROTO_GEN_RESULT
         )
         if(PROTO_GEN_RESULT EQUAL 0)
-            message(STATUS "Generated protocol/proto.h")
-            # Mark as generated for dependency tracking
-            set_property(SOURCE ${PROTO_H} PROPERTY GENERATED TRUE)
+            message(STATUS "Generated protocol/proto.h, protocol/proto.rs, protocol/types.ts")
         else()
-            message(WARNING "protocol/proto.h generation failed (exit=${PROTO_GEN_RESULT})")
+            message(WARNING "Protocol generation failed (exit=${PROTO_GEN_RESULT})")
         endif()
     else()
         message(STATUS "protocol/protocol.toml not found — skipping code generation")
     endif()
 else()
-    message(STATUS "Protocol code generation: skipped (python3=${PYTHON3}, test_api=${THETAGP_ENABLE_TEST_API})")
+    message(STATUS "Protocol code generation: skipped (python3 not found)")
 endif()
 
 # =============================================================================
@@ -70,8 +61,7 @@ file(GLOB_RECURSE SRC_FILES
 # =============================================================================
 # TinyUSB Configuration
 # =============================================================================
-option(THETAGP_TINYUSB_DEBUG "TinyUSB debug level (0=off, 1=errors, 2=info, 3=verbose)" OFF)
-if(THETAGP_TINYUSB_DEBUG)
+if(THETAGP_CFG_USB_DBG)
     set(TINYUSB_DEBUG_LEVEL 3)
 else()
     set(TINYUSB_DEBUG_LEVEL 0)
@@ -181,18 +171,24 @@ target_compile_definitions(${CMAKE_PROJECT_NAME}
 
     # MBEDTLS_CONFIG_FILE="${MBEDTLS_CONFIG_FILE}"
     # ${MBEDTLS_DEFS}
-    THETAGP_CFG_LOG_ENABLE=${THETAGP_CFG_LOG_ENABLE}
-    THETAGP_CFG_LOG_LEVEL=${THETAGP_CFG_LOG_LEVEL}
+    THETAGP_CFG_LOG_LV=${THETAGP_CFG_LOG_LV}
     THETAGP_SRC_PATH="${CMAKE_SOURCE_DIR}"
 
     BOARD_IDENTIFIER="${BOARD_IDENTIFIER}"
     BOARD_NAME="${BOARD_NAME}"
 )
 
-if(THETAGP_ENABLE_TEST_API)
+if(THETAGP_CFG_LOG_EN)
     target_compile_definitions(${CMAKE_PROJECT_NAME}
         PRIVATE
-        THETAGP_ENABLE_TEST_API
+        THETAGP_CFG_LOG_EN=1
+    )
+endif()
+
+if(THETAGP_CFG_TEST)
+    target_compile_definitions(${CMAKE_PROJECT_NAME}
+        PRIVATE
+        THETAGP_CFG_TEST
     )
 endif()
 

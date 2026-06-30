@@ -19,31 +19,23 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#include "drivers/event/EventManager.h"
 
-#include "BoardConfig.h"
-#include "drivers/device/device.h"
-#include "drivers/device/display/driver.h"
+namespace ThetaGP::Drivers::Event {
 
-namespace ThetaGP::Drivers::Device {
+EventManager &EventManager::getInstance() {
+  static EventManager instance;
+  return instance;
+}
 
-class Display : public Device {
-public:
-  static Display &getInstance() {
-    static Display instance;
-    return instance;
-  }
+uint8_t EventManager::registerPort(IEventPort &port) {
+  if (_count >= MAX_PORTS)
+    return INVALID_INDEX;
+  _ports[_count] = &port;
+  return _count++;
+}
 
-  void init() override;
-  void update();
-  void requestUpdate();
+uint8_t EventManager::portCount() const { return _count; }
+IEventPort *EventManager::getPort(uint8_t i) const { return _ports[i]; }
 
-  DisplayDriver *getDriver() { return _driver; }
-
-private:
-  Display();
-  DisplayDriver *_driver = nullptr;
-  bool _pendingUpdate = false;
-};
-
-} // namespace ThetaGP::Drivers::Device
+} // namespace ThetaGP::Drivers::Event

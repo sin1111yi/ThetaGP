@@ -20,7 +20,7 @@
 #
 # Test: Profile system — Milestone M9 (14 test cases)
 # Target: CDC ACM virtual serial port (ttyACM1) on firmware built with
-#         -DTHETAGP_ENABLE_TEST_API=ON
+#         -DTHETAGP_CFG_TEST=ON
 # Method: Sends profile. JSON commands via raw serial, parses responses.
 #         Tests all 14 profile commands: profile.start, profile.get,
 #         profile.list, profile.create, profile.delete, profile.select,

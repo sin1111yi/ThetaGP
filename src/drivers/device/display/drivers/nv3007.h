@@ -21,37 +21,50 @@
 
 #pragma once
 
+#include "build_info.h"
 #include "drivers/device/display/driver.h"
 #include "drivers/peripherals/bus/bus_spi.h"
 #include "drivers/peripherals/gpio.h"
 
-namespace ThetaGP::Drivers::Device::DisplayDrv {
+namespace ThetaGP::Drivers::Device {
 
-/// NV3007 (ST7789-like) SPI display driver.
-/// Init sequence ported from LVGL lv_nv3007.c.
 class Nv3007 : public DisplayDriver {
 public:
-  Nv3007(Peripheral::BUS::SpiBus &spi,
-         const Peripheral::GPIO::PinDesc &dcPin,
-         const Peripheral::GPIO::PinDesc &resPin,
-         const Peripheral::GPIO::PinDesc &blkPin);
+  static constexpr uint16_t WIDTH = 428;
+  static constexpr uint16_t HEIGHT = 154;
+
+  static Nv3007 &getInstance(Peripheral::BUS::SpiBus &spi,
+                              const Peripheral::GPIO::PinDesc &dcPin,
+                              const Peripheral::GPIO::PinDesc &resPin,
+                              const Peripheral::GPIO::PinDesc &blkPin);
 
   void init() override;
   void setWindow(uint16_t x, uint16_t y, uint16_t w, uint16_t h) override;
   void writePixels(const uint8_t *data, uint32_t len) override;
-  uint16_t width() const override { return 240; }
-  uint16_t height() const override { return 320; }
+  uint16_t width() const override { return WIDTH; }
+  uint16_t height() const override { return HEIGHT; }
+  void flush() override;
+  uint8_t *getFramebuffer() override { return _framebuffer; }
+  void setRotation(uint8_t madctl);
 
 private:
+  Nv3007(Peripheral::BUS::SpiBus &spi,
+         const Peripheral::GPIO::PinDesc &dcPin,
+         const Peripheral::GPIO::PinDesc &resPin,
+         const Peripheral::GPIO::PinDesc &blkPin);
   void sendCommand(uint8_t cmd);
   void sendData(uint8_t data);
   void sendCommandList(const uint8_t *list);
-  void reset();
+  void hwReset();
+  void swReset();
+
+  COMMON_ZERO_INIT static uint8_t _framebuffer[WIDTH * HEIGHT * 2];
 
   Peripheral::BUS::SpiBus &_spi;
   Peripheral::GPIO::Gpio _dc;
   Peripheral::GPIO::Gpio _res;
   Peripheral::GPIO::Gpio _blk;
+  uint8_t _madctl = 0;
 };
 
-} // namespace ThetaGP::Drivers::Device::DisplayDrv
+} // namespace ThetaGP::Drivers::Device

@@ -88,10 +88,10 @@ void Gamepad::setButtonMappings() {
 }
 
 // --- GamepadRawInput hook (listener/callback, defaults to no-op) ---
-FAST_DATA_ZERO_INIT static Gamepad::GamepadRawInputHook g_gamepadRawInputHook = nullptr;
+FAST_DATA_ZERO_INIT static Gamepad::GPInputStatHook g_inputStatHook = nullptr;
 
-void Gamepad::registerGamepadRawInputHook(GamepadRawInputHook hook) {
-  g_gamepadRawInputHook = hook;
+void Gamepad::registerGPInputStatHook(GPInputStatHook hook) {
+  g_inputStatHook = hook;
 }
 
 /**
@@ -134,8 +134,8 @@ void Gamepad::process() {
   }
   read();
 
-  if (g_gamepadRawInputHook) {
-    g_gamepadRawInputHook(_state);
+  if (g_inputStatHook) {
+    g_inputStatHook(_state);
   }
 
   _gpDriverMgr->getgpdriverDevice()->process(this);

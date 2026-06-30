@@ -16,7 +16,7 @@
 #
 # Test: CDC JSON protocol — sys domain + test mode
 # Target: CDC ACM virtual serial port on firmware built with
-#         -DTHETAGP_ENABLE_TEST_API=ON
+#         -DTHETAGP_CFG_TEST=ON
 
 import os
 import time

@@ -21,29 +21,13 @@
 
 #pragma once
 
-#include "BoardConfig.h"
-#include "drivers/device/device.h"
-#include "drivers/device/display/driver.h"
+namespace ThetaGP::Drivers::Event {
 
-namespace ThetaGP::Drivers::Device {
-
-class Display : public Device {
+class IEventPort {
 public:
-  static Display &getInstance() {
-    static Display instance;
-    return instance;
-  }
-
-  void init() override;
-  void update();
-  void requestUpdate();
-
-  DisplayDriver *getDriver() { return _driver; }
-
-private:
-  Display();
-  DisplayDriver *_driver = nullptr;
-  bool _pendingUpdate = false;
+  virtual ~IEventPort() = default;
+  virtual bool anyTriggered() = 0;
+  virtual void clearAll() = 0;
 };
 
-} // namespace ThetaGP::Drivers::Device
+} // namespace ThetaGP::Drivers::Event

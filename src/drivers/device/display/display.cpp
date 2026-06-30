@@ -21,10 +21,10 @@
 
 #include "drivers/device/display/display.h"
 
-#include <new>
-
-#if defined(DISPLAY_SPI)
+#ifdef USE_DISPLAY
 #include "drivers/device/display/drivers/nv3007.h"
+#include "drivers/event/EventManager.h"
+#include "drivers/peripherals/gpio.h"
 #include "drivers/peripherals/peripheralsmgr.h"
 
 namespace ThetaGP::Drivers::Device {
@@ -36,17 +36,15 @@ Display::Display()
 }
 
 void Display::init() {
-  // Get SPI bus from PeripheralsManager
-  _spiBus = &Peripheral::PeripheralsManager::getInstance().spiBus(DISPLAY_SPI);
-
-  // Create Nv3007 driver
-  _driver = new DisplayDrv::Nv3007(
-      *_spiBus,
-      PinDesc DISPLAY_DC_PIN,
-      PinDesc DISPLAY_RES_PIN,
-      PinDesc DISPLAY_BLK_PIN
-  );
-
+#ifdef DISPLAY_CHIP_NV3007
+  auto &spi = Peripheral::PeripheralsManager::getInstance().spiBus(DISPLAY_SPI);
+  _driver = &Nv3007::getInstance(spi,
+                                 PinDesc DISPLAY_DC_PIN,
+                                 PinDesc DISPLAY_RES_PIN,
+                                 PinDesc DISPLAY_BLK_PIN);
+#endif
+  if (!_driver)
+    return;
   _driver->init();
   _initialized = true;
 }
@@ -54,7 +52,26 @@ void Display::init() {
 void Display::update() {
   if (!_driver)
     return;
+
+  auto &mgr = Event::EventManager::getInstance();
+  bool triggered = _pendingUpdate;
+  for (uint8_t i = 0; i < mgr.portCount(); i++) {
+    auto *p = mgr.getPort(i);
+    if (p->anyTriggered()) {
+      triggered = true;
+      p->clearAll();
+    }
+  }
+  if (!triggered)
+    return;
+  _pendingUpdate = false;
+
+  _driver->flush();
+}
+
+void Display::requestUpdate() {
+  _pendingUpdate = true;
 }
 
 } // namespace ThetaGP::Drivers::Device
-#endif // DISPLAY_SPI
+#endif // USE_DISPLAY

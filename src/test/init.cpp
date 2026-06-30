@@ -29,6 +29,7 @@
 
 #include "gamepad/gamepad.h"
 #include "drivers/gpdriver/hid/HIDDriver.h"
+#include "drivers/gpdriver/gpdrivermgr.h"
 #include "drivers/gpdriver/usbdriver.h"
 #include "utils/log/log.h"
 
@@ -47,14 +48,17 @@ void initTestSystem() {
     // Wire USB CDC RX callback -> frame layer
     USB::USBDriver::getInstance().setCDCRxCallback(FrameLayer::cdcRxHandler);
 
-    // Register hooks into production code via listener/callback pattern
-#ifdef THETAGP_ENABLE_TEST_API
-    // Test-only handlers
+    // Register test domain handlers (no-op stub in production)
     TestCmdHandler::registerHandlers();
 
-    // Register hooks into production code via listener/callback pattern
-    Gamepad::Gamepad::registerGamepadRawInputHook(TestInjector::gamepadRawInputHook);
-    ThetaGP::Drivers::GPDriver::HIDDriver::registerHIDReportHook(TestInjector::hidReportHook);
+    // Register hooks into production code — keep under #ifdef so the hook
+    // pointers stay nullptr in production, retaining zero-overhead null checks.
+#ifdef THETAGP_CFG_TEST
+    Gamepad::Gamepad::registerGPInputStatHook(TestInjector::gpInputStatHook);
+    auto *driver = Drivers::GPDriver::GPDriverManager::getInstance().getgpdriverDevice();
+    if (driver) {
+        driver->registerGPReportHook(TestInjector::gpReportHook);
+    }
 #endif
 
     LOG_INFO("Test API system initialized");

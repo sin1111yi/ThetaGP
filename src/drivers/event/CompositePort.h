@@ -21,29 +21,25 @@
 
 #pragma once
 
-#include "BoardConfig.h"
-#include "drivers/device/device.h"
-#include "drivers/device/display/driver.h"
+#include "drivers/event/IEventPort.h"
 
-namespace ThetaGP::Drivers::Device {
+#include <cstdint>
 
-class Display : public Device {
+namespace ThetaGP::Drivers::Event {
+
+class CompositePort : public IEventPort {
 public:
-  static Display &getInstance() {
-    static Display instance;
-    return instance;
-  }
+  enum Mode { OR, AND };
 
-  void init() override;
-  void update();
-  void requestUpdate();
+  CompositePort(IEventPort **ports, uint8_t count, Mode mode = OR);
 
-  DisplayDriver *getDriver() { return _driver; }
+  bool anyTriggered() override;
+  void clearAll() override;
 
 private:
-  Display();
-  DisplayDriver *_driver = nullptr;
-  bool _pendingUpdate = false;
+  IEventPort **_ports;
+  uint8_t _count;
+  Mode _mode;
 };
 
-} // namespace ThetaGP::Drivers::Device
+} // namespace ThetaGP::Drivers::Event

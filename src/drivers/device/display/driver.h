@@ -23,7 +23,7 @@
 
 #include <cstdint>
 
-namespace ThetaGP::Drivers::Device::DisplayDrv {
+namespace ThetaGP::Drivers::Device {
 
 /// Abstract display chip driver.
 struct DisplayDriver {
@@ -41,6 +41,12 @@ struct DisplayDriver {
   /// Screen dimensions in pixels.
   virtual uint16_t width() const = 0;
   virtual uint16_t height() const = 0;
+
+  /// Flush the full framebuffer to the display.
+  virtual void flush() = 0;
+
+  /// Pointer to the driver-owned framebuffer for direct pixel access.
+  virtual uint8_t *getFramebuffer() = 0;
 };
 
-} // namespace ThetaGP::Drivers::Device::DisplayDrv
+} // namespace ThetaGP::Drivers::Device

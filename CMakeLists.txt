@@ -37,19 +37,13 @@ if(NOT DEFINED CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
     set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type (e.g. Debug, Release, RelWithDebInfo)" FORCE)
 endif()
 
+# Load user-configurable defaults (supports -D override)
+include(${CMAKE_SOURCE_DIR}/cmake/thetagp_config.cmake)
+
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(THETAGP_CFG_LOG_ENABLE 3)
-
-    if(NOT DEFINED THETAGP_CFG_LOG_LEVEL)
-        message(STATUS "Set ThetaGP Log Level to Debug.")
-        set(THETAGP_CFG_LOG_LEVEL "Debug")
-    endif()
-
     message(WARNING "Logging enabled (Debug build) — each log call adds ~100us delay. "
                     "This may affect real-time performance of the 1kHz gamepad loop. "
                     "Set -DCMAKE_BUILD_TYPE=Release to disable.")
-else()
-    set(THETAGP_CFG_LOG_ENABLE 0)
 endif()
 
 # Project name with version

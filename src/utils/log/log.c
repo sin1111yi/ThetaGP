@@ -22,14 +22,14 @@
 #include "build_info.h"
 #include "utils/log/log.h"
 
-#if THETAGP_CFG_LOG_ENABLE
+#if THETAGP_CFG_LOG_EN
 
 FAST_DATA_ZERO_INIT static const char *g_RootPath = NULL;
 FAST_DATA_ZERO_INIT static LogPrintFunc g_PrintCallback = NULL;
 FAST_DATA_ZERO_INIT static LogDelayFunc g_DelayCallback = NULL;
 FAST_DATA static LogLevel g_LogLevel
-#if defined(THETAGP_CFG_LOG_LEVEL)
-    = LOG_LV(THETAGP_CFG_LOG_LEVEL);
+#if defined(THETAGP_CFG_LOG_LV)
+    = LOG_LV(THETAGP_CFG_LOG_LV);
 #else
     = LOG_LV(Error);
 #endif
