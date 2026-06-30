@@ -20,7 +20,7 @@
  */
 
 /**
- * @file dma_manager.h
+ * @file dmamgr.h
  * @brief DMA stream allocation manager (singleton)
  *
  * DmaManager provides centralized allocation of DMA streams.

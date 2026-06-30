@@ -31,7 +31,7 @@
 #include "drivers/peripherals/bus/bus.h"
 #include "drivers/peripherals/bus/bus_spi.h"
 #include "drivers/peripherals/dma.h"
-#include "drivers/peripherals/dma_manager.h"
+#include "drivers/peripherals/dmamgr.h"
 #include "drivers/peripherals/gpio.h"
 #include "drivers/peripherals/nvic.h"
 #include "drivers/peripherals/nvic_exti.h"
