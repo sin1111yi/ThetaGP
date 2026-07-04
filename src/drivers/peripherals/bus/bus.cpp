@@ -57,7 +57,6 @@ void Bus::init() {
   _initialized = true;
 }
 
-// ── Default subclass hooks (all return Unsupported) ──────────
 Result Bus::writeSync(const uint8_t *, uint16_t) {
   return Result::Unsupported;
 }
@@ -74,7 +73,6 @@ Result Bus::readAsync(uint8_t *, uint16_t) {
   return Result::Unsupported;
 }
 
-// ── Single-byte convenience (delegates to multi-byte) ────────
 Result Bus::write(uint8_t byte) {
   return write(&byte, 1);
 }
@@ -84,7 +82,6 @@ Result Bus::read(uint8_t *byte) {
   return read(byte, 1);
 }
 
-// ── Multi-byte dispatch ──────────────────────────────────────
 Result Bus::write(const uint8_t *data, uint16_t len) {
   if (data == nullptr || len == 0) {
     return Result::InvalidParam;

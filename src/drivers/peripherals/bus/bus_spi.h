@@ -68,9 +68,14 @@ private:
 
   void configPins();
 
-  // ── Subclass hooks (SPI is always full-duplex, uses transfer/transferAsync) ──
+  // Bus hooks
   Result writeSync(const uint8_t *data, uint16_t num) override;
   Result readSync(uint8_t *data, uint16_t num) override;
+
+  Result transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len,
+                  uint16_t chunkLen);
+  Result transferAsync(const uint8_t *txData, uint8_t *rxData, uint16_t len,
+                       uint16_t chunkLen);
 
 public:
   SpiBus(SpiInstance spix, GPIO::PinDesc clk, GPIO::PinDesc mosi,
@@ -84,44 +89,24 @@ public:
   void init() override;
   void enableClock() override;
 
-  /**
-   * @brief Full-duplex SPI transfer (MOSI + MISO simultaneously)
-   *
-   * Transfers @p len bytes in total, split into chunks of @p chunkLen.
-   * Each chunk copies data through the internal _txBuf/_rxBuf buffers
-   * (must be ≤ _bufSize). NCS is held asserted for the entire multi-
-   * chunk transfer.
-   *
-   * Pass txData=nullptr to send dummy bytes (0xFF).
-   * Pass rxData=nullptr to discard received bytes.
-   * chunkLen must be > 0 and ≤ _bufSize.
-   */
-  Result transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len,
-                  uint16_t chunkLen);
+  void enable() { _desc.ncs.reset(); }
+  void disable() { _desc.ncs.set(); }
 
-  /**
-   * @brief Two-phase asynchronous SPI transfer
-   *
-   * Phase 1: CMD+ADDR sent via polling (blocking HAL_SPI_Transmit)
-   * Phase 2: data phase via DMA (TX dummy bytes, RX into caller buffer)
-   *
-   * NCS is asserted before Phase 1 and de-asserted after DMA completion.
-   *
-   * @param cmdBuf        Command/address buffer (sent via polling)
-   * @param cmdLen        Length of cmdBuf in bytes
-   * @param rxBuf         Caller's receive buffer (may be DTCM — memcpy'd)
-   * @param dataLen       Number of data bytes to transfer via DMA
-   * @param postCmdDelayUs  Busy-wait delay after CMD phase (µs)
-   * @param callback      Called from ISR on completion or error
-   * @param context       Opaque context for callback
-   */
-  Result transferAsync(const uint8_t *cmdBuf, uint16_t cmdLen, uint8_t *rxBuf,
-                       uint16_t dataLen, uint8_t postCmdDelayUs,
-                       void (*callback)(void *context), void *context);
-
-  // ── Public accessors for static ISR callbacks ──
   void *halHandle() const { return _halHandle; }
   uint8_t *rxBuf() const { return _rxBuf; }
+
+  void setTxCallback(void (*callback)(void *context), void *context);
+  void setRxCallback(void (*callback)(void *context), void *context);
+  void txCallback() {
+    if (_txCallback) {
+      _txCallback(_txContext);
+    }
+  }
+  void rxCallback() {
+    if (_rxCallback) {
+      _rxCallback(_rxContext);
+    }
+  }
 
   bool isBusy() const;
   bool isTxBusy() const;
@@ -130,10 +115,12 @@ public:
   // ── DMA state (accessed by static ISR callbacks in .cpp) ──
   DMA::DmaChannel *_dmaTx = nullptr;
   DMA::DmaChannel *_dmaRx = nullptr;
-  uint8_t *_readDmaBuf = nullptr;
-  uint16_t _readDmaLen = 0;
-  void (*_transferCb)(void *) = nullptr;
-  void *_transferCtx = nullptr;
+  uint8_t *_readDmaBufPtr = nullptr;
+  uint16_t _readDmaBufLen = 0;
+  void (*_txCallback)(void *) = nullptr;
+  void *_txContext = nullptr;
+  void (*_rxCallback)(void *) = nullptr;
+  void *_rxContext = nullptr;
 };
 
 } // namespace BUS

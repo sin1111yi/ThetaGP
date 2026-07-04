@@ -300,19 +300,6 @@ def gen_flash_lines(flash: dict | None) -> list[str]:
     return [f"#define FLASH_CHIP_{macro_suffix}"]
 
 
-# ── Display ──────────────────────────────────────────────────────────────────
-
-def gen_display_lines(display: dict | None) -> list[str]:
-    """Generate display configuration macros."""
-    if not display or "chip" not in display:
-        return []
-    lines: list[str] = []
-    lines.append("#define USE_DISPLAY")
-    lines.append(f"#define DISPLAY_CHIP_{display['chip'].upper()}")
-    for name, pin in display.get("pins", {}).items():
-        lines.append(generate_pin_macro(f"DISPLAY_{name.upper()}_PIN", pin))
-    return lines
-
 # ── Header / CMake assembly ──────────────────────────────────────────────────
 
 def assemble_header(
@@ -324,7 +311,6 @@ def assemble_header(
     uart_lines: list[str],
     spi_lines: list[str],
     flash_lines: list[str],
-    display_lines: list[str] | None = None,
 ) -> str:
     """Assemble the full BoardConfig.h content."""
     mcu_header = MCU_HEADER_MAP.get(mcu_series, "")
@@ -383,11 +369,6 @@ def assemble_header(
     if flash_lines:
         content += "\n"
         for line in flash_lines:
-            content += line + "\n"
-
-    if display_lines:
-        content += "\n"
-        for line in display_lines:
             content += line + "\n"
 
     return content

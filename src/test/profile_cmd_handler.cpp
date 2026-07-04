@@ -220,15 +220,18 @@ static void handleProfileGet(const char *cmd, const Json &json) {
   tud_cdc_write(hdrBuf, static_cast<uint16_t>(n));
   tud_cdc_write_flush();
 
-  // Send raw bytes from staging
+  // Send raw bytes from staging — tud_task() yields to the USB
+  // stack so the host can drain the CDC FIFO between writes
   uint16_t sent = 0;
   while (sent < dataLen) {
+    tud_task();
     uint16_t chunk = (dataLen - sent < 64) ? (dataLen - sent) : 64;
     uint32_t written = tud_cdc_write(
         ThetaGP::Gamepad::Profile::s_staging + sent, chunk);
     sent += static_cast<uint16_t>(written);
     if (written < chunk) {
       tud_cdc_write_flush();
+      tud_task();
     }
   }
   tud_cdc_write_flush();
@@ -236,7 +239,7 @@ static void handleProfileGet(const char *cmd, const Json &json) {
   // Send trailer
   Json trailer;
   trailer.beginWrite(s_profRespBuf, sizeof(s_profRespBuf));
-  trailer.printf("{cmd:%Q,id:%d}", "profile.end", profileId);
+  trailer.printf("{cmd:%Q,status:%Q,id:%d}", "profile.end", "ok", profileId);
   uint16_t tlen = trailer.end();
   FrameLayer::getInstance().sendResponse(trailer.c_str(), tlen);
 }
@@ -280,7 +283,8 @@ static void handleProfileList(const char *cmd, const Json &json) {
                         ",");
       }
       pos += snprintf(profilesBuf + pos, sizeof(profilesBuf) - static_cast<size_t>(pos),
-                      "{id:%d,active:%B}", id, (id == status.activeId));
+                      "{\"id\":%d,\"active\":%d}", id,
+                      (id == status.activeId) ? 1 : 0);
       first = false;
     }
   }
@@ -367,6 +371,8 @@ static void handleProfileSelect(const char *cmd, const Json &json) {
     sendError(cmd, json, 1, "selectProfile failed");
     return;
   }
+
+  ConfigMgr::getInstance().setActiveProfileId(static_cast<uint16_t>(profileId));
 
   uint16_t dataLen = 0;
   ProfileStore::getInstance().loadActive(nullptr, &dataLen);

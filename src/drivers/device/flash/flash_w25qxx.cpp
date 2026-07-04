@@ -32,19 +32,16 @@ using namespace ThetaGP::Drivers::Peripheral::BUS;
 
 namespace ThetaGP::Drivers::Device {
 
-// ── Constructor ───────────────────────────────────────────────
-
 FlashW25qxx::FlashW25qxx()
     : FlashBase("w25qxx",
                 Drivers::Peripheral::PeripheralsManager::getInstance().spiBus(
                     FLASH_SPI)) {}
 
-// ── Internal helpers ──────────────────────────────────────────
-
 void FlashW25qxx::reset() {
-  // Enable Reset + Reset Device sequence
   uint8_t tx[2] = {I_ENABLE_RESET, I_RESET_DEVICE};
-  (void)_spi.transfer(tx, nullptr, sizeof(tx), sizeof(tx));
+  _spi.enable();
+  (void)_spi.write(tx, sizeof(tx));
+  _spi.disable();
 }
 
 uint8_t FlashW25qxx::readStatusReg(uint8_t idx) {
@@ -63,15 +60,19 @@ uint8_t FlashW25qxx::readStatusReg(uint8_t idx) {
     return 0;
   }
 
-  uint8_t tx[2] = {cmd, 0x00};
-  uint8_t rx[2] = {0};
-  (void)_spi.transfer(tx, rx, sizeof(tx), sizeof(tx));
-  return rx[1];
+  uint8_t status = 0;
+  _spi.enable();
+  (void)_spi.write(&cmd, 1);
+  (void)_spi.read(&status, 1);
+  _spi.disable();
+  return status;
 }
 
 void FlashW25qxx::writeEnable() {
   uint8_t tx[1] = {I_WRITE_EN};
-  (void)_spi.transfer(tx, nullptr, sizeof(tx), sizeof(tx));
+  _spi.enable();
+  (void)_spi.write(tx, sizeof(tx));
+  _spi.disable();
   waitWhileBusy();
 }
 
@@ -87,26 +88,23 @@ void FlashW25qxx::waitWhileBusy(uint32_t timeoutMs) {
 
 void FlashW25qxx::set4ByteAddrMode(bool enable) {
   uint8_t tx[1] = {enable ? I_ENTER_4B_ADDR_MODE : I_EXIT_4B_ADDR_MODE};
-  (void)_spi.transfer(tx, nullptr, sizeof(tx), sizeof(tx));
+  _spi.enable();
+  (void)_spi.write(tx, sizeof(tx));
+  _spi.disable();
   _addrMode4Byte = enable;
 }
 
-// ── isBusy ────────────────────────────────────────────────────
-
 bool FlashW25qxx::isBusy() { return (readStatusReg(1) & SR1_BUSY) != 0; }
 
-// ── readId ────────────────────────────────────────────────────
-
 uint32_t FlashW25qxx::readId() {
-  // Manufacturer/Device ID command (0x90): cmd + 3-byte address (0x000000)
-  uint8_t tx[6] = {I_MANUF_DEV_ID, 0x00, 0x00, 0x00, 0x00, 0x00};
-  uint8_t rx[6] = {0};
-  (void)_spi.transfer(tx, rx, sizeof(tx), sizeof(tx));
-  // rx[4] = manufacturer ID, rx[5] = device ID
-  return (static_cast<uint32_t>(rx[4]) << 8) | static_cast<uint32_t>(rx[5]);
+  uint8_t cmd[4] = {I_MANUF_DEV_ID, 0x00, 0x00, 0x00};
+  uint8_t id[2] = {0};
+  _spi.enable();
+  (void)_spi.write(cmd, sizeof(cmd));
+  (void)_spi.read(id, sizeof(id));
+  _spi.disable();
+  return (static_cast<uint32_t>(id[0]) << 8) | static_cast<uint32_t>(id[1]);
 }
-
-// ── init ──────────────────────────────────────────────────────
 
 void FlashW25qxx::init() {
   // Allocate DMA-safe buffers from DevMem pool via MempoolManager
@@ -115,6 +113,13 @@ void FlashW25qxx::init() {
       ThetaGP::Drivers::Device::DevMem::getInstance().poolId(), BUF_SIZE));
   _rxBuf = static_cast<uint8_t *>(ThetaGP::Mempool::MempoolManager::alloc(
       ThetaGP::Drivers::Device::DevMem::getInstance().poolId(), BUF_SIZE));
+
+  if (_txBuf == nullptr || _rxBuf == nullptr) {
+    LOG_ERROR("FLASH: buffer allocation failed (tx=%p rx=%p)",
+              static_cast<void *>(_txBuf), static_cast<void *>(_rxBuf));
+    _initialized = false;
+    return;
+  }
 
   _spi.setBuffers(_txBuf, _rxBuf, BUF_SIZE);
   _spi.init();
@@ -125,7 +130,21 @@ void FlashW25qxx::init() {
   delay_ms(10);
   LOG_INFO("FLASH: delay done, reading ID...");
 
-  uint16_t chipId = static_cast<uint16_t>(readId() & 0xFFFF);
+  // Retry chip ID read up to 3 times (warm reset may leave the SPI
+  // peripheral in an intermediate state on some STM32H7 systems)
+  uint16_t chipId = 0;
+  for (int attempt = 0; attempt < 3; attempt++) {
+    chipId = static_cast<uint16_t>(readId() & 0xFFFF);
+    if (chipId != 0 && chipId != 0xFFFF) {
+      break;
+    }
+    LOG_WARN("FLASH: chip ID read attempt %d returned 0x%04X, retrying...",
+             attempt + 1, chipId);
+    // Re-init SPI bus and reset the flash before retrying
+    _spi.init();
+    reset();
+    delay_ms(10);
+  }
   LOG_INFO("FLASH: chip ID = 0x%04X", chipId);
 
   // Determine flash size from chip ID
@@ -179,8 +198,6 @@ void FlashW25qxx::init() {
   _initialized = true;
 }
 
-// ── read ──────────────────────────────────────────────────────
-
 bool FlashW25qxx::read(uint32_t addr, uint8_t *data, uint32_t len) {
   if (!_initialized || data == nullptr || len == 0) {
     return false;
@@ -190,63 +207,29 @@ bool FlashW25qxx::read(uint32_t addr, uint8_t *data, uint32_t len) {
     return false;
   }
 
-  // Build transfer buffer: command + address + dummy bytes for data clock
-  // We send command+addr, then dummy bytes to clock out the data
   uint8_t addrBytes = _addrMode4Byte ? 4 : 3;
-  uint8_t cmdLen = 1 + addrBytes; // command byte + address
+  uint8_t cmdLen = 1 + addrBytes;
 
-  // For full-duplex, send command+addr and then (len) dummy bytes,
-  // simultaneously receiving data into rx buffer
-  // We need a tx buffer of cmdLen + len bytes and rx buffer of same size
-  // Due to SpiBus buffer constraints, read in chunks if needed
-  uint32_t remaining = len;
-  uint32_t currentAddr = addr;
-  uint8_t *currentData = data;
-
-  // Use a reasonable chunk size that fits in the SPI buffer
-  const uint32_t chunkSize = 256;
-
-  while (remaining > 0) {
-    uint32_t chunkLen = (remaining < chunkSize) ? remaining : chunkSize;
-
-    // Build CMD+ADDR and dummy data in a single TX buffer
-    // Full-duplex transfer: send cmd+addr then 0xFF dummy bytes to clock in data
-    // Max: 5 (1 cmd + 4 addr) + 256 (chunk) = 261 bytes
-    uint8_t txBuf[261];
-    uint8_t rxBuf[261];
-    uint16_t totalLen = cmdLen + chunkLen;
-
-    txBuf[0] = _addrMode4Byte ? I_READ_DATA_4B : I_READ_DATA;
-    if (_addrMode4Byte) {
-      txBuf[1] = static_cast<uint8_t>((currentAddr >> 24) & 0xFF);
-      txBuf[2] = static_cast<uint8_t>((currentAddr >> 16) & 0xFF);
-      txBuf[3] = static_cast<uint8_t>((currentAddr >> 8) & 0xFF);
-      txBuf[4] = static_cast<uint8_t>(currentAddr & 0xFF);
-    } else {
-      txBuf[1] = static_cast<uint8_t>((currentAddr >> 16) & 0xFF);
-      txBuf[2] = static_cast<uint8_t>((currentAddr >> 8) & 0xFF);
-      txBuf[3] = static_cast<uint8_t>(currentAddr & 0xFF);
-    }
-    // Fill dummy bytes to clock out data
-    std::memset(txBuf + cmdLen, 0xFF, chunkLen);
-
-    // Full-duplex LL polling transfer: send cmd+addr+dummy, receive all
-    if (_spi.transfer(txBuf, rxBuf, totalLen, totalLen) != Result::Ok) {
-      return false;
-    }
-
-    // Actual data starts at offset cmdLen in rxBuf (garbage before that)
-    std::memcpy(currentData, rxBuf + cmdLen, chunkLen);
-
-    currentAddr += chunkLen;
-    currentData += chunkLen;
-    remaining -= chunkLen;
+  uint8_t cmdBuf[5];
+  cmdBuf[0] = _addrMode4Byte ? I_READ_DATA_4B : I_READ_DATA;
+  if (_addrMode4Byte) {
+    cmdBuf[1] = static_cast<uint8_t>((addr >> 24) & 0xFF);
+    cmdBuf[2] = static_cast<uint8_t>((addr >> 16) & 0xFF);
+    cmdBuf[3] = static_cast<uint8_t>((addr >> 8) & 0xFF);
+    cmdBuf[4] = static_cast<uint8_t>(addr & 0xFF);
+  } else {
+    cmdBuf[1] = static_cast<uint8_t>((addr >> 16) & 0xFF);
+    cmdBuf[2] = static_cast<uint8_t>((addr >> 8) & 0xFF);
+    cmdBuf[3] = static_cast<uint8_t>(addr & 0xFF);
   }
+
+  _spi.enable();
+  (void)_spi.write(cmdBuf, cmdLen);
+  (void)_spi.read(data, len);
+  _spi.disable();
 
   return true;
 }
-
-// ── write ─────────────────────────────────────────────────────
 
 bool FlashW25qxx::write(uint32_t addr, const uint8_t *data, uint32_t len) {
   if (!_initialized || data == nullptr || len == 0) {
@@ -262,7 +245,6 @@ bool FlashW25qxx::write(uint32_t addr, const uint8_t *data, uint32_t len) {
   const uint8_t *currentData = data;
 
   while (remaining > 0) {
-    // Page program boundary: each page is 256 bytes
     uint32_t pageOffset = currentAddr % 256;
     uint32_t pageRemaining = 256 - pageOffset;
     uint32_t writeLen = (remaining < pageRemaining) ? remaining : pageRemaining;
@@ -271,29 +253,25 @@ bool FlashW25qxx::write(uint32_t addr, const uint8_t *data, uint32_t len) {
 
     uint8_t addrBytes = _addrMode4Byte ? 4 : 3;
     uint8_t cmdLen = 1 + addrBytes;
-    uint16_t totalLen = cmdLen + writeLen;
 
-    // Build full transfer buffer: cmd + addr + data
-    uint8_t txBuf[261]; // max: 5 (cmd+4byte addr) + 256 (page)
-    uint8_t rxBuf[261];
-
-    txBuf[0] = _addrMode4Byte ? I_PAGE_PGM_4B : I_PAGE_PGM;
+    // Build command + address
+    uint8_t cmdBuf[5];
+    cmdBuf[0] = _addrMode4Byte ? I_PAGE_PGM_4B : I_PAGE_PGM;
     if (_addrMode4Byte) {
-      txBuf[1] = static_cast<uint8_t>((currentAddr >> 24) & 0xFF);
-      txBuf[2] = static_cast<uint8_t>((currentAddr >> 16) & 0xFF);
-      txBuf[3] = static_cast<uint8_t>((currentAddr >> 8) & 0xFF);
-      txBuf[4] = static_cast<uint8_t>(currentAddr & 0xFF);
+      cmdBuf[1] = static_cast<uint8_t>((currentAddr >> 24) & 0xFF);
+      cmdBuf[2] = static_cast<uint8_t>((currentAddr >> 16) & 0xFF);
+      cmdBuf[3] = static_cast<uint8_t>((currentAddr >> 8) & 0xFF);
+      cmdBuf[4] = static_cast<uint8_t>(currentAddr & 0xFF);
     } else {
-      txBuf[1] = static_cast<uint8_t>((currentAddr >> 16) & 0xFF);
-      txBuf[2] = static_cast<uint8_t>((currentAddr >> 8) & 0xFF);
-      txBuf[3] = static_cast<uint8_t>(currentAddr & 0xFF);
+      cmdBuf[1] = static_cast<uint8_t>((currentAddr >> 16) & 0xFF);
+      cmdBuf[2] = static_cast<uint8_t>((currentAddr >> 8) & 0xFF);
+      cmdBuf[3] = static_cast<uint8_t>(currentAddr & 0xFF);
     }
-    std::memcpy(&txBuf[cmdLen], currentData, writeLen);
 
-    // Full-duplex transfer: send command + addr + data, discard rx
-    if (_spi.transfer(txBuf, rxBuf, totalLen, totalLen) != Result::Ok) {
-      return false;
-    }
+    _spi.enable();
+    (void)_spi.write(cmdBuf, cmdLen);
+    (void)_spi.write(currentData, writeLen);
+    _spi.disable();
 
     waitWhileBusy();
 
@@ -304,8 +282,6 @@ bool FlashW25qxx::write(uint32_t addr, const uint8_t *data, uint32_t len) {
 
   return true;
 }
-
-// ── eraseSector ───────────────────────────────────────────────
 
 bool FlashW25qxx::eraseSector(uint32_t addr) {
   if (!_initialized) {
@@ -319,32 +295,27 @@ bool FlashW25qxx::eraseSector(uint32_t addr) {
   writeEnable();
 
   uint8_t addrBytes = _addrMode4Byte ? 4 : 3;
-  uint8_t totalLen = 1 + addrBytes;
 
-  uint8_t txBuf[5];
-  uint8_t rxBuf[5];
-
-  txBuf[0] = _addrMode4Byte ? I_SECTOR_ERASE_4K_4B : I_SECTOR_ERASE_4K;
+  uint8_t cmdBuf[5];
+  cmdBuf[0] = _addrMode4Byte ? I_SECTOR_ERASE_4K_4B : I_SECTOR_ERASE_4K;
   if (_addrMode4Byte) {
-    txBuf[1] = static_cast<uint8_t>((addr >> 24) & 0xFF);
-    txBuf[2] = static_cast<uint8_t>((addr >> 16) & 0xFF);
-    txBuf[3] = static_cast<uint8_t>((addr >> 8) & 0xFF);
-    txBuf[4] = static_cast<uint8_t>(addr & 0xFF);
+    cmdBuf[1] = static_cast<uint8_t>((addr >> 24) & 0xFF);
+    cmdBuf[2] = static_cast<uint8_t>((addr >> 16) & 0xFF);
+    cmdBuf[3] = static_cast<uint8_t>((addr >> 8) & 0xFF);
+    cmdBuf[4] = static_cast<uint8_t>(addr & 0xFF);
   } else {
-    txBuf[1] = static_cast<uint8_t>((addr >> 16) & 0xFF);
-    txBuf[2] = static_cast<uint8_t>((addr >> 8) & 0xFF);
-    txBuf[3] = static_cast<uint8_t>(addr & 0xFF);
+    cmdBuf[1] = static_cast<uint8_t>((addr >> 16) & 0xFF);
+    cmdBuf[2] = static_cast<uint8_t>((addr >> 8) & 0xFF);
+    cmdBuf[3] = static_cast<uint8_t>(addr & 0xFF);
   }
 
-  if (_spi.transfer(txBuf, rxBuf, totalLen, totalLen) != Result::Ok) {
-    return false;
-  }
+  _spi.enable();
+  (void)_spi.write(cmdBuf, 1 + addrBytes);
+  _spi.disable();
 
   waitWhileBusy();
   return true;
 }
-
-// ── eraseChip ─────────────────────────────────────────────────
 
 bool FlashW25qxx::eraseChip() {
   if (!_initialized) {
@@ -354,17 +325,13 @@ bool FlashW25qxx::eraseChip() {
   writeEnable();
 
   uint8_t tx[1] = {I_CHIP_ERASE};
-  uint8_t rx[1] = {0};
-
-  if (_spi.transfer(tx, rx, sizeof(tx), sizeof(tx)) != Result::Ok) {
-    return false;
-  }
+  _spi.enable();
+  (void)_spi.write(tx, sizeof(tx));
+  _spi.disable();
 
   waitWhileBusy();
   return true;
 }
-
-// ── getInfo ───────────────────────────────────────────────────
 
 const FlashInfo &FlashW25qxx::getInfo() const { return _info; }
 

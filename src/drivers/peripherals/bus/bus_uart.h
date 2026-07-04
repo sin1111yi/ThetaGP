@@ -75,12 +75,11 @@ private:
 
   // ── C-style ISR callback ──
   typedef void (*UartCallbackFunc)(void *context);
-  UartCallbackFunc _rxCallback;
+  UartCallbackFunc _rxCallback = nullptr;
   void *_rxContext = nullptr;
-  UartCallbackFunc _txCallback;
+  UartCallbackFunc _txCallback = nullptr;
   void *_txContext = nullptr;
 
-  // ── Subclass hooks (refactored base Bus interface) ──
   Result writeSync(const uint8_t *data, uint16_t len) override;
   Result readSync(uint8_t *data, uint16_t len) override;
   Result writeAsync(const uint8_t *data, uint16_t len) override;

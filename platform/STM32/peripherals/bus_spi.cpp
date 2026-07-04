@@ -224,6 +224,13 @@ void SpiBus::enableClock() {
 void SpiBus::configPins() {
 #if defined(STM32H7)
 
+  // Configure NCS first, driven HIGH, so the flash isn't selected
+  // while SCK/MOSI are being configured (prevents random command
+  // injection into the flash chip).
+  _desc.ncs.config(GPIO::Mode::OutputPushPull, Pull::NoPull, Speed::High);
+  _desc.ncs.init();
+  _desc.ncs.set();
+
   for (const auto &pinDesc : _desc.busPinDesc) {
     uint32_t alternate = lookupSpiAf(_desc.spix, pinDesc.port, pinDesc.pin);
     Gpio gpio(pinDesc);
@@ -232,14 +239,14 @@ void SpiBus::configPins() {
     gpio.init();
   }
 
-  _desc.ncs.config(GPIO::Mode::OutputPushPull, Pull::NoPull, Speed::High);
-  _desc.ncs.init();
-
 #endif
 }
 
 void SpiBus::init() {
   if (_txBuf == nullptr || _rxBuf == nullptr) {
+    LOG_ERROR("SPI%u: init skipped (txBuf=%p rxBuf=%p)",
+              static_cast<unsigned>(_desc.spix) + 1,
+              static_cast<void *>(_txBuf), static_cast<void *>(_rxBuf));
     return;
   }
   std::memset(_rxBuf, 0, _bufSize * sizeof(uint8_t));
@@ -249,7 +256,31 @@ void SpiBus::init() {
   configPins();
 #if defined(STM32H7)
   const auto spiIdx = static_cast<uint32_t>(_desc.spix);
+  std::memset(&SPI_HANDLE, 0, sizeof(SPI_HANDLE));
   SPI_HANDLE.Instance = spiInstance[spiIdx];
+
+  // Force-reset the SPI peripheral via RCC to ensure clean state
+  // (warm reset may leave the peripheral with residual state)
+  switch (_desc.spix) {
+  case SpiInstance::Spi1: __HAL_RCC_SPI1_FORCE_RESET(); break;
+  case SpiInstance::Spi2: __HAL_RCC_SPI2_FORCE_RESET(); break;
+  case SpiInstance::Spi3: __HAL_RCC_SPI3_FORCE_RESET(); break;
+  case SpiInstance::Spi4: __HAL_RCC_SPI4_FORCE_RESET(); break;
+  case SpiInstance::Spi5: __HAL_RCC_SPI5_FORCE_RESET(); break;
+  case SpiInstance::Spi6: __HAL_RCC_SPI6_FORCE_RESET(); break;
+  default: break;
+  }
+  __NOP(); __NOP();
+  switch (_desc.spix) {
+  case SpiInstance::Spi1: __HAL_RCC_SPI1_RELEASE_RESET(); break;
+  case SpiInstance::Spi2: __HAL_RCC_SPI2_RELEASE_RESET(); break;
+  case SpiInstance::Spi3: __HAL_RCC_SPI3_RELEASE_RESET(); break;
+  case SpiInstance::Spi4: __HAL_RCC_SPI4_RELEASE_RESET(); break;
+  case SpiInstance::Spi5: __HAL_RCC_SPI5_RELEASE_RESET(); break;
+  case SpiInstance::Spi6: __HAL_RCC_SPI6_RELEASE_RESET(); break;
+  default: break;
+  }
+  __NOP(); __NOP();
   SPI_HANDLE.Init.Mode = SPI_MODE_MASTER;
   SPI_HANDLE.Init.Direction = SPI_DIRECTION_2LINES;
   SPI_HANDLE.Init.DataSize = SPI_DATASIZE_8BIT;
@@ -356,13 +387,13 @@ void SpiBus::init() {
 // ── Synchronous write (delegates to transfer) ──
 
 Result SpiBus::writeSync(const uint8_t *data, uint16_t num) {
-  return transfer(data, nullptr, num, num);
+  return transfer(data, nullptr, num, _bufSize);
 }
 
 // ── Synchronous read (delegates to transfer) ──
 
 Result SpiBus::readSync(uint8_t *data, uint16_t num) {
-  return transfer(nullptr, data, num, num);
+  return transfer(nullptr, data, num, _bufSize);
 }
 
 // ── Full-duplex transfer (LL polling, auto-chunked) ──
@@ -371,8 +402,6 @@ Result SpiBus::transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len,
 #if defined(STM32H7)
   if (!_initialized || len == 0 || chunkLen == 0 || chunkLen > _bufSize)
     return Result::InvalidParam;
-
-  _desc.ncs.reset();
 
   auto *SPIx = SPI_HANDLE.Instance;
 
@@ -435,7 +464,6 @@ Result SpiBus::transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len,
     remaining -= curChunk;
   }
 
-  _desc.ncs.set();
   return Result::Ok;
 #else
   (void)txData;
@@ -446,17 +474,22 @@ Result SpiBus::transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len,
 #endif
 }
 
-Result SpiBus::transferAsync(const uint8_t *cmdBuf, uint16_t cmdLen,
-                             uint8_t *rxBuf, uint16_t dataLen,
-                             uint8_t postCmdDelayUs,
-                             void (*callback)(void *context), void *context) {
-  (void)cmdBuf;
-  (void)cmdLen;
-  (void)rxBuf;
-  (void)dataLen;
-  (void)postCmdDelayUs;
-  (void)callback;
-  (void)context;
+void SpiBus::setTxCallback(void (*callback)(void *context), void *context) {
+  _txCallback = callback;
+  _txContext = context;
+}
+
+void SpiBus::setRxCallback(void (*callback)(void *context), void *context) {
+  _rxCallback = callback;
+  _rxContext = context;
+}
+
+Result SpiBus::transferAsync(const uint8_t *txData, uint8_t *rxData,
+                             uint16_t len, uint16_t chunkLen) {
+  (void)txData;
+  (void)rxData;
+  (void)len;
+  (void)chunkLen;
   return Result::Unsupported;
 }
 

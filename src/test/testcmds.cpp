@@ -25,10 +25,12 @@
 #include "test/framelayer.h"
 
 #include "drivers/device/flash/flash_w25qxx.h"
+#include "drivers/device/devmem.h"
 
 #include "gamepad/gamepadstate.h"
 
 #include "utils/log/log.h"
+#include "utils/mempool/mempoolmanager.h"
 
 #include "protocol/proto.h"
 
@@ -381,6 +383,26 @@ static void handleReset(const char *cmd, const Json &json) {
     FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
+// ── Flash info (for testing only) ──
+
+static void handleFlashInfo(const char *cmd, const Json &json) {
+    auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+    const auto &info = flash.getInfo();
+    int queued = json.getInt("queued");
+
+    Json resp;
+    resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+    resp.printf("{status:%Q,cmd:%Q,queued:%d,"
+                "sizeBytes:%lu,pageSize:%u,sectorSize:%lu,"
+                "init:%d}",
+                "ok", cmd, queued + 1,
+                (unsigned long)info.sizeBytes, info.pageSize,
+                (unsigned long)info.sectorSize,
+                flash.isInitialized());
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
+}
+
 // ── Flash chip erase (for testing only) ──
 
 static void handleChipErase(const char *cmd, const Json &json) {
@@ -391,8 +413,9 @@ static void handleChipErase(const char *cmd, const Json &json) {
     Json resp;
     resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
     if (ok) {
-        resp.printf("{status:%Q,cmd:%Q,queued:%d}",
-                    "ok", cmd, queued + 1);
+        resp.printf("{status:%Q,cmd:%Q,queued:%d,warning:%Q}",
+                    "ok", cmd, queued + 1,
+                    "chip_erase is dangerous — entire SPI flash wiped");
     } else {
         resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,reason:%Q}",
                     "error", cmd, queued + 1, 1, "eraseChip failed");
@@ -430,6 +453,27 @@ void TestCmdHandler::handle(const char *cmd, const Json &json) {
     // Non-protocol commands handled directly
     if (strcmp(cmd, "test.chip_erase") == 0) {
         handleChipErase(cmd, json);
+        return;
+    }
+    if (strcmp(cmd, "test.flash_info") == 0) {
+        handleFlashInfo(cmd, json);
+        return;
+    }
+    if (strcmp(cmd, "test.mempool_info") == 0) {
+        int queued = json.getInt("queued");
+        using namespace ThetaGP::Mempool;
+        auto &dm = Drivers::Device::DevMem::getInstance();
+        auto pid = dm.poolId();
+        auto stats = (pid != INVALID_POOL_ID) ? MempoolManager::poolStats(pid) : PoolStats{0,0,0,0,0};
+        Json resp;
+        resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+        resp.printf("{status:%Q,cmd:%Q,queued:%d,"
+                    "poolId:%d,total:%u,used:%u,free:%u}",
+                    "ok", cmd, queued + 1,
+                    static_cast<int>(pid),
+                    stats.totalSize, stats.usedSize, stats.freeSize);
+        uint16_t len = resp.end();
+        FrameLayer::getInstance().sendResponse(resp.c_str(), len);
         return;
     }
 

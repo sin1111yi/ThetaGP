@@ -34,13 +34,17 @@ function(thetagp_fetch_dep name repo branch dest)
         return()
     endif()
 
-    # Repo exists — check upstream for updates
+    # Repo exists — check upstream for updates (with 5s timeout per
+    # git operation to prevent network stalls from blocking configure)
+    message(STATUS "${name}: checking for updates (5s timeout)...")
     execute_process(
-        COMMAND git -C ${dest} fetch origin ${branch} --quiet
+        COMMAND timeout 5 git -C ${dest} fetch origin ${branch} --quiet
         RESULT_VARIABLE fetch_result
+        TIMEOUT 10
+        ERROR_QUIET
     )
     if(NOT fetch_result EQUAL 0)
-        message(WARNING "${name}: fetch failed, skipping update check")
+        message(STATUS "${name}: fetch skipped (timeout or network unavailable)")
         return()
     endif()
 
@@ -49,7 +53,12 @@ function(thetagp_fetch_dep name repo branch dest)
         OUTPUT_VARIABLE behind
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
+        TIMEOUT 10
     )
+    if(NOT behind MATCHES "^[0-9]+$")
+        message(STATUS "${name}: rev-list failed, update check skipped")
+        return()
+    endif()
     if(behind GREATER 0)
         message(STATUS "${name}: ${behind} commit(s) behind — updating")
         execute_process(

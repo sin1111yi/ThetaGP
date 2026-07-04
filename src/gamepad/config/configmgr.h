@@ -44,6 +44,7 @@ public:
   ConfigStore &configMut() { return _config; }
 
   bool selectProfile(uint16_t profileId);
+  void setActiveProfileId(uint16_t id) { _activeId = id; }
   Profile::ProfileStatus getStatus() const;
 
   Profile::ProfileStore &store() {

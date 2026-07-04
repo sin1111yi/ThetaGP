@@ -19,7 +19,6 @@ from .generators import (
     gen_uart_lines,
     gen_spi_lines,
     gen_flash_lines,
-    gen_display_lines,
     assemble_header,
     generate_cmake,
 )
@@ -39,7 +38,6 @@ __all__ = [
     "gen_uart_lines",
     "gen_spi_lines",
     "gen_flash_lines",
-    "gen_display_lines",
     "assemble_header",
     "generate_cmake",
 ]

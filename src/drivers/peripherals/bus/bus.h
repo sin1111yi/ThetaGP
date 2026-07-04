@@ -50,7 +50,7 @@ enum class Type { Uart, Spi, I2c };
  *
  * Synchronous  — blocking call; returns when transfer completes or times out.
  * Asynchronous — non-blocking; returns immediately, completion signaled via
- *                callback or event. Only UART uses this (DMA) in practice.
+ *                callback or event.
  */
 enum class Mode { Synchronous, Asynchronous };
 
@@ -65,13 +65,11 @@ class Bus {
 public:
   virtual ~Bus();
 
-  // ── Public API ──────────────────────────────────────────────
   Result write(uint8_t byte);
   Result write(const uint8_t *data, uint16_t len);
   Result read(uint8_t *byte);
   Result read(uint8_t *data, uint16_t len);
 
-  // ── Configuration ───────────────────────────────────────────
   void setType(Type t) { _type = t; }
   void setMode(Mode m) { _mode = m; }
   [[nodiscard]] Type type() const { return _type; }
@@ -79,25 +77,21 @@ public:
   [[nodiscard]] bool isInitialized() const { return _initialized; }
   void setBuffers(uint8_t *txBuf, uint8_t *rxBuf, uint32_t size);
 
-  // ── Lifecycle ───────────────────────────────────────────────
   virtual void init();
   virtual void enableClock() = 0;
 
 protected:
   Bus();
 
-  // ── Subclass hooks (all default to Result::Unsupported) ─────
   virtual Result writeSync(const uint8_t *data, uint16_t len);
   virtual Result readSync(uint8_t *data, uint16_t len);
   virtual Result writeAsync(const uint8_t *data, uint16_t len);
   virtual Result readAsync(uint8_t *data, uint16_t len);
 
-  // ── Members ─────────────────────────────────────────────────
   Type _type;
   Mode _mode = Mode::Synchronous;
   bool _initialized = false;
 
-  // DMA-safe buffers (set externally via setBuffers())
   uint8_t *_txBuf = nullptr;
   uint8_t *_rxBuf = nullptr;
   uint32_t _bufSize = 0;
