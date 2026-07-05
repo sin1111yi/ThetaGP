@@ -28,7 +28,6 @@
 
 #include "ThetaGP.h"
 
-#include "drivers/device/run_led.h"
 #include "test/framelayer.h"
 
 using namespace ThetaGP;
@@ -47,15 +46,9 @@ FAST_CODE static void taskCmdProc(uint32_t currentTimeUs) {
   ThetaGP::Test::FrameLayer::getInstance().processCommandQueue();
 }
 
-FAST_CODE static void taskRunLed(uint32_t currentTimeUs) {
-  Drivers::Device::RunLed::getInstance().update(currentTimeUs);
-}
-
 void ThetaGP::ThetaGamepad::registerTasks(void) {
   TaskManager::registerTask("GAMEPAD", "CORE", taskGamepadCore,
                             TASK_PERIOD_HZ(1000), TaskPriority::Realtime);
   TaskManager::registerTask("TEST", "CMD_PROC", taskCmdProc,
                             TASK_PERIOD_HZ(20), TaskPriority::Medium);
-  TaskManager::registerTask("SYSTEM", "RUN_LED", taskRunLed,
-                            TASK_PERIOD_HZ(100), TaskPriority::Low);
 }

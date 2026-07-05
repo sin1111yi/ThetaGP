@@ -23,8 +23,10 @@
 
 #include "drivers/device/keypad.h"
 
+#include "drivers/device/run_led.h"
 #include "drivers/peripherals/gpio.h"
 #include "drivers/peripherals/peripheralsmgr.h"
+#include "drivers/peripherals/systick.h"
 
 #include "utils/log/log.h"
 
@@ -95,6 +97,8 @@ void Keypad::scanCallback() {
   }
 
   _pressedMask = debouncedMask;
+
+  RunLed::getInstance().update(micros());
 }
 
 void Keypad::readInputScanMatrix(uint32_t *mask) {
