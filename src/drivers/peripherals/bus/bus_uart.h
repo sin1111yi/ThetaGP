@@ -80,10 +80,9 @@ private:
   UartCallbackFunc _txCallback = nullptr;
   void *_txContext = nullptr;
 
-  Result writeSync(const uint8_t *data, uint16_t len) override;
-  Result readSync(uint8_t *data, uint16_t len) override;
-  Result writeAsync(const uint8_t *data, uint16_t len) override;
-  Result readAsync(uint8_t *data, uint16_t len) override;
+  Result transferImpl(TransferCallback cb, void *ctx,
+                        const uint8_t *txData, uint8_t *rxData,
+                        uint16_t len) override;
 
 public:
   static constexpr uint32_t MAX_BUF_SIZE = _bufSize;

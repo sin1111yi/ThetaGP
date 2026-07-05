@@ -52,6 +52,7 @@ public:
   [[nodiscard]] uint32_t readId() override;
   [[nodiscard]] const FlashInfo &getInfo() const override;
   [[nodiscard]] bool isBusy() override;
+  void setSpiBusMode(Peripheral::BUS::Mode mode);
 
 private:
   FlashW25qxx();

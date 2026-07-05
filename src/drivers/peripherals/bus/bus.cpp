@@ -19,17 +19,6 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-/**
- * @file bus.cpp
- * @brief BUS base class implementation
- *
- * After refactor:
- *   - No function pointer dispatch (removed _writeByteFn etc.)
- *   - No setupCallbacks() — dispatch is a simple switch in write()/read()
- *   - All subclass hooks default to Result::Unsupported
- *   - Single-byte write/read delegated to multi-byte variants
- */
-
 #include "build_info.h"
 
 #include "drivers/peripherals/bus/bus.h"
@@ -57,59 +46,23 @@ void Bus::init() {
   _initialized = true;
 }
 
-Result Bus::writeSync(const uint8_t *, uint16_t) {
-  return Result::Unsupported;
-}
-
-Result Bus::readSync(uint8_t *, uint16_t) {
-  return Result::Unsupported;
-}
-
-Result Bus::writeAsync(const uint8_t *, uint16_t) {
-  return Result::Unsupported;
-}
-
-Result Bus::readAsync(uint8_t *, uint16_t) {
-  return Result::Unsupported;
-}
-
-Result Bus::write(uint8_t byte) {
-  return write(&byte, 1);
-}
-
-Result Bus::read(uint8_t *byte) {
-  if (byte == nullptr) return Result::InvalidParam;
-  return read(byte, 1);
-}
-
 Result Bus::write(const uint8_t *data, uint16_t len) {
-  if (data == nullptr || len == 0) {
-    return Result::InvalidParam;
-  }
-
-  switch (_mode) {
-  case Mode::Synchronous:
-    return writeSync(data, len);
-  case Mode::Asynchronous:
-    return writeAsync(data, len);
-  }
-
-  return Result::Error;
+  return transferImpl(nullptr, nullptr, data, nullptr, len);
 }
 
 Result Bus::read(uint8_t *data, uint16_t len) {
-  if (data == nullptr || len == 0) {
-    return Result::InvalidParam;
-  }
+  return transferImpl(nullptr, nullptr, nullptr, data, len);
+}
 
-  switch (_mode) {
-  case Mode::Synchronous:
-    return readSync(data, len);
-  case Mode::Asynchronous:
-    return readAsync(data, len);
-  }
+Result Bus::duplexTransfer(const uint8_t *txData, uint8_t *rxData,
+                            uint16_t len) {
+  return transferImpl(nullptr, nullptr, txData, rxData, len);
+}
 
-  return Result::Error;
+Result Bus::duplexTransfer(TransferCallback cb, void *ctx,
+                            const uint8_t *txData, uint8_t *rxData,
+                            uint16_t len) {
+  return transferImpl(cb, ctx, txData, rxData, len);
 }
 
 } // namespace BUS

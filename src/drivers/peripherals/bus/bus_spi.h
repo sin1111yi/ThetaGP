@@ -44,7 +44,6 @@ enum class SpiInstance {
   SpiNone = 0xFF,
 };
 
-// Abstract bus index → PeripheralsManager array index
 #define BUS_SPI_1 0
 #define BUS_SPI_2 1
 #define BUS_SPI_3 2
@@ -62,21 +61,6 @@ struct SpiDesc {
 };
 
 class SpiBus : public Bus {
-private:
-  SpiDesc _desc;
-  void *_halHandle = nullptr;
-
-  void configPins();
-
-  // Bus hooks
-  Result writeSync(const uint8_t *data, uint16_t num) override;
-  Result readSync(uint8_t *data, uint16_t num) override;
-
-  Result transfer(const uint8_t *txData, uint8_t *rxData, uint16_t len,
-                  uint16_t chunkLen);
-  Result transferAsync(const uint8_t *txData, uint8_t *rxData, uint16_t len,
-                       uint16_t chunkLen);
-
 public:
   SpiBus(SpiInstance spix, GPIO::PinDesc clk, GPIO::PinDesc mosi,
          GPIO::PinDesc miso, GPIO::PinDesc ncs);
@@ -95,32 +79,49 @@ public:
   void *halHandle() const { return _halHandle; }
   uint8_t *rxBuf() const { return _rxBuf; }
 
-  void setTxCallback(void (*callback)(void *context), void *context);
-  void setRxCallback(void (*callback)(void *context), void *context);
-  void txCallback() {
-    if (_txCallback) {
-      _txCallback(_txContext);
-    }
-  }
-  void rxCallback() {
-    if (_rxCallback) {
-      _rxCallback(_rxContext);
-    }
-  }
-
   bool isBusy() const;
-  bool isTxBusy() const;
-  bool isRxBusy() const;
 
-  // ── DMA state (accessed by static ISR callbacks in .cpp) ──
+  // ── DMA state ──
   DMA::DmaChannel *_dmaTx = nullptr;
   DMA::DmaChannel *_dmaRx = nullptr;
-  uint8_t *_readDmaBufPtr = nullptr;
-  uint16_t _readDmaBufLen = 0;
-  void (*_txCallback)(void *) = nullptr;
-  void *_txContext = nullptr;
-  void (*_rxCallback)(void *) = nullptr;
-  void *_rxContext = nullptr;
+
+  // ── Async transfer state ──
+  const uint8_t *_asyncSrc = nullptr;
+  uint8_t *_asyncDst = nullptr;
+  const uint8_t *_asyncSrcOrig = nullptr;
+  uint8_t *_asyncDstOrig = nullptr;
+  uint16_t _asyncRemaining = 0;
+  uint16_t _asyncChunkLen = 0;
+  uint16_t _asyncTotalLen = 0;
+  TransferCallback _asyncCb = nullptr;
+  void *_asyncCtx = nullptr;
+  volatile bool _spiTransferDone = true;
+
+  void spiInternalInitStream(const uint8_t *txData, uint8_t *rxData,
+                              uint16_t len);
+  void spiInternalStartDMA(TransferCallback cb, void *ctx,
+                            uint16_t totalLen);
+  void spiInternalStopDMA();
+
+private:
+  void configPins();
+
+  Result transferImpl(TransferCallback cb, void *ctx,
+                       const uint8_t *txData, uint8_t *rxData,
+                       uint16_t len) override;
+
+  Result spiInternalReadWriteBufPolled(const uint8_t *txData,
+                                        uint8_t *rxData, uint16_t len);
+
+  SpiDesc _desc;
+  void *_halHandle = nullptr;
+
+  uint32_t _streamTxSrc = 0;
+  uint32_t _streamRxDst = 0;
+  uint16_t _streamTxLen = 0;
+  uint16_t _streamRxLen = 0;
+  bool _streamTxInc = false;
+  bool _streamRxInc = false;
 };
 
 } // namespace BUS

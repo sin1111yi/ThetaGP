@@ -424,6 +424,56 @@ static void handleChipErase(const char *cmd, const Json &json) {
     FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
+static void handleSpiMode(const char *cmd, const Json &json) {
+    int modeVal = json.getInt("mode");
+    int queued = json.getInt("queued");
+
+    auto mode = static_cast<Drivers::Peripheral::BUS::Mode>(modeVal);
+    auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+    flash.setSpiBusMode(mode);
+
+    Json resp;
+    resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+    resp.printf("{status:%Q,cmd:%Q,queued:%d,mode:%d}",
+                "ok", cmd, queued + 1, modeVal);
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
+}
+
+static void handleFlashRead(const char *cmd, const Json &json) {
+    int addr = json.getInt("addr");
+    int len = json.getInt("len");
+    int queued = json.getInt("queued");
+
+    auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+    bool ok = false;
+
+    if (len > 0 && len <= 4096 && addr >= 0) {
+        uint8_t buf[4096];
+        ok = flash.read(static_cast<uint32_t>(addr), buf,
+                         static_cast<uint32_t>(len));
+        Json resp;
+        resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+        if (ok) {
+            resp.printf("{status:%Q,cmd:%Q,queued:%d,lenRead:%d}",
+                        "ok", cmd, queued + 1, len);
+        } else {
+            resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,"
+                        "reason:%Q}",
+                        "error", cmd, queued + 1, 1, "read failed");
+        }
+        uint16_t slen = resp.end();
+        FrameLayer::getInstance().sendResponse(resp.c_str(), slen);
+    } else {
+        Json resp;
+        resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+        resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,reason:%Q}",
+                    "error", cmd, queued + 1, 1, "invalid addr/len");
+        uint16_t slen = resp.end();
+        FrameLayer::getInstance().sendResponse(resp.c_str(), slen);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // registerHandlers — self-register with the Dispatcher and Proto
 // ---------------------------------------------------------------------------
@@ -453,6 +503,14 @@ void TestCmdHandler::handle(const char *cmd, const Json &json) {
     // Non-protocol commands handled directly
     if (strcmp(cmd, "test.chip_erase") == 0) {
         handleChipErase(cmd, json);
+        return;
+    }
+    if (strcmp(cmd, "test.spi_mode") == 0) {
+        handleSpiMode(cmd, json);
+        return;
+    }
+    if (strcmp(cmd, "test.flash_read") == 0) {
+        handleFlashRead(cmd, json);
         return;
     }
     if (strcmp(cmd, "test.flash_info") == 0) {

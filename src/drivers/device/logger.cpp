@@ -40,7 +40,7 @@ void Logger::init() {
       Drivers::Device::DevMem::getInstance().poolId(), _uart.MAX_BUF_SIZE));
 
   _uart.setBuffers(_txBuf, _rxBuf, _uart.MAX_BUF_SIZE);
-  _uart.setMode(Mode::Synchronous);
+  _uart.setMode(Mode::Polling);
   _uart.init();
   _initialized = true;
 

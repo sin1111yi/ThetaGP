@@ -23,12 +23,10 @@
  * @file bus.h
  * @brief Abstract base class for all BUS peripherals (SPI, UART, I2C)
  *
- * Architecture (after refactor):
- *   - 2 modes: Synchronous (blocking) and Asynchronous (non-blocking)
- *   - 4 protected virtual hooks: writeSync/readSync/writeAsync/readAsync
- *   - No function-pointer dispatch (removed double indirection)
- *   - Single-byte ops delegate to multi-byte variants
- *   - Subclasses override only what they support; unsupported returns Unsupported
+ * Two modes: Polling (LL), Dma (auto DMA with fallback).
+ *
+ * All transfers route through a single virtual hook transferImpl.
+ * Half-duplex write/read are convenience wrappers.
  */
 
 #pragma once
@@ -45,37 +43,39 @@ namespace BUS {
 
 enum class Type { Uart, Spi, I2c };
 
-/**
- * @brief Bus transfer mode
- *
- * Synchronous  — blocking call; returns when transfer completes or times out.
- * Asynchronous — non-blocking; returns immediately, completion signaled via
- *                callback or event.
- */
-enum class Mode { Synchronous, Asynchronous };
+enum class Mode { Polling, Dma };
 
-/**
- * @brief Abstract base class for BUS peripherals
- *
- * Write/Read dispatch directly on _mode via switch statement — no function
- * pointers. Subclasses override the *Sync or *Async hooks they support.
- * Single-byte write/read simply delegates to the multi-byte variant with len=1.
- */
+enum class TransferStatus { Ready, Repeat };
+
+using TransferCallback = TransferStatus (*)(void *ctx);
+
 class Bus {
 public:
   virtual ~Bus();
 
-  Result write(uint8_t byte);
-  Result write(const uint8_t *data, uint16_t len);
-  Result read(uint8_t *byte);
-  Result read(uint8_t *data, uint16_t len);
-
-  void setType(Type t) { _type = t; }
   void setMode(Mode m) { _mode = m; }
-  [[nodiscard]] Type type() const { return _type; }
+  void setType(Type t) { _type = t; }
   [[nodiscard]] Mode mode() const { return _mode; }
+  [[nodiscard]] Type type() const { return _type; }
   [[nodiscard]] bool isInitialized() const { return _initialized; }
   void setBuffers(uint8_t *txBuf, uint8_t *rxBuf, uint32_t size);
+
+  uint8_t *txBuf() const { return _txBuf; }
+  uint8_t *rxBuf() const { return _rxBuf; }
+  uint32_t bufSize() const { return _bufSize; }
+
+  // ── blocking half-duplex ──────────────────────────────────
+  Result write(const uint8_t *data, uint16_t len);
+  Result read(uint8_t *data, uint16_t len);
+
+  // ── blocking full-duplex ──────────────────────────────────
+  Result duplexTransfer(const uint8_t *txData, uint8_t *rxData,
+                         uint16_t len);
+
+  // ── non-blocking full-duplex (DMA + callback) ─────────────
+  Result duplexTransfer(TransferCallback cb, void *ctx,
+                         const uint8_t *txData, uint8_t *rxData,
+                         uint16_t len);
 
   virtual void init();
   virtual void enableClock() = 0;
@@ -83,13 +83,14 @@ public:
 protected:
   Bus();
 
-  virtual Result writeSync(const uint8_t *data, uint16_t len);
-  virtual Result readSync(uint8_t *data, uint16_t len);
-  virtual Result writeAsync(const uint8_t *data, uint16_t len);
-  virtual Result readAsync(uint8_t *data, uint16_t len);
+  virtual Result transferImpl(TransferCallback cb, void *ctx,
+                               const uint8_t *txData, uint8_t *rxData,
+                               uint16_t len) {
+    return Result::Unsupported;
+  }
 
   Type _type;
-  Mode _mode = Mode::Synchronous;
+  Mode _mode = Mode::Dma;
   bool _initialized = false;
 
   uint8_t *_txBuf = nullptr;

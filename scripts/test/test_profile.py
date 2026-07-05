@@ -40,6 +40,7 @@
 #                  require 64+ / 128+ flash operations respectively.
 
 import os
+import sys
 import termios
 import time
 import select
@@ -47,6 +48,25 @@ import json
 import fcntl
 
 PORT = "/dev/ttyACM1"
+
+# ── Test config ──
+CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "test_profile_config.json")
+_enabled_tests = {}
+
+def _load_config():
+    global _enabled_tests
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH) as f:
+                _enabled_tests = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            _enabled_tests = {}
+
+def enabled(name):
+    return _enabled_tests.get(name, True)
+
+_load_config()
 
 # Try to find CDC port via stable symlink
 import glob
@@ -437,467 +457,527 @@ def main():
 
     def skip(name):
         nonlocal skipped
-        print(f"  SKIP — {name} (manual/simulated only)")
+        print(f"  SKIP — {name} (disabled in config)")
         skipped += 1
 
-    # ═════════════════════════════════════════════════════════════════
-    # TEST 1: Factory default after erase
-    # ═════════════════════════════════════════════════════════════════
-    print("\n=== Test 1: Factory default ===")
-
-    r = send(fd, "profile.status")
-    check("profile.status initial", r and r.get("status") == "ok")
-
-    # Profile0 may already exist (written by auto-init on fresh flash).
-    # If it exists, skip the raw upload; if not, upload the factory profile.
-    factory_json = make_profile_json(tag=128).encode("utf-8")
-    r = send(fd, "profile.list")
-    has_profile0 = False
-    if r and r.get("status") == "ok":
-        for p in r.get("profiles", []):
-            if p.get("id") == 0:
-                has_profile0 = True
-                break
-
-    if not has_profile0:
-        r = raw_upload_profile(fd, 0, factory_json)
-        check("raw upload profile0",
-              r and r.get("status") == "ok" and r.get("profile_id") == 0)
-    else:
-        print("  profile0 already exists (auto-init), skipping upload")
-        passed += 1
-
-    r = send(fd, "profile.list")
-    check("profile.list shows profile0",
-          r and r.get("status") == "ok" and r.get("active") == 0)
-
-    # ═════════════════════════════════════════════════════════════════
-    # TEST 2: Profile0 write-once
-    # ═════════════════════════════════════════════════════════════════
-    # writeFactoryProfile should succeed only once (when BootMeta ring
-    # is empty). A second attempt should fail.
-    print("\n=== Test 2: Profile0 write-once ===")
-
-    r = raw_upload_profile(fd, 0, factory_json)
-    check("second profile0 upload fails (write-once)",
-          r is not None and r.get("status") == "error")
-
-    # ═════════════════════════════════════════════════════════════════
-    # TEST 3: Create user profile
-    # ═════════════════════════════════════════════════════════════════
-    # profile.create with hex-encoded JSON should return a new profile
-    # ID (expected: 1, since only profile0 exists so far).
-    print("\n=== Test 3: Create user profile ===")
-
-    profile1_json = make_profile_json(tag=42)
-    r = send(fd, "profile.create", data_hex=to_hex(profile1_json))
-    check("profile.create id=1",
-          r and r.get("status") == "ok" and r.get("profile_id") == 1)
-
-    # ═════════════════════════════════════════════════════════════════
-    # TEST 4: Load and verify profile content
-    # ═════════════════════════════════════════════════════════════════
-    # profile.load(id=1) loads the profile from flash into RAM config.
-    # profile.get(id=1) streams back the stored JSON; verify it matches.
-    print("\n=== Test 4: Load and verify ===")
-
-    r = send(fd, "profile.load", id=1)
-    check("profile.load id=1",
-          r and r.get("status") == "ok" and r.get("id") == 1)
-
-    # profile.get returns streaming header+body+trailer
-    result = send_profile_get(fd, 1)
-    hdr = result.get("hdr")
-    body = result.get("body")
-    trailer = result.get("trailer")
-    body_ok = (body is not None and len(body) > 0)
-    trailer_ok = (trailer is not None and trailer.get("status") == "ok" and
-                  trailer.get("id") == 1)
-    check("profile.get header present", hdr is not None)
-    check("profile.get body received", body_ok)
-    check("profile.get trailer ok", trailer_ok)
-
-    # Verify body contains our distinguishing field value
-    if body:
-        try:
-            body_str = body.decode("utf-8")
-            body_obj = json.loads(body_str)
-            content_ok = (body_obj.get("led", {}).get("bri") == 42)
-        except (json.JSONDecodeError, UnicodeDecodeError, KeyError):
-            content_ok = False
-        check("profile.get body content matches profile1", content_ok)
-
-    # ═════════════════════════════════════════════════════════════════
-    # TEST 5: Modify profile
-    # ═════════════════════════════════════════════════════════════════
-    # Select profile1, call profile.save (persists current RAM config
-    # to the active profile via modifyProfile), then verify the stored
-    # content has changed.
-    print("\n=== Test 5: Modify profile ===")
-
-    r = send(fd, "profile.select", id=1)
-    check("profile.select id=1 for modify",
-          r and r.get("status") == "ok" and r.get("id") == 1)
-
-    r = send(fd, "profile.save")
-    check("profile.save (modify profile1)",
-          r and r.get("status") == "ok" and r.get("id") == 1)
-
-    # Verify modified content via profile.get
-    result = send_profile_get(fd, 1)
-    check("profile.get after save",
-          result.get("ok") and result.get("body") is not None)
-
-    # ═════════════════════════════════════════════════════════════════
-    # TEST 6: Switch profile
-    # ═════════════════════════════════════════════════════════════════
-    # profile.select changes the active profile ID. Verify via
-    # profile.status that the active profile changes accordingly.
-    print("\n=== Test 6: Switch profile ===")
-
-    # Switch to profile0 (default)
-    r = send(fd, "profile.select", id=0)
-    check("profile.select id=0",
-          r and r.get("status") == "ok" and r.get("id") == 0)
-
-    r = send(fd, "profile.status")
-    check("profile.status after select 0, active=0",
-          r and r.get("status") == "ok" and r.get("active_profile_id") == 0)
-
-    # Switch back to profile1
-    r = send(fd, "profile.select", id=1)
-    check("profile.select id=1 back",
-          r and r.get("status") == "ok" and r.get("id") == 1)
-
-    r = send(fd, "profile.status")
-    check("profile.status after select 1, active=1",
-          r and r.get("status") == "ok" and r.get("active_profile_id") == 1)
-
-    # ═════════════════════════════════════════════════════════════════
-    # TEST 7: Delete profile
-    # ═════════════════════════════════════════════════════════════════
-    # profile.delete marks a profile as deleted (sets address=0 in
-    # Address Ring). Verify it disappears from profile.list.
-    print("\n=== Test 7: Delete profile ===")
-
-    # First create a disposable profile (id=2)
-    profile_tmp = make_profile_json(tag=99)
-    r = send(fd, "profile.create", data_hex=to_hex(profile_tmp))
-    check("create disposable profile2",
-          r and r.get("status") == "ok" and r.get("profile_id") == 2)
-
-    # Delete it
-    r = send(fd, "profile.delete", id=2)
-    check("profile.delete id=2",
-          r and r.get("status") == "ok" and r.get("id") == 2)
-
-    # Verify it's gone from profile.list
-    r = send(fd, "profile.list")
-    if r and r.get("status") == "ok":
-        profile_ids = [p.get("id") for p in r.get("profiles", [])]
-        check("profile.list excludes deleted id=2", 2 not in profile_ids)
-    else:
-        check("profile.list after delete", False)
-
-    # Delete of profile0 should fail (it's protected)
-    r = send(fd, "profile.delete", id=0)
-    check("profile.delete id=0 rejected (protected)",
-          r and r.get("status") == "error")
-
-    # Delete of non-existent profile should fail
-    r = send(fd, "profile.delete", id=99)
-    check("profile.delete invalid id rejected",
-          r and r.get("status") == "error")
-
-    # ═════════════════════════════════════════════════════════════════
-    # TEST 8: List profiles
-    # ═════════════════════════════════════════════════════════════════
-    # Create several profiles, list them, verify all IDs and correct
-    # active status.
-    print("\n=== Test 8: List profiles ===")
-
-    # Create profiles 2..4
-    created_ids = [1]  # profile1 already exists
-    for tag_val in [200, 201, 202]:
-        pj = make_profile_json(tag=tag_val)
-        r = send(fd, "profile.create", data_hex=to_hex(pj))
-        if r and r.get("status") == "ok":
-            created_ids.append(r.get("profile_id"))
-            print(f"  Created profile id={r.get('profile_id')}")
-
-    r = send(fd, "profile.list")
-    if r and r.get("status") == "ok":
-        profiles = r.get("profiles", [])
-        listed_ids = sorted([p.get("id") for p in profiles])
-        expected = sorted(created_ids + [0])  # 0 always exists
-        check(f"profile.list IDs match expected={expected}",
-              listed_ids == expected)
-        # Verify active flag is correct (profile1 is active)
-        active_ids = [p.get("id") for p in profiles if p.get("active")]
-        check(f"profile.list active count = 1", len(active_ids) == 1)
-        check(f"profile.list active is last created",
-              active_ids == [created_ids[-1]])
-        check(f"profile.list count = {len(profiles)}",
-              r.get("count", 0) == len(profiles) or True)  # count may not be present
-    else:
-        check("profile.list fails", False)
-
-    # ═════════════════════════════════════════════════════════════════
-    # TEST 9: BootMeta ring wraparound
-    # ═════════════════════════════════════════════════════════════════
-    print("\n=== Test 9: BootMeta ring wraparound ===")
-
-    # Perform 70 profile.select ops to exceed the 64-slot BootMeta ring
-    errors = 0
-    for i in range(70):
-        target = i % 2  # alternate between 0 and 1
-        r = send(fd, "profile.select", id=target)
-        if not r or r.get("status") != "ok":
-            errors += 1
-    r = send(fd, "profile.status")
-    check("BootMeta ring wraparound (70 selects, no crash, active valid)",
-          r and r.get("active_profile_id") in (0, 1))
-
-    # ═════════════════════════════════════════════════════════════════
-    # TEST 10: Address ring wraparound
-    # ═════════════════════════════════════════════════════════════════
-    print("\n=== Test 10: Address ring wraparound ===")
-
-    # Select profile1 and perform 135 saves to exceed the 128-slot Address ring
-    send(fd, "profile.select", id=1)
-    errors = 0
-    for i in range(135):
-        r = send(fd, "profile.save")
-        if not r or r.get("status") != "ok":
-            errors += 1
-            if errors > 5:
-                check(f"Address ring save at iteration {i}", False)
-                break
-        errors = 0
-    else:
+    if enabled("test1"):
+        # ═════════════════════════════════════════════════════════════════
+        # TEST 1: Factory default after erase
+        # ═════════════════════════════════════════════════════════════════
+        print("\n=== Test 1: Factory default ===")
+    
         r = send(fd, "profile.status")
-        check("Address ring wraparound (135 saves, addr_ring_seq high)",
-              r and r.get("address_ring_seq", 0) > 128)
-
-        # Verify profile1 is still readable
-        result = send_profile_get(fd, 1)
-        check("profile.get profile1 after address ring wraparound",
-              result.get("ok") and result.get("body") is not None)
-
-    # ═════════════════════════════════════════════════════════════════
-    # TEST 11: User Ring compaction (smoke test)
-    # ═════════════════════════════════════════════════════════════════
-    # Full compaction requires filling all ~2000 sectors, which takes
-    # hours. This smoke test creates 100 profiles and deletes the odd
-    # ones, verifying the compaction code path doesn't crash.
-    print("\n=== Test 11: User Ring compaction smoke test ===")
-
-    # Delete existing profiles to free up space, then cycle creates
-    for pid in range(1, 16):
-        send(fd, "profile.delete", id=pid)
-
-    sentinel = make_profile_json(tag=0)
-    send(fd, "profile.create", data_hex=to_hex(sentinel))
-    r = send(fd, "profile.status")
-    before_free = r.get("free_sectors", 0)
-
-    churn = 0
-    for i in range(100):
-        pj = make_profile_json(tag=i % 256)
-        r = send(fd, "profile.create", data_hex=to_hex(pj))
-        if not r or r.get("status") != "ok":
-            break
-        pid = r.get("profile_id")
-        # Delete odd-numbered profiles to create churn
-        if pid and pid % 2 == 1:
-            send(fd, "profile.delete", id=pid)
-        churn += 1
-
-    r = send(fd, "profile.status")
-    after_free = r.get("free_sectors", 0) if r else 0
-    check(f"compaction smoke test ({churn} create/delete ops, "
-          f"free={before_free}->{after_free})",
-          r and r.get("status") == "ok")
-
-    # Re-create profile1 and clean up churn leftovers. We need
-    # slots free for subsequent tests (CRC, 16-profile, sample reads).
-    for pid in range(1, 16):
-        send(fd, "profile.delete", id=pid)
-    # Also delete any profiles with IDs beyond 15 (unlikely but CYA)
-    r = send(fd, "profile.list")
-    if r and r.get("status") == "ok":
-        for p in r.get("profiles", []):
-            pid = p.get("id")
-            if pid and pid > 15:
-                send(fd, "profile.delete", id=pid)
-    pj1 = make_profile_json(tag=1)
-    send(fd, "profile.create", data_hex=to_hex(pj1))
-
-    # ═════════════════════════════════════════════════════════════════
-    # TEST 12: Power-loss mid-compaction (design documentation)
-    # ═════════════════════════════════════════════════════════════════
-    print("\n=== Test 12: Power-loss mid-compaction [DESIGN] ===")
-    print("  Design uses monotonic seq numbers for crash recovery.")
-    print("  On next boot, init() scans BootMeta/Address rings and picks")
-    print("  the highest seq entry, effectively rolling back partial compaction.")
-    print("  Not physically testable via CDC channel — documented here for audit.")
-    passed += 1
-
-    # ═════════════════════════════════════════════════════════════════
-    # TEST 13: CRC validation
-    # ═════════════════════════════════════════════════════════════════
-    # BootMeta entries have a CRC16 field. If data is corrupted, the
-    # device should fall back gracefully (e.g., ignore corrupt entries
-    # and use the next valid one). Since we cannot directly corrupt
-    # flash via the test API, we verify CRC by reading known-good data
-    # and checking that profile operations succeed consistently.
-    print("\n=== Test 13: CRC validation ===")
-
-    # CRC is validated internally by ProfileStore during init() and
-    # scanBootMeta(). We verify that a known-good profile survives
-    # repeated read cycles to prove CRC passes on valid data.
-    result = send_profile_get(fd, 0)
-    check("profile.get profile0 (CRC validation baseline)",
-          result.get("ok") and result.get("body") is not None)
-
-    # Also re-read profile1 to verify CRC on user profiles
-    result = send_profile_get(fd, 1)
-    check("profile.get profile1 (CRC validation)",
-          result.get("ok") and result.get("body") is not None)
-
-    # ── MANUAL CRC corruption test (documented) ──
-    # To test CRC failure recovery manually:
-    # 1. Read a known-good BootMeta entry address from the flash
-    #    (e.g., using a flash programmer or direct flash read command)
-    # 2. Corrupt one byte of the 16-byte BootMeta entry
-    # 3. Reset the device
-    # 4. Verify the device boots and falls back to the next valid entry
-    #    or to defaults if no valid entry found
-    print("  Note: Full CRC corruption test requires direct flash access")
-    print("  or a firmware test API that can corrupt a CRC byte.")
-
-    # ═════════════════════════════════════════════════════════════════
-    # TEST 14: Multiple profile support (16 profiles)
-    # ═════════════════════════════════════════════════════════════════
-    # Create profiles up to the maximum ID (15). Verify all can be
-    # listed, switched between, and their content retrieved correctly.
-    print("\n=== Test 14: Multiple profile support (16 profiles) ===")
-
-    # After test 9-11, only profiles 0 and 1 are guaranteed to exist.
-    # Create profiles 2..15 to fill all 16 slots.
-    for pid in range(2, 16):
-        pj = make_profile_json(tag=pid * 10)
-        r = send(fd, "profile.create", data_hex=to_hex(pj))
+        check("profile.status initial", r and r.get("status") == "ok")
+    
+        # Profile0 may already exist (written by auto-init on fresh flash).
+        # If it exists, skip the raw upload; if not, upload the factory profile.
+        factory_json = make_profile_json(tag=128).encode("utf-8")
+        r = send(fd, "profile.list")
+        has_profile0 = False
         if r and r.get("status") == "ok":
-            cid = r.get("profile_id")
-            print(f"  Created profile id={cid}")
-        elif r and r.get("status") == "error":
-            print(f"  Profile id={pid} creation returned error: {r.get('reason')}")
-
-    # List all profiles
-    r = send(fd, "profile.list")
-    if r and r.get("status") == "ok":
-        profiles = r.get("profiles", [])
-        listed_ids = sorted([p.get("id") for p in profiles])
-        print(f"  Listed {len(profiles)} profiles: IDs={listed_ids}")
-        check("16 profiles created and listed",
-              len(listed_ids) >= 2 and len(listed_ids) <= 16)
-    else:
-        check("profile.list (16 profiles)", False)
-
-    # Switch to each profile and verify
-    for pid in range(0, 16):
-        r = send(fd, "profile.select", id=pid)
-        ok = r and r.get("status") == "ok" and r.get("id") == pid
-        if not ok:
-            print(f"  Profile id={pid}: select failed — may not exist")
-            if pid > 0:
-                continue  # Skip read for missing profiles
-        r2 = send(fd, "profile.status")
-        if r2 and r2.get("status") == "ok":
-            actual = r2.get("active_profile_id")
-            check(f"profile.status active == {pid}",
-                  actual == pid)
+            for p in r.get("profiles", []):
+                if p.get("id") == 0:
+                    has_profile0 = True
+                    break
+    
+        if not has_profile0:
+            r = raw_upload_profile(fd, 0, factory_json)
+            check("raw upload profile0",
+                  r and r.get("status") == "ok" and r.get("profile_id") == 0)
         else:
-            check(f"profile.status after select {pid}", False)
-
-    # Read each profile and verify content via bri field
-    sample_ids = [0, 1, 5, 10, 15]
-    for pid in sample_ids:
-        result = send_profile_get(fd, pid)
-        check(f"profile.get id={pid} readable",
-              result.get("ok") and result.get("body") is not None)
-
-    # ═════════════════════════════════════════════════════════════════
-    # EDGE CASE: Error handling tests
-    # ═════════════════════════════════════════════════════════════════
-    print("\n=== Edge case: Error handling ===")
-
-    # Unknown sub-command
-    r = send(fd, "profile.no_such_cmd")
-    check("unknown profile sub-command returns error",
-          r and r.get("status") == "error")
-
-    # profile.select with out-of-range id
-    r = send(fd, "profile.select", id=99)
-    check("profile.select invalid id returns error",
-          r and r.get("status") == "error")
-
-    # profile.delete with invalid id (0 = protected)
-    r = send(fd, "profile.delete", id=0)
-    check("profile.delete id=0 returns error",
-          r and r.get("status") == "error")
-
-    # profile.create with empty data_hex
-    r = send(fd, "profile.create", data_hex="")
-    check("profile.create empty data_hex returns error",
-          r and r.get("status") == "error")
-
-    # profile.start with len=0 (invalid)
-    r = send(fd, "profile.start", len=0)
-    check("profile.start len=0 returns error",
-          r and r.get("status") == "error")
-
-    # profile.start with profileId > 15
-    r = send(fd, "profile.start", len=100, profileId=16)
-    check("profile.start profileId=16 returns error",
-          r and r.get("status") == "error")
-
-    # profile.save on active=0 should fail (profile0 is read-only)
-    # Note: profile.select does not sync ConfigManager's activeId cache;
-    # if ConfigManager loaded a non-0 profile previously, save may succeed
-    # on that stale ID rather than the just-selected profile0.
-    r = send(fd, "profile.select", id=0)
-    if r and r.get("status") == "ok":
-        r = send(fd, "profile.save")
-        # profile0 is read-only per ConfigManager::saveProfile check
-        # but may succeed if ConfigManager's cached ID != 0
-        check("profile.save on profile0 read-only returns error",
-              r and r.get("status") == "error")
+            print("  profile0 already exists (auto-init), skipping upload")
+            passed += 1
+    
+        r = send(fd, "profile.list")
+        check("profile.list shows profile0",
+              r and r.get("status") == "ok" and r.get("active") == 0)
+    
     else:
-        print(f"  select(id=0) failed, skip save-on-0 check")
-        skipped += 1
+        skip("test1")
 
-    # profile.get with invalid id
-    r = send(fd, "profile.get", id=99)
-    check("profile.get invalid id returns error",
-          r and r.get("status") == "error")
+    if enabled("test2"):
+        # ═════════════════════════════════════════════════════════════════
+        # TEST 2: Profile0 write-once
+        # ═════════════════════════════════════════════════════════════════
+        # writeFactoryProfile should succeed only once (when BootMeta ring
+        # is empty). A second attempt should fail.
+        print("\n=== Test 2: Profile0 write-once ===")
+    
+        r = raw_upload_profile(fd, 0, factory_json)
+        check("second profile0 upload fails (write-once)",
+              r is not None and r.get("status") == "error")
+    
+    else:
+        skip("test2")
 
-    # ═════════════════════════════════════════════════════════════════
-    # Summary
-    # ═════════════════════════════════════════════════════════════════
-    total = passed + failed + skipped
-    print(f"\n{'='*50}")
-    print(f"  Profile test suite complete")
-    print(f"{'='*50}")
-    print(f"  Passed: {passed}/{total}")
-    print(f"  Failed: {failed}/{total}")
-    print(f"  Skipped: {skipped}/{total}")
-    print(f"{'='*50}")
+    if enabled("test3"):
+        # ═════════════════════════════════════════════════════════════════
+        # TEST 3: Create user profile
+        # ═════════════════════════════════════════════════════════════════
+        # profile.create with hex-encoded JSON should return a new profile
+        # ID (expected: 1, since only profile0 exists so far).
+        print("\n=== Test 3: Create user profile ===")
+    
+        profile1_json = make_profile_json(tag=42)
+        r = send(fd, "profile.create", data_hex=to_hex(profile1_json))
+        check("profile.create id=1",
+              r and r.get("status") == "ok" and r.get("profile_id") == 1)
+    
+    else:
+        skip("test3")
 
-    os.close(fd)
-    return failed == 0
+    if enabled("test4"):
+        # ═════════════════════════════════════════════════════════════════
+        # TEST 4: Load and verify profile content
+        # ═════════════════════════════════════════════════════════════════
+        # profile.load(id=1) loads the profile from flash into RAM config.
+        # profile.get(id=1) streams back the stored JSON; verify it matches.
+        print("\n=== Test 4: Load and verify ===")
+    
+        r = send(fd, "profile.load", id=1)
+        check("profile.load id=1",
+              r and r.get("status") == "ok" and r.get("id") == 1)
+    
+        # profile.get returns streaming header+body+trailer
+        result = send_profile_get(fd, 1)
+        hdr = result.get("hdr")
+        body = result.get("body")
+        trailer = result.get("trailer")
+        body_ok = (body is not None and len(body) > 0)
+        trailer_ok = (trailer is not None and trailer.get("status") == "ok" and
+                      trailer.get("id") == 1)
+        check("profile.get header present", hdr is not None)
+        check("profile.get body received", body_ok)
+        check("profile.get trailer ok", trailer_ok)
+    
+        # Verify body contains our distinguishing field value
+        if body:
+            try:
+                body_str = body.decode("utf-8")
+                body_obj = json.loads(body_str)
+                content_ok = (body_obj.get("led", {}).get("bri") == 42)
+            except (json.JSONDecodeError, UnicodeDecodeError, KeyError):
+                content_ok = False
+            check("profile.get body content matches profile1", content_ok)
+    
+    else:
+        skip("test4")
 
+    if enabled("test5"):
+        # ═════════════════════════════════════════════════════════════════
+        # TEST 5: Modify profile
+        # ═════════════════════════════════════════════════════════════════
+        # Select profile1, call profile.save (persists current RAM config
+        # to the active profile via modifyProfile), then verify the stored
+        # content has changed.
+        print("\n=== Test 5: Modify profile ===")
+    
+        r = send(fd, "profile.select", id=1)
+        check("profile.select id=1 for modify",
+              r and r.get("status") == "ok" and r.get("id") == 1)
+    
+        r = send(fd, "profile.save")
+        check("profile.save (modify profile1)",
+              r and r.get("status") == "ok" and r.get("id") == 1)
+    
+        # Verify modified content via profile.get
+        result = send_profile_get(fd, 1)
+        check("profile.get after save",
+              result.get("ok") and result.get("body") is not None)
+    
+    else:
+        skip("test5")
 
-if __name__ == "__main__":
-    exit(0 if main() else 1)
+    if enabled("test6"):
+        # ═════════════════════════════════════════════════════════════════
+        # TEST 6: Switch profile
+        # ═════════════════════════════════════════════════════════════════
+        # profile.select changes the active profile ID. Verify via
+        # profile.status that the active profile changes accordingly.
+        print("\n=== Test 6: Switch profile ===")
+    
+        # Switch to profile0 (default)
+        r = send(fd, "profile.select", id=0)
+        check("profile.select id=0",
+              r and r.get("status") == "ok" and r.get("id") == 0)
+    
+        r = send(fd, "profile.status")
+        check("profile.status after select 0, active=0",
+              r and r.get("status") == "ok" and r.get("active_profile_id") == 0)
+    
+        # Switch back to profile1
+        r = send(fd, "profile.select", id=1)
+        check("profile.select id=1 back",
+              r and r.get("status") == "ok" and r.get("id") == 1)
+    
+        r = send(fd, "profile.status")
+        check("profile.status after select 1, active=1",
+              r and r.get("status") == "ok" and r.get("active_profile_id") == 1)
+    
+    else:
+        skip("test6")
+
+    if enabled("test7"):
+        # ═════════════════════════════════════════════════════════════════
+        # TEST 7: Delete profile
+        # ═════════════════════════════════════════════════════════════════
+        # profile.delete marks a profile as deleted (sets address=0 in
+        # Address Ring). Verify it disappears from profile.list.
+        print("\n=== Test 7: Delete profile ===")
+    
+        # First create a disposable profile (id=2)
+        profile_tmp = make_profile_json(tag=99)
+        r = send(fd, "profile.create", data_hex=to_hex(profile_tmp))
+        check("create disposable profile2",
+              r and r.get("status") == "ok" and r.get("profile_id") == 2)
+    
+        # Delete it
+        r = send(fd, "profile.delete", id=2)
+        check("profile.delete id=2",
+              r and r.get("status") == "ok" and r.get("id") == 2)
+    
+        # Verify it's gone from profile.list
+        r = send(fd, "profile.list")
+        if r and r.get("status") == "ok":
+            profile_ids = [p.get("id") for p in r.get("profiles", [])]
+            check("profile.list excludes deleted id=2", 2 not in profile_ids)
+        else:
+            check("profile.list after delete", False)
+    
+        # Delete of profile0 should fail (it's protected)
+        r = send(fd, "profile.delete", id=0)
+        check("profile.delete id=0 rejected (protected)",
+              r and r.get("status") == "error")
+    
+        # Delete of non-existent profile should fail
+        r = send(fd, "profile.delete", id=99)
+        check("profile.delete invalid id rejected",
+              r and r.get("status") == "error")
+    
+    else:
+        skip("test7")
+
+    if enabled("test8"):
+        # ═════════════════════════════════════════════════════════════════
+        # TEST 8: List profiles
+        # ═════════════════════════════════════════════════════════════════
+        # Create several profiles, list them, verify all IDs and correct
+        # active status.
+        print("\n=== Test 8: List profiles ===")
+    
+        # Create profiles 2..4
+        created_ids = [1]  # profile1 already exists
+        for tag_val in [200, 201, 202]:
+            pj = make_profile_json(tag=tag_val)
+            r = send(fd, "profile.create", data_hex=to_hex(pj))
+            if r and r.get("status") == "ok":
+                created_ids.append(r.get("profile_id"))
+                print(f"  Created profile id={r.get('profile_id')}")
+    
+        r = send(fd, "profile.list")
+        if r and r.get("status") == "ok":
+            profiles = r.get("profiles", [])
+            listed_ids = sorted([p.get("id") for p in profiles])
+            expected = sorted(created_ids + [0])  # 0 always exists
+            check(f"profile.list IDs match expected={expected}",
+                  listed_ids == expected)
+            # Verify active flag is correct (profile1 is active)
+            active_ids = [p.get("id") for p in profiles if p.get("active")]
+            check(f"profile.list active count = 1", len(active_ids) == 1)
+            check(f"profile.list active is last created",
+                  active_ids == [created_ids[-1]])
+            check(f"profile.list count = {len(profiles)}",
+                  r.get("count", 0) == len(profiles) or True)  # count may not be present
+        else:
+            check("profile.list fails", False)
+    
+    else:
+        skip("test8")
+
+    if enabled("test9"):
+        # ═════════════════════════════════════════════════════════════════
+        # TEST 9: BootMeta ring wraparound
+        # ═════════════════════════════════════════════════════════════════
+        print("\n=== Test 9: BootMeta ring wraparound ===")
+    
+        # Perform 70 profile.select ops to exceed the 64-slot BootMeta ring
+        errors = 0
+        for i in range(70):
+            target = i % 2  # alternate between 0 and 1
+            r = send(fd, "profile.select", id=target)
+            if not r or r.get("status") != "ok":
+                errors += 1
+        r = send(fd, "profile.status")
+        check("BootMeta ring wraparound (70 selects, no crash, active valid)",
+              r and r.get("active_profile_id") in (0, 1))
+    
+    else:
+        skip("test9")
+
+    if enabled("test10"):
+        # ═════════════════════════════════════════════════════════════════
+        # TEST 10: Address ring wraparound
+        # ═════════════════════════════════════════════════════════════════
+        print("\n=== Test 10: Address ring wraparound ===")
+    
+        # Select profile1 and perform 135 saves to exceed the 128-slot Address ring
+        send(fd, "profile.select", id=1)
+        errors = 0
+        for i in range(135):
+            r = send(fd, "profile.save")
+            if not r or r.get("status") != "ok":
+                errors += 1
+                if errors > 5:
+                    check(f"Address ring save at iteration {i}", False)
+                    break
+            errors = 0
+        else:
+            r = send(fd, "profile.status")
+            check("Address ring wraparound (135 saves, addr_ring_seq high)",
+                  r and r.get("address_ring_seq", 0) > 128)
+    
+            # Verify profile1 is still readable
+            result = send_profile_get(fd, 1)
+            check("profile.get profile1 after address ring wraparound",
+                  result.get("ok") and result.get("body") is not None)
+    
+    else:
+        skip("test10")
+
+    if enabled("test11"):
+        # ═════════════════════════════════════════════════════════════════
+        # TEST 11: User Ring compaction (smoke test)
+        # ═════════════════════════════════════════════════════════════════
+        # Full compaction requires filling all ~2000 sectors, which takes
+        # hours. This smoke test creates 100 profiles and deletes the odd
+        # ones, verifying the compaction code path doesn't crash.
+        print("\n=== Test 11: User Ring compaction smoke test ===")
+    
+        # Delete existing profiles to free up space, then cycle creates
+        for pid in range(1, 16):
+            send(fd, "profile.delete", id=pid)
+    
+        sentinel = make_profile_json(tag=0)
+        send(fd, "profile.create", data_hex=to_hex(sentinel))
+        r = send(fd, "profile.status")
+        before_free = r.get("free_sectors", 0)
+    
+        churn = 0
+        for i in range(100):
+            pj = make_profile_json(tag=i % 256)
+            r = send(fd, "profile.create", data_hex=to_hex(pj))
+            if not r or r.get("status") != "ok":
+                break
+            pid = r.get("profile_id")
+            # Delete odd-numbered profiles to create churn
+            if pid and pid % 2 == 1:
+                send(fd, "profile.delete", id=pid)
+            churn += 1
+    
+        r = send(fd, "profile.status")
+        after_free = r.get("free_sectors", 0) if r else 0
+        check(f"compaction smoke test ({churn} create/delete ops, "
+              f"free={before_free}->{after_free})",
+              r and r.get("status") == "ok")
+    
+        # Re-create profile1 and clean up churn leftovers. We need
+        # slots free for subsequent tests (CRC, 16-profile, sample reads).
+        for pid in range(1, 16):
+            send(fd, "profile.delete", id=pid)
+        # Also delete any profiles with IDs beyond 15 (unlikely but CYA)
+        r = send(fd, "profile.list")
+        if r and r.get("status") == "ok":
+            for p in r.get("profiles", []):
+                pid = p.get("id")
+                if pid and pid > 15:
+                    send(fd, "profile.delete", id=pid)
+        pj1 = make_profile_json(tag=1)
+        send(fd, "profile.create", data_hex=to_hex(pj1))
+    
+    else:
+        skip("test11")
+
+    if enabled("test12"):
+        # ═════════════════════════════════════════════════════════════════
+        # TEST 12: Power-loss mid-compaction (design documentation)
+        # ═════════════════════════════════════════════════════════════════
+        print("\n=== Test 12: Power-loss mid-compaction [DESIGN] ===")
+        print("  Design uses monotonic seq numbers for crash recovery.")
+        print("  On next boot, init() scans BootMeta/Address rings and picks")
+        print("  the highest seq entry, effectively rolling back partial compaction.")
+        print("  Not physically testable via CDC channel — documented here for audit.")
+        passed += 1
+    
+    else:
+        skip("test12")
+
+    if enabled("test13"):
+        # ═════════════════════════════════════════════════════════════════
+        # TEST 13: CRC validation
+        # ═════════════════════════════════════════════════════════════════
+        # BootMeta entries have a CRC16 field. If data is corrupted, the
+        # device should fall back gracefully (e.g., ignore corrupt entries
+        # and use the next valid one). Since we cannot directly corrupt
+        # flash via the test API, we verify CRC by reading known-good data
+        # and checking that profile operations succeed consistently.
+        print("\n=== Test 13: CRC validation ===")
+    
+        # CRC is validated internally by ProfileStore during init() and
+        # scanBootMeta(). We verify that a known-good profile survives
+        # repeated read cycles to prove CRC passes on valid data.
+        result = send_profile_get(fd, 0)
+        check("profile.get profile0 (CRC validation baseline)",
+              result.get("ok") and result.get("body") is not None)
+    
+        # Also re-read profile1 to verify CRC on user profiles
+        result = send_profile_get(fd, 1)
+        check("profile.get profile1 (CRC validation)",
+              result.get("ok") and result.get("body") is not None)
+    
+        # ── MANUAL CRC corruption test (documented) ──
+        # To test CRC failure recovery manually:
+        # 1. Read a known-good BootMeta entry address from the flash
+        #    (e.g., using a flash programmer or direct flash read command)
+        # 2. Corrupt one byte of the 16-byte BootMeta entry
+        # 3. Reset the device
+        # 4. Verify the device boots and falls back to the next valid entry
+        #    or to defaults if no valid entry found
+        print("  Note: Full CRC corruption test requires direct flash access")
+        print("  or a firmware test API that can corrupt a CRC byte.")
+    
+    else:
+        skip("test13")
+
+    if enabled("test14"):
+        # ═════════════════════════════════════════════════════════════════
+        # TEST 14: Multiple profile support (16 profiles)
+        # ═════════════════════════════════════════════════════════════════
+        # Create profiles up to the maximum ID (15). Verify all can be
+        # listed, switched between, and their content retrieved correctly.
+        print("\n=== Test 14: Multiple profile support (16 profiles) ===")
+    
+        # After test 9-11, only profiles 0 and 1 are guaranteed to exist.
+        # Create profiles 2..15 to fill all 16 slots.
+        for pid in range(2, 16):
+            pj = make_profile_json(tag=pid * 10)
+            r = send(fd, "profile.create", data_hex=to_hex(pj))
+            if r and r.get("status") == "ok":
+                cid = r.get("profile_id")
+                print(f"  Created profile id={cid}")
+            elif r and r.get("status") == "error":
+                print(f"  Profile id={pid} creation returned error: {r.get('reason')}")
+    
+        # List all profiles
+        r = send(fd, "profile.list")
+        if r and r.get("status") == "ok":
+            profiles = r.get("profiles", [])
+            listed_ids = sorted([p.get("id") for p in profiles])
+            print(f"  Listed {len(profiles)} profiles: IDs={listed_ids}")
+            check("16 profiles created and listed",
+                  len(listed_ids) >= 2 and len(listed_ids) <= 16)
+        else:
+            check("profile.list (16 profiles)", False)
+    
+        # Switch to each profile and verify
+        for pid in range(0, 16):
+            r = send(fd, "profile.select", id=pid)
+            ok = r and r.get("status") == "ok" and r.get("id") == pid
+            if not ok:
+                print(f"  Profile id={pid}: select failed — may not exist")
+                if pid > 0:
+                    continue  # Skip read for missing profiles
+            r2 = send(fd, "profile.status")
+            if r2 and r2.get("status") == "ok":
+                actual = r2.get("active_profile_id")
+                check(f"profile.status active == {pid}",
+                      actual == pid)
+            else:
+                check(f"profile.status after select {pid}", False)
+    
+        # Read each profile and verify content via bri field
+        sample_ids = [0, 1, 5, 10, 15]
+        for pid in sample_ids:
+            result = send_profile_get(fd, pid)
+            check(f"profile.get id={pid} readable",
+                  result.get("ok") and result.get("body") is not None)
+    
+        # ═════════════════════════════════════════════════════════════════
+        # EDGE CASE: Error handling tests
+    else:
+        skip("test14")
+
+    if enabled("edge_cases"):
+        # ═════════════════════════════════════════════════════════════════
+        print("\n=== Edge case: Error handling ===")
+    
+        # Unknown sub-command
+        r = send(fd, "profile.no_such_cmd")
+        check("unknown profile sub-command returns error",
+              r and r.get("status") == "error")
+    
+        # profile.select with out-of-range id
+        r = send(fd, "profile.select", id=99)
+        check("profile.select invalid id returns error",
+              r and r.get("status") == "error")
+    
+        # profile.delete with invalid id (0 = protected)
+        r = send(fd, "profile.delete", id=0)
+        check("profile.delete id=0 returns error",
+              r and r.get("status") == "error")
+    
+        # profile.create with empty data_hex
+        r = send(fd, "profile.create", data_hex="")
+        check("profile.create empty data_hex returns error",
+              r and r.get("status") == "error")
+    
+        # profile.start with len=0 (invalid)
+        r = send(fd, "profile.start", len=0)
+        check("profile.start len=0 returns error",
+              r and r.get("status") == "error")
+    
+        # profile.start with profileId > 15
+        r = send(fd, "profile.start", len=100, profileId=16)
+        check("profile.start profileId=16 returns error",
+              r and r.get("status") == "error")
+    
+        # profile.save on active=0 should fail (profile0 is read-only)
+        # Note: profile.select does not sync ConfigManager's activeId cache;
+        # if ConfigManager loaded a non-0 profile previously, save may succeed
+        # on that stale ID rather than the just-selected profile0.
+        r = send(fd, "profile.select", id=0)
+        if r and r.get("status") == "ok":
+            r = send(fd, "profile.save")
+            # profile0 is read-only per ConfigManager::saveProfile check
+            # but may succeed if ConfigManager's cached ID != 0
+            check("profile.save on profile0 read-only returns error",
+                  r and r.get("status") == "error")
+        else:
+            print(f"  select(id=0) failed, skip save-on-0 check")
+            skipped += 1
+    
+        # profile.get with invalid id
+        r = send(fd, "profile.get", id=99)
+        check("profile.get invalid id returns error",
+              r and r.get("status") == "error")
+    
+        # ═════════════════════════════════════════════════════════════════
+        # Summary
+        # ═════════════════════════════════════════════════════════════════
+        total = passed + failed + skipped
+        print(f"\n{'='*50}")
+        print(f"  Profile test suite complete")
+        print(f"{'='*50}")
+        print(f"  Passed: {passed}/{total}")
+        print(f"  Failed: {failed}/{total}")
+        print(f"  Skipped: {skipped}/{total}")
+        print(f"{'='*50}")
+    
+        os.close(fd)
+        return failed == 0
+    
+    
+    if __name__ == "__main__":
+        exit(0 if main() else 1)
+    else:
+        skip("edge_cases")
+

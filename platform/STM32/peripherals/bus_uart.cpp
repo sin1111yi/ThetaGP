@@ -286,7 +286,7 @@ void UartBus::init() {
   HAL_NVIC_EnableIRQ(uartGroupIRQn[uartIdx]);
 
   // ── DMA mode setup ──
-  if (_mode == Mode::Asynchronous) {
+  if (_mode == Mode::Dma) {
     uint32_t txRequestId = 0;
     uint32_t rxRequestId = 0;
     switch (_desc.uartx) {
@@ -363,149 +363,108 @@ void UartBus::init() {
   Bus::init();
 }
 
-// ── writeSync (LL polled write via TXE/TC flags) ──
-Result UartBus::writeSync(const uint8_t *data, uint16_t len) {
-#if defined(STM32H7)
-  if (_initialized && data && len > 0) {
+// ── transferImpl — single hook for half-duplex UART ──
+Result UartBus::transferImpl(TransferCallback cb, void *ctx,
+                              const uint8_t *txData, uint8_t *rxData,
+                              uint16_t len) {
+  if (len == 0) return Result::InvalidParam;
+  if (!_initialized) return Result::NotReady;
+
+  // Full-duplex not supported on UART
+  if (txData != nullptr && rxData != nullptr) return Result::Unsupported;
+
+  if (txData != nullptr) {
+    // ── TX ──
+    if (_mode == Mode::Dma && _dmaTx && len <= _bufSize && _txBuf) {
+      if (isTxBusy()) return Result::Busy;
+      std::memcpy(_txBuf, txData, len);
+      auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
+      (void)_dmaTx->start(reinterpret_cast<uint32_t>(_txBuf),
+                          reinterpret_cast<uint32_t>(&huart->Instance->TDR),
+                          len);
+      huart->Instance->CR3 |= USART_CR3_DMAT;
+      if (cb == nullptr) {
+        while (isTxBusy()) {}
+      }
+      return Result::Ok;
+    }
+
+    // Polling fallback
     auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
     USART_TypeDef *UARTx = huart->Instance;
-    // Approximate busy-wait iterations from timeout ms
     const uint32_t timeout = UART_POLL_TIMEOUT_MS * 10000;
-
     for (uint16_t i = 0; i < len; i++) {
       uint32_t tick = 0;
       while (!LL_USART_IsActiveFlag_TXE(UARTx)) {
-        if (++tick > timeout) {
-          return Result::Timeout;
-        }
+        if (++tick > timeout) return Result::Timeout;
       }
-      LL_USART_TransmitData8(UARTx, data[i]);
+      LL_USART_TransmitData8(UARTx, txData[i]);
     }
-
-    // Wait for TC (transmission complete) on the last byte
     {
       uint32_t tick = 0;
       while (!LL_USART_IsActiveFlag_TC(UARTx)) {
-        if (++tick > timeout) {
-          return Result::Timeout;
-        }
+        if (++tick > timeout) return Result::Timeout;
       }
       LL_USART_ClearFlag_TC(UARTx);
     }
     return Result::Ok;
   }
-#endif
-  return Result::Error;
-}
 
-// ── readSync (LL polled read via RXNE flag) ──
-Result UartBus::readSync(uint8_t *data, uint16_t len) {
-#if defined(STM32H7)
-  if (_initialized && data && len > 0) {
+  if (rxData != nullptr) {
+    // ── RX ──
+    if (_mode == Mode::Dma && _dmaRx && len <= _bufSize && _rxBuf) {
+      if (isRxBusy()) return Result::Busy;
+      _readDmaBufPtr = rxData;
+      _readDmaBufLen = len;
+      _idleDetectionEnabled = true;
+      auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
+      (void)_dmaRx->start(reinterpret_cast<uint32_t>(&huart->Instance->RDR),
+                          reinterpret_cast<uint32_t>(_rxBuf), len);
+      huart->Instance->CR3 |= USART_CR3_DMAR;
+      huart->Instance->CR1 |= USART_CR1_IDLEIE;
+      return Result::Ok;
+    }
+
+    // Polling fallback
     auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
     USART_TypeDef *UARTx = huart->Instance;
     const uint32_t timeout = UART_POLL_TIMEOUT_MS * 10000;
-
     for (uint16_t i = 0; i < len; i++) {
       uint32_t tick = 0;
       while (!LL_USART_IsActiveFlag_RXNE(UARTx)) {
-        if (++tick > timeout) {
-          return Result::Timeout;
-        }
+        if (++tick > timeout) return Result::Timeout;
       }
-      data[i] = LL_USART_ReceiveData8(UARTx);
+      rxData[i] = LL_USART_ReceiveData8(UARTx);
     }
     return Result::Ok;
   }
-#endif
-  return Result::Error;
+
+  return Result::InvalidParam;
 }
 
-void UartBus::setRxCallback(UartCallbackFunc cb, void *context) {
-  _rxCallback = cb;
-  _rxContext = context;
-}
-
-void UartBus::setTxCallback(UartCallbackFunc cb, void *context) {
-  _txCallback = cb;
-  _txContext = context;
-}
-
-// ── DMA mode ──
-// Uses LL-level DMA control directly: DmaChannel::start() to set up the
-// DMA stream, then manually enable UART CR3 bits to trigger DMA requests.
-// Completion is dispatched through DmaChannel's callback.
-// No HAL_UART_Transmit_DMA / HAL_DMA_Start_IT dependency.
+// ── DMA completion callbacks ──
 
 static void uartTxDmaComplete(void *context) {
   auto *uart = static_cast<UartBus *>(context);
-  if (!uart)
-    return;
-
+  if (!uart) return;
   auto *huart = &static_cast<HalUart *>(uart->halHandle())->handle;
   huart->Instance->CR3 &= ~USART_CR3_DMAT;
-
   uart->txCallback();
 }
 
 static void uartRxDmaComplete(void *context) {
   auto *uart = static_cast<UartBus *>(context);
-  if (!uart)
-    return;
-
+  if (!uart) return;
   auto *huart = &static_cast<HalUart *>(uart->halHandle())->handle;
   huart->Instance->CR3 &= ~USART_CR3_DMAR;
   huart->Instance->CR1 &= ~USART_CR1_IDLEIE;
   uart->_idleDetectionEnabled = false;
-
-  // Copy from DMA-safe _rxBuf to caller buffer (may be in DTCM)
   if (uart->_readDmaBufPtr && uart->_readDmaBufLen > 0) {
     std::memcpy(uart->_readDmaBufPtr, uart->rxBuf(), uart->_readDmaBufLen);
     uart->_readDmaBufPtr = nullptr;
     uart->_readDmaBufLen = 0;
     uart->rxCallback();
   }
-}
-
-// ── writeAsync (DMA write via LL CR3 DMAT control) ──
-Result UartBus::writeAsync(const uint8_t *data, uint16_t len) {
-#if defined(STM32H7)
-  if (_initialized && _dmaTx && data && len > 0 && len <= _bufSize &&
-      _txBuf != nullptr) {
-    if (isTxBusy()) {
-      return Result::Busy;
-    }
-    std::memcpy(_txBuf, data, len);
-    auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
-    (void)_dmaTx->start(reinterpret_cast<uint32_t>(_txBuf),
-                        reinterpret_cast<uint32_t>(&huart->Instance->TDR), len);
-    huart->Instance->CR3 |= USART_CR3_DMAT;
-    return Result::Ok;
-  }
-#endif
-  return Result::Error;
-}
-
-// ── readAsync (DMA read + idle line detection, LL CR3 DMAR/CR1 IDLEIE) ──
-Result UartBus::readAsync(uint8_t *data, uint16_t len) {
-#if defined(STM32H7)
-  if (_initialized && _dmaRx && data && len > 0 && len <= _bufSize &&
-      _rxBuf != nullptr) {
-    if (isRxBusy()) {
-      return Result::Busy;
-    }
-    _readDmaBufPtr = data;
-    _readDmaBufLen = len;
-    _idleDetectionEnabled = true;
-    auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
-    (void)_dmaRx->start(reinterpret_cast<uint32_t>(&huart->Instance->RDR),
-                        reinterpret_cast<uint32_t>(_rxBuf), len);
-    huart->Instance->CR3 |= USART_CR3_DMAR;
-    huart->Instance->CR1 |= USART_CR1_IDLEIE;
-    return Result::Ok;
-  }
-#endif
-  return Result::Error;
 }
 
 bool UartBus::isBusy() const {
