@@ -25,8 +25,8 @@
  *
  * Two modes: Polling (LL), Dma (auto DMA with fallback).
  *
- * All transfers route through a single virtual hook transferImpl.
- * Half-duplex write/read are convenience wrappers.
+ * All transfers route through a single virtual hook transmitReceiveImpl.
+ * Half-duplex transmit/receive are convenience wrappers.
  */
 
 #pragma once
@@ -65,17 +65,17 @@ public:
   uint32_t bufSize() const { return _bufSize; }
 
   // ── blocking half-duplex ──────────────────────────────────
-  Result write(const uint8_t *data, uint16_t len);
-  Result read(uint8_t *data, uint16_t len);
+  Result transmit(const uint8_t *data, uint16_t len);
+  Result receive(uint8_t *data, uint16_t len);
 
   // ── blocking full-duplex ──────────────────────────────────
-  Result duplexTransfer(const uint8_t *txData, uint8_t *rxData,
-                         uint16_t len);
+  Result transmitReceive(const uint8_t *txData, uint8_t *rxData,
+                          uint16_t len);
 
   // ── non-blocking full-duplex (DMA + callback) ─────────────
-  Result duplexTransfer(TransferCallback cb, void *ctx,
-                         const uint8_t *txData, uint8_t *rxData,
-                         uint16_t len);
+  Result transmitReceiveDma(TransferCallback cb, void *ctx,
+                             const uint8_t *txData, uint8_t *rxData,
+                             uint16_t len);
 
   virtual void init();
   virtual void enableClock() = 0;
@@ -83,7 +83,7 @@ public:
 protected:
   Bus();
 
-  virtual Result transferImpl(TransferCallback cb, void *ctx,
+  virtual Result transmitReceiveImpl(TransferCallback cb, void *ctx,
                                const uint8_t *txData, uint8_t *rxData,
                                uint16_t len) {
     return Result::Unsupported;

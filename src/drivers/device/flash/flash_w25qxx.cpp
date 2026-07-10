@@ -40,7 +40,7 @@ FlashW25qxx::FlashW25qxx()
 void FlashW25qxx::reset() {
   uint8_t tx[2] = {I_ENABLE_RESET, I_RESET_DEVICE};
   _spi.enable();
-  (void)_spi.write(tx, sizeof(tx));
+  (void)_spi.transmit(tx, sizeof(tx));
   _spi.disable();
 }
 
@@ -62,8 +62,8 @@ uint8_t FlashW25qxx::readStatusReg(uint8_t idx) {
 
   uint8_t status = 0;
   _spi.enable();
-  (void)_spi.write(&cmd, 1);
-  (void)_spi.read(&status, 1);
+  (void)_spi.transmit(&cmd, 1);
+  (void)_spi.receive(&status, 1);
   _spi.disable();
   return status;
 }
@@ -71,7 +71,7 @@ uint8_t FlashW25qxx::readStatusReg(uint8_t idx) {
 void FlashW25qxx::writeEnable() {
   uint8_t tx[1] = {I_WRITE_EN};
   _spi.enable();
-  (void)_spi.write(tx, sizeof(tx));
+  (void)_spi.transmit(tx, sizeof(tx));
   _spi.disable();
   waitWhileBusy();
 }
@@ -89,7 +89,7 @@ void FlashW25qxx::waitWhileBusy(uint32_t timeoutMs) {
 void FlashW25qxx::set4ByteAddrMode(bool enable) {
   uint8_t tx[1] = {enable ? I_ENTER_4B_ADDR_MODE : I_EXIT_4B_ADDR_MODE};
   _spi.enable();
-  (void)_spi.write(tx, sizeof(tx));
+  (void)_spi.transmit(tx, sizeof(tx));
   _spi.disable();
   _addrMode4Byte = enable;
 }
@@ -100,8 +100,8 @@ uint32_t FlashW25qxx::readId() {
   uint8_t cmd[4] = {I_MANUF_DEV_ID, 0x00, 0x00, 0x00};
   uint8_t id[2] = {0};
   _spi.enable();
-  (void)_spi.write(cmd, sizeof(cmd));
-  (void)_spi.read(id, sizeof(id));
+  (void)_spi.transmit(cmd, sizeof(cmd));
+  (void)_spi.receive(id, sizeof(id));
   _spi.disable();
   return (static_cast<uint32_t>(id[0]) << 8) | static_cast<uint32_t>(id[1]);
 }
@@ -224,8 +224,8 @@ bool FlashW25qxx::read(uint32_t addr, uint8_t *data, uint32_t len) {
   }
 
   _spi.enable();
-  (void)_spi.write(cmdBuf, cmdLen);
-  (void)_spi.read(data, len);
+  (void)_spi.transmit(cmdBuf, cmdLen);
+  (void)_spi.receive(data, len);
   _spi.disable();
 
   return true;
@@ -269,8 +269,8 @@ bool FlashW25qxx::write(uint32_t addr, const uint8_t *data, uint32_t len) {
     }
 
     _spi.enable();
-    (void)_spi.write(cmdBuf, cmdLen);
-    (void)_spi.write(currentData, writeLen);
+    (void)_spi.transmit(cmdBuf, cmdLen);
+    (void)_spi.transmit(currentData, writeLen);
     _spi.disable();
 
     waitWhileBusy();
@@ -310,7 +310,7 @@ bool FlashW25qxx::eraseSector(uint32_t addr) {
   }
 
   _spi.enable();
-  (void)_spi.write(cmdBuf, 1 + addrBytes);
+  (void)_spi.transmit(cmdBuf, 1 + addrBytes);
   _spi.disable();
 
   waitWhileBusy();
@@ -326,7 +326,7 @@ bool FlashW25qxx::eraseChip() {
 
   uint8_t tx[1] = {I_CHIP_ERASE};
   _spi.enable();
-  (void)_spi.write(tx, sizeof(tx));
+  (void)_spi.transmit(tx, sizeof(tx));
   _spi.disable();
 
   waitWhileBusy();

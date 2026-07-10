@@ -46,23 +46,23 @@ void Bus::init() {
   _initialized = true;
 }
 
-Result Bus::write(const uint8_t *data, uint16_t len) {
-  return transferImpl(nullptr, nullptr, data, nullptr, len);
+Result Bus::transmit(const uint8_t *data, uint16_t len) {
+  return transmitReceiveImpl(nullptr, nullptr, data, nullptr, len);
 }
 
-Result Bus::read(uint8_t *data, uint16_t len) {
-  return transferImpl(nullptr, nullptr, nullptr, data, len);
+Result Bus::receive(uint8_t *data, uint16_t len) {
+  return transmitReceiveImpl(nullptr, nullptr, nullptr, data, len);
 }
 
-Result Bus::duplexTransfer(const uint8_t *txData, uint8_t *rxData,
-                            uint16_t len) {
-  return transferImpl(nullptr, nullptr, txData, rxData, len);
+Result Bus::transmitReceive(const uint8_t *txData, uint8_t *rxData,
+                             uint16_t len) {
+  return transmitReceiveImpl(nullptr, nullptr, txData, rxData, len);
 }
 
-Result Bus::duplexTransfer(TransferCallback cb, void *ctx,
-                            const uint8_t *txData, uint8_t *rxData,
-                            uint16_t len) {
-  return transferImpl(cb, ctx, txData, rxData, len);
+Result Bus::transmitReceiveDma(TransferCallback cb, void *ctx,
+                                const uint8_t *txData, uint8_t *rxData,
+                                uint16_t len) {
+  return transmitReceiveImpl(cb, ctx, txData, rxData, len);
 }
 
 } // namespace BUS

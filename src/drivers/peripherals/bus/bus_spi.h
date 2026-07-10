@@ -106,7 +106,7 @@ public:
 private:
   void configPins();
 
-  Result transferImpl(TransferCallback cb, void *ctx,
+  Result transmitReceiveImpl(TransferCallback cb, void *ctx,
                        const uint8_t *txData, uint8_t *rxData,
                        uint16_t len) override;
 

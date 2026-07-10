@@ -363,8 +363,8 @@ void UartBus::init() {
   Bus::init();
 }
 
-// ── transferImpl — single hook for half-duplex UART ──
-Result UartBus::transferImpl(TransferCallback cb, void *ctx,
+// ── transmitReceiveImpl — single hook for half-duplex UART ──
+Result UartBus::transmitReceiveImpl(TransferCallback cb, void *ctx,
                               const uint8_t *txData, uint8_t *rxData,
                               uint16_t len) {
   if (len == 0) return Result::InvalidParam;

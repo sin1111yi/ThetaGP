@@ -489,9 +489,9 @@ Result SpiBus::spiInternalReadWriteBufPolled(const uint8_t *txData,
   return Result::Ok;
 }
 
-// transferImpl — the single hook, dispatched by _mode
+// transmitReceiveImpl — the single hook, dispatched by _mode
 
-Result SpiBus::transferImpl(TransferCallback cb, void *ctx,
+Result SpiBus::transmitReceiveImpl(TransferCallback cb, void *ctx,
                              const uint8_t *txData, uint8_t *rxData,
                              uint16_t len) {
   if (len == 0) return Result::InvalidParam;
