@@ -68,10 +68,6 @@ private:
   }
 
 public:
-  /// Hook type: called after Gamepad::read(), can modify GamepadRawInput
-  using GPInputStatHook = void (*)(GamepadRawInput &state);
-  static void registerGPInputStatHook(GPInputStatHook hook);
-
   Gamepad();
 
   void setup();

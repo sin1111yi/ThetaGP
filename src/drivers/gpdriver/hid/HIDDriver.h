@@ -32,8 +32,6 @@ namespace ThetaGP::Drivers::GPDriver {
 class HIDDriver : public GPDriver {
 public:
   HIDDriver();
-  void registerGPReportHook(GPReportHook hook) override;
-
   void initialize() override;
   bool process(void *gamepad) override;
   void initializeAux() override {}

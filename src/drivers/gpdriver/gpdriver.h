@@ -32,11 +32,6 @@
 
 namespace ThetaGP::Drivers::GPDriver {
 
-/// Generic hook for intercepting/modifying the outgoing gamepad report.
-/// Receives a void* to the driver-specific report struct; the callee casts
-/// to the concrete type (e.g. HIDReport).
-using GPReportHook = void (*)(void *report);
-
 class GPDriver {
 public:
   virtual void initialize() = 0;
@@ -58,10 +53,6 @@ public:
   virtual const uint8_t *get_descriptor_device_qualifier_cb() = 0;
   virtual uint16_t GetJoystickMidValue() = 0;
   virtual USBListener *get_usb_auth_listener() = 0;
-
-  /// Register a hook to intercept/modify the report before USB send.
-  /// Default no-op — only overridden by drivers that support it.
-  virtual void registerGPReportHook(GPReportHook /*hook*/) {}
 
   const usbd_class_driver_t *get_class_driver() { return &class_driver; }
 

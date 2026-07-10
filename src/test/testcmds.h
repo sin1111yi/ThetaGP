@@ -30,19 +30,12 @@ namespace ThetaGP::Test {
 /**
  * TestCmdHandler — handles commands in the `test.` domain.
  *
- * Supported commands (12 total):
- *   test.inject_gamepad_state  - Inject a GamepadRawInput into the pipeline
- *   test.inject_hid_report     - Inject a HIDReport into the pipeline
- *   test.get_gamepad_state     - Read current gamepad state snapshot
- *   test.get_hid_report        - Read current HID report snapshot
- *   test.set_override          - Enable/disable persistent override
- *   test.clear_inject          - Clear inject queue(s)
- *   test.set_mode              - Set TestMode (0=PASS_THRU, 1=INJECT, 2=RECORD)
- *   test.get_mode              - Read current TestMode
- *   test.get_history           - Read history ring buffer entries
- *   test.clear_history         - Clear history ring buffer(s)
- *   test.get_status            - Read full status (mode, queue counts, etc.)
- *   test.reset                 - Reset TestInjector to defaults
+ * Supported commands:
+ *   test.chip_erase   - Erase entire SPI flash chip
+ *   test.spi_mode     - Set SPI bus mode (0=Sync, 1=Async with DMA)
+ *   test.flash_read   - Raw SPI flash read at given address
+ *   test.flash_info   - Read SPI flash size/sector info
+ *   test.mempool_info - Read DevMem pool statistics
  */
 class TestCmdHandler {
 public:
