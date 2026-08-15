@@ -700,15 +700,15 @@ def main():
         # ═════════════════════════════════════════════════════════════════
         print("\n=== Test 9: BootMeta ring wraparound ===")
     
-        # Perform 70 profile.select ops to exceed the 64-slot BootMeta ring
+        # Perform 150 profile.select ops to exceed the 128-slot BootMeta ring
         errors = 0
-        for i in range(70):
+        for i in range(150):
             target = i % 2  # alternate between 0 and 1
             r = send(fd, "profile.select", id=target)
             if not r or r.get("status") != "ok":
                 errors += 1
         r = send(fd, "profile.status")
-        check("BootMeta ring wraparound (70 selects, no crash, active valid)",
+        check("BootMeta ring wraparound (150 selects, no crash, active valid)",
               r and r.get("active_profile_id") in (0, 1))
     
     else:
@@ -720,10 +720,10 @@ def main():
         # ═════════════════════════════════════════════════════════════════
         print("\n=== Test 10: Address ring wraparound ===")
     
-        # Select profile1 and perform 135 saves to exceed the 128-slot Address ring
+        # Select profile1 and perform 300 saves to exceed the 256-slot Address ring
         send(fd, "profile.select", id=1)
         errors = 0
-        for i in range(135):
+        for i in range(300):
             r = send(fd, "profile.save")
             if not r or r.get("status") != "ok":
                 errors += 1
@@ -733,7 +733,7 @@ def main():
             errors = 0
         else:
             r = send(fd, "profile.status")
-            check("Address ring wraparound (135 saves, addr_ring_seq high)",
+            check("Address ring wraparound (300 saves, addr_ring_seq high)",
                   r and r.get("address_ring_seq", 0) > 128)
     
             # Verify profile1 is still readable
@@ -959,25 +959,25 @@ def main():
         r = send(fd, "profile.get", id=99)
         check("profile.get invalid id returns error",
               r and r.get("status") == "error")
-    
-        # ═════════════════════════════════════════════════════════════════
-        # Summary
-        # ═════════════════════════════════════════════════════════════════
-        total = passed + failed + skipped
-        print(f"\n{'='*50}")
-        print(f"  Profile test suite complete")
-        print(f"{'='*50}")
-        print(f"  Passed: {passed}/{total}")
-        print(f"  Failed: {failed}/{total}")
-        print(f"  Skipped: {skipped}/{total}")
-        print(f"{'='*50}")
-    
-        os.close(fd)
-        return failed == 0
-    
-    
-    if __name__ == "__main__":
-        exit(0 if main() else 1)
     else:
         skip("edge_cases")
+
+    # ═════════════════════════════════════════════════════════════════
+    # Summary
+    # ═════════════════════════════════════════════════════════════════
+    total = passed + failed + skipped
+    print(f"\n{'='*50}")
+    print(f"  Profile test suite complete")
+    print(f"{'='*50}")
+    print(f"  Passed: {passed}/{total}")
+    print(f"  Failed: {failed}/{total}")
+    print(f"  Skipped: {skipped}/{total}")
+    print(f"{'='*50}")
+
+    os.close(fd)
+    return failed == 0
+
+
+if __name__ == "__main__":
+    exit(0 if main() else 1)
 

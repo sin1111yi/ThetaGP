@@ -171,8 +171,8 @@ static void onStagingDone(const uint8_t *buf, uint16_t len) {
 
 static void handleProfileStart(const char *cmd, const Json &json) {
   int rawLen = json.getInt("len", 0);
-  if (rawLen <= 0 || rawLen > 2048) {
-    sendError(cmd, json, 1, "invalid or missing len (1-2048)");
+  if (rawLen <= 0 || rawLen > 4096) {
+    sendError(cmd, json, 1, "invalid or missing len (1-4096)");
     return;
   }
 

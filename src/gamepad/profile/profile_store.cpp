@@ -456,6 +456,10 @@ bool ProfileStore::createProfile(const char *json, uint16_t len,
   }
 
   uint32_t dataAddr = _nextAddr;
+  if (!flash.eraseSector(dataAddr)) {
+    LOG_ERROR("ProfileStore: failed to erase sector before write");
+    return false;
+  }
   if (!flash.write(dataAddr, reinterpret_cast<const uint8_t *>(json), len)) {
     LOG_ERROR("ProfileStore: failed to write profile data");
     return false;
@@ -543,6 +547,10 @@ bool ProfileStore::modifyProfile(uint16_t id, const char *json, uint16_t len) {
   }
 
   uint32_t dataAddr = _nextAddr;
+  if (!flash.eraseSector(dataAddr)) {
+    LOG_ERROR("ProfileStore: failed to erase sector before modify");
+    return false;
+  }
   if (!flash.write(dataAddr, reinterpret_cast<const uint8_t *>(json), len)) {
     LOG_ERROR("ProfileStore: failed to write modified profile");
     return false;
@@ -745,7 +753,7 @@ ProfileStatus ProfileStore::getStatus() const {
 
   status.totalSectors = info.sizeBytes / 4096;
   status.usedSectors = (_nextAddr - USER_RING_BASE) / 4096;
-  status.freeSectors = status.totalSectors - 2 - status.usedSectors;
+  status.freeSectors = status.totalSectors - 3 - status.usedSectors;
 
   return status;
 }
@@ -759,7 +767,9 @@ bool ProfileStore::compaction() {
 
   auto &flash = Drivers::Device::FlashW25qxx::getInstance();
 
-  // 1. Collect valid profiles (address != 0), ordered by profileId
+  // 1. Collect valid user profiles (address != 0).
+  //    Profile0 (id=0) is excluded — it stays at the fixed PROFILE0_ADDR and
+  //    its backup at PROFILE0_BACKUP is never touched.
   struct ValidProfile {
     uint16_t id;
     uint32_t oldAddr;
@@ -767,7 +777,7 @@ bool ProfileStore::compaction() {
   ValidProfile valid[16];
   uint8_t validCount = 0;
 
-  for (uint16_t i = 0; i <= PROFILE_MAX_ID; ++i) {
+  for (uint16_t i = 1; i <= PROFILE_MAX_ID; ++i) {
     if (_profileAddresses[i] != 0) {
       valid[validCount].id = i;
       valid[validCount].oldAddr = _profileAddresses[i];
@@ -780,40 +790,46 @@ bool ProfileStore::compaction() {
     return true;
   }
 
-  // 2. Rewrite each valid profile at User Ring head (S2 onward)
+  // Sort by oldAddr ascending. This is REQUIRED for in-place compaction
+  // safety: writeAddr starts at USER_RING_BASE and increments by one sector
+  // per profile, so writeAddr[i] <= oldAddr[i] only holds if valid[] is
+  // ordered by address. Processing in id order could erase a target sector
+  // that still contains an un-read source profile (data corruption).
+  for (uint8_t i = 0; i < validCount; ++i) {
+    for (uint8_t j = i + 1; j < validCount; ++j) {
+      if (valid[j].oldAddr < valid[i].oldAddr) {
+        ValidProfile tmp = valid[i];
+        valid[i] = valid[j];
+        valid[j] = tmp;
+      }
+    }
+  }
+
+  // 2. Rewrite each valid profile at User Ring head (S3 onward)
   uint32_t writeAddr = USER_RING_BASE;
   _addressRingSeq = 0;
 
   for (uint8_t i = 0; i < validCount; ++i) {
     memset(s_staging, 0xFF, PROFILE_JSON_MAX);
+    // read old
     if (!flash.read(valid[i].oldAddr, s_staging, PROFILE_JSON_MAX)) {
       LOG_ERROR("ProfileStore: compaction read fail at 0x%06lX",
                 valid[i].oldAddr);
       return false;
     }
 
+    // erase target
+    if (!flash.eraseSector(writeAddr)) {
+      LOG_ERROR("ProfileStore: compaction erase fail at 0x%06lX", writeAddr);
+      return false;
+    }
+    // write target
     if (!flash.write(writeAddr, s_staging, PROFILE_JSON_MAX)) {
       LOG_ERROR("ProfileStore: compaction write fail at 0x%06lX", writeAddr);
       return false;
     }
 
-    seqBeforeIncrement();
-    _addressRingSeq++;
-    AddressEntry addrEntry;
-    addrEntry.profileId = valid[i].id;
-    addrEntry.address = writeAddr;
-    addrEntry.seq = _addressRingSeq;
-
-    uint32_t addrSlot = ADDR_RING_BASE + i * sizeof(AddressEntry);
-    if (!flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&addrEntry),
-                     sizeof(AddressEntry))) {
-      LOG_ERROR("ProfileStore: compaction Address write fail");
-      return false;
-    }
-
     _profileAddresses[valid[i].id] = writeAddr;
-    _profileSeqs[valid[i].id] = _addressRingSeq;
-
     writeAddr += 0x1000;
   }
 
@@ -830,6 +846,9 @@ bool ProfileStore::compaction() {
   bootMeta.crc16 = 0;
   bootMeta.crc16 = crc16BootMeta(&bootMeta);
 
+  // 4. Erase the whole Sector 0 (BootMeta Ring + Address Ring), then rebuild
+  //    both rings below. Order matters: Address Ring entries must be written
+  //    AFTER the erase, otherwise they get wiped.
   if (!eraseSector0Range(BOOTMETA_BASE, BOOTMETA_SIZE)) {
     LOG_ERROR("ProfileStore: compaction BootMeta erase fail");
     return false;
@@ -841,8 +860,43 @@ bool ProfileStore::compaction() {
     return false;
   }
 
-  // 4. Clear unused Address Ring slots
-  for (uint8_t i = validCount; i < ADDR_RING_SLOTS; ++i) {
+  // 5. Rebuild Address Ring: all compacted user profiles + profile0
+  _addressRingSeq = 0;
+  for (uint8_t i = 0; i < validCount; ++i) {
+    seqBeforeIncrement();
+    _addressRingSeq++;
+    AddressEntry addrEntry;
+    addrEntry.profileId = valid[i].id;
+    addrEntry.address = _profileAddresses[valid[i].id];
+    addrEntry.seq = _addressRingSeq;
+
+    uint32_t addrSlot = ADDR_RING_BASE + i * sizeof(AddressEntry);
+    if (!flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&addrEntry),
+                     sizeof(AddressEntry))) {
+      LOG_ERROR("ProfileStore: compaction Address write fail");
+      return false;
+    }
+    _profileSeqs[valid[i].id] = _addressRingSeq;
+  }
+
+  // Profile0 Address Ring entry (fixed address, never moved by compaction)
+  {
+    seqBeforeIncrement();
+    _addressRingSeq++;
+    AddressEntry addrEntry;
+    addrEntry.profileId = 0;
+    addrEntry.address = PROFILE0_ADDR;
+    addrEntry.seq = _addressRingSeq;
+
+    uint32_t addrSlot =
+        ADDR_RING_BASE + validCount * sizeof(AddressEntry);
+    (void)flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&addrEntry),
+                      sizeof(AddressEntry));
+  }
+
+  // 6. Clear unused Address Ring slots (after profile0 entry)
+  uint16_t clearStart = validCount + 1;
+  for (uint16_t i = clearStart; i < ADDR_RING_SLOTS; ++i) {
     AddressEntry empty;
     empty.profileId = PROFILE_ID_NONE;
     empty.address = 0;
@@ -854,7 +908,6 @@ bool ProfileStore::compaction() {
 
   _nextAddr = writeAddr;
 
-  LOG_INFO("ProfileStore: compaction done, nextAddr=0x%06lX", _nextAddr);
   return true;
 }
 
@@ -893,7 +946,13 @@ bool ProfileStore::resetSector0() {
     return false;
   }
 
-  // Restore Profile0 from Sector 1 backup
+  // Restore Profile0 from Sector 2 backup. Erase Sector 1 (PROFILE0_ADDR)
+  // first — Sector 0 erase does NOT touch Sector 1, and NOR flash can only
+  // program 1→0, so rewriting over old data without erase corrupts.
+  if (!flash.eraseSector(PROFILE0_ADDR)) {
+    LOG_ERROR("ProfileStore: failed to erase Profile0 primary sector");
+    return false;
+  }
   memset(s_staging, 0, PROFILE_JSON_MAX);
   if (!flash.read(PROFILE0_BACKUP, s_staging, PROFILE_JSON_MAX)) {
     LOG_WARN("ProfileStore: failed to read Profile0 backup, writing minimal "

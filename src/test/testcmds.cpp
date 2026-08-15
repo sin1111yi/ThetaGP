@@ -25,6 +25,7 @@
 
 #include "drivers/device/flash/flash_w25qxx.h"
 #include "drivers/device/devmem.h"
+#include "gamepad/profile/profile_store.h"
 
 #include "utils/log/log.h"
 #include "utils/mempool/mempoolmanager.h"
@@ -78,6 +79,10 @@ static void handleChipErase(const char *cmd, const Json &json) {
     Json resp;
     resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
     if (ok) {
+        // Flash is now fully erased. Re-scan the profile system so
+        // runtime caches (nextAddr, addresses, count) match the empty
+        // flash — otherwise profile.status reports stale pre-erase data.
+        (void)ThetaGP::Gamepad::Profile::ProfileStore::getInstance().init();
         resp.printf("{status:%Q,cmd:%Q,queued:%d,warning:%Q}",
                     "ok", cmd, queued + 1,
                     "chip_erase is dangerous — entire SPI flash wiped");
@@ -101,6 +106,30 @@ static void handleSpiMode(const char *cmd, const Json &json) {
     resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
     resp.printf("{status:%Q,cmd:%Q,queued:%d,mode:%d}",
                 "ok", cmd, queued + 1, modeVal);
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
+}
+
+static void handleEraseSector(const char *cmd, const Json &json) {
+    int addr = json.getInt("addr");
+    int queued = json.getInt("queued");
+    auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+    bool ok = flash.eraseSector(static_cast<uint32_t>(addr));
+    Json resp;
+    resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+    resp.printf("{status:%Q,cmd:%Q,queued:%d,addr:0x%X,ok:%d}",
+                "ok", cmd, queued + 1, addr, ok ? 1 : 0);
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
+}
+
+static void handleCompaction(const char *cmd, const Json &json) {
+    int queued = json.getInt("queued");
+    bool ok = ThetaGP::Gamepad::Profile::ProfileStore::getInstance().compaction();
+    Json resp;
+    resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+    resp.printf("{status:%Q,cmd:%Q,queued:%d,ok:%d}",
+                "ok", cmd, queued + 1, ok ? 1 : 0);
     uint16_t len = resp.end();
     FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
@@ -156,6 +185,14 @@ void TestCmdHandler::handle(const char *cmd, const Json &json) {
     // Non-protocol commands handled directly
     if (strcmp(cmd, "test.chip_erase") == 0) {
         handleChipErase(cmd, json);
+        return;
+    }
+    if (strcmp(cmd, "test.erase_sector") == 0) {
+        handleEraseSector(cmd, json);
+        return;
+    }
+    if (strcmp(cmd, "test.compaction") == 0) {
+        handleCompaction(cmd, json);
         return;
     }
     if (strcmp(cmd, "test.spi_mode") == 0) {

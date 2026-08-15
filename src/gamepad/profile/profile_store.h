@@ -32,34 +32,35 @@ class FlashW25qxx;
 namespace ThetaGP::Gamepad::Profile {
 
 // ── Constants ──
-// Layout: Sector 0 = BootMeta Ring (64x16B) + Address Ring (128x8B) + Profile0
-//         Sector 1 = Profile0 factory backup
-//         Sectors 2..N = User Ring (linear append area)
+// Layout: Sector 0 = BootMeta Ring (128×16B=2KB) + Address Ring (256×8B=2KB)
+//         Sector 1 = Profile0 primary
+//         Sector 2 = Profile0 backup
+//         Sectors 3..N = User Ring (linear append area)
 
 static constexpr uint32_t PROFILE_JSON_MAX =
-    2048; /**< Max JSON body size per profile */
+    4096; /**< Max JSON body size per profile */
 static constexpr uint16_t PROFILE_MAX_ID = 15; /**< Maximum profile ID (0-15) */
 static constexpr uint16_t PROFILE_ID_NONE =
     0xFFFF; /**< Sentinel for empty AddressEntry */
 
 static constexpr uint32_t BOOTMETA_BASE = 0x000000; /**< BootMeta Ring base */
 static constexpr uint32_t BOOTMETA_SIZE =
-    0x000400; /**< BootMeta Ring size (1024 bytes) */
+    0x000800; /**< BootMeta Ring size (2048 bytes) */
 static constexpr uint32_t ADDR_RING_BASE =
-    0x000400; /**< Profile Address Ring base */
+    0x000800; /**< Profile Address Ring base */
 static constexpr uint32_t ADDR_RING_SIZE =
-    0x000400; /**< Profile Address Ring size (1024 bytes) */
+    0x000800; /**< Profile Address Ring size (2048 bytes) */
 static constexpr uint32_t PROFILE0_ADDR =
-    0x000800; /**< Profile 0 primary copy */
+    0x001000; /**< Profile 0 primary copy */
 static constexpr uint32_t PROFILE0_BACKUP =
-    0x001000; /**< Sector 1: Profile 0 backup */
+    0x002000; /**< Sector 2: Profile 0 backup */
 static constexpr uint32_t USER_RING_BASE =
-    0x002000; /**< User Ring start address */
+    0x003000; /**< User Ring start address */
 
 static constexpr uint16_t BOOTMETA_MAGIC = 0x5442; /**< "TB" magic */
 
-static constexpr uint16_t BOOTMETA_SLOTS = 64;   /**< BootMeta Ring capacity */
-static constexpr uint16_t ADDR_RING_SLOTS = 128; /**< Address Ring capacity */
+static constexpr uint16_t BOOTMETA_SLOTS = 128;  /**< BootMeta Ring capacity */
+static constexpr uint16_t ADDR_RING_SLOTS = 256;  /**< Address Ring capacity */
 
 // ── Structs ──
 
