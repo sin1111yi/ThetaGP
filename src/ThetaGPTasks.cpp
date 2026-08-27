@@ -36,9 +36,13 @@ using namespace ThetaGP::Gamepad;
 FAST_CODE static void taskGamepadCore(uint32_t currentTimeUs) {
   UNUSED(currentTimeUs);
 
+  // tud_task first: consume pending USB events and free the HID IN
+  // endpoint before submitting the next report. Calling it after
+  // process() drops ~2/3 of a 1kHz report stream (single-buffer HID:
+  // a report submitted while the endpoint is still busy is discarded).
+  tud_task();
   Gamepad::Gamepad::getInstance().process();
   ThetaGP::Test::FrameLayer::getInstance().flushTx();
-  tud_task();
 }
 
 FAST_CODE static void taskCmdProc(uint32_t currentTimeUs) {
