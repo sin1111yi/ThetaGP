@@ -74,6 +74,9 @@ public:
   static bool isValidTID(TID tid);
   static const TaskInfo *getTaskInfo(TID tid);
   static size_t getTaskCount() { return taskCount; }
+  static uint16_t getAverageSystemLoadPercent() {
+    return averageSystemLoadPercent;
+  }
 };
 
 } // namespace ThetaGP::Gamepad

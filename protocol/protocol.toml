@@ -162,6 +162,25 @@ error_codes = [
   { name = "ERR_INVALID_PARAM", code = 2, description = "Invalid TID" },
 ]
 
+[[commands]]
+name = "get_usage"
+domain = "sys"
+description = "Aggregate system resource usage: CPU load, memory pool, task count, SPI flash"
+request = []
+response = [
+  { name = "cpu_load_percent",   type = "u32", json = "cpu_load_percent" },
+  { name = "task_count",         type = "u32", json = "task_count" },
+  { name = "mem_pool_id",        type = "i32", json = "mem_pool_id" },
+  { name = "mem_pool_total",     type = "u32", json = "mem_pool_total" },
+  { name = "mem_pool_used",      type = "u32", json = "mem_pool_used" },
+  { name = "mem_pool_free",      type = "u32", json = "mem_pool_free" },
+  { name = "profile_count",      type = "i32", json = "profile_count" },
+  { name = "flash_total_sectors", type = "u32", json = "flash_total_sectors" },
+  { name = "flash_used_sectors", type = "u32", json = "flash_used_sectors" },
+  { name = "flash_free_sectors", type = "u32", json = "flash_free_sectors" },
+]
+error_codes = []
+
 # --- config domain (reserved) ---
 
 [[commands]]

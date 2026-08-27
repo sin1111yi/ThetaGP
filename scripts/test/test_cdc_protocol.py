@@ -83,6 +83,15 @@ def main():
     ok("spi_mode DMA",
        r and r.get("status") == "ok" and r.get("mode") == 1)
 
+    # sys.get_usage — aggregate system resource report
+    r = ctx.send("sys.get_usage")
+    ok("get_usage",
+       r and r.get("status") == "ok"
+       and r.get("cpu_load_percent") is not None
+       and r.get("task_count") is not None
+       and r.get("mem_pool_total") is not None
+       and r.get("flash_total_sectors") is not None)
+
     # Destructive commands (chip_erase / erase_sector / compaction)
     # are intentionally NOT executed — they would wipe the SPI flash.
     # They are validated by the profile test suite instead.
