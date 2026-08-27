@@ -502,8 +502,8 @@ Result SpiBus::transmitReceiveImpl(TransferCallback cb, void *ctx,
     return spiInternalReadWriteBufPolled(txData, rxData, len);
   }
 
-  if (!_dmaTx || !_dmaRx || len > _bufSize) {
-    // Fallback: LL polling (small transfer or no DMA available)
+  if (!_dmaTx || !_dmaRx) {
+    // Fallback: LL polling (no DMA available)
     if (cb != nullptr) return Result::Unsupported;
     return spiInternalReadWriteBufPolled(txData, rxData, len);
   }
