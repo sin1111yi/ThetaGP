@@ -14,9 +14,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 #
-# Test: CDC JSON protocol — sys domain + test mode
+# Test: CDC JSON protocol — sys domain + test domain
 # Target: CDC ACM virtual serial port on firmware built with
 #         -DTHETAGP_CFG_TEST=ON
+#
+# Note: The gamepad/HID injection commands (test.set_mode, inject_*,
+# set_override, etc.) were removed in commit 2408e32 (refactor(test):
+# remove TestInjector and gamepad/HID report hooks). The current
+# firmware test domain exposes flash/mempool commands instead:
+#   test.flash_info, test.mempool_info, test.flash_read (read-only)
+#   test.spi_mode, test.erase_sector, test.compaction, test.chip_erase
+# Destructive commands (chip_erase / erase_sector / compaction) are
+# NOT executed by this suite to avoid wiping the SPI flash.
 
 import os
 import time
@@ -42,70 +51,41 @@ def main():
     ok("unknown cmd",
        r and r.get("status") == "error" and r.get("error_code") == 1)
 
-    # ── Stage 2: test mode ─────────────────────────────────────────────
-    print("\n=== Stage 2: test mode ===")
+    # ── Stage 2: test domain (flash/mempool, read-only) ─────────────
+    print("\n=== Stage 2: test domain (read-only commands) ===")
 
-    r = ctx.send("test.set_mode", mode=1)
-    ok("set_mode INJECT",
+    # test.flash_info — read-only flash geometry
+    r = ctx.send("test.flash_info")
+    ok("flash_info",
+       r and r.get("status") == "ok"
+       and r.get("sizeBytes") is not None
+       and r.get("sectorSize") is not None)
+
+    # test.mempool_info — read-only pool stats
+    r = ctx.send("test.mempool_info")
+    ok("mempool_info",
+       r and r.get("status") == "ok"
+       and r.get("total") is not None
+       and r.get("free") is not None)
+
+    # test.flash_read — read 32 bytes from flash start (read-only)
+    r = ctx.send("test.flash_read", addr=0, len=32)
+    ok("flash_read 32B@0",
+       r and r.get("status") == "ok" and r.get("lenRead") == 32)
+
+    # test.flash_read — invalid len rejected
+    r = ctx.send("test.flash_read", addr=0, len=99999)
+    ok("flash_read invalid len",
+       r and r.get("status") == "error")
+
+    # test.spi_mode — set DMA mode (default, non-destructive)
+    r = ctx.send("test.spi_mode", mode=1)
+    ok("spi_mode DMA",
        r and r.get("status") == "ok" and r.get("mode") == 1)
 
-    r = ctx.send("test.get_mode")
-    ok("get_mode",
-       r and r.get("mode") == 1 and r.get("mode_name") == "INJECT")
-
-    r = ctx.send("test.inject_gamepad_state",
-                 buttons=65536, dpad=5,
-                 lx=32767, ly=32767, rx=0, ry=0, lt=255, rt=128)
-    ok("inject_gamepad_state", r and r.get("status") == "ok")
-
-    r = ctx.send("test.get_gamepad_state")
-    ok("get_gamepad_state", r and r.get("buttons") is not None)
-
-    r = ctx.send("test.inject_hid_report",
-                 buttons=255, dpad=2,
-                 l_x_axis=128, l_y_axis=128, r_x_axis=64, r_y_axis=192)
-    ok("inject_hid_report", r and r.get("status") == "ok")
-
-    r = ctx.send("test.get_hid_report")
-    ok("get_hid_report",
-       r and r.get("buttons") is not None and "dpad" in r)
-
-    r = ctx.send("test.set_override", point="gamepad_state", enabled=True)
-    ok("set_override ON",
-       r and r.get("status") == "ok" and r.get("enabled") is True)
-
-    r = ctx.send("test.set_override", point="hid_report", enabled=False)
-    ok("set_override OFF",
-       r and r.get("status") == "ok" and r.get("enabled") is False)
-
-    r = ctx.send("test.clear_inject", point="all")
-    ok("clear_inject", r and r.get("status") == "ok")
-
-    r = ctx.send("test.get_status")
-    ok("get_status",
-       r and r.get("gamepad_history_count") is not None
-       and r.get("gamepad_inject_queued") is not None)
-
-    r = ctx.send("test.get_history", type="gamepad_state", count=3)
-    ok("get_history gamepad",
-       r and r.get("count") is not None and "entries" in r)
-
-    r = ctx.send("test.get_history", type="hid_report", count=3)
-    ok("get_history hid",
-       r and r.get("count") is not None and "entries" in r)
-
-    r = ctx.send("test.clear_history", type="all")
-    ok("clear_history", r and r.get("status") == "ok")
-
-    r = ctx.send("test.reset")
-    ok("reset", r and r.get("status") == "ok")
-
-    r = ctx.send("test.get_mode")
-    ok("mode after reset = PASS_THRU",
-       r and r.get("mode") == 0 and r.get("mode_name") == "PASS_THRU")
-
-    r = ctx.send("test.set_mode", mode=0)
-    ok("set_mode PASS_THRU", r and r.get("status") == "ok")
+    # Destructive commands (chip_erase / erase_sector / compaction)
+    # are intentionally NOT executed — they would wipe the SPI flash.
+    # They are validated by the profile test suite instead.
 
     # ── Summary ────────────────────────────────────────────────────────
     ok_ = ctx.summary()
