@@ -160,16 +160,24 @@ cmake -B build -DTARGET=BoringTechH743
 cmake --build build
 
 # Build with test API enabled
-cmake -B build -DTARGET=BoringTechH743 -DTHETAGP_ENABLE_TEST_API=ON
+cmake -B build -DTARGET=BoringTechH743 -DTHETAGP_CFG_TEST=ON
 cmake --build build
 ```
+
+Note: `THETAGP_CFG_TEST` is the compile switch that pulls in the test
+domain handlers (see `src/CMakeLists.txt`). The old
+`THETAGP_ENABLE_TEST_API` name is retired.
 
 ### Flashing
 
 ```bash
-probe-rs download --chip STM32H743ZITx build/ThetaGP_*.elf
+probe-rs download --chip ${BOARD_CHIP} build/ThetaGP_*.elf
 probe-rs reset
 ```
+
+`BOARD_CHIP` comes from `configs/BoringTechH743/board_config.cmake`
+(generated from `BoardConfig.toml` `[board_info].chip`). Current value:
+`STM32H743VITx`.
 
 The debug adapter is CMSIS-DAP (VID:PID 0d28:0204). Connect via SWD, udev rule at `/etc/udev/rules.d/99-cmsis-dap.rules`.
 
@@ -179,19 +187,38 @@ Logger outputs on UART1 (PA9 TX, PA10 RX) at 115200 baud. The CMSIS-DAP (DAPLink
 
 ### CDC test channel
 
-When built with `-DTHETAGP_ENABLE_TEST_API=ON`, the device exposes a CDC ACM
+When built with `-DTHETAGP_CFG_TEST=ON`, the device exposes a CDC ACM
 virtual serial port for JSON test commands. Plugged via the device's own USB
-interface (not the debug probe), typically at `ttyACM1`.
+interface (not the debug probe). The ttyACM number shifts across flashes;
+locate it via the stable symlink instead of a hardcoded node:
 
 ```bash
+ls -l /dev/serial/by-id/usb-ThetaGamepad*if01*
+# e.g. usb-ThetaGamepad_BoringTechH743-if01 -> ../../ttyACM0
+
 # Send a ping
-echo '{"cmd":"sys.ping","queued":0}' > /dev/ttyACM1
+echo '{"cmd":"sys.ping","queued":0}' > /dev/serial/by-id/usb-ThetaGamepad*if01*
 # Read response
-cat /dev/ttyACM1
+cat /dev/serial/by-id/usb-ThetaGamepad*if01*
 ```
 
-See `docs/cdc-json-protocol.md` for the full protocol specification and
-`scripts/test/test_cdc.py` for an automated test suite.
+See `docs/cdc-json-protocol.md` for the full protocol specification and the
+automated suites under `scripts/test/`:
+
+- `test_cdc_protocol.py` — sys domain + read-only test domain commands
+  (`test.flash_info`, `test.mempool_info`, `test.flash_read`,
+  `test.spi_mode`). Destructive commands (`test.chip_erase`,
+  `test.erase_sector`, `test.compaction`) are intentionally not executed
+  here; they are covered by the profile suite.
+- `test_profile.py` — profile store lifecycle (create/delete/select/save/
+  load, wraparound, compaction, CRC, 16-profile limit).
+- `cdc_serial.py` — shared serial I/O helper (stable-symlink port
+  discovery, raw mode setup).
+
+The gamepad/HID injection commands (`test.set_mode`, `test.inject_*`,
+`test.set_override`, history/reset) were removed in commit 2408e32
+(refactor(test): remove TestInjector and gamepad/HID report hooks) and do
+not exist in current firmware.
 
 ---
 
