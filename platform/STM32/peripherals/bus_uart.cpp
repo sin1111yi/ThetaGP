@@ -366,9 +366,11 @@ void UartBus::init() {
 // ── transmitReceiveImpl — single hook for half-duplex UART ──
 Result UartBus::transmitReceiveImpl(TransferCallback cb, void *ctx,
                               const uint8_t *txData, uint8_t *rxData,
-                              uint16_t len) {
+                              uint32_t len) {
   if (len == 0) return Result::InvalidParam;
   if (!_initialized) return Result::NotReady;
+  // One UART transfer is counted by a 16-bit DMA length register.
+  if (len > UINT16_MAX) return Result::InvalidParam;
 
   // Full-duplex not supported on UART
   if (txData != nullptr && rxData != nullptr) return Result::Unsupported;
@@ -381,7 +383,7 @@ Result UartBus::transmitReceiveImpl(TransferCallback cb, void *ctx,
       auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
       (void)_dmaTx->start(reinterpret_cast<uint32_t>(_txBuf),
                           reinterpret_cast<uint32_t>(&huart->Instance->TDR),
-                          len);
+                          static_cast<uint16_t>(len));
       huart->Instance->CR3 |= USART_CR3_DMAT;
       if (cb == nullptr) {
         while (isTxBusy()) {}
@@ -393,7 +395,7 @@ Result UartBus::transmitReceiveImpl(TransferCallback cb, void *ctx,
     auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
     USART_TypeDef *UARTx = huart->Instance;
     const uint32_t timeout = UART_POLL_TIMEOUT_MS * 10000;
-    for (uint16_t i = 0; i < len; i++) {
+    for (uint32_t i = 0; i < len; i++) {
       uint32_t tick = 0;
       while (!LL_USART_IsActiveFlag_TXE(UARTx)) {
         if (++tick > timeout) return Result::Timeout;
@@ -415,11 +417,12 @@ Result UartBus::transmitReceiveImpl(TransferCallback cb, void *ctx,
     if (_mode == Mode::Dma && _dmaRx && len <= _bufSize && _rxBuf) {
       if (isRxBusy()) return Result::Busy;
       _readDmaBufPtr = rxData;
-      _readDmaBufLen = len;
+      _readDmaBufLen = static_cast<uint16_t>(len);
       _idleDetectionEnabled = true;
       auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
       (void)_dmaRx->start(reinterpret_cast<uint32_t>(&huart->Instance->RDR),
-                          reinterpret_cast<uint32_t>(_rxBuf), len);
+                          reinterpret_cast<uint32_t>(_rxBuf),
+                          static_cast<uint16_t>(len));
       huart->Instance->CR3 |= USART_CR3_DMAR;
       huart->Instance->CR1 |= USART_CR1_IDLEIE;
       return Result::Ok;
@@ -429,7 +432,7 @@ Result UartBus::transmitReceiveImpl(TransferCallback cb, void *ctx,
     auto *huart = &static_cast<HalUart *>(_halHandle)->handle;
     USART_TypeDef *UARTx = huart->Instance;
     const uint32_t timeout = UART_POLL_TIMEOUT_MS * 10000;
-    for (uint16_t i = 0; i < len; i++) {
+    for (uint32_t i = 0; i < len; i++) {
       uint32_t tick = 0;
       while (!LL_USART_IsActiveFlag_RXNE(UARTx)) {
         if (++tick > timeout) return Result::Timeout;

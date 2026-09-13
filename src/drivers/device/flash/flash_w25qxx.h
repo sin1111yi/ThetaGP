@@ -34,7 +34,6 @@ namespace ThetaGP::Drivers::Device {
  *
  * Replaces the old C-style w25qxx.c/w25qxx.h driver.
  * Uses SpiBus::transfer() for all SPI communication (full-duplex).
- * Buffers are allocated via MempoolManager + DevMem at init time.
  */
 class FlashW25qxx : public FlashBase {
 public:
@@ -135,10 +134,6 @@ private:
 
   // ── Members ─────────────────────────────────────────────────
   bool _addrMode4Byte = false;
-
-  // ── DMA-safe buffers (allocated via MempoolManager) ─────────
-  uint8_t *_txBuf = nullptr;
-  uint8_t *_rxBuf = nullptr;
 };
 
 } // namespace ThetaGP::Drivers::Device

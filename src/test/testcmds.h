@@ -35,7 +35,6 @@ namespace ThetaGP::Test {
  *   test.spi_mode     - Set SPI bus mode (0=Sync, 1=Async with DMA)
  *   test.flash_read   - Raw SPI flash read at given address
  *   test.flash_info   - Read SPI flash size/sector info
- *   test.mempool_info - Read DevMem pool statistics
  */
 class TestCmdHandler {
 public:

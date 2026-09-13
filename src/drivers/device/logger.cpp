@@ -20,13 +20,22 @@
  */
 
 #include "drivers/device/logger.h"
-#include "drivers/device/devmem.h"
+#include "drivers/peripherals/bus/bus_uart.h"
 #include "drivers/peripherals/systick.h"
-#include "utils/mempool/mempoolmanager.h"
 #include "utils/log/log.h"
 
 using namespace ThetaGP::Drivers::Device;
 using ThetaGP::Drivers::Peripheral::BUS::Mode;
+using ThetaGP::Drivers::Peripheral::BUS::UartBus;
+
+// ── UART buffers ──
+//   Borrowed by the bus, held for the firmware lifetime:
+//   2 x 256 B = 512 B; UartBus::MAX_BUF_SIZE is the bus capacity constant.
+COMMON_ZERO_INIT static uint8_t s_logTxBuf[UartBus::MAX_BUF_SIZE]{};
+COMMON_ZERO_INIT static uint8_t s_logRxBuf[UartBus::MAX_BUF_SIZE]{};
+
+static_assert(sizeof(s_logTxBuf) == UartBus::MAX_BUF_SIZE,
+              "buffer size drifted");
 
 Logger::Logger()
     : Device("logger"),
@@ -34,12 +43,7 @@ Logger::Logger()
           LOGGER_UART)) {}
 
 void Logger::init() {
-  _txBuf = static_cast<uint8_t *>(Mempool::MempoolManager::alloc(
-      Drivers::Device::DevMem::getInstance().poolId(), _uart.MAX_BUF_SIZE));
-  _rxBuf = static_cast<uint8_t *>(Mempool::MempoolManager::alloc(
-      Drivers::Device::DevMem::getInstance().poolId(), _uart.MAX_BUF_SIZE));
-
-  _uart.setBuffers(_txBuf, _rxBuf, _uart.MAX_BUF_SIZE);
+  _uart.setBuffers(s_logTxBuf, s_logRxBuf, sizeof(s_logTxBuf));
   _uart.setMode(Mode::Polling);
   _uart.init();
   _initialized = true;

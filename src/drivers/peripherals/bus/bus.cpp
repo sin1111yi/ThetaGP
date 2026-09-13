@@ -61,7 +61,7 @@ Result Bus::transmitReceive(const uint8_t *txData, uint8_t *rxData,
 
 Result Bus::transmitReceiveDma(TransferCallback cb, void *ctx,
                                 const uint8_t *txData, uint8_t *rxData,
-                                uint16_t len) {
+                                uint32_t len) {
   return transmitReceiveImpl(cb, ctx, txData, rxData, len);
 }
 

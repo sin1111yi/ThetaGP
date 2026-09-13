@@ -42,8 +42,6 @@ public:
 private:
   Logger();
   Peripheral::BUS::UartBus &_uart;
-  uint8_t *_txBuf = nullptr;
-  uint8_t *_rxBuf = nullptr;
 };
 
 } // namespace ThetaGP::Drivers::Device

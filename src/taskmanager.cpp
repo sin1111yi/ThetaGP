@@ -32,24 +32,16 @@
 
 #include "build_info.h"
 
-#include <cstring>
-
 namespace ThetaGP::Gamepad {
 
 FAST_DATA_ZERO_INIT Scheduler *TaskManager::scheduler = nullptr;
-Mempool::PoolID TaskManager::taskPoolId = Mempool::INVALID_POOL_ID;
-COMMON_ZERO_INIT uint8_t TaskManager::taskPoolMemory[TASK_POOL_SIZE]{};
+FAST_DATA_ZERO_INIT Task TaskManager::taskSlots[MAX_TASKS]{};
+TaskAttribute TaskManager::attrSlots[MAX_TASKS]{};
 FAST_DATA_ZERO_INIT TaskManager::TaskRecord TaskManager::records[MAX_TASKS]{};
 size_t TaskManager::taskCount = 0;
 uint16_t TaskManager::averageSystemLoadPercent = 0;
 
-void TaskManager::init() {
-  scheduler = &Scheduler::getInstance();
-
-  std::memset(taskPoolMemory, 0, sizeof(taskPoolMemory));
-  taskPoolId = Mempool::MempoolManager::createPool(taskPoolMemory,
-                                                   TASK_POOL_SIZE, "task");
-}
+void TaskManager::init() { scheduler = &Scheduler::getInstance(); }
 
 void TaskManager::setupSysTasks() {
   TID loadTid = createTask("SYSTEM", "LOAD", taskSystemLoad, TASK_PERIOD_HZ(10),
@@ -73,38 +65,32 @@ FAST_CODE void TaskManager::run() { scheduler->run(); }
 TID TaskManager::createTask(const char *name, const char *subName,
                             TaskFunc func, uint32_t periodUs,
                             TaskPriority priority) {
-  if (taskCount >= MAX_TASKS) {
-    return -1;
+  TID tid = INVALID_TID;
+  for (uint32_t i = 0; i < MAX_TASKS; i++) {
+    if (!records[i].inUse) {
+      tid = static_cast<TID>(i);
+      break;
+    }
+  }
+  if (tid == INVALID_TID) {
+    return INVALID_TID;
   }
 
-  Task *task = static_cast<Task *>(
-      Mempool::MempoolManager::alloc(taskPoolId, sizeof(Task)));
-  if (!task) {
-    return -1;
-  }
+  taskSlots[tid] = Task{};
+  attrSlots[tid] = TaskAttribute{};
 
-  TaskAttribute *attr = static_cast<TaskAttribute *>(
-      Mempool::MempoolManager::alloc(taskPoolId, sizeof(TaskAttribute)));
-  if (!attr) {
-    (void)Mempool::MempoolManager::free(taskPoolId, task);
-    return -1;
-  }
+  TaskAttribute &attr = attrSlots[tid];
+  attr.taskName = name;
+  attr.subTaskName = subName;
+  attr.checkFunc = nullptr;
+  attr.taskFunc = func;
+  attr.desiredPeriodUs = periodUs;
+  attr.staticPriority = static_cast<int8_t>(priority);
 
-  *task = Task{};
-  *attr = TaskAttribute{};
+  taskSlots[tid].attribute = &attr;
 
-  attr->taskName = name;
-  attr->subTaskName = subName;
-  attr->checkFunc = nullptr;
-  attr->taskFunc = func;
-  attr->desiredPeriodUs = periodUs;
-  attr->staticPriority = static_cast<int8_t>(priority);
-
-  task->attribute = attr;
-
-  TID tid = static_cast<TID>(taskCount);
-  records[tid].task = task;
-  records[tid].attribute = attr;
+  records[tid].task = &taskSlots[tid];
+  records[tid].attribute = &attr;
   records[tid].inUse = true;
   taskCount++;
 
@@ -126,22 +112,14 @@ void TaskManager::destroyTask(TID tid) {
 
   TaskRecord &rec = records[tid];
   scheduler->queueRemove(rec.task);
-  (void)Mempool::MempoolManager::free(taskPoolId, rec.attribute);
-  (void)Mempool::MempoolManager::free(taskPoolId, rec.task);
-
-  rec.task = nullptr;
-  rec.attribute = nullptr;
-  rec.inUse = false;
-
-  for (size_t i = static_cast<size_t>(tid); i < taskCount - 1; i++) {
-    records[i] = records[i + 1];
-  }
-  records[taskCount - 1] = TaskRecord{};
+  // The slot is released for reuse; its memory stays with the module.
+  rec = TaskRecord{};
   taskCount--;
 }
 
 bool TaskManager::isValidTID(TID tid) {
-  return tid >= 0 && static_cast<size_t>(tid) < taskCount && records[tid].inUse;
+  return tid >= 0 && static_cast<uint32_t>(tid) < MAX_TASKS &&
+         records[tid].inUse;
 }
 
 const TaskInfo *TaskManager::getTaskInfo(TID tid) {
@@ -163,6 +141,7 @@ const TaskInfo *TaskManager::getTaskInfo(TID tid) {
   info.movingAverageCycleTimeUs = t->movingAverageCycleTimeUs;
 #ifdef USE_LATE_TASK_STATISTICS
   info.runCount = t->runCount;
+  info.lateCount = t->lateCount;
 #endif
   return &info;
 }

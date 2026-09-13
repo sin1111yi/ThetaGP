@@ -25,11 +25,9 @@
 
 #include "taskmanager.h"
 
-#include "drivers/device/devmem.h"
 #include "gamepad/profile/profile_store.h"
 
 #include "utils/log/log.h"
-#include "utils/mempool/mempoolmanager.h"
 
 #include "protocol/proto.h"
 
@@ -142,19 +140,12 @@ static void handleSysEnterDfu([[maybe_unused]] const char *cmd,
 }
 
 // ── sys.get_usage ──
-// Aggregate system resource report: CPU load, memory pool, task count,
-// SPI flash usage (from profile store).
+// Aggregate system resource report: CPU load, task count, SPI flash usage
+// (from profile store).
 
 static void handleSysGetUsage([[maybe_unused]] const char *cmd,
                               [[maybe_unused]] const Json &json) {
     int queued = json.getInt("queued");
-
-    using namespace ThetaGP::Mempool;
-    auto &dm = Drivers::Device::DevMem::getInstance();
-    auto pid = dm.poolId();
-    auto poolStats = (pid != INVALID_POOL_ID)
-                         ? MempoolManager::poolStats(pid)
-                         : PoolStats{0, 0, 0, 0, 0};
 
     auto &profileStore = ThetaGP::Gamepad::Profile::ProfileStore::getInstance();
     ProfileStatus pstat = profileStore.getStatus();
@@ -165,14 +156,11 @@ static void handleSysGetUsage([[maybe_unused]] const char *cmd,
         "{status:%Q,cmd:%Q,queued:%d,"
         "cpu_load_percent:%u,"
         "task_count:%u,"
-        "mem_pool_id:%d,mem_pool_total:%u,mem_pool_used:%u,mem_pool_free:%u,"
         "profile_count:%d,flash_total_sectors:%lu,flash_used_sectors:%lu,"
         "flash_free_sectors:%lu}",
         "ok", "sys.get_usage", queued + 1,
         (unsigned)Gamepad::TaskManager::getAverageSystemLoadPercent(),
         (unsigned)Gamepad::TaskManager::getTaskCount(),
-        static_cast<int>(pid),
-        poolStats.totalSize, poolStats.usedSize, poolStats.freeSize,
         pstat.profileCount,
         (unsigned long)pstat.totalSectors,
         (unsigned long)pstat.usedSectors,

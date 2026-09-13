@@ -24,6 +24,7 @@ lib/mbedtls
 lib/tinyusb
 lib/ArduinoJson
 lib/frozen
+lib/lvgl
 
 /agent/
 *.jsonl

@@ -493,7 +493,7 @@ Result SpiBus::spiInternalReadWriteBufPolled(const uint8_t *txData,
 
 Result SpiBus::transmitReceiveImpl(TransferCallback cb, void *ctx,
                              const uint8_t *txData, uint8_t *rxData,
-                             uint16_t len) {
+                             uint32_t len) {
   if (len == 0) return Result::InvalidParam;
   if (!_initialized) return Result::NotReady;
 

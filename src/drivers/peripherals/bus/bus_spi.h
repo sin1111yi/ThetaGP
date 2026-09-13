@@ -108,7 +108,7 @@ private:
 
   Result transmitReceiveImpl(TransferCallback cb, void *ctx,
                        const uint8_t *txData, uint8_t *rxData,
-                       uint16_t len) override;
+                       uint32_t len) override;
 
   Result spiInternalReadWriteBufPolled(const uint8_t *txData,
                                         uint8_t *rxData, uint16_t len);

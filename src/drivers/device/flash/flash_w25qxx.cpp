@@ -21,16 +21,26 @@
 
 #include "drivers/device/flash/flash_w25qxx.h"
 
-#include "drivers/device/devmem.h"
 #include "drivers/peripherals/systick.h"
 #include "utils/log/log.h"
-#include "utils/mempool/mempoolmanager.h"
 
 #include <cstring>
 
 using namespace ThetaGP::Drivers::Peripheral::BUS;
 
 namespace ThetaGP::Drivers::Device {
+
+// Staging chunk for flash transfers: two W25QXX pages (256 B each).
+static constexpr uint32_t FLASH_SPI_BUF_SIZE = 512;
+
+// ── Flash SPI staging buffers ──
+//   Borrowed by the bus, held for the firmware lifetime:
+//   2 x 512 B = 1,024 B.
+COMMON_ZERO_INIT static uint8_t s_flashSpiTxBuf[FLASH_SPI_BUF_SIZE]{};
+COMMON_ZERO_INIT static uint8_t s_flashSpiRxBuf[FLASH_SPI_BUF_SIZE]{};
+
+static_assert(sizeof(s_flashSpiTxBuf) == FLASH_SPI_BUF_SIZE,
+              "buffer size drifted");
 
 FlashW25qxx::FlashW25qxx()
     : FlashBase("w25qxx",
@@ -107,21 +117,7 @@ uint32_t FlashW25qxx::readId() {
 }
 
 void FlashW25qxx::init() {
-  // Allocate DMA-safe buffers from DevMem pool via MempoolManager
-  constexpr uint32_t BUF_SIZE = 512;
-  _txBuf = static_cast<uint8_t *>(ThetaGP::Mempool::MempoolManager::alloc(
-      ThetaGP::Drivers::Device::DevMem::getInstance().poolId(), BUF_SIZE));
-  _rxBuf = static_cast<uint8_t *>(ThetaGP::Mempool::MempoolManager::alloc(
-      ThetaGP::Drivers::Device::DevMem::getInstance().poolId(), BUF_SIZE));
-
-  if (_txBuf == nullptr || _rxBuf == nullptr) {
-    LOG_ERROR("FLASH: buffer allocation failed (tx=%p rx=%p)",
-              static_cast<void *>(_txBuf), static_cast<void *>(_rxBuf));
-    _initialized = false;
-    return;
-  }
-
-  _spi.setBuffers(_txBuf, _rxBuf, BUF_SIZE);
+  _spi.setBuffers(s_flashSpiTxBuf, s_flashSpiRxBuf, sizeof(s_flashSpiTxBuf));
   _spi.init();
   LOG_INFO("FLASH: SPI bus initialized");
 

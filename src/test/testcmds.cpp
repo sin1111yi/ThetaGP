@@ -24,11 +24,9 @@
 #include "test/framelayer.h"
 
 #include "drivers/device/flash/flash_w25qxx.h"
-#include "drivers/device/devmem.h"
 #include "gamepad/profile/profile_store.h"
 
 #include "utils/log/log.h"
-#include "utils/mempool/mempoolmanager.h"
 
 #include "protocol/proto.h"
 
@@ -205,23 +203,6 @@ void TestCmdHandler::handle(const char *cmd, const Json &json) {
     }
     if (strcmp(cmd, "test.flash_info") == 0) {
         handleFlashInfo(cmd, json);
-        return;
-    }
-    if (strcmp(cmd, "test.mempool_info") == 0) {
-        int queued = json.getInt("queued");
-        using namespace ThetaGP::Mempool;
-        auto &dm = Drivers::Device::DevMem::getInstance();
-        auto pid = dm.poolId();
-        auto stats = (pid != INVALID_POOL_ID) ? MempoolManager::poolStats(pid) : PoolStats{0,0,0,0,0};
-        Json resp;
-        resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
-        resp.printf("{status:%Q,cmd:%Q,queued:%d,"
-                    "poolId:%d,total:%u,used:%u,free:%u}",
-                    "ok", cmd, queued + 1,
-                    static_cast<int>(pid),
-                    stats.totalSize, stats.usedSize, stats.freeSize);
-        uint16_t len = resp.end();
-        FrameLayer::getInstance().sendResponse(resp.c_str(), len);
         return;
     }
 

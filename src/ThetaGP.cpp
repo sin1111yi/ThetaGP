@@ -22,11 +22,9 @@
 #include "BoardConfig.h"
 
 #include "drivers/device/logger.h"
-#include "drivers/device/devmem.h"
 #include "drivers/peripherals/peripheralsmgr.h"
 #include "gamepad/scheduler/scheduler.h"
 #include "utils/log/log.h"
-#include "utils/mempool/mempoolmanager.h"
 
 #include "gamepad/gamepad.h"
 #include "gamepad/config/configmgr.h"
@@ -52,12 +50,6 @@ using namespace ThetaGP;
 ThetaGamepad::ThetaGamepad() {}
 
 void ThetaGamepad::setup() {
-  // initialize Mempool Manager
-  Mempool::MempoolManager::init();
-
-  // initialize Device memory pool (AXI SRAM)
-  (void)Drivers::Device::DevMem::getInstance().init();
-
   // setup peripherals' driver
   Drivers::Peripheral::PeripheralsManager::getInstance().initPeripherals();
 

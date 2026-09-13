@@ -33,7 +33,6 @@
 
 #include "build_info.h"
 
-#include "utils/mempool/mempoolmanager.h"
 #include "utils/types.h"
 
 namespace ThetaGP {
@@ -75,7 +74,7 @@ public:
   // ── non-blocking full-duplex (DMA + callback) ─────────────
   Result transmitReceiveDma(TransferCallback cb, void *ctx,
                              const uint8_t *txData, uint8_t *rxData,
-                             uint16_t len);
+                             uint32_t len);
 
   virtual void init();
   virtual void enableClock() = 0;
@@ -85,7 +84,7 @@ protected:
 
   virtual Result transmitReceiveImpl(TransferCallback cb, void *ctx,
                                const uint8_t *txData, uint8_t *rxData,
-                               uint16_t len) {
+                               uint32_t len) {
     return Result::Unsupported;
   }
 

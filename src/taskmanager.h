@@ -23,8 +23,6 @@
 
 #include "gamepad/scheduler/scheduler.h"
 
-#include "utils/mempool/mempoolmanager.h"
-
 #include <cstddef>
 #include <cstdint>
 
@@ -35,7 +33,7 @@ using TID = int;
 class TaskManager {
 private:
   static constexpr uint32_t MAX_TASKS = 16;
-  static constexpr uint32_t TASK_POOL_SIZE = 4096;
+  static constexpr TID INVALID_TID = -1;
 
   struct TaskRecord {
     Task *task = nullptr;
@@ -44,9 +42,14 @@ private:
   };
 
   static Scheduler *scheduler;
-  static Mempool::PoolID taskPoolId;
 
-  static uint8_t taskPoolMemory[TASK_POOL_SIZE];
+  // ── Task slots ──
+  //   One Task/TaskAttribute pair per TID, held for the firmware lifetime.
+  //   Invariant: records[i].task == &taskSlots[i] and records[i].attribute
+  //   == &attrSlots[i] for every i in [0, MAX_TASKS). A TID is a slot index
+  //   and is valid exactly while its record is in use.
+  static Task taskSlots[MAX_TASKS];          // 1,024 B (16 x 64)
+  static TaskAttribute attrSlots[MAX_TASKS]; //   384 B (16 x 24)
 
   static TaskRecord records[MAX_TASKS];
   static size_t taskCount;
@@ -58,8 +61,6 @@ private:
   static void taskMain(uint32_t currentTimeUs);
 
 public:
-  static Mempool::PoolID getTaskPoolId() { return taskPoolId; }
-
   static void init();
   static void setupSysTasks();
   static void setupScheduler();
