@@ -69,6 +69,18 @@ ITCMRAM (xrw)      : ORIGIN = 0x00000400, LENGTH = 63K  /* offset 1KB from 0x0 t
 FLASH (rx)         : ORIGIN = 0x8000000, LENGTH = 2048K
 }
 
+/* ── Region bounds for the firmware resource report ──
+   These are absolute symbols: the symbol's value is the number itself
+   (read them in C as (uintptr_t)&sym — never dereference).
+   _mem_end_* is defined by the high-water marker sections below, so
+   used = (_mem_end_* - _mem_base_*) and size = _mem_size_*. */
+_mem_base_flash = ORIGIN(FLASH);    _mem_size_flash = LENGTH(FLASH);
+_mem_base_dtcm  = ORIGIN(DTCMRAM);  _mem_size_dtcm  = LENGTH(DTCMRAM);
+_mem_base_axi   = ORIGIN(RAM);      _mem_size_axi   = LENGTH(RAM);
+_mem_base_d2    = ORIGIN(RAM_D2);   _mem_size_d2    = LENGTH(RAM_D2);
+_mem_base_d3    = ORIGIN(RAM_D3);   _mem_size_d3    = LENGTH(RAM_D3);
+_mem_base_itcm  = ORIGIN(ITCMRAM);  _mem_size_itcm  = LENGTH(ITCMRAM);
+
 /* Define output sections */
 SECTIONS
 {
@@ -243,9 +255,15 @@ SECTIONS
   ._user_stack :
   {
     . = ALIGN(8);
+    _suser_stack = .;
     . = . + _Min_Stack_Size;
     . = ALIGN(8);
+    _euser_stack = .;
   } >DTCMRAM
+
+  /* DTCMRAM high-water mark: after the last DTCMRAM output section
+     (._user_stack above). Zero-size, occupies no space. */
+  .mem_end_dtcm (READONLY) : { . = ALIGN(4); _mem_end_dtcm = .; } >DTCMRAM
 
   /* ── AXI SRAM sections (DMA-accessible) ── */
 
@@ -300,6 +318,12 @@ SECTIONS
     _eram_heap = .;
   } >RAM
 
+  /* AXI high-water mark: the RAM_D2 sections are emitted in the middle of
+     the AXI block above, so this must follow the LAST AXI output section
+     (.ram_heap) — placing it after .ram_bss would under-report by the
+     heap reserve. Zero-size, occupies no space. */
+  .mem_end_axi (READONLY) : { . = ALIGN(4); _mem_end_axi = .; } >RAM
+
   /* ── RAM_D3 sections ── */
 
   .ram_d3_data :
@@ -316,6 +340,19 @@ SECTIONS
   _siram_d3_data = LOADADDR(.ram_d3_data);
 
   /* ── End ── */
+
+  /* FLASH / ITCMRAM / RAM_D2 / RAM_D3 high-water marks.
+     _mem_end_flash MUST stay after EVERY FLASH output section — including
+     the flash load images of the six `>REGION AT> FLASH` sections
+     (.data, .dtcmram_data, .itcmram_code, .ram_data, .ram_d2_data,
+     .ram_d3_data). Moving it earlier under-reports the image that has to
+     be flashed. Zero-size, occupies no space.
+     ALIGN(4) (not 8): an 8-byte alignment adds a 4 B tail gap and the
+     reported FLASH usage would exceed the real image size. */
+  .mem_end_flash (READONLY) : { . = ALIGN(4); _mem_end_flash = .; } >FLASH
+  .mem_end_itcm  (READONLY) : { . = ALIGN(4); _mem_end_itcm  = .; } >ITCMRAM
+  .mem_end_d2    (READONLY) : { . = ALIGN(4); _mem_end_d2    = .; } >RAM_D2
+  .mem_end_d3    (READONLY) : { . = ALIGN(4); _mem_end_d3    = .; } >RAM_D3
 
   /* Remove information from the standard libraries */
   /DISCARD/ :
