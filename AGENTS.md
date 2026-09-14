@@ -131,6 +131,19 @@ class Holder {
 };
 ```
 
+### Comments
+
+Comments describe what the code does, nothing else.
+
+- Write **property statements** only — what this code is/does. Never
+  reference design documents, ADR numbers, decision history, rejected
+  alternatives, or lessons learned. Those live in `docs/`; a comment that
+  cites them rots silently when the document moves on.
+- Drop parenthetical asides that are not part of the code's meaning.
+- **English only.** No Chinese in comments.
+- No doxygen/template blocks. If the code already says it clearly, write
+  no comment. Section separators are `// ── section ──`.
+
 ---
 
 ## 4. Query Priority
@@ -170,14 +183,21 @@ domain handlers (see `src/CMakeLists.txt`). The old
 
 ### Flashing
 
+**Use the probe-rs target name, not the ordering part number.**
+
 ```bash
-probe-rs download --chip ${BOARD_CHIP} build/ThetaGP_*.elf
-probe-rs reset
+probe-rs download --chip STM32H743VI build/ThetaGP_*.elf
+probe-rs reset --chip STM32H743VI
 ```
 
 `BOARD_CHIP` comes from `configs/BoringTechH743/board_config.cmake`
-(generated from `BoardConfig.toml` `[board_info].chip`). Current value:
-`STM32H743VITx`.
+(generated from `BoardConfig.toml` `[board_info].chip`); its current value
+is `STM32H743VITx`, which is ST's **orderable part number** (package and
+temperature suffix included). probe-rs 0.32.0 has no target by that name:
+`--chip STM32H743VITx` fails with "Unable to load specification for chip /
+The connected chip could not automatically be determined". The probe-rs
+target is `STM32H743VI` (verified working). Both `download` and `reset`
+need it.
 
 The debug adapter is CMSIS-DAP (VID:PID 0d28:0204). Connect via SWD, udev rule at `/etc/udev/rules.d/99-cmsis-dap.rules`.
 
@@ -206,8 +226,9 @@ See `docs/cdc-json-protocol.md` for the full protocol specification and the
 automated suites under `scripts/test/`:
 
 - `test_cdc_protocol.py` — sys domain + read-only test domain commands
-  (`test.flash_info`, `test.mempool_info`, `test.flash_read`,
-  `test.spi_mode`). Destructive commands (`test.chip_erase`,
+  (`test.flash_info`, `test.mem_info`, `test.flash_read`,
+  `test.spi_mode`; `test.mem_info` reports the six raw linker memory
+  regions). Destructive commands (`test.chip_erase`,
   `test.erase_sector`, `test.compaction`) are intentionally not executed
   here; they are covered by the profile suite.
 - `test_profile.py` — profile store lifecycle (create/delete/select/save/
@@ -226,7 +247,7 @@ not exist in current firmware.
 
 ### MCU
 
-- STM32H743 (Cortex-M7 r1p1, 400MHz)
+- STM32H743 (Cortex-M7 r1p1, 480 MHz — PLL1 M=5/N=192/P=2 on a 25 MHz HSE)
 - Flash: 2MB (dual bank), RAM: 1MB (distributed across DTCM, AXI SRAM, SRAMs)
 
 ### Memory section classification
@@ -256,9 +277,9 @@ Variables that are either DMA-accessed, or large/cold enough to justify saving f
 
 | Condition | Macro | Examples |
 |-----------|-------|----------|
-| **DMA buffers** (fast RAM is not DMA-accessible) | `COMMON_ZERO_INIT` | CDC buffers, USB descriptors, memory pools |
+| **DMA buffers** (fast RAM is not DMA-accessible) | `COMMON_ZERO_INIT` | CDC buffers, USB descriptors, SPI staging buffers (`s_nv3kSpiTxBuf`, `s_flashSpiTxBuf`) |
 | **ISR dispatch tables** (low-frequency ISRs) | `COMMON_ZERO_INIT` | DMA/SPI/UART/TIM ISR callback tables |
-| **Large pools** (accessed on alloc/free only) | `COMMON_ZERO_INIT` | Task pool memory, mempool entries |
+| **Large NOLOAD buffers** (allocated once, touched off the hot path) | `COMMON_ZERO_INIT` | CDC command queue (`FrameLayer::_cmdQueue`, 16,384 B), test-domain response staging (`s_testRespBuf`, 4,096 B) |
 | **Log/infrastructure buffers** (slow path) | `COMMON_ZERO_INIT` | Log ring buffer |
 | **Peripheral config tables** (constructor-initialized) | `COMMON_DATA` | SPI/UART bus descriptor arrays |
 | **Init-once, rarely-touched values** | `COMMON_ZERO_INIT` | CPU frequency cache, config sizes, USB state |
@@ -271,6 +292,10 @@ Rules:
 - **`aligned(32)`** — automatically applied by both DMA macros for cache line alignment.
 - **`FAST_DATA_ZERO_INIT`** — hot path variable, zero-initialized in DTCM (NOLOAD, no Flash copy).
 - **`FAST_DATA`** — hot path variable with initial value, initialized from Flash load image into DTCM.
+- **Registration** — any new static buffer of 256 B or more must be recorded
+  in the buffer register (name, size, macro, region) so total static usage
+  stays reviewable in one place. The register currently lives in
+  `docs/analysis/adr-0003-mempool-removal.md` §3.1.
 
 Usage:
 ```cpp

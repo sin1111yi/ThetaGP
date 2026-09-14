@@ -23,7 +23,7 @@ TOML-based board configuration.
 - **Test API** — inject/observe GamepadRawInput and HIDReport via CDC
 - TinyUSB stack (auto-fetched, auto-updated)
 - No RTOS — cooperative task scheduler
-- Static memory pool allocator (no malloc/free)
+- No allocator — all memory is statically allocated (no malloc/free)
 - ArduinoJson v7.4.3 for JSON serialization
 
 ## Hardware Requirements
@@ -87,7 +87,7 @@ ThetaGP/
 │   ├── drivers/                Device & gamepad drivers
 │   ├── gamepad/                Core gamepad logic & scheduler
 │   ├── test/                   Test API
-│   ├── utils/                  Memory pool, logging, atomic, time
+│   ├── utils/                  Resource accounting, logging, atomic, time
 │   └── taskmanager.cpp/h       Task lifecycle
 ├── lib/                        Third-party libraries (auto-fetched)
 │   └── CMakeLists.txt          Dependency declarations + fetch logic
@@ -139,7 +139,7 @@ fast-forwards if behind. No manual submodule management needed.
 
 ## Architecture
 
-- **No dynamic allocation**: All memory is static or pool-allocated via `MempoolManager`
+- **No dynamic allocation**: All memory is statically allocated; each buffer is a file-scope static array owned by its module
 - **No RTOS**: Cooperative scheduler in `gamepad/scheduler/` driven by `TaskManager`
 - **USB stack**: TinyUSB handles device enumeration and HID class driver registration
 - **Peripheral abstraction**: MCU-agnostic enums in headers, HAL mapping in platform `.cpp` files
