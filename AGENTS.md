@@ -444,6 +444,28 @@ BoardConfig macros (`SPI_2_PERIPHERAL`, `SPI_2_SCLK`, etc.) are generated from `
 BoardConfig.toml → scripts/generate_config.py → BoardConfig.h + board_config.cmake
 ```
 
+### Configuration layers
+
+Every parameter belongs to exactly one of two layers. The question that
+decides it: does changing this value depend on **how the firmware behaves**,
+or on **what this board looks like**?
+
+| Layer | Where | Holds |
+|-------|-------|-------|
+| Firmware | `src/conf/ThetaGP_Config.h` | Behaviour identical across every build target: report rate, keypad scan frequency, debounce windows, timeouts, retry counts. |
+| Board | `configs/<target>/BoardConfig.toml` | Pin assignment, peripheral selection, USB hardware and speed, and anything the board's electrical properties decide. |
+
+A firmware parameter carries a default and is normally left alone. Each one
+is wrapped in `#ifndef` so a board-specific value can override it, which is
+why `ThetaGP_Config.h` is included **after** `BoardConfig.h`.
+
+A firmware parameter may still be decided by the board's electrical
+properties — `THETAGP_CFG_KEYPAD_GPIO_SETTLE_US` is one: its default assumes
+a 30–50 kΩ pull-up against 10–20 pF, so a board that changes the pull-up or
+lengthens the trace must recompute it. Such values stay in
+`ThetaGP_Config.h` because the default holds for ordinary boards; state the
+assumption in the comment so a misfiring keypad points straight at it.
+
 ### Adding a new peripheral
 
 1. Add config data to `configs/<target>/BoardConfig.toml` under the appropriate `bus` key
