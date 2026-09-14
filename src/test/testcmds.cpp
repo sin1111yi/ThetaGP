@@ -27,6 +27,7 @@
 #include "gamepad/profile/profile_store.h"
 
 #include "utils/log/log.h"
+#include "utils/meminfo.h"
 
 #include "protocol/proto.h"
 
@@ -63,6 +64,53 @@ static void handleFlashInfo(const char *cmd, const Json &json) {
                 (unsigned long)info.sizeBytes, info.pageSize,
                 (unsigned long)info.sectorSize,
                 flash.isInitialized());
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
+}
+
+// ── test.mem_info ──
+// Raw linker region report: base/end/size/used for the six regions, plus the
+// reserves and the live RAM total.
+
+static void handleMemInfo(const char *cmd, const Json &json) {
+    using namespace ThetaGP::Util::MemInfo;
+
+    const auto f  = region(RegionId::Flash);
+    const auto dt = region(RegionId::Dtcm);
+    const auto ax = region(RegionId::Axi);
+    const auto d2 = region(RegionId::D2);
+    const auto d3 = region(RegionId::D3);
+    const auto it = region(RegionId::Itcm);
+    int queued = json.getInt("queued");
+
+    Json resp;
+    resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+    resp.printf("{status:%Q,cmd:%Q,queued:%d,"
+                "flash_base:%lu,flash_end:%lu,flash_size:%lu,flash_used:%lu,"
+                "dtcm_base:%lu,dtcm_end:%lu,dtcm_size:%lu,dtcm_used:%lu,"
+                "axi_base:%lu,axi_end:%lu,axi_size:%lu,axi_used:%lu,"
+                "d2_base:%lu,d2_end:%lu,d2_size:%lu,d2_used:%lu,"
+                "d3_base:%lu,d3_end:%lu,d3_size:%lu,d3_used:%lu,"
+                "itcm_base:%lu,itcm_end:%lu,itcm_size:%lu,itcm_used:%lu,"
+                "ram_reserved_bytes:%lu,stack_bytes:%lu,heap_bytes:%lu,"
+                "ram_live_bytes:%lu}",
+                "ok", cmd, queued + 1,
+                (unsigned long)f.base, (unsigned long)f.end,
+                (unsigned long)f.size, (unsigned long)f.used,
+                (unsigned long)dt.base, (unsigned long)dt.end,
+                (unsigned long)dt.size, (unsigned long)dt.used,
+                (unsigned long)ax.base, (unsigned long)ax.end,
+                (unsigned long)ax.size, (unsigned long)ax.used,
+                (unsigned long)d2.base, (unsigned long)d2.end,
+                (unsigned long)d2.size, (unsigned long)d2.used,
+                (unsigned long)d3.base, (unsigned long)d3.end,
+                (unsigned long)d3.size, (unsigned long)d3.used,
+                (unsigned long)it.base, (unsigned long)it.end,
+                (unsigned long)it.size, (unsigned long)it.used,
+                (unsigned long)ramReservedBytes(),
+                (unsigned long)stackBytes(),
+                (unsigned long)heapBytes(),
+                (unsigned long)ramLiveBytes());
     uint16_t len = resp.end();
     FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
@@ -203,6 +251,10 @@ void TestCmdHandler::handle(const char *cmd, const Json &json) {
     }
     if (strcmp(cmd, "test.flash_info") == 0) {
         handleFlashInfo(cmd, json);
+        return;
+    }
+    if (strcmp(cmd, "test.mem_info") == 0) {
+        handleMemInfo(cmd, json);
         return;
     }
 

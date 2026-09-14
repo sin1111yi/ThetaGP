@@ -189,6 +189,11 @@ if(THETAGP_CFG_TEST)
     target_compile_definitions(${CMAKE_PROJECT_NAME}
         PRIVATE
         THETAGP_CFG_TEST
+
+        # Adds runCount / lateCount to TaskInfo and reports them from
+        # sys.get_task_info. Bound to the test switch: production firmware
+        # keeps the smaller TaskInfo and the shorter response.
+        USE_LATE_TASK_STATISTICS
     )
 endif()
 

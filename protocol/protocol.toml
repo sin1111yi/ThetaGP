@@ -23,7 +23,7 @@
 # ---------------------------------------------------------------------------
 [meta]
 name = "ThetaGP CDC JSON Protocol"
-version = "1.0"
+version = "1.1"
 description = "CDC ACM JSON command protocol for ThetaGP embedded gamepad"
 
 # ---------------------------------------------------------------------------
@@ -157,6 +157,9 @@ response = [
   { name = "avgCycleUs",  type = "f32",   json = "avgCycleUs" },
   { name = "actualHz",    type = "f32",   json = "actualHz" },
   { name = "maxExecUs",   type = "u32",   json = "maxExecUs" },
+  { name = "avgExecUs",   type = "u32",   json = "avgExecUs", description = "Moving-average execution time, microseconds" },
+  { name = "totalExecUs", type = "u32",   json = "totalExecUs", description = "Accumulated execution time since boot, microseconds" },
+  { name = "avgDeltaUs",  type = "u32",   json = "avgDeltaUs", description = "Moving-average interval between executions, microseconds" },
 ]
 error_codes = [
   { name = "ERR_INVALID_PARAM", code = 2, description = "Invalid TID" },
@@ -165,15 +168,25 @@ error_codes = [
 [[commands]]
 name = "get_usage"
 domain = "sys"
-description = "Aggregate system resource usage: CPU load, task count, SPI flash"
+description = "Aggregate resource usage: CPU load, MCU flash, MCU RAM, external SPI flash"
 request = []
 response = [
-  { name = "cpu_load_percent",   type = "u32", json = "cpu_load_percent" },
-  { name = "task_count",         type = "u32", json = "task_count" },
-  { name = "profile_count",      type = "i32", json = "profile_count" },
-  { name = "flash_total_sectors", type = "u32", json = "flash_total_sectors" },
-  { name = "flash_used_sectors", type = "u32", json = "flash_used_sectors" },
-  { name = "flash_free_sectors", type = "u32", json = "flash_free_sectors" },
+  { name = "cpu_load_percent",       type = "u32", json = "cpu_load_percent" },
+  { name = "task_count",             type = "u32", json = "task_count" },
+  { name = "mcu_flash_used_bytes",   type = "u32", json = "mcu_flash_used_bytes" },
+  { name = "mcu_flash_total_bytes",  type = "u32", json = "mcu_flash_total_bytes" },
+  { name = "ram_used_bytes",         type = "u32", json = "ram_used_bytes" },
+  { name = "ram_total_bytes",        type = "u32", json = "ram_total_bytes" },
+  { name = "ram_reserved_bytes",     type = "u32", json = "ram_reserved_bytes" },
+  { name = "ram_dtcm_used_bytes",    type = "u32", json = "ram_dtcm_used_bytes" },
+  { name = "ram_axi_used_bytes",     type = "u32", json = "ram_axi_used_bytes" },
+  { name = "ram_d2_used_bytes",      type = "u32", json = "ram_d2_used_bytes" },
+  { name = "ram_d3_used_bytes",      type = "u32", json = "ram_d3_used_bytes" },
+  { name = "ram_itcm_used_bytes",    type = "u32", json = "ram_itcm_used_bytes" },
+  { name = "ext_flash_total_sectors", type = "u32", json = "ext_flash_total_sectors" },
+  { name = "ext_flash_used_sectors", type = "u32", json = "ext_flash_used_sectors" },
+  { name = "ext_flash_free_sectors", type = "u32", json = "ext_flash_free_sectors" },
+  { name = "profile_count",          type = "u32", json = "profile_count" },
 ]
 error_codes = []
 

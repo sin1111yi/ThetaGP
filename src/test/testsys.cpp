@@ -28,6 +28,7 @@
 #include "gamepad/profile/profile_store.h"
 
 #include "utils/log/log.h"
+#include "utils/meminfo.h"
 
 #include "protocol/proto.h"
 
@@ -106,15 +107,30 @@ static void handleSysGetTaskInfo([[maybe_unused]] const char *cmd,
         // ArduinoJson printf does not support float, use integer math
         uint32_t avgUs = static_cast<uint32_t>(info->movingAverageCycleTimeUs);
         uint32_t actualHz = (avgUs > 0) ? (1000000U / avgUs) : 0;
+        // The moving sums carry execution and delta time scaled by 10, so the
+        // per-task averages are in tenths of a microsecond.
+        uint32_t avgExecUs = info->averageExecutionTime10thUs / 10U;
+        uint32_t avgDeltaUs = info->averageDeltaTime10thUs / 10U;
         resp.printf("{status:%Q,cmd:%Q,queued:%d,tid:%d,"
                     "name:%Q,sub:%Q,desiredUs:%lu,"
-                    "avgCycleUs:%lu,actualHz:%lu,maxExecUs:%lu}",
+                    "avgCycleUs:%lu,actualHz:%lu,maxExecUs:%lu,"
+                    "avgExecUs:%lu,totalExecUs:%lu,avgDeltaUs:%lu",
                     "ok", "sys.get_task_info", queued + 1, tid,
                     info->taskName, info->subTaskName,
                     info->desiredPeriodUs,
                     (unsigned long)avgUs,
                     (unsigned long)actualHz,
-                    info->maxExecutionTimeUs);
+                    (unsigned long)info->maxExecutionTimeUs,
+                    (unsigned long)avgExecUs,
+                    (unsigned long)info->totalExecutionTimeUs,
+                    (unsigned long)avgDeltaUs);
+#ifdef USE_LATE_TASK_STATISTICS
+        // Counters are reported only when late-task statistics are compiled in
+        resp.printf(",runCount:%lu,lateCount:%lu",
+                    (unsigned long)info->runCount,
+                    (unsigned long)info->lateCount);
+#endif
+        resp.printf("}");
     } else {
         resp.printf("{status:%Q,cmd:%Q,queued:%d,tid:%d,"
                     "error_code:%d,reason:%Q}",
@@ -140,12 +156,15 @@ static void handleSysEnterDfu([[maybe_unused]] const char *cmd,
 }
 
 // ── sys.get_usage ──
-// Aggregate system resource report: CPU load, task count, SPI flash usage
-// (from profile store).
+// Aggregate resource report, four-item scope: CPU load, MCU flash,
+// MCU RAM (per region + aggregate + reserve), external SPI flash. Bytes on the
+// MCU side, sectors on the external flash, no percentages.
 
 static void handleSysGetUsage([[maybe_unused]] const char *cmd,
                               [[maybe_unused]] const Json &json) {
     int queued = json.getInt("queued");
+
+    using namespace ThetaGP::Util::MemInfo;
 
     auto &profileStore = ThetaGP::Gamepad::Profile::ProfileStore::getInstance();
     ProfileStatus pstat = profileStore.getStatus();
@@ -156,15 +175,30 @@ static void handleSysGetUsage([[maybe_unused]] const char *cmd,
         "{status:%Q,cmd:%Q,queued:%d,"
         "cpu_load_percent:%u,"
         "task_count:%u,"
-        "profile_count:%d,flash_total_sectors:%lu,flash_used_sectors:%lu,"
-        "flash_free_sectors:%lu}",
+        "mcu_flash_used_bytes:%lu,mcu_flash_total_bytes:%lu,"
+        "ram_used_bytes:%lu,ram_total_bytes:%lu,ram_reserved_bytes:%lu,"
+        "ram_dtcm_used_bytes:%lu,ram_axi_used_bytes:%lu,"
+        "ram_d2_used_bytes:%lu,ram_d3_used_bytes:%lu,ram_itcm_used_bytes:%lu,"
+        "ext_flash_total_sectors:%lu,ext_flash_used_sectors:%lu,"
+        "ext_flash_free_sectors:%lu,"
+        "profile_count:%u}",
         "ok", "sys.get_usage", queued + 1,
         (unsigned)Gamepad::TaskManager::getAverageSystemLoadPercent(),
         (unsigned)Gamepad::TaskManager::getTaskCount(),
-        pstat.profileCount,
+        (unsigned long)mcuFlashUsedBytes(),
+        (unsigned long)mcuFlashTotalBytes(),
+        (unsigned long)ramUsedBytes(),
+        (unsigned long)ramTotalBytes(),
+        (unsigned long)ramReservedBytes(),
+        (unsigned long)region(RegionId::Dtcm).used,
+        (unsigned long)region(RegionId::Axi).used,
+        (unsigned long)region(RegionId::D2).used,
+        (unsigned long)region(RegionId::D3).used,
+        (unsigned long)region(RegionId::Itcm).used,
         (unsigned long)pstat.totalSectors,
         (unsigned long)pstat.usedSectors,
-        (unsigned long)pstat.freeSectors);
+        (unsigned long)pstat.freeSectors,
+        (unsigned)pstat.profileCount);
     uint16_t len = resp.end();
     FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
