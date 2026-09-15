@@ -157,7 +157,17 @@ void Keypad::initPins() {
 
 uint32_t Keypad::getPressed() const {
   UNUSED(this);
+#if THETAGP_CFG_KEY_TOGGLE_EN
+  // Test hook: flip one key bit per read. The gamepad tick reads this once, so
+  // the mask differs from the previous report on every tick. A free-running
+  // counter is used rather than a timer bit because the tick period is an even
+  // number of microseconds, which would keep a micros()-derived bit's parity
+  // from tick to tick.
+  static uint32_t s_readCount = 0;
+  return _pressedMask ^ ((++s_readCount & 1U) ? 0x1U : 0x2U);
+#else
   return _pressedMask;
+#endif
 }
 
 bool Keypad::isKeyPressed(uint8_t keyId) const {

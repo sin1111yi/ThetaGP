@@ -37,8 +37,9 @@ if(NOT DEFINED CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
     set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type (e.g. Debug, Release, RelWithDebInfo)" FORCE)
 endif()
 
-# Load user-configurable defaults (supports -D override)
-include(${CMAKE_SOURCE_DIR}/cmake/thetagp_config.cmake)
+# Configuration lives in src/conf/ThetaGP_Config.h. Build-layer switches are
+# named BUILD_* on the command line (-DBUILD_TEST_API=ON) and are passed through
+# by src/CMakeLists.txt.
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(WARNING "Logging enabled (Debug build) — each log call adds ~100us delay. "

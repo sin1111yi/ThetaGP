@@ -36,7 +36,7 @@
 
 namespace ThetaGP::Test {
 
-#ifdef THETAGP_CFG_TEST
+#if THETAGP_CFG_BUILD_TEST_API
 
 static COMMON_ZERO_INIT char s_testRespBuf[4096];
 
@@ -295,6 +295,6 @@ void TestCmdHandler::handle(const char *cmd, const Json &json) {
 // All methods are inlined in testcmds.h for production mode
 // (empty class stub with no-op implementations)
 
-#endif // THETAGP_CFG_TEST
+#endif // THETAGP_CFG_BUILD_TEST_API
 
 } // namespace ThetaGP::Test

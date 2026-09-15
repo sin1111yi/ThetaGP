@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include "conf/ThetaGP_Config.h"
+
 #include "drivers/device/systimer.h"
 
 #include <cstddef>

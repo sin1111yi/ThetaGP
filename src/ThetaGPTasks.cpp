@@ -23,6 +23,8 @@
 #include "utils/utils.h"
 #include "build_info.h"
 
+#include "BoardConfig.h"
+
 #include "gamepad/gamepad.h"
 #include "taskmanager.h"
 
@@ -52,7 +54,8 @@ FAST_CODE static void taskCmdProc(uint32_t currentTimeUs) {
 
 void ThetaGP::ThetaGamepad::registerTasks(void) {
   TaskManager::registerTask("GAMEPAD", "CORE", taskGamepadCore,
-                            TASK_PERIOD_HZ(1000), TaskPriority::Realtime);
+                            TASK_PERIOD_HZ(THETAGP_CFG_USB_REPORT_RATE_HZ),
+                            TaskPriority::Realtime);
   TaskManager::registerTask("TEST", "CMD_PROC", taskCmdProc,
                             TASK_PERIOD_HZ(20), TaskPriority::Medium);
 }

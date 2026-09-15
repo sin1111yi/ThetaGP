@@ -61,7 +61,13 @@ file(GLOB_RECURSE SRC_FILES
 # =============================================================================
 # TinyUSB Configuration
 # =============================================================================
-if(THETAGP_CFG_USB_DBG)
+# TinyUSB log level. The value lives in src/conf/ThetaGP_Config.h so that all
+# configuration sits in one file. The library cannot see that header, so the
+# build reads the value here and forwards it as CFG_TUSB_DEBUG: 1 means verbose
+# (level 3), 0 means silent.
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/conf/ThetaGP_Config.h" _thetagp_usb_dbg
+     REGEX "^#define[ \t]+THETAGP_CFG_USB_DBG[ \t]+([0-9]+)")
+if(_thetagp_usb_dbg MATCHES "[ \t]([0-9]+)$" AND NOT CMAKE_MATCH_1 STREQUAL "0")
     set(TINYUSB_DEBUG_LEVEL 3)
 else()
     set(TINYUSB_DEBUG_LEVEL 0)
@@ -180,15 +186,15 @@ target_compile_definitions(${CMAKE_PROJECT_NAME}
     BOARD_NAME="${BOARD_NAME}"
 )
 
-if(THETAGP_CFG_TEST)
+if(BUILD_TEST_API)
     target_compile_definitions(${CMAKE_PROJECT_NAME}
         PRIVATE
-        THETAGP_CFG_TEST
-
-        # Adds runCount / lateCount to TaskInfo and reports them from
-        # sys.get_task_info. Bound to the test switch: production firmware
-        # keeps the smaller TaskInfo and the shorter response.
-        USE_LATE_TASK_STATISTICS
+        # Build-layer switch: the command line uses BUILD_TEST_API, the source
+        # sees this THETAGP_CFG_* macro. Its default and the
+        # USE_LATE_TASK_STATISTICS binding live in src/conf/ThetaGP_Config.h.
+        # The value must be given: the header tests this name with #if, and an
+        # empty definition would be a syntax error.
+        THETAGP_CFG_BUILD_TEST_API=1
     )
 endif()
 

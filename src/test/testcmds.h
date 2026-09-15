@@ -25,7 +25,7 @@
 
 namespace ThetaGP::Test {
 
-#ifdef THETAGP_CFG_TEST
+#if THETAGP_CFG_BUILD_TEST_API
 
 /**
  * TestCmdHandler — handles commands in the `test.` domain.

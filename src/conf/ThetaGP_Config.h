@@ -23,10 +23,62 @@
 
 #include "BoardConfig.h"
 
-// Firmware-level defaults. These are properties of the firmware, not of a
-// board: every target behaves the same unless a board or a build overrides a
-// value. BoardConfig.h is included first so a board-level definition wins, and
-// each macro below is wrapped in #ifndef so an override needs no edit here.
+// Firmware-level defaults: this file is where the software behaviour of the
+// firmware is configured. BoardConfig.h is included first and every macro below
+// is wrapped in #ifndef, so a board definition wins. The build forwards only
+// the switches it names (see src/CMakeLists.txt); everything else is changed by
+// editing the value here.
+
+// ── Index ──
+// Every knob in this file with its default. The per-knob block below carries
+// the unit and the meaning; this list is only so a reader sees the whole set
+// in one screen without scrolling.
+//
+//   build / test
+//     THETAGP_CFG_BUILD_TEST_API            0     compile the CDC JSON test API
+//     THETAGP_CFG_USB_DBG                   0     TinyUSB verbose debug (the build
+//                                                  forwards it as CFG_TUSB_DEBUG)
+//     THETAGP_CFG_LOG_EN / THETAGP_CFG_LOG_LV     derived from the build type
+//   report path
+//     THETAGP_CFG_USB_REPORT_RATE_HZ        1000  gamepad task rate, <= link ceiling
+//     THETAGP_CFG_USB_REPORT_RATE_MAX_HZ          derived from the board's USB speed
+//     THETAGP_CFG_KEY_TOGGLE_EN             0     test hook, flips one key bit per read
+//   keypad scan path
+//     THETAGP_CFG_KEYPAD_SCAN_HZ            32000
+//     THETAGP_CFG_KEYPAD_DEBOUNCE_PRESS_US  125
+//     THETAGP_CFG_KEYPAD_DEBOUNCE_HOLD_US   3000
+//     THETAGP_CFG_KEYPAD_GPIO_SETTLE_US     1
+//   config-layer defaults (see the blocks for units and meanings)
+//     SOCD_MODE 4      FOUR_WAY_MODE 0   DPAD_MODE 0
+//     INV_X/Y/RX/RY 0  SWAP_STICKS 0
+//     LX/LY/RX/RY_DZ 512                LX/LY/RX/RY_SENS 128
+//     CURVE 0          EMA 0            LT_DZ 8     RT_DZ 8
+//     LED_BRIGHTNESS 128  LED_MODE 0    LED_HUE 180 LED_SATURATION 255  LED_SPEED 128
+//     CAL_LX/LY/RX/RY 0
+
+// ── Test API ──
+// Compiles the CDC JSON test command infrastructure. The late-task statistics
+// that sys.get_task_info reports belong to it, so they are bound here instead
+// of being set separately by the build.
+//
+// Switched on by the build (src/CMakeLists.txt passes
+// THETAGP_CFG_BUILD_TEST_API=1 when its BUILD_TEST_API switch is on) or by a
+// board; the default is off.
+#ifndef THETAGP_CFG_BUILD_TEST_API
+#define THETAGP_CFG_BUILD_TEST_API 0
+#endif
+#if THETAGP_CFG_BUILD_TEST_API
+#define USE_LATE_TASK_STATISTICS
+#endif
+
+// ── TinyUSB debug ──
+// Log level of the TinyUSB stack itself. The value lives here with the rest of
+// the configuration, but the build has to hand it to the library as
+// CFG_TUSB_DEBUG: a definition in this header only reaches the firmware's own
+// translation units, not the library's.
+#ifndef THETAGP_CFG_USB_DBG
+#define THETAGP_CFG_USB_DBG 0
+#endif
 
 // ── Logging ──
 // Logging is on with a Debug threshold in a debug build and compiled out of a
@@ -47,6 +99,16 @@
 #ifndef THETAGP_CFG_LOG_LV
 #define THETAGP_CFG_LOG_LV Debug
 #endif
+#endif
+
+// ── Key toggle test ──
+// Test hook for exercising the report path. When enabled the keypad read
+// returns a mask with one bit flipped per call, so every report differs from
+// the last one submitted. The HID driver sends only when the report differs
+// from the last one it handed to the stack, so without such a toggle an idle
+// pad produces no traffic. Compiled out entirely when disabled.
+#ifndef THETAGP_CFG_KEY_TOGGLE_EN
+#define THETAGP_CFG_KEY_TOGGLE_EN 0
 #endif
 
 // ── USB report path ──
@@ -86,6 +148,11 @@
 // is re-read at this rate divided by the number of drive lines.
 #ifndef THETAGP_CFG_KEYPAD_SCAN_HZ
 #define THETAGP_CFG_KEYPAD_SCAN_HZ 32000
+#endif
+
+// A zero rate would leave the scan timer with no period to run at.
+#if THETAGP_CFG_KEYPAD_SCAN_HZ == 0
+#error "THETAGP_CFG_KEYPAD_SCAN_HZ must be positive"
 #endif
 
 // Level-confirmation window. A raw level that contradicts the committed state
