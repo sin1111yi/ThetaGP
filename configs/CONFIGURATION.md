@@ -90,10 +90,10 @@ active_low = true
 Generates:
 
 ```c
-#define LED0_PIN                     {Port::PortC, Pin::Pin0}
-#define LED0_ACTIVE_LOW              false
-#define LED1_PIN                     {Port::PortC, Pin::Pin1}
-#define LED1_ACTIVE_LOW              true
+#define BDCFG_LED0_PIN               {Port::PortC, Pin::Pin0}
+#define BDCFG_LED0_ACTIVE_LOW        false
+#define BDCFG_LED1_PIN               {Port::PortC, Pin::Pin1}
+#define BDCFG_LED1_ACTIVE_LOW        true
 ```
 
 Pin strings use `P<port><pin>` format: `PA0`–`PI15`. Port letters are A–I.
@@ -141,12 +141,13 @@ E1, E2, E3, E4, E5, E6, E7, E8
 |-------|------|-------------|
 | `hw_periph` | string | `USB1`, `USB2`, or `ULPI` |
 | `speed` | string | `high_speed` or `full_speed` |
+| `wired_report_hz` | int | Ceiling on the wired report rate in Hz — the gamepad task tick rate, not a constant packet stream: a report goes out only when the state differs from the last one. Optional; the firmware default is 1000. The link caps it (at most 1000 on `full_speed`, 8000 on `high_speed`), and it must divide 1000000 so the tick period is a whole number of microseconds. |
 
 ### `[[bus.uart]]` — optional, repeatable
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `bind` | string | Logical name (e.g. `logger`). Required for USE_UART_COUNT. |
+| `bind` | string | Logical name (e.g. `logger`). Required for BDCFG_USE_UART_COUNT. |
 | `peripheral` | string | `UART1`–`UART8` or `LPUART1` |
 | `tx` | string | TX pin (`PA0` format) |
 | `rx` | string | RX pin (`PA0` format), optional |

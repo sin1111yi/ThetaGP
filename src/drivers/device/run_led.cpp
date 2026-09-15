@@ -27,7 +27,7 @@ using namespace Peripheral::GPIO;
 
 RunLed::RunLed()
     : Device("run_led"),
-      _led(PinDesc LED0_PIN) {
+      _led(PinDesc BDCFG_LED0_PIN) {
 }
 
 void RunLed::init() {
@@ -78,7 +78,7 @@ void RunLed::update(uint32_t currentTimeUs) {
   }
 
   PinState target = on ? PinState::Set : PinState::Reset;
-#if defined(LED0_ACTIVE_LOW) && LED0_ACTIVE_LOW
+#if defined(BDCFG_LED0_ACTIVE_LOW) && BDCFG_LED0_ACTIVE_LOW
   target = (target == PinState::Set) ? PinState::Reset : PinState::Set;
 #endif
   _led.write(target);

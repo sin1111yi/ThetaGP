@@ -130,9 +130,9 @@ void Keypad::readInputScanMatrix(uint32_t *mask) {
 }
 
 void Keypad::initPins() {
-#if defined(KEYPAD_DRIVE_IO_LIST) && defined(KEYPAD_SENSE_IO_LIST)
-  const PinDesc drivePinsTmp[] = {KEYPAD_DRIVE_IO_LIST};
-  const PinDesc sensePinsTmp[] = {KEYPAD_SENSE_IO_LIST};
+#if defined(BDCFG_KEYPAD_DRIVE_IO_LIST) && defined(BDCFG_KEYPAD_SENSE_IO_LIST)
+  const PinDesc drivePinsTmp[] = {BDCFG_KEYPAD_DRIVE_IO_LIST};
+  const PinDesc sensePinsTmp[] = {BDCFG_KEYPAD_SENSE_IO_LIST};
 
   const bool activeLow = (_active == KeypadConfig::Active::Low);
   const PinState idleState = activeLow ? PinState::Set : PinState::Reset;

@@ -54,7 +54,7 @@ struct KeypadConfig {
   // A key is re-read once every DRIVE_LINES interrupts. Holding that refresh
   // rate to at least twice the report rate keeps a change from being missed
   // and leaves margin for it to settle before a report has to carry it.
-  static constexpr uint32_t DRIVE_LINES = KEYPAD_DRIVE_PIN_NUM;
+  static constexpr uint32_t DRIVE_LINES = BDCFG_KEYPAD_DRIVE_PIN_NUM;
   static_assert(THETAGP_CFG_KEYPAD_SCAN_HZ / DRIVE_LINES >=
                     2u * THETAGP_CFG_USB_REPORT_RATE_HZ,
                 "every key must be re-read at least twice per report");
@@ -76,23 +76,23 @@ class Keypad : public Device {
 private:
   Keypad();
 
-#ifndef KEYPAD_KEY_MAP
+#ifndef BDCFG_KEYPAD_KEY_MAP
 #error "[keypad] key_map is required — see configs/CONFIGURATION.md"
 #endif
 
-#ifndef KEYPAD_DRIVE_MODE
+#ifndef BDCFG_KEYPAD_DRIVE_MODE
 #error "[keypad] drive_mode is required — see configs/CONFIGURATION.md"
 #endif
 
-#ifndef KEYPAD_ACTIVE_MODE
+#ifndef BDCFG_KEYPAD_ACTIVE_MODE
 #error "[keypad] active_mode is required — see configs/CONFIGURATION.md"
 #endif
 
-  static constexpr size_t DRIVE_PIN_NUM = KEYPAD_DRIVE_PIN_NUM;
-  static constexpr size_t SENSE_PIN_NUM = KEYPAD_SENSE_PIN_NUM;
+  static constexpr size_t DRIVE_PIN_NUM = BDCFG_KEYPAD_DRIVE_PIN_NUM;
+  static constexpr size_t SENSE_PIN_NUM = BDCFG_KEYPAD_SENSE_PIN_NUM;
   static constexpr auto _keyMap =
-      std::array<std::array<uint8_t, SENSE_PIN_NUM>, DRIVE_PIN_NUM>{{KEYPAD_KEY_MAP}};
-  static constexpr size_t MAX_KEY_INDEX = KEYPAD_MAX_KEY_INDEX;
+      std::array<std::array<uint8_t, SENSE_PIN_NUM>, DRIVE_PIN_NUM>{{BDCFG_KEYPAD_KEY_MAP}};
+  static constexpr size_t MAX_KEY_INDEX = BDCFG_KEYPAD_MAX_KEY_INDEX;
   static constexpr size_t MASK_ARRAY_SIZE = 1; // 32 keys = 1 uint32_t
   static constexpr size_t MAX_KEYS = 32;
 
@@ -107,11 +107,11 @@ private:
   volatile uint32_t _pressedMask = 0;
   HardwareTimer _scanTimer;
 
-  static constexpr KeypadConfig::Mode _mode = KEYPAD_DRIVE_MODE;
-  static constexpr KeypadConfig::Active _active = KEYPAD_ACTIVE_MODE;
+  static constexpr KeypadConfig::Mode _mode = BDCFG_KEYPAD_DRIVE_MODE;
+  static constexpr KeypadConfig::Active _active = BDCFG_KEYPAD_ACTIVE_MODE;
 
-  std::array<PinDesc, KEYPAD_DRIVE_PIN_NUM> _drivePins;
-  std::array<PinDesc, KEYPAD_SENSE_PIN_NUM> _sensePins;
+  std::array<PinDesc, BDCFG_KEYPAD_DRIVE_PIN_NUM> _drivePins;
+  std::array<PinDesc, BDCFG_KEYPAD_SENSE_PIN_NUM> _sensePins;
 
   using InputReader = void (Keypad::*)(uint32_t *);
   InputReader _readInput = nullptr;

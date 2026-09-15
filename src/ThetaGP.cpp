@@ -60,7 +60,7 @@ void ThetaGamepad::setup() {
       &Drivers::Device::SystemTimer::getInstance());
   (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::RunLed::getInstance());
-#ifdef LOGGER_UART
+#ifdef BDCFG_LOGGER_UART
   (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::Logger::getInstance());
 #endif

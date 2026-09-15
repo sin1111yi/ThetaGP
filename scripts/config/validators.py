@@ -26,6 +26,11 @@ BUTTON_SUFFIX_LIST = {
 VALID_USB_PERIPHS = {"USB1", "USB2", "ULPI"}
 VALID_USB_SPEEDS = {"high_speed", "full_speed"}
 
+# Reports per second each link speed can poll the interrupt endpoint at: one
+# transaction per 1 ms frame on full speed, one per 125 us microframe on high
+# speed.
+USB_REPORT_RATE_CEILING_HZ = {"high_speed": 8000, "full_speed": 1000}
+
 VALID_FLASH_CHIPS = {"none", "w25qxx"}
 
 VALID_UART_PERIPHERALS = {
@@ -285,6 +290,41 @@ def _validate_usb(usb: dict, errors: list[str]) -> None:
         errors.append(
             f"Invalid usb.speed '{usb['speed']}'. "
             f"Valid values: {', '.join(sorted(VALID_USB_SPEEDS))}"
+        )
+    if "wired_report_hz" in usb:
+        _validate_wired_report_hz(usb, errors)
+
+
+def _validate_wired_report_hz(usb: dict, errors: list[str]) -> None:
+    """The optional report rate may not ask for more than the link polls.
+
+    A board that omits the key builds with the firmware default of 1000.
+    """
+    rate = usb["wired_report_hz"]
+    if not isinstance(rate, int) or isinstance(rate, bool):
+        errors.append(f"usb.wired_report_hz must be a number (got {rate!r})")
+        return
+    if rate <= 0:
+        errors.append(f"usb.wired_report_hz must be positive (got {rate})")
+        return
+
+    speed = usb.get("speed")
+    ceiling = None
+    if isinstance(speed, str):
+        ceiling = USB_REPORT_RATE_CEILING_HZ.get(speed)
+    if ceiling is not None and rate > ceiling:
+        errors.append(
+            f"usb.wired_report_hz is {rate} but usb.speed '{speed}' polls "
+            f"the interrupt endpoint at most {ceiling} times per second, so "
+            f"the key must not exceed {ceiling}: full_speed polls at most "
+            f"1000 times per second and high_speed at most 8000"
+        )
+    if 1000000 % rate != 0:
+        errors.append(
+            f"usb.wired_report_hz is {rate}, which does not divide 1000000. "
+            f"The task period is a whole number of microseconds "
+            f"(1000000/{rate} truncated to {1000000 // rate} us), so the tick "
+            f"cannot land on exactly {rate} times per second."
         )
 
 

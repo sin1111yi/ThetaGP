@@ -40,7 +40,7 @@ static_assert(sizeof(s_logTxBuf) == UartBus::MAX_BUF_SIZE,
 Logger::Logger()
     : Device("logger"),
       _uart(Drivers::Peripheral::PeripheralsManager::getInstance().uartBus(
-          LOGGER_UART)) {}
+          BDCFG_LOGGER_UART)) {}
 
 void Logger::init() {
   _uart.setBuffers(s_logTxBuf, s_logRxBuf, sizeof(s_logTxBuf));

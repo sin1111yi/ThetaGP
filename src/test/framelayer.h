@@ -94,7 +94,10 @@ public:
     uint16_t _rxLen = 0;
     FrameCallback _frameCallback = nullptr;
 
-    // TX pending buffer — defer tud_cdc_write to main loop
+    // TX pending buffer — sendResponse() fills it with the frame and its
+    // trailing CRLF, flushTx() hands the bytes to tud_cdc_write() on the
+    // gamepad task tick and flushes them; a partial write leaves the offset in
+    // _txPendingSent for the next tick to continue from.
     char _txPendingBuf[4096];
     uint16_t _txPendingLen = 0;
     uint16_t _txPendingSent = 0;

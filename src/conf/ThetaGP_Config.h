@@ -116,24 +116,28 @@
 // ── USB report path ──
 // The link mode sets the ceiling. Full speed polls the interrupt endpoint once
 // per 1 ms frame, so it carries at most 1000 reports/s; high speed polls once
-// per 125 us microframe, so it reaches 8000. USBHW_SPEED_* comes from the
+// per 125 us microframe, so it reaches 8000. BDCFG_SPEED_* comes from the
 // board's [usb] speed setting.
-//
-// On high speed the rate is a choice rather than a given: the default keeps
-// parity with full speed, and raising it to the microframe ceiling is worth it
-// only when the host really polls that fast and the CPU budget is there.
-#if defined(USBHW_SPEED_HS)
+#if defined(BDCFG_SPEED_HS)
 #define THETAGP_CFG_USB_REPORT_RATE_MAX_HZ 8000
-#ifndef THETAGP_CFG_USB_REPORT_RATE_HZ
-#define THETAGP_CFG_USB_REPORT_RATE_HZ 1000
-#endif
-#elif defined(USBHW_SPEED_FS)
+#elif defined(BDCFG_SPEED_FS)
 #define THETAGP_CFG_USB_REPORT_RATE_MAX_HZ 1000
-#ifndef THETAGP_CFG_USB_REPORT_RATE_HZ
-#define THETAGP_CFG_USB_REPORT_RATE_HZ 1000
-#endif
 #else
 #error "[usb] speed not configured — set high_speed or full_speed in BoardConfig.toml"
+#endif
+
+// Rate the gamepad task ticks at. A board that asks for its own rate declares
+// it in [usb] wired_report_hz, which reaches here as BDCFG_REPORT_RATE_HZ;
+// without it the default keeps parity with full speed. The rate is a ceiling
+// rather than a constant packet stream: on high speed, raising it to the
+// microframe ceiling is worth it only when the host really polls that fast and
+// the CPU budget is there.
+#ifndef THETAGP_CFG_USB_REPORT_RATE_HZ
+#ifdef BDCFG_REPORT_RATE_HZ
+#define THETAGP_CFG_USB_REPORT_RATE_HZ BDCFG_REPORT_RATE_HZ
+#else
+#define THETAGP_CFG_USB_REPORT_RATE_HZ 1000
+#endif
 #endif
 
 // Asking for more than the link can carry would build a firmware that silently
@@ -141,8 +145,31 @@
 #if THETAGP_CFG_USB_REPORT_RATE_HZ > THETAGP_CFG_USB_REPORT_RATE_MAX_HZ
 #error "THETAGP_CFG_USB_REPORT_RATE_HZ exceeds what the configured USB speed can carry"
 #endif
-#if THETAGP_CFG_USB_REPORT_RATE_HZ == 0
+#if THETAGP_CFG_USB_REPORT_RATE_HZ <= 0
 #error "THETAGP_CFG_USB_REPORT_RATE_HZ must be positive"
+#endif
+// The task period is a whole number of microseconds (TASK_PERIOD_HZ divides
+// 1000000 by the rate), so a rate that does not divide 1000000 cannot be kept:
+// the period is truncated and the tick lands on a rate nothing asked for. The
+// guard keeps the modulo off a zero rate, which the check above already rejects.
+#if THETAGP_CFG_USB_REPORT_RATE_HZ > 0 && 1000000 % THETAGP_CFG_USB_REPORT_RATE_HZ != 0
+#error "THETAGP_CFG_USB_REPORT_RATE_HZ must divide 1000000 so the task period is a whole number of microseconds"
+#endif
+
+// ── Flash presence ──
+// Whether the board carries a flash chip, under the name the firmware reads.
+// The board config always states it, as BDCFG_HAS_FLASH: 0 for a board that
+// declares chip = "none", 1 for a board that declares a chip. The outer
+// #ifndef leaves a build-time definition (a bare -D) in charge of the value.
+//
+// There is no #else. The bridge carries the board's answer and does not invent
+// one: a board config that states nothing leaves THETAGP_CFG_HAS_FLASH
+// undefined, which an #if reads as 0 and an #ifdef reads as absent, instead of
+// defined as 0, which an #ifdef would read as present.
+#ifndef THETAGP_CFG_HAS_FLASH
+#ifdef BDCFG_HAS_FLASH
+#define THETAGP_CFG_HAS_FLASH BDCFG_HAS_FLASH
+#endif
 #endif
 
 // ── Keypad scan path ──

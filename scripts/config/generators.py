@@ -41,10 +41,10 @@ def gen_pin_lines(cfg: dict) -> list[str]:
             continue
         val = cfg[key]
         if isinstance(val, dict) and "pin" in val:
-            lines.append(generate_pin_macro(f"{key.upper()}_PIN", val["pin"]))
+            lines.append(generate_pin_macro(f"BDCFG_{key.upper()}_PIN", val["pin"]))
             if "active_low" in val:
                 lines.append(
-                    f"#define {key.upper() + '_ACTIVE_LOW':<28} "
+                    f"#define {'BDCFG_' + key.upper() + '_ACTIVE_LOW':<28} "
                     f"{'true' if val['active_low'] else 'false'}"
                 )
     return lines
@@ -61,11 +61,11 @@ def gen_keypad_lines(kp: dict | None) -> list[str]:
     dm = kp.get("drive_mode", "").lower()
 
     mode_val = KEYPAD_DRIVE_MODE_MAP.get(dm, "")
-    lines.append(f"#define {'KEYPAD_DRIVE_MODE':<28} KeypadConfig::Mode::{mode_val}")
+    lines.append(f"#define {'BDCFG_KEYPAD_DRIVE_MODE':<28} KeypadConfig::Mode::{mode_val}")
 
     am = kp.get("active_mode", "none").lower()
     active_val = KEYPAD_ACTIVE_MODE_MAP.get(am, "None")
-    lines.append(f"#define {'KEYPAD_ACTIVE_MODE':<28} KeypadConfig::Active::{active_val}")
+    lines.append(f"#define {'BDCFG_KEYPAD_ACTIVE_MODE':<28} KeypadConfig::Active::{active_val}")
 
     if dm == "scan_matrix":
         _gen_keypad_scan_matrix(kp, lines)
@@ -81,13 +81,13 @@ def gen_keypad_lines(kp: dict | None) -> list[str]:
 def _gen_keypad_scan_matrix(kp: dict, lines: list[str]) -> None:
     dp = kp.get("drive_pins", [])
     if dp:
-        lines.append(f"#define {'KEYPAD_DRIVE_PIN_NUM':<28} {len(dp)}")
-        lines.append(generate_pin_array_macro("KEYPAD_DRIVE_IO_LIST", dp))
+        lines.append(f"#define {'BDCFG_KEYPAD_DRIVE_PIN_NUM':<28} {len(dp)}")
+        lines.append(generate_pin_array_macro("BDCFG_KEYPAD_DRIVE_IO_LIST", dp))
 
     sp = kp.get("sense_pins", [])
     if sp:
-        lines.append(f"#define {'KEYPAD_SENSE_PIN_NUM':<28} {len(sp)}")
-        lines.append(generate_pin_array_macro("KEYPAD_SENSE_IO_LIST", sp))
+        lines.append(f"#define {'BDCFG_KEYPAD_SENSE_PIN_NUM':<28} {len(sp)}")
+        lines.append(generate_pin_array_macro("BDCFG_KEYPAD_SENSE_IO_LIST", sp))
 
     km = kp.get("key_map", {})
     if km and dp and sp:
@@ -97,7 +97,7 @@ def _gen_keypad_scan_matrix(kp: dict, lines: list[str]) -> None:
         total = drive_num * sense_num
 
         lines.append("")
-        lines.append("#define KEYPAD_KEY_MAP \\")
+        lines.append("#define BDCFG_KEYPAD_KEY_MAP \\")
 
         max_index = 0
         # Emit as 2-D rows matching TOML layout
@@ -119,22 +119,22 @@ def _gen_keypad_scan_matrix(kp: dict, lines: list[str]) -> None:
 
         lines.append("")
         lines.append("")
-        lines.append(f"#define {'KEYPAD_MAX_KEY_INDEX':<28} {max_index}")
+        lines.append(f"#define {'BDCFG_KEYPAD_MAX_KEY_INDEX':<28} {max_index}")
         lines.append(
-            f"#define {'KEYPAD_MASK_ARRAY_SIZE':<28} {(max_index + 32) // 32}"
+            f"#define {'BDCFG_KEYPAD_MASK_ARRAY_SIZE':<28} {(max_index + 32) // 32}"
         )
 
 
 def _gen_keypad_io_direct(kp: dict, lines: list[str]) -> None:
     dp = kp.get("direct_pins", [])
     if dp:
-        lines.append(f"#define {'KEYPAD_DIRECT_PINS_NUM':<28} {len(dp)}")
-        lines.append(generate_pin_array_macro("KEYPAD_DIRECT_PINS", dp))
+        lines.append(f"#define {'BDCFG_KEYPAD_DIRECT_PINS_NUM':<28} {len(dp)}")
+        lines.append(generate_pin_array_macro("BDCFG_KEYPAD_DIRECT_PINS", dp))
 
 
 def _gen_keypad_spi_chips(kp: dict, lines: list[str]) -> None:
     if "spi_chips" in kp:
-        lines.append(f"#define {'KEYPAD_SPI_CHIPS':<28} {kp['spi_chips']}")
+        lines.append(f"#define {'BDCFG_KEYPAD_SPI_CHIPS':<28} {kp['spi_chips']}")
 
 
 def _gen_button_map(kp: dict, lines: list[str]) -> None:
@@ -142,7 +142,7 @@ def _gen_button_map(kp: dict, lines: list[str]) -> None:
     if not bm:
         return
     lines.append("")
-    lines.append("#define KEYPAD_BUTTON_MAP \\")
+    lines.append("#define BDCFG_KEYPAD_BUTTON_MAP \\")
     sorted_keys = sorted(bm.keys())
     for i, k in enumerate(sorted_keys):
         mask_name = f"GAMEPAD_MASK_{bm[k].upper()}"
@@ -162,10 +162,14 @@ def gen_usb_lines(usb: dict | None) -> list[str]:
     lines: list[str] = []
     if "hw_periph" in usb:
         pv = USB_PERIPHERAL_MAP.get(usb["hw_periph"], "USB1_OTG")
-        lines.append(f"#define USBHW_IF_{pv}")
+        lines.append(f"#define BDCFG_IF_{pv}")
     if "speed" in usb:
         sv = USB_SPEED_MAP.get(usb["speed"], "FS")
-        lines.append(f"#define USBHW_SPEED_{sv}")
+        lines.append(f"#define BDCFG_SPEED_{sv}")
+    if "wired_report_hz" in usb:
+        lines.append(
+            f"#define {'BDCFG_REPORT_RATE_HZ':<28} {usb['wired_report_hz']}"
+        )
     return lines
 
 
@@ -182,20 +186,20 @@ def gen_uart_lines(bus: dict | None) -> list[str]:
     lines: list[str] = []
 
     for i in range(len(uart_list)):
-        lines.append(f"#define {'USE_UART_' + str(i + 1):<28}")
+        lines.append(f"#define {'BDCFG_USE_UART_' + str(i + 1):<28}")
 
     bind_count = sum(1 for u in uart_list if u.get("bind"))
     if bind_count == 0:
         return lines
 
     lines.append("")
-    lines.append(f"#define USE_UART_COUNT {bind_count}")
+    lines.append(f"#define BDCFG_USE_UART_COUNT {bind_count}")
     lines.append("")
 
     for i, u in enumerate(uart_list):
         if u.get("bind") and u.get("peripheral"):
             lines.append(
-                f"#define {u['bind'].upper() + '_UART':<28} BUS_UART_{i + 1}"
+                f"#define {'BDCFG_' + u['bind'].upper() + '_UART':<28} BUS_UART_{i + 1}"
             )
 
     desc_entries: list[str] = []
@@ -213,7 +217,7 @@ def gen_uart_lines(bus: dict | None) -> list[str]:
 
     if desc_entries:
         lines.append("")
-        lines.append(f"#define {'UART_DESC_DATA':<28} \\")
+        lines.append(f"#define {'BDCFG_UART_DESC_DATA':<28} \\")
         for j, entry in enumerate(desc_entries):
             if j < len(desc_entries) - 1:
                 lines.append(f"    {entry}, \\")
@@ -236,20 +240,20 @@ def gen_spi_lines(bus: dict | None) -> list[str]:
     lines: list[str] = []
 
     for i in range(len(flash_list)):
-        lines.append(f"#define {'USE_SPI_' + str(i + 1):<28}")
+        lines.append(f"#define {'BDCFG_USE_SPI_' + str(i + 1):<28}")
 
     bind_count = sum(1 for f in flash_list if f.get("bind"))
     if bind_count == 0:
         return lines
 
     lines.append("")
-    lines.append(f"#define USE_SPI_COUNT {bind_count}")
+    lines.append(f"#define BDCFG_USE_SPI_COUNT {bind_count}")
     lines.append("")
 
     for i, f in enumerate(flash_list):
         if f.get("bind") and f.get("peripheral"):
             lines.append(
-                f"#define {f['bind'].upper() + '_SPI':<28} BUS_SPI_{i + 1}"
+                f"#define {'BDCFG_' + f['bind'].upper() + '_SPI':<28} BUS_SPI_{i + 1}"
             )
 
     desc_entries: list[str] = []
@@ -274,7 +278,7 @@ def gen_spi_lines(bus: dict | None) -> list[str]:
 
     if desc_entries:
         lines.append("")
-        lines.append(f"#define {'SPI_DESC_DATA':<28} \\")
+        lines.append(f"#define {'BDCFG_SPI_DESC_DATA':<28} \\")
         for j, entry in enumerate(desc_entries):
             if j < len(desc_entries) - 1:
                 lines.append(f"    {entry}, \\")
@@ -295,7 +299,7 @@ def gen_flash_lines(flash: dict | None) -> list[str]:
     """
     chip = (flash or {}).get("chip", "none")
     if chip == "none":
-        return ["#define THETAGP_CFG_HAS_FLASH 0"]
+        return ["#define BDCFG_HAS_FLASH 0"]
 
     macro_suffix = FLASH_CHIP_MAP.get(chip)
     if not macro_suffix:
@@ -304,8 +308,8 @@ def gen_flash_lines(flash: dict | None) -> list[str]:
             f"Supported: none, {', '.join(sorted(FLASH_CHIP_MAP))}"
         )
     return [
-        "#define THETAGP_CFG_HAS_FLASH 1",
-        f"#define FLASH_CHIP_{macro_suffix}",
+        "#define BDCFG_HAS_FLASH 1",
+        f"#define BDCFG_FLASH_CHIP_{macro_suffix}",
     ]
 
 

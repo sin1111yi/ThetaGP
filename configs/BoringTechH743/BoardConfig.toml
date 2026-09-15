@@ -29,8 +29,9 @@ button_map = [
 ]
 
 [usb]
-hw_periph = "USB2"
-speed     = "full_speed"
+hw_periph       = "USB2"
+speed           = "full_speed"
+wired_report_hz = 1000
 
 [[bus.uart]]
 bind       = "logger"

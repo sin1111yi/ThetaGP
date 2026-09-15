@@ -43,9 +43,9 @@
 //--------------------------------------------------------------------+
 
 // USB speed indicator
-#if defined(USBHW_SPEED_HS)
+#if defined(BDCFG_SPEED_HS)
 #define THETAGP_USB_HIGH_SPEED 1
-#elif defined(USBHW_SPEED_FS)
+#elif defined(BDCFG_SPEED_FS)
 #define THETAGP_USB_HIGH_SPEED 0
 #else
 #error "[usb] speed not configured — set high_speed or full_speed in BoardConfig.toml (see configs/CONFIGURATION.md)"
@@ -55,9 +55,9 @@
 #define THETAGP_USB_EP0_SIZE 64
 
 // USB root hub port
-#if defined(USBHW_IF_ULPI) || defined(USBHW_IF_OTG1)
+#if defined(BDCFG_IF_ULPI) || defined(BDCFG_IF_OTG1)
 #define THETAGP_USB_RHPORT 1
-#elif defined(USBHW_IF_OTG2)
+#elif defined(BDCFG_IF_OTG2)
 #define THETAGP_USB_RHPORT 0
 #else
 #define THETAGP_USB_RHPORT 0

@@ -22,6 +22,7 @@
 #pragma once
 
 #include "BoardConfig.h"
+#include "conf/ThetaGP_Config.h" // THETAGP_CFG_HAS_FLASH, the flash switch the firmware reads
 
 #include "gamepad/config/config_store.h"
 #include "gamepad/profile/profile_store.h"

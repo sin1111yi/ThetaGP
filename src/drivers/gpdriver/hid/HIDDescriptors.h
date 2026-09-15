@@ -189,5 +189,12 @@ static const uint8_t hid_interface_descriptor[] = {
     GAMEPAD_ENDPOINT | 0x80, // bEndpointAddress
     0x03,                    // bmAttributes (intr)
     GAMEPAD_SIZE, 0,         // wMaxPacketSize
-    1,                       // bInterval (1 ms)
+    // bInterval: how often the host polls this endpoint. Full speed counts 1 ms
+    // frames, so the value is a frame count (1..255) and 1 asks for one poll per
+    // frame, 1000 reports/s. High speed counts 125 us microframes and the value
+    // is an exponent: the period is 2^(value-1) x 125 us (1..16), so 1 asks for
+    // one poll per microframe, 125 us, 8000 reports/s, and 2 would ask for
+    // 250 us, 4000 reports/s. A value of 1 is the fastest rate either link
+    // offers.
+    1,
 };

@@ -44,11 +44,19 @@ FAST_CODE static void taskGamepadCore(uint32_t currentTimeUs) {
   // a report submitted while the endpoint is still busy is discarded).
   tud_task();
   Gamepad::Gamepad::getInstance().process();
+  // Drains the response bytes sendResponse() laid down: those reach the
+  // stack's TX FIFO here, on the report tick.
   ThetaGP::Test::FrameLayer::getInstance().flushTx();
 }
 
 FAST_CODE static void taskCmdProc(uint32_t currentTimeUs) {
   UNUSED(currentTimeUs);
+
+  // The 20 Hz command tick: decode the frames the host sent and dispatch the
+  // queued ones synchronously. Responses built through sendResponse() are
+  // queued for the gamepad tick's flushTx(); a command that writes the CDC
+  // FIFO itself (profile.get: header and raw payload) gets its bytes out
+  // during this dispatch, while its trailer goes through sendResponse().
   ThetaGP::Test::FrameLayer::getInstance().processCommandQueue();
 }
 

@@ -24,7 +24,7 @@
 #include "conf/ThetaGP_Config.h"
 #include "gamepad/config/config_store.h"
 
-// GAMEPAD_MASK_*, which KEYPAD_BUTTON_MAP is written in terms of.
+// GAMEPAD_MASK_*, which BDCFG_KEYPAD_BUTTON_MAP is written in terms of.
 #include "gamepad/gamepadstate.h"
 
 #include <array>
@@ -32,7 +32,7 @@
 
 // The button table below comes from the board's key table, so a board that
 // configures no table fails the build here.
-#ifndef KEYPAD_BUTTON_MAP
+#ifndef BDCFG_KEYPAD_BUTTON_MAP
 #error "[keypad] button_map is required — see configs/CONFIGURATION.md"
 #else
 
@@ -70,7 +70,7 @@ struct KeyMapping {
   uint32_t mask;
 };
 
-inline constexpr KeyMapping kKeypadButtonMap[] = {KEYPAD_BUTTON_MAP};
+inline constexpr KeyMapping kKeypadButtonMap[] = {BDCFG_KEYPAD_BUTTON_MAP};
 
 // Physical key index -> button bit index, the table read() consumes. The table
 // says "unmapped" by leaving a key out, so a key the board does not list keeps
@@ -113,9 +113,9 @@ constexpr bool keysAddressSlots() {
 }
 
 static_assert(entriesAreButtonBits(),
-              "KEYPAD_BUTTON_MAP: each mask must be a single button bit");
+              "BDCFG_KEYPAD_BUTTON_MAP: each mask must be a single button bit");
 static_assert(keysAddressSlots(),
-              "KEYPAD_BUTTON_MAP: physical key index must be below kBtnMapSlots");
+              "BDCFG_KEYPAD_BUTTON_MAP: physical key index must be below kBtnMapSlots");
 
 inline constexpr std::array<uint8_t, kBtnMapSlots> kBtnMap = buildBtnMap();
 
@@ -177,4 +177,4 @@ inline constexpr ConfigStore kConfigDefaults = detail::makeDefaults();
 
 } // namespace ThetaGP::Gamepad::Config
 
-#endif // KEYPAD_BUTTON_MAP
+#endif // BDCFG_KEYPAD_BUTTON_MAP

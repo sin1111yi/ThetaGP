@@ -47,7 +47,7 @@ static_assert(sizeof(s_flashSpiTxBuf) == FLASH_SPI_BUF_SIZE,
 FlashW25qxx::FlashW25qxx()
     : FlashBase("w25qxx",
                 Drivers::Peripheral::PeripheralsManager::getInstance().spiBus(
-                    FLASH_SPI)) {}
+                    BDCFG_FLASH_SPI)) {}
 
 void FlashW25qxx::reset() {
   uint8_t tx[2] = {I_ENABLE_RESET, I_RESET_DEVICE};

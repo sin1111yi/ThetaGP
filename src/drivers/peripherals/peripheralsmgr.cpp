@@ -59,18 +59,18 @@ void PeripheralsManager::initPeripherals() {
 
   // USB (existing logic unchanged)
   USB::USBSpeed usbSpeed =
-#if defined(USBHW_SPEED_HS)
+#if defined(BDCFG_SPEED_HS)
       USB::USBSpeed::UsbHighSpeed;
 #else
       USB::USBSpeed::UsbFullSpeed;
 #endif
 
   USB::USBPeripheral usbPeriph =
-#if defined(USBHW_IF_OTG1)
+#if defined(BDCFG_IF_OTG1)
       USB::USBPeripheral::OTG1;
-#elif defined(USBHW_IF_OTG2)
+#elif defined(BDCFG_IF_OTG2)
       USB::USBPeripheral::OTG2;
-#elif defined(USBHW_IF_ULPI)
+#elif defined(BDCFG_IF_ULPI)
       USB::USBPeripheral::ULPI;
 #else
 #error "[usb] hw_periph not configured — set USB1, USB2, or ULPI in BoardConfig.toml (see configs/CONFIGURATION.md)"
@@ -81,8 +81,8 @@ void PeripheralsManager::initPeripherals() {
 }
 
 void PeripheralsManager::initSpiBuses() {
-#if defined(SPI_DESC_DATA)
-  COMMON_DATA static BUS::SpiBus g_buses[] = { BUS::SpiBus{ SPI_DESC_DATA } };
+#if defined(BDCFG_SPI_DESC_DATA)
+  COMMON_DATA static BUS::SpiBus g_buses[] = { BUS::SpiBus{ BDCFG_SPI_DESC_DATA } };
   _spiBuses = g_buses;
   _spiCount = sizeof(g_buses) / sizeof(g_buses[0]);
 #else
@@ -92,8 +92,8 @@ void PeripheralsManager::initSpiBuses() {
 }
 
 void PeripheralsManager::initUartBuses() {
-#if defined(UART_DESC_DATA)
-  COMMON_DATA static BUS::UartBus g_buses[] = { BUS::UartBus{ UART_DESC_DATA } };
+#if defined(BDCFG_UART_DESC_DATA)
+  COMMON_DATA static BUS::UartBus g_buses[] = { BUS::UartBus{ BDCFG_UART_DESC_DATA } };
   _uartBuses = g_buses;
   _uartCount = sizeof(g_buses) / sizeof(g_buses[0]);
 #else

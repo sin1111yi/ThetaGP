@@ -72,11 +72,11 @@ void Gamepad::setButtonMappings() {
   // Clear all mappings (0xFF = unmapped)
   _mappings.fill(0xFF);
 
-#ifdef KEYPAD_BUTTON_MAP
+#ifdef BDCFG_KEYPAD_BUTTON_MAP
   constexpr struct {
     uint8_t key;
     uint32_t mask;
-  } map[] = {KEYPAD_BUTTON_MAP};
+  } map[] = {BDCFG_KEYPAD_BUTTON_MAP};
   for (auto &entry : map) {
     if (entry.mask != 0) {
       setMapping(entry.key, __builtin_ctz(entry.mask));
