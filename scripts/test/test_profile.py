@@ -20,7 +20,10 @@
 #
 # Test: Profile system — Milestone M9 (14 test cases)
 # Target: CDC ACM virtual serial port (ttyACM1) on firmware built with
-#         -DTHETAGP_CFG_TEST=ON
+#         -DBUILD_TEST_API=ON (source sees THETAGP_CFG_BUILD_TEST_API=1)
+# Boards without an external SPI flash cannot run this suite: the profile.*
+# handlers are compiled out when THETAGP_CFG_HAS_FLASH is 0, and the run is
+# reported as skipped rather than failed.
 # Method: Sends profile. JSON commands via raw serial, parses responses.
 #         Tests all 14 profile commands: profile.start, profile.get,
 #         profile.list, profile.create, profile.delete, profile.select,
@@ -411,7 +414,13 @@ def main():
 
     # ── Prerequisite: clean up and verify device is ready ──
     print("=== Prerequisite: clean up and verify device ===")
-    fd = open_serial(PORT)
+    try:
+        fd = open_serial(PORT)
+    except OSError as e:
+        print(f"  ABORT: cannot open {PORT} — {e.strerror or e}")
+        print("  Locate the port via /dev/serial/by-id/usb-ThetaGamepad*if01* "
+              "(the ttyACM number shifts across flashes).")
+        return False
     time.sleep(1)
     _queued = 0
 
@@ -421,10 +430,36 @@ def main():
         if r: print(f"  [boot] {r[:80]}")
         else: break
 
-    # Verify flash is alive
+    # The profile store lives in the external SPI flash, and its command handler
+    # is compiled out on boards that have none. Ask the device what it is first,
+    # so a missing capability is reported as a skip instead of as a dead link.
+    usage = send(fd, "sys.get_usage")
+    if usage is None:
+        print("  ABORT: sys.get_usage got no reply — port, link or firmware issue")
+        os.close(fd)
+        return False
+    if usage.get("status") != "ok":
+        print(f"  ABORT: sys.get_usage answered {usage.get('reason', 'an error')} "
+              f"— firmware built without the test API?")
+        os.close(fd)
+        return False
+    if not usage.get("ext_flash_total_sectors"):
+        print("  SKIP: not applicable to this board — sys.get_usage reports "
+              "ext_flash_total_sectors=0, so the profile.* handlers are compiled out "
+              "(#if THETAGP_CFG_HAS_FLASH) and answer as unknown commands.")
+        print("  Run this suite against a board carrying an external SPI flash.")
+        os.close(fd)
+        return True
+
+    # Verify the profile store answers
     r = send(fd, "profile.status")
-    if not r or r.get("status") != "ok":
-        print("  ABORT: device not responding")
+    if r is None:
+        print("  ABORT: profile.status got no reply — the device did not answer")
+        os.close(fd)
+        return False
+    if r.get("status") != "ok":
+        print(f"  ABORT: profile.status answered {r.get('reason', 'an error')} — "
+              f"the profile domain is not present in this firmware")
         os.close(fd)
         return False
     print(f"  flash: {r.get('total_sectors')} sectors, "
