@@ -36,7 +36,9 @@ void initTestSystem() {
 
     // Always registered handlers
     SysHandler::registerHandlers();
+#if THETAGP_CFG_HAS_FLASH
     ProfileCmdHandler::registerHandlers();
+#endif
 
     // Wire frame-complete callback -> dispatcher
     framelayer.setFrameCallback(Dispatcher::dispatch);

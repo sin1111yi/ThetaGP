@@ -26,6 +26,8 @@
 
 #include <cstring>
 
+#if THETAGP_CFG_HAS_FLASH
+
 using namespace ThetaGP::Drivers::Peripheral::BUS;
 
 namespace ThetaGP::Drivers::Device {
@@ -335,12 +337,8 @@ void FlashW25qxx::setSpiBusMode(Mode mode) {
   _spi.setMode(mode);
 }
 
-FlashBase &FlashBase::getInstance() {
-#if defined(FLASH_CHIP_W25QXX)
-  return FlashW25qxx::getInstance();
-#else
-  #error "No flash chip selected. Add [flash] chip = 'w25qxx' to BoardConfig.toml (see configs/CONFIGURATION.md)"
-#endif
-}
+FlashBase &FlashBase::getInstance() { return FlashW25qxx::getInstance(); }
 
 } // namespace ThetaGP::Drivers::Device
+
+#endif // THETAGP_CFG_HAS_FLASH

@@ -26,6 +26,8 @@ BUTTON_SUFFIX_LIST = {
 VALID_USB_PERIPHS = {"USB1", "USB2", "ULPI"}
 VALID_USB_SPEEDS = {"high_speed", "full_speed"}
 
+VALID_FLASH_CHIPS = {"none", "w25qxx"}
+
 VALID_UART_PERIPHERALS = {
     "UART1", "UART2", "UART3", "UART4",
     "UART5", "UART6", "UART7", "UART8", "LPUART1",
@@ -42,6 +44,7 @@ def validate_config(cfg: dict) -> list[str]:
     _validate_keypad(cfg.get("keypad", {}), errors)
     _validate_usb(cfg.get("usb", {}), errors)
     _validate_bus(cfg.get("bus", {}), errors)
+    _validate_flash(cfg.get("flash"), cfg.get("bus", {}), errors)
 
     return errors
 
@@ -309,3 +312,27 @@ def _validate_bus(bus: dict, errors: list[str]) -> None:
                 errors.append(f"bus.uart[{i}].rx: {err}")
         if "baud" in u and (not isinstance(u["baud"], int) or u["baud"] <= 0):
             errors.append(f"bus.uart[{i}].baud must be a positive number")
+
+
+# ── Flash ────────────────────────────────────────────────────────────────────
+
+def _validate_flash(flash: dict | None, bus: dict, errors: list[str]) -> None:
+    """A declared flash chip needs an SPI bus to sit on."""
+    chip = (flash or {}).get("chip", "none")
+
+    if chip not in VALID_FLASH_CHIPS:
+        errors.append(
+            f"flash.chip '{chip}' is invalid. "
+            f"Valid values: {', '.join(sorted(VALID_FLASH_CHIPS))}"
+        )
+        return
+
+    if chip == "none":
+        return
+
+    if not any(s.get("bind") == "flash" for s in bus.get("spi", [])):
+        errors.append(
+            f"flash.chip is '{chip}' but no bus.spi entry binds it. "
+            f"Add a [[bus.spi]] entry with bind = \"flash\", or declare "
+            f"chip = \"none\" on a board without a flash chip"
+        )

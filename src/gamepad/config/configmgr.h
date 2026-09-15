@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include "BoardConfig.h"
+
 #include "gamepad/config/config_store.h"
 #include "gamepad/profile/profile_store.h"
 
@@ -47,9 +49,12 @@ public:
   void setActiveProfileId(uint16_t id) { _activeId = id; }
   Profile::ProfileStatus getStatus() const;
 
+#if THETAGP_CFG_HAS_FLASH
+  /** Profile storage on the external flash; absent on boards without a chip. */
   Profile::ProfileStore &store() {
     return Profile::ProfileStore::getInstance();
   }
+#endif
 
 private:
   ConfigManager() = default;

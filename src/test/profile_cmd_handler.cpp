@@ -33,6 +33,8 @@
 
 #include <cstring>
 
+#if THETAGP_CFG_HAS_FLASH
+
 namespace ThetaGP::Test {
 
 using namespace ThetaGP::Gamepad::Profile;
@@ -502,3 +504,5 @@ void ProfileCmdHandler::registerHandlers() {
 }
 
 } // namespace ThetaGP::Test
+
+#endif

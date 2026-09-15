@@ -50,6 +50,8 @@ TestCmdHandler &TestCmdHandler::getInstance() {
 
 // ── Flash info (for testing only) ──
 
+#if THETAGP_CFG_HAS_FLASH
+
 static void handleFlashInfo(const char *cmd, const Json &json) {
     auto &flash = Drivers::Device::FlashW25qxx::getInstance();
     const auto &info = flash.getInfo();
@@ -67,6 +69,8 @@ static void handleFlashInfo(const char *cmd, const Json &json) {
     uint16_t len = resp.end();
     FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
+
+#endif // THETAGP_CFG_HAS_FLASH
 
 // ── test.mem_info ──
 // Raw linker region report: base/end/size/used for the six regions, plus the
@@ -116,6 +120,8 @@ static void handleMemInfo(const char *cmd, const Json &json) {
 }
 
 // ── Flash chip erase (for testing only) ──
+
+#if THETAGP_CFG_HAS_FLASH
 
 static void handleChipErase(const char *cmd, const Json &json) {
     auto &flash = Drivers::Device::FlashW25qxx::getInstance();
@@ -214,6 +220,8 @@ static void handleFlashRead(const char *cmd, const Json &json) {
     }
 }
 
+#endif // THETAGP_CFG_HAS_FLASH
+
 // ---------------------------------------------------------------------------
 // registerHandlers — self-register with the Dispatcher and Proto
 // ---------------------------------------------------------------------------
@@ -229,6 +237,7 @@ void TestCmdHandler::handle(const char *cmd, const Json &json) {
     LOG_DEBUG("TestCmdHandler: cmd='%s' queued=%d", cmd, queued);
 
     // Non-protocol commands handled directly
+#if THETAGP_CFG_HAS_FLASH
     if (strcmp(cmd, "test.chip_erase") == 0) {
         handleChipErase(cmd, json);
         return;
@@ -253,6 +262,7 @@ void TestCmdHandler::handle(const char *cmd, const Json &json) {
         handleFlashInfo(cmd, json);
         return;
     }
+#endif // THETAGP_CFG_HAS_FLASH
     if (strcmp(cmd, "test.mem_info") == 0) {
         handleMemInfo(cmd, json);
         return;

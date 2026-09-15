@@ -26,6 +26,8 @@
 #include "utils/json/json.h"
 #include <cstring>
 
+#if THETAGP_CFG_HAS_FLASH
+
 namespace ThetaGP::Gamepad::Profile {
 
 COMMON_ZERO_INIT uint8_t s_staging[4096];
@@ -1013,3 +1015,5 @@ bool ProfileStore::eraseSector0Range(uint32_t addr, uint32_t len) {
 }
 
 } // namespace ThetaGP::Gamepad::Profile
+
+#endif // THETAGP_CFG_HAS_FLASH

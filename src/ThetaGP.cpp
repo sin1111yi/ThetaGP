@@ -64,8 +64,10 @@ void ThetaGamepad::setup() {
   (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::Logger::getInstance());
 #endif
+#if THETAGP_CFG_HAS_FLASH
   (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::FlashBase::getInstance());
+#endif
 
   Drivers::Device::DeviceManager::getInstance().initDevices();
 

@@ -287,17 +287,26 @@ def gen_spi_lines(bus: dict | None) -> list[str]:
 # ── Flash ────────────────────────────────────────────────────────────────────
 
 def gen_flash_lines(flash: dict | None) -> list[str]:
-    """Generate flash chip selection macro."""
-    if not flash or "chip" not in flash:
-        return []
-    chip = flash["chip"]
+    """Generate the flash enable switch and the chip selection macro.
+
+    A board without a flash chip declares chip = "none". A board that omits the
+    section is read the same way: the section is absent because there is nothing
+    to declare, not because a value was forgotten.
+    """
+    chip = (flash or {}).get("chip", "none")
+    if chip == "none":
+        return ["#define THETAGP_CFG_HAS_FLASH 0"]
+
     macro_suffix = FLASH_CHIP_MAP.get(chip)
     if not macro_suffix:
         raise ValueError(
             f"Unknown flash chip: {chip}. "
-            f"Supported: {', '.join(sorted(FLASH_CHIP_MAP))}"
+            f"Supported: none, {', '.join(sorted(FLASH_CHIP_MAP))}"
         )
-    return [f"#define FLASH_CHIP_{macro_suffix}"]
+    return [
+        "#define THETAGP_CFG_HAS_FLASH 1",
+        f"#define FLASH_CHIP_{macro_suffix}",
+    ]
 
 
 # ── Header / CMake assembly ──────────────────────────────────────────────────

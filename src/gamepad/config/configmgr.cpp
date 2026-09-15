@@ -29,14 +29,18 @@
 
 namespace ThetaGP::Gamepad::Config {
 
-using Profile::PROFILE_JSON_MAX;
-using Profile::ProfileStore;
-using Profile::s_staging;
-
 ConfigManager &ConfigManager::getInstance() {
   static ConfigManager instance;
   return instance;
 }
+
+uint16_t ConfigManager::activeProfileId() const { return _activeId; }
+
+#if THETAGP_CFG_HAS_FLASH
+
+using Profile::PROFILE_JSON_MAX;
+using Profile::ProfileStore;
+using Profile::s_staging;
 
 bool ConfigManager::init() {
   if (!ProfileStore::getInstance().init()) {
@@ -145,8 +149,6 @@ bool ConfigManager::saveProfile() {
   return true;
 }
 
-uint16_t ConfigManager::activeProfileId() const { return _activeId; }
-
 uint8_t ConfigManager::profileCount() const {
   return ProfileStore::getInstance().getStatus().profileCount;
 }
@@ -156,5 +158,29 @@ bool ConfigManager::selectProfile(uint16_t pid) { return loadProfile(pid); }
 Profile::ProfileStatus ConfigManager::getStatus() const {
   return ProfileStore::getInstance().getStatus();
 }
+
+#else // THETAGP_CFG_HAS_FLASH
+
+// Without a flash chip there is nowhere to keep profiles, so the configuration
+// runs on the compiled defaults in ConfigStore. The host holds the user's
+// settings and is expected to push them over the control protocol; nothing
+// survives a power cycle on this side.
+
+bool ConfigManager::init() {
+  LOG_INFO("ConfigManager: no flash chip, running on defaults");
+  return true;
+}
+
+bool ConfigManager::loadProfile(uint16_t) { return false; }
+
+bool ConfigManager::saveProfile() { return false; }
+
+uint8_t ConfigManager::profileCount() const { return 1; }
+
+bool ConfigManager::selectProfile(uint16_t) { return false; }
+
+Profile::ProfileStatus ConfigManager::getStatus() const { return {}; }
+
+#endif // THETAGP_CFG_HAS_FLASH
 
 } // namespace ThetaGP::Gamepad::Config

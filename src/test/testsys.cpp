@@ -166,8 +166,12 @@ static void handleSysGetUsage([[maybe_unused]] const char *cmd,
 
     using namespace ThetaGP::Util::MemInfo;
 
+#if THETAGP_CFG_HAS_FLASH
     auto &profileStore = ThetaGP::Gamepad::Profile::ProfileStore::getInstance();
     ProfileStatus pstat = profileStore.getStatus();
+#else
+    ProfileStatus pstat{};
+#endif
 
     Json resp;
     resp.beginWrite(s_sysRespBuf, sizeof(s_sysRespBuf));

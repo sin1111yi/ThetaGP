@@ -38,4 +38,4 @@ tx         = "PB14"
 rx         = "PB15"
 
 [flash]
-chip = "w25qxx"
+chip = "none"
