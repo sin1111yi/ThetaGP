@@ -205,12 +205,18 @@ The debug adapter is CMSIS-DAP (VID:PID 0d28:0204). Connect via SWD, udev rule a
 
 Logger outputs on UART1 (PA9 TX, PA10 RX) at 115200 baud. The CMSIS-DAP (DAPLink) provides a VCP bridge on `ttyACM0`.
 
-### CDC test channel
+### CDC command channel
 
-When built with `-DTHETAGP_CFG_TEST=ON`, the device exposes a CDC ACM
-virtual serial port for JSON test commands. Plugged via the device's own USB
-interface (not the debug probe). The ttyACM number shifts across flashes;
-locate it via the stable symlink instead of a hardcoded node:
+The CDC ACM virtual serial port carrying JSON commands is present in **every**
+build — the interface is unconditional in the USB descriptors and
+`CFG_TUD_CDC` is always 1. `-DTHETAGP_CFG_TEST=ON` gates only the `test.*`
+command set: without it those handlers compile to no-op stubs. The `sys.*`
+domain is always live, and `profile.*` is live whenever the board declares a
+flash chip (`THETAGP_CFG_HAS_FLASH`).
+
+Plugged via the device's own USB interface (not the debug probe). The ttyACM
+number shifts across flashes; locate it via the stable symlink instead of a
+hardcoded node:
 
 ```bash
 ls -l /dev/serial/by-id/usb-ThetaGamepad*if01*
