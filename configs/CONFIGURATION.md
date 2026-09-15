@@ -166,7 +166,32 @@ E1, E2, E3, E4, E5, E6, E7, E8
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `chip` | string | Flash chip driver: `w25qxx` |
+| `chip` | string | Flash chip driver: `w25qxx`, or `none` for a board without one. Default: `none`. |
+
+A board without a flash chip states it explicitly — `chip = "none"`, or by
+leaving the section out entirely; the generator treats the two as the same
+input. The build then drops the whole chain: the `w25qxx` driver, the profile
+store and the `profile.*` command domain. The device boots on the compiled
+defaults and nothing the user changes survives a power cycle; the settings
+live on the host.
+
+Declaring a chip requires a `[[bus.spi]]` entry that binds it:
+
+```toml
+[[bus.spi]]
+bind       = "flash"
+peripheral = "SPI2"
+sclk       = "PB13"
+mosi       = "PB15"
+miso       = "PB14"
+ncs        = "PB12"
+
+[flash]
+chip = "w25qxx"
+```
+
+A declared chip with no bus binding fails at configure time — without it the
+driver references a macro nothing provides.
 
 ## Regenerating Config
 
