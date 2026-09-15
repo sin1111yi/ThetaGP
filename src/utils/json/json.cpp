@@ -1,10 +1,43 @@
 #include "utils/json/json.h"
 #include "frozen.h"
 
+#include <climits>
 #include <cstring>
 #include <cstdio>
 
 // ── Path helpers ──────────────────────────────────────────────
+
+// Digits of a number token as an int. strtol is not used: newlib-nano's returns
+// the right value but leaves endptr at the start, so the usual endptr check
+// fails from the second call on.
+static int tokenToInt(const struct json_token &tok) {
+  int val = 0;
+  bool negative = false;
+  int i = 0;
+  if (tok.ptr[0] == '-') {
+    negative = true;
+    i = 1;
+  }
+  for (; i < tok.len; ++i) {
+    const char c = tok.ptr[i];
+    if (c < '0' || c > '9') {
+      break;
+    }
+    const int digit = c - '0';
+    // The JSON text comes from outside, so a number wider than int is saturating
+    // rather than wrapping: every caller compares the value against its own
+    // bounds, and a value that saturates keeps its sign and its rejection.
+    if (val > (INT_MAX - digit) / 10) {
+      return negative ? INT_MIN : INT_MAX;
+    }
+    val = val * 10 + digit;
+  }
+  return negative ? -val : val;
+}
+
+static bool isNumberToken(const struct json_token &tok) {
+  return tok.type == JSON_TYPE_NUMBER && tok.ptr && tok.len > 0;
+}
 
 const char *Json::buildFmt(const char *path, const char *spec) const {
   // Count segments and find last dot
@@ -71,23 +104,29 @@ int Json::getInt(const char *path, int def) const {
   if (!_input) return def;
   struct json_token tok;
   const char *fmt = buildFmt(path, "%T");
-  if (json_scanf(_input, _inputLen, fmt, &tok) == 1 &&
-      tok.type == JSON_TYPE_NUMBER && tok.ptr && tok.len > 0) {
-    // Manual integer parse: newlib-nano strtol returns correct value but
-    // sets endptr == start, making *endptr check fail on subsequent calls.
-    int val = 0;
-    bool negative = false;
-    int i = 0;
-    if (tok.ptr[0] == '-') { negative = true; i = 1; }
-    for (; i < tok.len; ++i) {
-      char c = tok.ptr[i];
-      if (c >= '0' && c <= '9') {
-        val = val * 10 + (c - '0');
-      } else {
-        break;
-      }
-    }
-    return negative ? -val : val;
+  if (json_scanf(_input, _inputLen, fmt, &tok) == 1 && isNumberToken(tok)) {
+    return tokenToInt(tok);
+  }
+  return def;
+}
+
+int Json::getArrInt(const char *path, int idx, int def) const {
+  if (!_input || !path || idx < 0) return def;
+
+  // frozen walks into an array element under the name "<array>[<index>]" and
+  // matches that spelling against the path it is given plus the index. Object
+  // keys on that path carry a leading dot, so the array path is spelled with
+  // one; a path without it reaches no element.
+  char arrPath[64];
+  const size_t pathLen = strlen(path);
+  if (pathLen + 2 > sizeof(arrPath)) return def;
+  arrPath[0] = '.';
+  memcpy(arrPath + 1, path, pathLen + 1);
+
+  struct json_token tok;
+  if (json_scanf_array_elem(_input, _inputLen, arrPath, idx, &tok) > 0 &&
+      isNumberToken(tok)) {
+    return tokenToInt(tok);
   }
   return def;
 }
@@ -180,6 +219,7 @@ void Json::beginWrite(char *buf, int cap) {
   _cap = cap;
   _len = 0;
   _writing = true;
+  _overflowed = false;
   if (_buf && _cap > 0) _buf[0] = '\0';
 }
 
@@ -192,8 +232,13 @@ void Json::printf(const char *fmt, ...) {
   va_start(ap, fmt);
   int n = json_vprintf(&out, fmt, ap);
   va_end(ap);
+  // json_vprintf returns the length the piece needed, not the length that
+  // fit, so _len overshooting _cap is how a lost tail shows up.
   if (n > 0) _len += n;
-  if (_len >= _cap) _len = _cap - 1;
+  if (_len >= _cap) {
+    _len = _cap - 1;
+    _overflowed = true;
+  }
   _buf[_len] = '\0';
 }
 
@@ -211,4 +256,5 @@ void Json::reset() {
   _cap = 0;
   _len = 0;
   _writing = false;
+  _overflowed = false;
 }

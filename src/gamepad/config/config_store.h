@@ -27,57 +27,60 @@
 
 namespace ThetaGP::Gamepad::Config {
 
+// No field carries an initializer. The defaults are aggregated in one object in
+// config_defaults.h (kConfigDefaults); this struct has none of its own. A
+// ConfigStore nothing has assigned to it is zero, not a usable config.
 struct ConfigStore {
   // ── Map settings ──
-  uint16_t btn_map[32];
-  uint8_t socd_mode = 0;
-  uint8_t four_way_mode = 0;
-  uint8_t dpad_mode = 0;
-  uint8_t inv_x = 0;
-  uint8_t inv_y = 0;
-  uint8_t inv_rx = 0;
-  uint8_t inv_ry = 0;
-  uint8_t swap_sticks = 0;
+  uint8_t btn_map[32]; // Physical key → button bit index (0xFF = unmapped)
+  uint8_t socd_mode;
+  uint8_t four_way_mode;
+  uint8_t dpad_mode;
+  uint8_t inv_x;
+  uint8_t inv_y;
+  uint8_t inv_rx;
+  uint8_t inv_ry;
+  uint8_t swap_sticks;
 
   // ── Stick settings ──
-  uint16_t lx_dz = 512;
-  uint16_t ly_dz = 512;
-  uint16_t rx_dz = 512;
-  uint16_t ry_dz = 512;
-  uint8_t lx_sens = 128;
-  uint8_t ly_sens = 128;
-  uint8_t rx_sens = 128;
-  uint8_t ry_sens = 128;
-  uint8_t curve = 0;
-  uint8_t ema = 0;
+  uint16_t lx_dz;
+  uint16_t ly_dz;
+  uint16_t rx_dz;
+  uint16_t ry_dz;
+  uint8_t lx_sens;
+  uint8_t ly_sens;
+  uint8_t rx_sens;
+  uint8_t ry_sens;
+  uint8_t curve;
+  uint8_t ema;
 
   // ── Trigger settings ──
-  uint8_t lt_dz = 8;
-  uint8_t rt_dz = 8;
-
-  // ── USB settings ──
-  uint8_t poll_rate = 2;
+  uint8_t lt_dz;
+  uint8_t rt_dz;
 
   // ── LED settings ──
-  uint8_t led_brightness = 128;
-  uint8_t led_mode = 0;
-  uint16_t led_hue = 180;
-  uint8_t led_saturation = 255;
-  uint8_t led_speed = 128;
-
-  // ── System settings ──
-  uint8_t log_level = 1;
-  uint8_t debounce_samples = 16;
-  uint8_t debounce_threshold = 12;
+  uint8_t led_brightness;
+  uint8_t led_mode;
+  uint16_t led_hue;
+  uint8_t led_saturation;
+  uint8_t led_speed;
 
   // ── Calibration ──
-  int16_t cal_lx = 0;
-  int16_t cal_ly = 0;
-  int16_t cal_rx = 0;
-  int16_t cal_ry = 0;
+  int16_t cal_lx;
+  int16_t cal_ly;
+  int16_t cal_rx;
+  int16_t cal_ry;
 };
 
-/** Parse JSON profile body into ConfigStore. */
+// Parse JSON profile body into ConfigStore.
 void parseProfile(const char *json, ConfigStore *cfg);
+
+// Write cfg into dst as a profile JSON body. `cap` is the size of dst in bytes,
+// terminator included. Returns the body length in bytes, terminator not
+// counted, or 0 when no usable body was produced: dst was too small for it, or
+// the body would be longer than PROFILE_JSON_MAX, the most the flash layer
+// stores. A truncated body is never returned — 0 means "nothing to persist", so
+// a caller must not hand that length to the store.
+uint16_t serializeProfile(const ConfigStore &cfg, char *dst, uint16_t cap);
 
 } // namespace ThetaGP::Gamepad::Config

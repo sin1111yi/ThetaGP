@@ -54,6 +54,17 @@ public:
   Profile::ProfileStore &store() {
     return Profile::ProfileStore::getInstance();
   }
+
+  /** Bring flash and RAM back in step on a flash that carries no profile at
+   * all: write the factory Profile0 (the compiled defaults) and reset the
+   * active configuration to what that body holds. Does nothing when the flash
+   * already carries a profile.
+   *
+   * Shared by init() and by the test.chip_erase post-path: an erase changes the
+   * answer without a reboot, so the question is asked of the flash instead of
+   * being decided once at boot. Returns true when the flash holds a profile
+   * after the call. */
+  bool ensureFactoryProfile();
 #endif
 
 private:

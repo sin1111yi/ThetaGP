@@ -11,7 +11,10 @@
  * Path syntax for read accessors:
  *   "cmd"              → root key
  *   "map.socd"         → nested object key
- *   "map.btn_map.3"    → array element at index 3
+ *
+ * An array element is read by naming the array and the index separately
+ * (getArrInt("map.btn_map", 3)), not by spelling the index into the path: the
+ * walker names an element "<array>[<index>]", which a dot path cannot express.
  */
 class Json {
   const char *_input = nullptr;  // parse: points to external data
@@ -20,6 +23,7 @@ class Json {
   int _cap = 0;
   int _len = 0;
   bool _writing = false;
+  bool _overflowed = false;      // write: a piece did not fit the buffer
 
   mutable char _fmtBuf[128];     // temp format string builder
 
@@ -35,6 +39,12 @@ public:
 
   /** Int value at dot path, or def if missing/invalid. */
   int getInt(const char *path, int def = 0) const;
+
+  /**
+   * Int value of the element at index idx of the array at path (path names the
+   * array, not the element), or def if the array or that element is missing.
+   */
+  int getArrInt(const char *path, int idx, int def = 0) const;
 
   /**
    * String value at dot path, or nullptr if missing.
@@ -73,6 +83,13 @@ public:
 
   /** Finalize, null-terminate, return written length. */
   int end();
+
+  /**
+   * True when a write dropped output because the buffer filled up: the text in
+   * the buffer is then an incomplete prefix and must not be taken for a whole
+   * JSON document. Cleared by beginWrite(); valid until the next beginWrite().
+   */
+  bool overflowed() const { return _overflowed; }
 
   const char *c_str() const { return _buf; }
   int len() const { return _writing ? _len : 0; }

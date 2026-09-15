@@ -20,12 +20,11 @@
  */
 
 #include "gamepad/config/configmgr.h"
+#include "gamepad/config/config_defaults.h"
 #include "gamepad/config/config_store.h"
 #include "gamepad/profile/profile_store.h"
 
 #include "utils/log/log.h"
-
-#include "utils/json/json.h"
 
 namespace ThetaGP::Gamepad::Config {
 
@@ -38,33 +37,82 @@ uint16_t ConfigManager::activeProfileId() const { return _activeId; }
 
 #if THETAGP_CFG_HAS_FLASH
 
-using Profile::PROFILE_JSON_MAX;
+using Profile::PROFILE_ID_ACTIVE;
+using Profile::PROFILE_STAGING_SIZE;
 using Profile::ProfileStore;
+using Profile::ProfileText;
 using Profile::s_staging;
 
 bool ConfigManager::init() {
-  if (!ProfileStore::getInstance().init()) {
+  // The profile below overrides only the fields it carries; every other field
+  // stays at the compiled-in default.
+  _config = kConfigDefaults;
+
+  ProfileStore &store = ProfileStore::getInstance();
+  if (!store.init()) {
     LOG_ERROR("ConfigManager: ProfileStore init failed");
     return false;
   }
 
-  Profile::ProfileStatus status = ProfileStore::getInstance().getStatus();
+  // A flash that carries no profile gets the factory one, whose text is this
+  // configuration (the compiled defaults).
+  (void)ensureFactoryProfile();
+
+  Profile::ProfileStatus status = store.getStatus();
   _activeId = status.activeId;
 
-  uint16_t dataLen = 0;
-  if (!ProfileStore::getInstance().loadActive(nullptr, &dataLen)) {
-    LOG_WARN("ConfigManager: loadActive failed, using defaults");
+  ProfileText text;
+  if (!store.readProfile(PROFILE_ID_ACTIVE, &text)) {
+    LOG_WARN("ConfigManager: no readable profile, using defaults");
     return false;
   }
 
-  // Parse raw JSON from s_staging into _config
-  if (dataLen > 0) {
-    s_staging[dataLen] = '\0';
-    parseProfile(reinterpret_cast<const char *>(s_staging), &_config);
+  // Parse the profile body into _config, on top of the compiled-in defaults.
+  if (text.len > 0) {
+    parseProfile(text.data, &_config);
   }
 
   LOG_INFO("ConfigManager: init OK, active=%u count=%u", _activeId,
            status.profileCount);
+  return true;
+}
+
+// Restore the factory Profile0 on a flash that carries no profile, and reset
+// the active configuration to what that body holds. Both callers go through
+// here: init() on a fresh flash, and test.chip_erase, which wipes the chip
+// without a reboot — the question "is there a profile?" is put to the flash on
+// the spot (ProfileStore::needsFactoryProfile()) instead of being answered once
+// at boot.
+bool ConfigManager::ensureFactoryProfile() {
+  ProfileStore &store = ProfileStore::getInstance();
+  if (!store.needsFactoryProfile()) {
+    return true; // the flash carries a profile; RAM is the caller's business
+  }
+
+  // The body is the compiled defaults, not _config: _config can still describe
+  // a profile that an erase just removed, and Profile0 is by definition the
+  // compiled-in baseline. cap is the size of the buffer, not a body limit.
+  const uint16_t jsonLen = serializeProfile(
+      kConfigDefaults, reinterpret_cast<char *>(s_staging),
+      static_cast<uint16_t>(PROFILE_STAGING_SIZE));
+  if (jsonLen == 0) {
+    LOG_ERROR("ConfigManager: factory Profile0 body does not fit the staging "
+              "buffer");
+    return false;
+  }
+
+  if (!store.writeFactoryProfile(reinterpret_cast<const char *>(s_staging),
+                                 jsonLen)) {
+    LOG_WARN("ConfigManager: factory Profile0 write failed");
+    return false;
+  }
+
+  // The flash now holds exactly the compiled defaults, so the RAM copy of the
+  // configuration becomes those defaults too.
+  _config = kConfigDefaults;
+  _activeId = 0;
+
+  LOG_INFO("ConfigManager: factory Profile0 written, %u bytes", jsonLen);
   return true;
 }
 
@@ -73,13 +121,24 @@ bool ConfigManager::loadProfile(uint16_t profileId) {
   if (profileId != _activeId) {
     if (!store.selectProfile(profileId))
       return false;
+    // The select above wrote the BootMeta entry that names this profile active,
+    // so _activeId follows it and is not rolled back when the read below fails:
+    // a reboot's scan reaches the same id. What a failed read leaves behind is
+    // _config at the compiled defaults, which the reset below applies whichever
+    // way the read goes.
     _activeId = profileId;
   }
-  uint16_t dataLen = 0;
-  bool ok = store.loadActive(nullptr, &dataLen);
-  if (ok && dataLen > 0) {
-    s_staging[dataLen] = '\0';
-    parseProfile(reinterpret_cast<const char *>(s_staging), &_config);
+
+  // The reset does not depend on what the read returns: _config is overwritten
+  // with the compiled-in defaults before the read, and a body of length 0
+  // (erased or half-written sector) leaves it at those defaults. Only the parse
+  // step below looks at len.
+  _config = kConfigDefaults;
+
+  ProfileText text;
+  bool ok = store.readProfile(PROFILE_ID_ACTIVE, &text);
+  if (ok && text.len > 0) {
+    parseProfile(text.data, &_config);
   }
   LOG_INFO("ConfigManager: load id=%u %s", profileId, ok ? "OK" : "FAIL");
   return ok;
@@ -92,52 +151,16 @@ bool ConfigManager::saveProfile() {
     return false;
   }
 
-  // Build JSON using frozen printf
-  Json doc;
-  doc.beginWrite(reinterpret_cast<char *>(s_staging), PROFILE_JSON_MAX);
-
-  // ── map ──
-  doc.printf("{ver:1,map:{socd:%d,four_way:%d,dpad:%d,"
-             "inv_x:%B,inv_y:%B,inv_rx:%B,inv_ry:%B,swap:%B,btn_map:[",
-             _config.socd_mode, _config.four_way_mode, _config.dpad_mode,
-             _config.inv_x, _config.inv_y, _config.inv_rx, _config.inv_ry,
-             _config.swap_sticks);
-  for (uint8_t i = 0; i < 32; i++) {
-    if (i > 0) doc.printf(",");
-    doc.printf("%d", _config.btn_map[i]);
+  // The whole staging buffer is offered, so the largest body the flash layer
+  // accepts (PROFILE_JSON_MAX) still fits with its terminator. A length of 0
+  // means the serializer produced no usable body — there is nothing to persist.
+  const uint16_t jsonLen = serializeProfile(
+      _config, reinterpret_cast<char *>(s_staging),
+      static_cast<uint16_t>(PROFILE_STAGING_SIZE));
+  if (jsonLen == 0) {
+    LOG_ERROR("ConfigManager: nothing to save, serialization produced no body");
+    return false;
   }
-  doc.printf("]");
-
-  // ── stick ──
-  doc.printf(",stick:{lx_dz:%d,ly_dz:%d,rx_dz:%d,ry_dz:%d,"
-             "lx_sens:%d,ly_sens:%d,rx_sens:%d,ry_sens:%d,curve:%d,ema:%d}",
-             _config.lx_dz, _config.ly_dz, _config.rx_dz, _config.ry_dz,
-             _config.lx_sens, _config.ly_sens, _config.rx_sens, _config.ry_sens,
-             _config.curve, _config.ema);
-
-  // ── trig ──
-  doc.printf(",trig:{lt_dz:%d,rt_dz:%d}", _config.lt_dz, _config.rt_dz);
-
-  // ── usb ──
-  doc.printf(",usb:{poll:%d}", _config.poll_rate);
-
-  // ── led ──
-  doc.printf(",led:{bri:%d,mode:%d,hue:%d,sat:%d,spd:%d}",
-             _config.led_brightness, _config.led_mode,
-             _config.led_hue, _config.led_saturation, _config.led_speed);
-
-  // ── sys ──
-  doc.printf(",sys:{log:%d,deb_samp:%d,deb_thr:%d}",
-             _config.log_level, _config.debounce_samples,
-             _config.debounce_threshold);
-
-  // ── cal ──
-  doc.printf(",cal:{lx_c:%d,ly_c:%d,rx_c:%d,ry_c:%d}",
-             _config.cal_lx, _config.cal_ly, _config.cal_rx, _config.cal_ry);
-
-  doc.printf("}");  // close root
-
-  uint16_t jsonLen = static_cast<uint16_t>(doc.end());
 
   if (!store.modifyProfile(_activeId, reinterpret_cast<const char *>(s_staging),
                            jsonLen)) {
@@ -167,6 +190,7 @@ Profile::ProfileStatus ConfigManager::getStatus() const {
 // survives a power cycle on this side.
 
 bool ConfigManager::init() {
+  _config = kConfigDefaults;
   LOG_INFO("ConfigManager: no flash chip, running on defaults");
   return true;
 }

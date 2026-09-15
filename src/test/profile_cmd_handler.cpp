@@ -317,7 +317,10 @@ static void handleProfileCreate(const char *cmd, const Json &json) {
     return;
   }
 
-  if (len < PROFILE_JSON_MAX) {
+  // len is what the decode above accepted, and its cap is PROFILE_JSON_MAX —
+  // one byte below the size of s_staging — so the terminator of a body of any
+  // legal length lands inside the buffer.
+  if (len < PROFILE_STAGING_SIZE) {
     s_staging[len] = '\0';
   }
 
@@ -374,10 +377,11 @@ static void handleProfileSelect(const char *cmd, const Json &json) {
     return;
   }
 
+  // The flash now names this profile active, and the configuration layer is
+  // told the same id: it is the id profile.save() writes to. The configuration
+  // the device runs on comes from profile.load, which is the command that reads
+  // a body into RAM — this one leaves that copy where it is.
   ConfigMgr::getInstance().setActiveProfileId(static_cast<uint16_t>(profileId));
-
-  uint16_t dataLen = 0;
-  ProfileStore::getInstance().loadActive(nullptr, &dataLen);
 
   int q = json.getInt("queued");
   Json resp;

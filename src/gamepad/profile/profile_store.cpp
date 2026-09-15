@@ -23,14 +23,13 @@
 #include "drivers/device/flash/flash_w25qxx.h"
 #include "utils/log/log.h"
 
-#include "utils/json/json.h"
 #include <cstring>
 
 #if THETAGP_CFG_HAS_FLASH
 
 namespace ThetaGP::Gamepad::Profile {
 
-COMMON_ZERO_INIT uint8_t s_staging[4096];
+COMMON_ZERO_INIT uint8_t s_staging[PROFILE_STAGING_SIZE];
 
 // ── CRC16 (CCITT, poly=0x1021) ──
 
@@ -133,6 +132,11 @@ uint16_t ProfileStore::ensureAddressRingSlot() {
 }
 
 // ── init() ──
+// Scans both Sector 0 rings and leaves every cache field describing the flash
+// as it is now. It writes nothing: on a flash that carries no profile at all,
+// the configuration layer writes the factory Profile0 (ConfigManager::
+// ensureFactoryProfile()), which is also what the test.chip_erase post-path
+// needs after wiping the chip.
 
 bool ProfileStore::init() {
   LOG_INFO("ProfileStore: init");
@@ -150,62 +154,7 @@ bool ProfileStore::init() {
   scanAddressRing();
   bool hasFactoryProfile = (_profileAddresses[0] != 0);
 
-  // Check for fresh flash: no valid BootMeta AND the Profile0 area is erased
   if (!found) {
-    bool profile0Erased = true;
-    flash.read(PROFILE0_ADDR, s_staging, PROFILE_JSON_MAX);
-    for (uint16_t i = 0; i < 16; ++i) {
-      if (s_staging[i] != 0xFF) {
-        profile0Erased = false;
-        break;
-      }
-    }
-
-    if (profile0Erased && !hasFactoryProfile) {
-      LOG_INFO("ProfileStore: fresh flash detected, writing default Profile0");
-      // Build minimal default config JSON using frozen printf
-      Json doc;
-      doc.beginWrite(reinterpret_cast<char *>(s_staging), PROFILE_JSON_MAX);
-      doc.printf("{ver:1,map:{socd:%d,four_way:%d,dpad:%d,"
-                 "inv_x:%d,inv_y:%d,inv_rx:%d,inv_ry:%d,swap:%d,btn_map:[",
-                 0, 0, 0, 0, 0, 0, 0, 0);
-      for (int i = 0; i < 32; ++i) {
-        if (i > 0) doc.printf(",");
-        doc.printf("%d", i);
-      }
-      doc.printf("],stick:{lx_dz:%d,ly_dz:%d,rx_dz:%d,ry_dz:%d,"
-                 "lx_sens:%d,ly_sens:%d,rx_sens:%d,ry_sens:%d,curve:%d,ema:%d},"
-                 "trig:{lt_dz:%d,rt_dz:%d},usb:{poll:%d},"
-                 "led:{bri:%d,mode:%d,hue:%d,sat:%d,spd:%d},"
-                 "sys:{log:%d,deb_samp:%d,deb_thr:%d},"
-                 "cal:{lx_c:%d,ly_c:%d,rx_c:%d,ry_c:%d}}",
-                 0, 0, 0, 0,
-                 128, 128, 128, 128, 0, 0,
-                 0, 0,
-                 1,
-                 50, 1, 0, 255, 50,
-                 1, 3, 5,
-                 0, 0, 0, 0);
-      uint16_t jsonLen = static_cast<uint16_t>(doc.end());
-      if (jsonLen > 0 && jsonLen < PROFILE_JSON_MAX) {
-        writeFactoryProfile(reinterpret_cast<const char *>(s_staging), jsonLen);
-        // Re-scan after writing factory Profile0 — init is complete
-        scanBootMeta(&activeId, &activeAddr);
-        scanAddressRing();
-        _activeProfileId = activeId;
-        _activeAddress = activeAddr;
-        _nextAddr = findNextAddr();
-        _profileCount = 0;
-        for (uint16_t i = 0; i <= PROFILE_MAX_ID; ++i) {
-          if (_profileAddresses[i] != 0)
-            _profileCount++;
-        }
-        LOG_INFO("ProfileStore: auto-init done, active=%u, addr=0x%06lX, "
-                 "next=0x%06lX, count=%u",
-                 _activeProfileId, _activeAddress, _nextAddr, _profileCount);
-        return true;
-      }
-    }
     LOG_WARN("ProfileStore: no valid BootMeta, fallback to Profile0");
     activeId = 0;
     activeAddr = PROFILE0_ADDR;
@@ -228,6 +177,45 @@ bool ProfileStore::init() {
   LOG_INFO("ProfileStore: init done, active=%u, addr=0x%06lX, next=0x%06lX, "
            "count=%u",
            _activeProfileId, _activeAddress, _nextAddr, _profileCount);
+  return true;
+}
+
+// ── needsFactoryProfile() ──
+// The caller that owns the configuration needs to know whether the flash holds
+// a profile at all. That is a property of the flash, so it is answered from the
+// current caches (filled by init()) plus a read of the Profile0 area — never
+// remembered from the call that first saw a fresh flash. An erase between two
+// calls changes the answer, and a cached flag would keep answering "no" after
+// the caller had written one.
+
+bool ProfileStore::needsFactoryProfile() const {
+  // A BootMeta entry names an active profile: the flash holds configuration.
+  if (_bootMetaSeq != 0) {
+    return false;
+  }
+  // A ring entry points at a Profile0 body even when no BootMeta survived.
+  if (_profileAddresses[0] != 0) {
+    return false;
+  }
+
+  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+  if (!flash.isInitialized()) {
+    return false;
+  }
+
+  // Nothing is hooked onto the rings; is there a body anyway? Read into a local
+  // probe rather than the shared staging buffer — the answer must not disturb
+  // whatever the caller has staged there.
+  uint8_t probe[16];
+  if (!flash.read(PROFILE0_ADDR, probe, sizeof(probe))) {
+    return false;
+  }
+  for (uint16_t i = 0; i < sizeof(probe); ++i) {
+    if (probe[i] != 0xFF) {
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -330,18 +318,24 @@ uint32_t ProfileStore::findNextAddr() const {
   const auto &info = flash.getInfo();
   uint32_t flashSize = info.sizeBytes;
 
-  uint32_t maxAddr = USER_RING_BASE;
+  // The highest address the address map places inside the User Ring, and 0
+  // while the map holds none: an address below USER_RING_BASE — where Profile0
+  // keeps its two copies — lies outside the ring and marks no space in it.
+  uint32_t ringUsedUpTo = 0;
   for (uint16_t i = 0; i <= PROFILE_MAX_ID; ++i) {
-    if (_profileAddresses[i] != 0 && _profileAddresses[i] > maxAddr) {
-      maxAddr = _profileAddresses[i];
+    if (_profileAddresses[i] >= USER_RING_BASE &&
+        _profileAddresses[i] > ringUsedUpTo) {
+      ringUsedUpTo = _profileAddresses[i];
     }
   }
 
-  if (maxAddr < USER_RING_BASE) {
+  // Nothing occupies the ring: its head is free, and the first user profile
+  // goes there.
+  if (ringUsedUpTo < USER_RING_BASE) {
     return USER_RING_BASE;
   }
 
-  uint32_t next = (maxAddr & ~0xFFF) + 0x1000;
+  uint32_t next = (ringUsedUpTo & ~0xFFF) + 0x1000;
 
   if (next >= flashSize) {
     return flashSize;
@@ -398,27 +392,56 @@ bool ProfileStore::writeFactoryProfile(const char *json, uint16_t len) {
     return false;
   }
 
-  _activeProfileId = 0;
-  _activeAddress = PROFILE0_ADDR;
-  _bootMetaSeq = 1;
-  _profileAddresses[0] = PROFILE0_ADDR;
-  _profileSeqs[0] = 0;
-  _profileCount = 1;
+  // ── Converge the cache onto the values the flash now holds ──
+  // Each field below is what a fresh scanBootMeta()/scanAddressRing() over this
+  // flash would produce; the two must not drift apart, or resetSector0() copies
+  // a seq the ring cannot see back into it (scanAddressRing() only accepts
+  // entry.seq > _profileSeqs[id], which starts at 0 — a _profileSeqs[0] left at
+  // 0 makes the entry written below invisible, dropping Profile0 out of
+  // _profileAddresses[] and out of profileCount).
+  _bootMetaSeq = 1;               // BootMeta slot 0: seq
+  _activeProfileId = 0;           // BootMeta slot 0: profileId
+  _activeAddress = PROFILE0_ADDR; // BootMeta slot 0: address
 
-  LOG_INFO("ProfileStore: factory profile written");
-
-  // Also write Address Ring entry for profile0 so scanAddressRing finds it
+  // The Address Ring entry that makes the body findable (scanAddressRing()
+  // reads the rings, not the fixed PROFILE0_ADDR).
   AddressEntry addrEntry;
   addrEntry.profileId = 0;
   addrEntry.address = PROFILE0_ADDR;
   addrEntry.seq = 1;
-  _addressRingSeq = 1;
+
   if (!flash.write(ADDR_RING_BASE,
                    reinterpret_cast<const uint8_t *>(&addrEntry),
                    sizeof(AddressEntry))) {
+    // The body and the BootMeta are on the flash, but the ring holds no entry
+    // for id 0 — which is exactly what a rescan of this flash reports, so the
+    // cache reports the same. The body stays readable either way:
+    // readProfile(0) reads the fixed PROFILE0_ADDR.
     LOG_WARN("ProfileStore: failed to write Address entry for profile0");
+    _addressRingSeq = 0;
+    _profileAddresses[0] = 0;
+    _profileSeqs[0] = 0;
+  } else {
+    _addressRingSeq = 1;               // Address Ring slot 0: seq
+    _profileAddresses[0] = PROFILE0_ADDR; // Address Ring slot 0: address
+    _profileSeqs[0] = 1;               // Address Ring slot 0: seq
   }
 
+  // profileCount is a property of the address map, not of the write above:
+  // recount it with the rule init() uses, so that entries the map still holds
+  // for other ids stay counted (the failed branch above clears id 0 only).
+  _profileCount = 0;
+  for (uint16_t i = 0; i <= PROFILE_MAX_ID; ++i) {
+    if (_profileAddresses[i] != 0) {
+      _profileCount++;
+    }
+  }
+
+  _nextAddr = findNextAddr();        // no flash field of its own: derived from
+                                     // the address map (Profile0 sits below
+                                     // USER_RING_BASE, so the head is free)
+
+  LOG_INFO("ProfileStore: factory profile written");
   return true;
 }
 
@@ -704,21 +727,18 @@ bool ProfileStore::selectProfile(uint16_t id) {
   return true;
 }
 
-// ── loadActive() ──
-// Reads raw JSON into buf. Caller (ConfigManager) is responsible for parsing.
+// ── readBody() ──
+// Reads raw JSON from a flash address into buf; caller drives the parse.
 
-bool ProfileStore::loadActive(uint8_t *buf, uint16_t *outLen) {
-  LOG_DEBUG("ProfileStore: loadActive");
-
+bool ProfileStore::readBody(uint32_t address, uint8_t *buf, uint16_t *outLen) {
   auto &flash = Drivers::Device::FlashW25qxx::getInstance();
 
   if (!buf) {
     buf = s_staging;
   }
 
-  if (!flash.read(_activeAddress, buf, PROFILE_JSON_MAX)) {
-    LOG_ERROR("ProfileStore: failed to read active profile at 0x%06lX",
-              _activeAddress);
+  if (!flash.read(address, buf, PROFILE_JSON_MAX)) {
+    LOG_ERROR("ProfileStore: failed to read profile at 0x%06lX", address);
     return false;
   }
 
@@ -730,13 +750,50 @@ bool ProfileStore::loadActive(uint8_t *buf, uint16_t *outLen) {
     actualLen = i + 1;
   }
 
-  // No parse here — caller (ConfigManager) drives the parse
-
   if (outLen) {
     *outLen = actualLen;
   }
 
-  LOG_DEBUG("ProfileStore: loaded active profile, %u bytes", actualLen);
+  LOG_DEBUG("ProfileStore: read profile at 0x%06lX, %u bytes", address,
+            actualLen);
+  return true;
+}
+
+bool ProfileStore::loadActive(uint8_t *buf, uint16_t *outLen) {
+  LOG_DEBUG("ProfileStore: loadActive");
+  return readBody(_activeAddress, buf, outLen);
+}
+
+// ── readProfile() ──
+
+bool ProfileStore::readProfile(uint16_t id, ProfileText *out) {
+  if (!out) {
+    return false;
+  }
+  out->data = nullptr;
+  out->len = 0;
+
+  uint32_t address = 0;
+  if (id == PROFILE_ID_ACTIVE) {
+    address = _activeAddress;
+  } else if (id == 0) {
+    address = PROFILE0_ADDR;
+  } else if (id <= PROFILE_MAX_ID && _profileAddresses[id] != 0) {
+    address = _profileAddresses[id];
+  } else {
+    return false;
+  }
+
+  uint16_t len = 0;
+  if (!readBody(address, s_staging, &len)) {
+    return false;
+  }
+
+  // readBody reports at most PROFILE_JSON_MAX bytes, one below the size of the
+  // buffer, so the terminator lands inside it.
+  s_staging[len] = '\0';
+  out->data = reinterpret_cast<const char *>(s_staging);
+  out->len = len;
   return true;
 }
 

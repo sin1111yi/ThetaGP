@@ -106,3 +106,118 @@
 #ifndef THETAGP_CFG_KEYPAD_GPIO_SETTLE_US
 #define THETAGP_CFG_KEYPAD_GPIO_SETTLE_US 1
 #endif
+
+// ── Config-layer defaults ──
+// The compiled-in values of the configuration fields, one macro per scalar
+// field. Each is an #ifndef so a board or a build can change a single one with
+// a bare -D. Values that only a board can know are not here: the key table is
+// [keypad] button_map and stays in BoardConfig.h.
+
+// SOCD cleaner mode (0..4).
+#ifndef THETAGP_CFG_DEFAULT_SOCD_MODE
+#define THETAGP_CFG_DEFAULT_SOCD_MODE 4                // Bypass — opposing directions both pass through
+#endif
+
+// Four-way gate for the dpad.
+#ifndef THETAGP_CFG_DEFAULT_FOUR_WAY_MODE
+#define THETAGP_CFG_DEFAULT_FOUR_WAY_MODE 0            // off — no direction is filtered out
+#endif
+
+// D-pad output mode.
+#ifndef THETAGP_CFG_DEFAULT_DPAD_MODE
+#define THETAGP_CFG_DEFAULT_DPAD_MODE 0                // 0 — native d-pad output
+#endif
+
+// Axis inversion and stick swap. 0 leaves the axis as it was read.
+#ifndef THETAGP_CFG_DEFAULT_INV_X
+#define THETAGP_CFG_DEFAULT_INV_X 0                    // off — left X not inverted
+#endif
+#ifndef THETAGP_CFG_DEFAULT_INV_Y
+#define THETAGP_CFG_DEFAULT_INV_Y 0                    // off — left Y not inverted
+#endif
+#ifndef THETAGP_CFG_DEFAULT_INV_RX
+#define THETAGP_CFG_DEFAULT_INV_RX 0                   // off — right X not inverted
+#endif
+#ifndef THETAGP_CFG_DEFAULT_INV_RY
+#define THETAGP_CFG_DEFAULT_INV_RY 0                   // off — right Y not inverted
+#endif
+#ifndef THETAGP_CFG_DEFAULT_SWAP_STICKS
+#define THETAGP_CFG_DEFAULT_SWAP_STICKS 0              // off — left and right sticks are not swapped
+#endif
+
+// Stick dead zones, in internal axis units: a 16-bit axis, 0..65535 with 32767
+// as the centre (GAMEPAD_JOYSTICK_MIN / _MID / _MAX in gamepadstate.h).
+#ifndef THETAGP_CFG_DEFAULT_LX_DZ
+#define THETAGP_CFG_DEFAULT_LX_DZ 512                  // left X dead zone, in internal axis units
+#endif
+#ifndef THETAGP_CFG_DEFAULT_LY_DZ
+#define THETAGP_CFG_DEFAULT_LY_DZ 512                  // left Y dead zone, in internal axis units
+#endif
+#ifndef THETAGP_CFG_DEFAULT_RX_DZ
+#define THETAGP_CFG_DEFAULT_RX_DZ 512                  // right X dead zone, in internal axis units
+#endif
+#ifndef THETAGP_CFG_DEFAULT_RY_DZ
+#define THETAGP_CFG_DEFAULT_RY_DZ 512                  // right Y dead zone, in internal axis units
+#endif
+
+// Stick sensitivity per axis; 128 is unity gain.
+#ifndef THETAGP_CFG_DEFAULT_LX_SENS
+#define THETAGP_CFG_DEFAULT_LX_SENS 128                // left X sensitivity, 128 = unity gain
+#endif
+#ifndef THETAGP_CFG_DEFAULT_LY_SENS
+#define THETAGP_CFG_DEFAULT_LY_SENS 128                // left Y sensitivity, 128 = unity gain
+#endif
+#ifndef THETAGP_CFG_DEFAULT_RX_SENS
+#define THETAGP_CFG_DEFAULT_RX_SENS 128                // right X sensitivity, 128 = unity gain
+#endif
+#ifndef THETAGP_CFG_DEFAULT_RY_SENS
+#define THETAGP_CFG_DEFAULT_RY_SENS 128                // right Y sensitivity, 128 = unity gain
+#endif
+
+// Stick response shaping.
+#ifndef THETAGP_CFG_DEFAULT_CURVE
+#define THETAGP_CFG_DEFAULT_CURVE 0                    // no response curve applied
+#endif
+#ifndef THETAGP_CFG_DEFAULT_EMA
+#define THETAGP_CFG_DEFAULT_EMA 0                      // no smoothing applied
+#endif
+
+// Trigger dead zones, in raw trigger units (0..255, rest 0).
+#ifndef THETAGP_CFG_DEFAULT_LT_DZ
+#define THETAGP_CFG_DEFAULT_LT_DZ 8                    // left trigger dead zone, in raw trigger units
+#endif
+#ifndef THETAGP_CFG_DEFAULT_RT_DZ
+#define THETAGP_CFG_DEFAULT_RT_DZ 8                    // right trigger dead zone, in raw trigger units
+#endif
+
+// LED strip parameters. Brightness and animation speed are 0..255 with 128 as
+// mid scale, saturation is 0..255 with 255 as full, hue is in degrees.
+#ifndef THETAGP_CFG_DEFAULT_LED_BRIGHTNESS
+#define THETAGP_CFG_DEFAULT_LED_BRIGHTNESS 128         // mid scale
+#endif
+#ifndef THETAGP_CFG_DEFAULT_LED_MODE
+#define THETAGP_CFG_DEFAULT_LED_MODE 0                 // off — the strip is not lit by default
+#endif
+#ifndef THETAGP_CFG_DEFAULT_LED_HUE
+#define THETAGP_CFG_DEFAULT_LED_HUE 180                // hue in degrees (0..359)
+#endif
+#ifndef THETAGP_CFG_DEFAULT_LED_SATURATION
+#define THETAGP_CFG_DEFAULT_LED_SATURATION 255         // full saturation
+#endif
+#ifndef THETAGP_CFG_DEFAULT_LED_SPEED
+#define THETAGP_CFG_DEFAULT_LED_SPEED 128              // mid scale
+#endif
+
+// Stick calibration offsets; 0 is "no offset", a freshly built device.
+#ifndef THETAGP_CFG_DEFAULT_CAL_LX
+#define THETAGP_CFG_DEFAULT_CAL_LX 0                   // no calibration offset
+#endif
+#ifndef THETAGP_CFG_DEFAULT_CAL_LY
+#define THETAGP_CFG_DEFAULT_CAL_LY 0                   // no calibration offset
+#endif
+#ifndef THETAGP_CFG_DEFAULT_CAL_RX
+#define THETAGP_CFG_DEFAULT_CAL_RX 0                   // no calibration offset
+#endif
+#ifndef THETAGP_CFG_DEFAULT_CAL_RY
+#define THETAGP_CFG_DEFAULT_CAL_RY 0                   // no calibration offset
+#endif

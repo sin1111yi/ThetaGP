@@ -24,6 +24,7 @@
 #include "test/framelayer.h"
 
 #include "drivers/device/flash/flash_w25qxx.h"
+#include "gamepad/config/configmgr.h"
 #include "gamepad/profile/profile_store.h"
 
 #include "utils/log/log.h"
@@ -131,10 +132,17 @@ static void handleChipErase(const char *cmd, const Json &json) {
     Json resp;
     resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
     if (ok) {
-        // Flash is now fully erased. Re-scan the profile system so
-        // runtime caches (nextAddr, addresses, count) match the empty
-        // flash — otherwise profile.status reports stale pre-erase data.
-        (void)ThetaGP::Gamepad::Profile::ProfileStore::getInstance().init();
+        // Flash is now fully erased. Re-scan the profile system so the runtime
+        // caches (nextAddr, addresses, count) describe the empty flash instead
+        // of reporting pre-erase data — and then let the configuration layer do
+        // what it does on a fresh flash: write the factory Profile0 back and
+        // reset the active configuration to it. Without the second call the
+        // chip would sit with no Profile0 until the next reboot, and RAM would
+        // keep describing profiles the erase removed. The same call runs from
+        // ConfigManager::init(), so both paths leave the chip in one state.
+        ThetaGP::Gamepad::Profile::ProfileStore::getInstance().init();
+        (void)ThetaGP::Gamepad::Config::ConfigManager::getInstance()
+            .ensureFactoryProfile();
         resp.printf("{status:%Q,cmd:%Q,queued:%d,warning:%Q}",
                     "ok", cmd, queued + 1,
                     "chip_erase is dangerous — entire SPI flash wiped");

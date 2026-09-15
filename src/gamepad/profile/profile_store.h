@@ -39,9 +39,36 @@ namespace ThetaGP::Gamepad::Profile {
 
 static constexpr uint32_t PROFILE_JSON_MAX =
     4096; /**< Max JSON body size per profile */
+
+// One byte more than the largest body: a body of exactly PROFILE_JSON_MAX bytes
+// still gets a NUL after it, which the scanners that read it as a string need.
+// Every write into the staging buffer stays below this size.
+static constexpr uint32_t PROFILE_STAGING_SIZE = PROFILE_JSON_MAX + 1;
+
 static constexpr uint16_t PROFILE_MAX_ID = 15; /**< Maximum profile ID (0-15) */
 static constexpr uint16_t PROFILE_ID_NONE =
     0xFFFF; /**< Sentinel for empty AddressEntry */
+static constexpr uint16_t PROFILE_ID_ACTIVE =
+    PROFILE_ID_NONE; /**< Selects the active profile in ProfileStore::readProfile
+                      */
+
+// The empty-slot sentinel must not be a profile id: readProfile() tests
+// PROFILE_ID_ACTIVE (== PROFILE_ID_NONE) before the range check, so a sentinel
+// that landed inside 0..PROFILE_MAX_ID would take the first branch and read a
+// profile for a ring entry that marks a deleted one. The two constants are
+// defined independently, so this compares them instead of restating one.
+static_assert(PROFILE_ID_NONE > PROFILE_MAX_ID,
+              "PROFILE_ID_NONE must stay outside the valid id range");
+
+// readProfile() branches on PROFILE_ID_ACTIVE, not on PROFILE_ID_NONE, so pin
+// that symbol too: it is the one the first branch compares.
+static_assert(PROFILE_ID_ACTIVE > PROFILE_MAX_ID,
+              "PROFILE_ID_ACTIVE must stay outside the valid id range");
+
+// Body lengths travel as uint16_t (writeFactoryProfile, createProfile,
+// modifyProfile all take one), so the staging size must fit that type.
+static_assert(PROFILE_STAGING_SIZE <= 0xFFFF,
+              "PROFILE_STAGING_SIZE must fit as a uint16_t body length");
 
 static constexpr uint32_t BOOTMETA_BASE = 0x000000; /**< BootMeta Ring base */
 static constexpr uint32_t BOOTMETA_SIZE =
@@ -87,6 +114,16 @@ struct AddressEntry {
 
 static_assert(sizeof(AddressEntry) == 8, "AddressEntry must be 8 bytes");
 
+/** Read-only view of a profile body. `data` is NUL-terminated and points into
+ * the store's staging buffer, so the view is invalidated by the next call that
+ * reads or writes a profile. The buffer is not writable through this view.
+ * That buffer is PROFILE_STAGING_SIZE bytes, one more than the largest body, so
+ * the terminator of a full-length body still lands inside it. */
+struct ProfileText {
+  const char *data = nullptr;
+  uint16_t len = 0;
+};
+
 /** Runtime status of the profile system. */
 struct ProfileStatus {
   uint16_t activeId = 0;       // currently active profile ID
@@ -114,8 +151,18 @@ public:
   static ProfileStore &getInstance();
 
   /** Scan BootMeta and Address Rings, determine active profile and next write
-   * addr. */
+   * addr. Writes nothing: see needsFactoryProfile() for the flash that carries
+   * no profile at all. */
   bool init();
+
+  /** True when the flash carries no valid BootMeta and no Profile0 body: the
+   * holder of the configuration writes the factory Profile0.
+   *
+   * A property of the flash as it stands right now, answered from the caches
+   * init() filled plus a read of the Profile0 area — never remembered from an
+   * earlier call, because an erase changes the answer without a reboot. Call it
+   * after init(). */
+  bool needsFactoryProfile() const;
 
   /** Write factory default Profile0 (only when BootMeta Ring is empty). */
   bool writeFactoryProfile(const char *json, uint16_t len);
@@ -132,9 +179,24 @@ public:
   /** Select a profile as active (appends BootMeta entry). */
   bool selectProfile(uint16_t id);
 
-  /** Load the active profile JSON body into buf. Returns actual length (raw
-   * JSON, no parse). */
+  /** Load the active profile JSON body into buf. Reports the body length (raw
+   * JSON, no parse) in outLen. No terminator is written: the read copies
+   * PROFILE_JSON_MAX bytes out of flash and the length scan stops at the first
+   * 0x00 or 0xFF inside the window, so when it stops, buf[outLen] is that byte
+   * rather than a NUL this function placed; a body that fills the window whole
+   * ends at PROFILE_JSON_MAX with no stop byte at outLen.
+   *
+   * To use the result as a C string, terminate it yourself; the buffer then
+   * needs room for that byte too (len + 1, i.e. PROFILE_STAGING_SIZE for a body
+   * that could be any size). For the call itself, PROFILE_JSON_MAX bytes in buf
+   * are enough — that is the most the read writes.
+   *
+   * Pass nullptr to read into the store's own staging buffer. */
   bool loadActive(uint8_t *buf, uint16_t *outLen);
+
+  /** Read-only view of the body of profile `id` (PROFILE_ID_ACTIVE selects the
+   * active profile). Returns false when there is no such profile. */
+  bool readProfile(uint16_t id, ProfileText *out);
 
   /** Get runtime status of the profile system. */
   ProfileStatus getStatus() const;
@@ -145,6 +207,12 @@ public:
 private:
   // ── Internal helpers ──
   bool resetSector0();
+  /** Read the raw body at `address` into buf, which must hold at least
+   * PROFILE_JSON_MAX bytes (nullptr means the store's staging buffer), and
+   * report its length in outLen. Writes no terminator: the read copies
+   * PROFILE_JSON_MAX bytes over from flash and the length scan stops at the
+   * first 0x00 or 0xFF among them. */
+  bool readBody(uint32_t address, uint8_t *buf, uint16_t *outLen);
   uint16_t crc16BootMeta(const BootMeta *meta) const;
   void seqBeforeIncrement();
   bool scanBootMeta(uint16_t *outActiveId, uint32_t *outAddress);
@@ -154,7 +222,10 @@ private:
   uint16_t ensureBootMetaSlot();
   uint16_t ensureAddressRingSlot();
 
-  // ── Cached state (updated by init()) ──
+  // ── Cached state (describes the flash as of the last scan) ──
+  // init() refreshes every field here; writeFactoryProfile() refreshes the ones
+  // a factory write invalidates. needsFactoryProfile() is derived from these on
+  // demand rather than stored.
   uint16_t _activeProfileId = 0;
   uint32_t _activeAddress = PROFILE0_ADDR;
   uint32_t _nextAddr = USER_RING_BASE;
@@ -167,7 +238,8 @@ private:
   uint16_t _profileSeqs[16] = {0};
 };
 
-/** DMA-safe staging buffer for profile operations (4KB). */
-COMMON_ZERO_INIT extern uint8_t s_staging[4096];
+/** Staging buffer for profile bodies: large enough for a body of
+ * PROFILE_JSON_MAX bytes plus the NUL the scanners read it by. */
+COMMON_ZERO_INIT extern uint8_t s_staging[PROFILE_STAGING_SIZE];
 
 } // namespace ThetaGP::Gamepad::Profile
