@@ -171,19 +171,14 @@ target_compile_definitions(${CMAKE_PROJECT_NAME}
 
     # MBEDTLS_CONFIG_FILE="${MBEDTLS_CONFIG_FILE}"
     # ${MBEDTLS_DEFS}
-    THETAGP_CFG_LOG_LV=${THETAGP_CFG_LOG_LV}
+
+    # Source root for the logger's path shortening; a build path, not a
+    # behaviour parameter.
     THETAGP_SRC_PATH="${CMAKE_SOURCE_DIR}"
 
     BOARD_IDENTIFIER="${BOARD_IDENTIFIER}"
     BOARD_NAME="${BOARD_NAME}"
 )
-
-if(THETAGP_CFG_LOG_EN)
-    target_compile_definitions(${CMAKE_PROJECT_NAME}
-        PRIVATE
-        THETAGP_CFG_LOG_EN=1
-    )
-endif()
 
 if(THETAGP_CFG_TEST)
     target_compile_definitions(${CMAKE_PROJECT_NAME}

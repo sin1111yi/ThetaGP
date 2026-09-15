@@ -22,6 +22,7 @@
 #pragma once
 
 #include "BoardConfig.h"
+#include "conf/ThetaGP_Config.h"
 
 #include "drivers/device/device.h"
 #include "drivers/peripherals/gpio.h"
@@ -45,10 +46,18 @@ enum class KeyState : bool {
 static constexpr uint8_t KEYPAD_NO_KEY = 0xFF;
 
 struct KeypadConfig {
-  static constexpr uint32_t DEFAULT_SCAN_FREQ = 20000;
+  static constexpr uint32_t DEFAULT_SCAN_FREQ = THETAGP_CFG_KEYPAD_SCAN_HZ;
   static constexpr uint8_t DEBOUNCE_SAMPLES = 16;
   static constexpr uint8_t DEBOUNCE_THRESHOLD = 12;
   static constexpr uint32_t GPIO_STABILIZE_DELAY_CYCLES = 50;
+
+  // A key is re-read once every DRIVE_LINES interrupts. Holding that refresh
+  // rate to at least twice the report rate keeps a change from being missed
+  // and leaves margin for it to settle before a report has to carry it.
+  static constexpr uint32_t DRIVE_LINES = KEYPAD_DRIVE_PIN_NUM;
+  static_assert(THETAGP_CFG_KEYPAD_SCAN_HZ / DRIVE_LINES >=
+                    2u * THETAGP_CFG_USB_REPORT_RATE_HZ,
+                "every key must be re-read at least twice per report");
 
   enum class Mode : uint8_t {
     ScanMatrix,

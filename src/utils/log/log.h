@@ -20,6 +20,7 @@
 #pragma once
 
 #include "BoardConfig.h"
+#include "conf/ThetaGP_Config.h"
 
 #include <stdarg.h>
 #include <stdint.h>

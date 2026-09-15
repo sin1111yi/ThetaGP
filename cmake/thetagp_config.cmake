@@ -1,12 +1,15 @@
 #[[
-# Default configuration values for ThetaGP.
+# Build feature switches for ThetaGP.
+#
+# Only switches that decide what gets compiled belong here. Firmware behaviour
+# parameters live in src/conf/ThetaGP_Config.h; board properties live in
+# configs/<target>/BoardConfig.toml.
 #
 # All values use `if(NOT DEFINED ...)` so they can be overridden from the
 # CMake command line via -D<VAR>=<VALUE>.
 #
 # Examples:
 #   cmake -B build -DTARGET=BoringTechH743
-#   cmake -B build -DTARGET=BoringTechH743 -DTHETAGP_CFG_LOG_LV=Error
 #   cmake -B build -DTARGET=BoringTechH743 -DTHETAGP_CFG_TEST=ON
 #]]
 
@@ -33,16 +36,6 @@ function(thetagp_config name)
         endif()
     endif()
 endfunction()
-
-# =============================================================================
-# Log enable (passed as 1 to C; #if THETAGP_CFG_LOG_EN works correctly)
-# =============================================================================
-thetagp_config(THETAGP_CFG_LOG_EN DEFAULT_DEBUG ON DEFAULT_RELEASE OFF)
-
-# =============================================================================
-# Log level string (None, Error, Warn, Info, Debug, Trace)
-# =============================================================================
-thetagp_config(THETAGP_CFG_LOG_LV DEFAULT_DEBUG Debug DEFAULT_RELEASE None)
 
 # =============================================================================
 # Enable test API (ON compiles CDC JSON test command infrastructure)
