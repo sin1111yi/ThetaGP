@@ -239,7 +239,15 @@ automated suites under `scripts/test/`:
   `test.spi_mode`; `test.mem_info` reports the six raw linker memory
   regions). Destructive commands (`test.chip_erase`,
   `test.erase_sector`, `test.compaction`) are intentionally not executed
-  here; they are covered by the profile suite.
+  here; they are covered by the profile suite. The suite is board-aware:
+  it derives whether the board declares an external flash from
+  `sys.get_usage.ext_flash_total_sectors`, and when it does not, the
+  flash/SPI commands are reported as SKIP with that reason instead of
+  FAIL — those commands are compiled out without a chip, so a failure
+  there would say nothing. On a board with a flash they must all pass.
+  A run against a firmware built without `THETAGP_CFG_TEST` skips both
+  the test-domain group and the checks that compare it against
+  `sys.get_usage`.
 - `test_profile.py` — profile store lifecycle (create/delete/select/save/
   load, wraparound, compaction, CRC, 16-profile limit).
 - `cdc_serial.py` — shared serial I/O helper (stable-symlink port
