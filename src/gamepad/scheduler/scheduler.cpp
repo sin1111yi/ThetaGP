@@ -196,7 +196,6 @@ FAST_CODE void Scheduler::run() {
     if (selectedTask) {
       const uint32_t taskRequiredTimeUs =
           selectedTask->anticipatedExecutionTime >> TASK_EXEC_TIME_SHIFT;
-      selectedTask->execTime = taskRequiredTimeUs;
       int32_t taskRequiredTimeCycles =
           static_cast<int32_t>(timer->microsToCycles(taskRequiredTimeUs));
 

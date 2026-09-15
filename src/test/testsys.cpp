@@ -124,8 +124,8 @@ static void handleSysGetTaskInfo([[maybe_unused]] const char *cmd,
                     (unsigned long)avgExecUs,
                     (unsigned long)info->totalExecutionTimeUs,
                     (unsigned long)avgDeltaUs);
-#ifdef USE_LATE_TASK_STATISTICS
-        // Counters are reported only when late-task statistics are compiled in
+#ifdef USE_TASK_COUNTERS
+        // Counters are reported only when the task counters are compiled in
         resp.printf(",runCount:%lu,lateCount:%lu",
                     (unsigned long)info->runCount,
                     (unsigned long)info->lateCount);

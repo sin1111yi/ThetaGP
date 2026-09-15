@@ -63,12 +63,14 @@
 //
 // Switched on by the build (src/CMakeLists.txt passes
 // THETAGP_CFG_BUILD_TEST_API=1 when its BUILD_TEST_API switch is on) or by a
-// board; the default is off.
+// board; the default is off. It gates the copy and the reporting of the task
+// counters, not the counters themselves: the scheduler maintains those in
+// every build.
 #ifndef THETAGP_CFG_BUILD_TEST_API
 #define THETAGP_CFG_BUILD_TEST_API 0
 #endif
 #if THETAGP_CFG_BUILD_TEST_API
-#define USE_LATE_TASK_STATISTICS
+#define USE_TASK_COUNTERS
 #endif
 
 // ── TinyUSB debug ──

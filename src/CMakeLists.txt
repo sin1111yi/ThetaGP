@@ -190,8 +190,8 @@ if(BUILD_TEST_API)
     target_compile_definitions(${CMAKE_PROJECT_NAME}
         PRIVATE
         # Build-layer switch: the command line uses BUILD_TEST_API, the source
-        # sees this THETAGP_CFG_* macro. Its default and the
-        # USE_LATE_TASK_STATISTICS binding live in src/conf/ThetaGP_Config.h.
+        # sees this THETAGP_CFG_* macro. Its default and the USE_TASK_COUNTERS
+        # binding live in src/conf/ThetaGP_Config.h.
         # The value must be given: the header tests this name with #if, and an
         # empty definition would be a syntax error.
         THETAGP_CFG_BUILD_TEST_API=1

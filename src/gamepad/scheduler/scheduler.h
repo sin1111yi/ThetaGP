@@ -90,10 +90,11 @@ struct TaskInfo {
   uint32_t averageExecutionTime10thUs;
   uint32_t averageDeltaTime10thUs;
   float movingAverageCycleTimeUs;
-#ifdef USE_LATE_TASK_STATISTICS
+// The scheduler maintains runCount / lateCount in every build; this switch only
+// decides whether sys.get_task_info copies and reports them.
+#ifdef USE_TASK_COUNTERS
   uint32_t runCount;
   uint32_t lateCount;
-  uint32_t execTime;
 #endif
 };
 
@@ -121,7 +122,6 @@ struct Task {
   uint32_t lastStatsAtUs = 0;
   uint32_t runCount = 0;
   uint32_t lateCount = 0;
-  uint32_t execTime = 0;
 
   void resetStatistics();
   void resetMaxExecutionTime();
