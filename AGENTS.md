@@ -449,7 +449,7 @@ class Gd25qFlash : public FlashBase {
 };
 ```
 
-BoardConfig macros (`SPI_2_PERIPHERAL`, `SPI_2_SCLK`, etc.) are generated from `BoardConfig.toml` via the Python config generator. The pattern uses `CONTACT3(FLASH_SPI, _, name)` to resolve `FLASH_SPI` → `SPI_2` → `SPI_2_PERIPHERAL`.
+BoardConfig macros (`BDCFG_SPI_*`, `BDCFG_LOGGER_UART`, etc.) are generated from `BoardConfig.toml` via the Python config generator. A bind macro names its bus by index: `BDCFG_FLASH_SPI` resolves to `BUS_SPI_1`, which the driver turns into the bus instance it talks to.
 
 ---
 
@@ -469,7 +469,7 @@ or on **what this board looks like**?
 
 | Layer | Where | Holds |
 |-------|-------|-------|
-| Firmware | `src/conf/ThetaGP_Config.h` | Behaviour identical across every build target: report rate, keypad scan frequency, debounce windows, timeouts, retry counts. |
+| Firmware | `src/conf/ThetaGP_Config.h` | Behaviour identical across every build target unless the board's electrical properties decide otherwise: report rate (`[usb] wired_report_hz` overrides it, bounded by the USB speed), keypad scan frequency, debounce windows, timeouts, retry counts. |
 | Board | `configs/<target>/BoardConfig.toml` | Pin assignment, peripheral selection, USB hardware and speed, and anything the board's electrical properties decide. |
 
 A firmware parameter carries a default and is normally left alone. Each one
@@ -483,6 +483,12 @@ lengthens the trace must recompute it. Such values stay in
 `ThetaGP_Config.h` because the default holds for ordinary boards; state the
 assumption in the comment so a misfiring keypad points straight at it.
 
+The wire report rate follows the same shape for a different reason: the most a
+link can carry is set by the USB speed the board declares, so the rate is kept
+as a firmware default of 1000 Hz and a board may raise it with
+`[usb] wired_report_hz` (generated as `BDCFG_REPORT_RATE_HZ`, bridged into
+`THETAGP_CFG_USB_REPORT_RATE_HZ`, rejected above the ceiling the speed allows).
+
 ### Adding a new peripheral
 
 1. Add config data to `configs/<target>/BoardConfig.toml` under the appropriate `bus` key
@@ -492,8 +498,8 @@ assumption in the comment so a misfiring keypad points straight at it.
 
 - Instance names use underscores to avoid HAL macro conflicts: `SPI_2` not `SPI2`, `UART_1` not `UART1`
 - Bind prefix + underscore suffix pattern: `LOGGER_UART`, `FLASH_SPI`
-- Sub-macros use the instance name as prefix: `UART_1_TX_PIN`, `SPI_2_SCLK`
-- Sub-macros are resolved via `CONTACT3(bind_macro, _, name)`
+- A bind macro names a bus instance by index: `BDCFG_LOGGER_UART` → `BUS_UART_1` → the instance the driver receives. The pin fields live in the generated descriptor tables, not in per-pin macros.
+- The macros the board config generates carry the `BDCFG_` prefix (`BDCFG_SPEED_HS`, `BDCFG_KEYPAD_*`, `BDCFG_LED0_*`, `BDCFG_UART_*`, `BDCFG_SPI_*`, `BDCFG_LOGGER_UART`, `BDCFG_FLASH_SPI`, `BDCFG_HAS_FLASH`, …); the firmware layer bridges them into the `THETAGP_CFG_*` names the software reads
 
 ### UART example (BoardConfig.toml)
 
