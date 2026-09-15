@@ -66,10 +66,11 @@ chip = "w25qxx"
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `identifier` | string | Alphanumeric + underscores. Used in build paths. |
-| `name` | string | Human-readable board name. |
+| `identifier` | string | Alphanumeric + underscores. Feeds a compile definition; no source reads it today, so renaming it is safe once the whole tree is grepped. |
+| `name` | string | Human-readable board name. Reaches the host: it is the USB product string, the HID serial hash and the `board` field of `sys.get_fw_version`. |
 | `mcu` | string | MCU part number, e.g. `STM32H743xx`. |
 | `mcu_series` | string | One of: `STM32H7`, `STM32F4`, `STM32F1`. |
+| `chip` | string | probe-rs target name for flashing, emitted as `BOARD_CHIP` — e.g. `STM32H743VI`. This is the probe-rs target, not ST's orderable part number: `STM32H743VITx` is rejected by probe-rs. Optional; empty means "fill this in before flashing". |
 
 ### Pin macros — optional
 

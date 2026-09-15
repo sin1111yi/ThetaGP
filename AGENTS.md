@@ -183,21 +183,24 @@ domain handlers (see `src/CMakeLists.txt`). The old
 
 ### Flashing
 
-**Use the probe-rs target name, not the ordering part number.**
+**Use `BOARD_CHIP`, which holds the probe-rs target name.**
 
 ```bash
-probe-rs download --chip STM32H743VI build/ThetaGP_*.elf
-probe-rs reset --chip STM32H743VI
+probe-rs download --chip ${BOARD_CHIP} build/ThetaGP_*.elf
+probe-rs reset --chip ${BOARD_CHIP}
 ```
 
-`BOARD_CHIP` comes from `configs/BoringTechH743/board_config.cmake`
-(generated from `BoardConfig.toml` `[board_info].chip`); its current value
-is `STM32H743VITx`, which is ST's **orderable part number** (package and
-temperature suffix included). probe-rs 0.32.0 has no target by that name:
-`--chip STM32H743VITx` fails with "Unable to load specification for chip /
-The connected chip could not automatically be determined". The probe-rs
-target is `STM32H743VI` (verified working). Both `download` and `reset`
-need it.
+`BOARD_CHIP` comes from `configs/<TARGET>/board_config.cmake` (generated from
+`BoardConfig.toml` `[board_info].chip`); both targets currently carry
+`STM32H743VI`, which is a probe-rs target (verified working). Both `download`
+and `reset` need it.
+
+Do **not** put ST's **orderable part number** in that field. `STM32H743VITx`
+(package and temperature suffix included) is a legal-looking value that
+probe-rs 0.32.0 has no target for: `--chip STM32H743VITx` fails with
+"Unable to load specification for chip / The connected chip could not
+automatically be determined". The orderable part number belongs in
+`[board_info].mcu`.
 
 The debug adapter is CMSIS-DAP (VID:PID 0d28:0204). Connect via SWD, udev rule at `/etc/udev/rules.d/99-cmsis-dap.rules`.
 
