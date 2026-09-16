@@ -83,6 +83,30 @@ fields = [
   - `task_counters` — written to a response only in a build that compiles the
     task counters in (`USE_TASK_COUNTERS`)
 
+  **A role is read by a person and not derived.** It says the field is
+  conditional, and it is the licence an emitter takes to leave the field out of
+  one of its lists (`field_coverage_errors()` in `scripts/gen_proto.py` trusts
+  it), so a role on a field that does not in fact vary with its condition reads
+  as conditional to every check downstream and to the response table generated
+  from it. The generator holds the name — an unregistered role stops generation
+  — and nothing holds the intent, because the intent is not in the field. So
+  review every role against the field it marks:
+
+  - Does the field really vary with what the role names? `task_counters` is a
+    build that compiles the counters in; `accounting` claims the field is in
+    every build, and a field the firmware writes only conditionally does not
+    belong in that subset.
+  - Does a field the firmware writes conditionally carry a role? A missing role
+    reads as unconditional, and the response table then writes the field in
+    builds that have no value for it.
+
+  Two halves of the marking are checked, and are what a review has to keep
+  holding: the CDC suite (`scripts/test/test_cdc_protocol.py`) refuses to run
+  when the manifest stops marking the `accounting` fields its invariants are
+  stated in, or the `task_counters` fields `sys.get_task_info` reports only in a
+  build with the counters; and `src/test/testsys.cpp` fails to compile when
+  `USE_TASK_COUNTERS` and `THETAGP_RESP_HAS_TASK_COUNTERS` disagree.
+
 ### [[commands]] — command definitions
 
 ```toml

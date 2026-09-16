@@ -38,6 +38,31 @@
 #include <cstring>
 #include <type_traits>
 
+// The response table of sys.get_task_info (protocol/proto_resp.h) carries the
+// task counters only in a build that compiles them in, and it takes that from
+// the roles protocol.toml marks runCount / lateCount with: for role =
+// "task_counters" the header defines THETAGP_RESP_HAS_TASK_COUNTERS out of
+// USE_TASK_COUNTERS, and writes the presence of those two entries from it.
+// Both headers are included above, conf/ThetaGP_Config.h before proto_resp.h,
+// so the two names below are the ones this build has.
+//
+// The generator's half of that binding is a macro name: the header opens with
+// `#ifdef <the guard scripts/gen_proto.py names for the role>`. The halves can
+// disagree with nothing failing — with no role on those fields in
+// protocol.toml the header carries no flag at all, the entries take the
+// constant presence 1, and a build that does not compile the counters in
+// answers runCount and lateCount with zeros, under keys that read as measured.
+// The checks below are this translation unit's half: the switch and the flag
+// agree, in either direction, or nothing here compiles.
+#if defined(USE_TASK_COUNTERS) && !(defined(THETAGP_RESP_HAS_TASK_COUNTERS) \
+                                   && THETAGP_RESP_HAS_TASK_COUNTERS)
+#error "[task_counters] USE_TASK_COUNTERS is on but proto_resp.h reports no task counters — mark runCount / lateCount role=\"task_counters\" in protocol.toml"
+#endif
+#if !defined(USE_TASK_COUNTERS) && !(defined(THETAGP_RESP_HAS_TASK_COUNTERS) \
+                                    && !THETAGP_RESP_HAS_TASK_COUNTERS)
+#error "[task_counters] USE_TASK_COUNTERS is off but proto_resp.h reports task counters — the flag comes from the guard gen_proto.py names for role=\"task_counters\""
+#endif
+
 // Expands a response field table (protocol/proto_resp.h) into the field writes
 // of a response. The JSON key and the printf conversion of a field come from
 // the table, and its value from the THETAGP_VALUE_<name> macro that the table's

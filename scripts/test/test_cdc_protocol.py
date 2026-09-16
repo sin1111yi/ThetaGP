@@ -70,6 +70,13 @@
 # protocol.toml marks role = "accounting": a field that joins or leaves that set
 # does so in the source, and those checks follow it without an edit to this
 # file, exactly as they already follow the full field list.
+#
+# The other marking the source carries, role = "task_counters", is guarded the
+# same way and for the same reason: the fields it marks are reported only in a
+# build that compiles the task counters in, so a run whose manifest no longer
+# marks them stops before the port is opened — without the marking the response
+# table claims both keys are written in every build, and a build that does not
+# compile the counters in answers them with zeros.
 
 import hashlib
 import json
@@ -430,6 +437,16 @@ def ram_totals_match(usage, mem):
 TASK_INFO_INVARIANTS = ("avgCycleUs", "actualHz", "maxExecUs", "avgExecUs",
                         "totalExecUs")
 
+# The fields sys.get_task_info reports only in a build that compiles the task
+# counters in. Whether they are conditional is a fact about the protocol, so
+# that is read from the source and main() refuses to run when the marking that
+# says so is gone. The two names below are a fact about the guard and not about
+# the protocol: they are the fields this suite knows to look for. It does not
+# compare them against a device response — they are not part of the accounting
+# subset, so no check here reads them off the wire — it holds the declaration
+# the response table and the firmware both follow.
+TASK_COUNTER_FIELDS = ("runCount", "lateCount")
+
 # Existing TIDs: 0 SYSTEM/LOAD, 1 SYSTEM/UPDATE, 2 GAMEPAD/CORE,
 # 3 TEST/CMD_PROC. TIDs beyond the build's task set answer with
 # ERR_INVALID_PARAM instead.
@@ -491,6 +508,26 @@ def main():
         print("       The per-task invariants are stated in those fields; "
               "without the marking they would be read from a subset that no "
               "longer has to contain them.", file=sys.stderr)
+        sys.exit(2)
+
+    # The same gate for the other marking the response carries. These fields are
+    # written only in a build that compiles the task counters in, so the marking
+    # is what makes the response table conditional; without it the table writes
+    # both keys in every build, and a build that does not compile the counters
+    # in answers them with zeros — values under keys that read as measured. That
+    # is a loss in the source and not on the device, so it stops the run here,
+    # before the port is opened, rather than being reported as something the
+    # board did wrong.
+    counter_fields = role_fields(manifest, "sys.get_task_info", "task_counters")
+    unmarked_counters = [f for f in TASK_COUNTER_FIELDS if f not in counter_fields]
+    if unmarked_counters:
+        print(f"ERROR: protocol.toml no longer marks {unmarked_counters} as "
+              f"role=\"task_counters\" on sys.get_task_info.", file=sys.stderr)
+        print("       Those fields are reported only in a build that compiles "
+              "the task counters in, and the response table reads that "
+              "condition from the marking: without it the table writes both "
+              "keys unconditionally, and a build without the counters answers "
+              "them with zeros.", file=sys.stderr)
         sys.exit(2)
 
     fd = open_serial()

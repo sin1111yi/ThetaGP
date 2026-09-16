@@ -315,6 +315,15 @@ def validate_types(proto: dict) -> None:
     the exception list says no table can be written from it. Only one of the
     two can be right, and which one is a decision about the type — so an
     overlap is reported rather than resolved.
+
+    The exception list's own names are reconciled with the vocabulary and with
+    the side it excepts, because nothing above reads them: every name in
+    PRINTF_LESS_TYPES has to be a type the three tables map — a name they do
+    not map is not a type a field can be declared with, so the entry is a
+    misspelling that no lookup elsewhere meets — and it has to be a type some
+    response field names, because an entry no response field draws on is a
+    decision about a type that is no longer written, left standing exactly
+    where a reader of the response side looks for what has no printf form.
     """
     request = {f["type"] for cmd in proto.get("commands", [])
                for f in cmd.get("request", [])}
@@ -373,6 +382,42 @@ def validate_types(proto: dict) -> None:
                   f"{list(PRINTF_LESS_TYPES)}", file=sys.stderr)
         sys.exit(1)
 
+    # The exception list's own names, against the two things an entry can be
+    # wrong about: whether the name is a type at all, and whether the response
+    # side still declares a field of it. Neither is visible from the lists
+    # above, which look a *used* type up in the four maps and never read the
+    # exception list itself — a name in it is met by no lookup but gen_resp()'s,
+    # so a misspelling sits there unnamed. All three tables, because that is
+    # what a type a field may be declared with has to be in; the response side,
+    # because a response field is the one thing the list is an exception for.
+    not_a_type = [t for t in sorted(PRINTF_LESS_TYPES)
+                  if any(t not in table for _, table in TYPE_MAPS)]
+    no_field = [t for t in sorted(PRINTF_LESS_TYPES) if t not in response]
+    if not_a_type or no_field:
+        if not_a_type:
+            print(f"ERROR: PRINTF_LESS_TYPES names types the type maps do not "
+                  f"carry: {not_a_type}", file=sys.stderr)
+            print("       A field's type is read out of those tables, so a name "
+                  "they do not map is not a type protocol.toml can be declared "
+                  "with: the entry excepts nothing and no other check reads it.",
+                  file=sys.stderr)
+        if no_field:
+            print(f"ERROR: PRINTF_LESS_TYPES names types no response field "
+                  f"declares: {no_field}", file=sys.stderr)
+            print("       The list is the response side's exception — the types "
+                  "no printf conversion writes — so an entry no response field "
+                  "draws on excepts nothing: it reads as a decision about a "
+                  "type while the field it was written for is gone.",
+                  file=sys.stderr)
+        print(f"       PRINTF_LESS_TYPES: {list(PRINTF_LESS_TYPES)}",
+              file=sys.stderr)
+        print(f"       Types the type maps carry: "
+              f"{sorted(set().union(*(set(t) for _, t in TYPE_MAPS)))}",
+              file=sys.stderr)
+        print(f"       Types a response field declares: {sorted(response)}",
+              file=sys.stderr)
+        sys.exit(1)
+
 
 def validate_field_roles(proto: dict) -> None:
     """Abort unless every field `role` is a role this generator is registered for.
@@ -392,8 +437,9 @@ def validate_field_roles(proto: dict) -> None:
     is a statement about the field and not about the name, and neither the TOML
     nor this file states the field's intent: a registered role on a field that
     does not in fact vary with its condition still reads as conditional, and
-    every check downstream follows the declaration and agrees with it —
-    field_coverage_errors() takes a `role` as the license to leave the field
+    every check downstream follows the declaration and agrees with it — a
+    `role` is one of the reasons omission_reason() honours, and
+    field_coverage_errors() takes a reason as the license to leave the field
     out of an emitted list, which is exactly why a wrong license is not
     something generation can see. It has to be reviewed where the field is
     declared; here, only a role nobody registered is refused.
@@ -424,30 +470,57 @@ def validate_field_roles(proto: dict) -> None:
         sys.exit(1)
 
 
-def field_coverage_errors(command: str, side: str, declared: List[dict],
+def omission_reason(field: Dict[str, Any]) -> Optional[str]:
+    """Why protocol.toml says a field may be left out of an emitted list, or None.
+
+    Each of the three is written on the field itself in the source, so an
+    emitter that drops the field is following a declaration rather than making a
+    choice nothing else can see:
+
+      ``role``               the field is conditional, and a view of its side
+                             that excludes it is the design
+      ``omit_in_serialize``  the field is not part of the shape that travels
+      ``json = ""``          the field has no key to be written under
+
+    Returned as the declaration quoted back rather than as a flag, because what
+    a caller reports is that the field carries nothing licensing its absence.
+    """
+    if "role" in field:
+        return f"role = {field['role']!r}"
+    if field.get("omit_in_serialize"):
+        return "omit_in_serialize"
+    if not field.get("json"):
+        return 'json = ""'
+    return None
+
+
+def field_coverage_errors(owner: str, side: str, declared: List[dict],
                           emitted: List[str]) -> List[str]:
-    """Every way one emitted field list fails to cover one side of a command.
+    """Every way one emitted field list fails to cover the declarations behind it.
 
-    ``side`` is ``"request"`` or ``"response"``, and is carried into every
-    problem it reports: the two sides are compared the same way but are not the
-    same loss, and a field list that lost one reads identically either way — a
-    request field dropped is a command that no longer reads an argument it
-    declares, a response field dropped a response that no longer carries a
-    value. Naming the side is what lets the reader tell them apart.
+    ``owner`` names what the fields belong to — a command as ``"<domain>.<name>"``
+    or a shared type as ``"type <Name>"`` — and ``side`` what the list is a view
+    of: ``"request"`` / ``"response"`` for a command, ``"struct"`` / ``"serialize"``
+    / ``"deserialize"`` / ``"interface"`` for a type. Both are carried into every
+    problem reported: two views that lost the same field are not the same loss,
+    and a list that dropped one reads identically either way — a request field
+    dropped is a command that no longer reads an argument it declares, a response
+    field dropped a response that no longer carries a value, a type field dropped
+    from a serialization a value the wire never writes.
 
-    ``declared`` is that side's array as the TOML spells it, and ``emitted``
-    the field names an emitter derived from it — the two halves are taken from
-    different places on purpose, the first from the source and the second from
-    the emitter's own output, so the comparison can come out equal only when
-    the emitter kept every field. A field carrying a ``role`` is not a loss
-    when an emitted list leaves it out: the role is what makes the field
-    conditional, and a view that excludes it is the design. A field with no
-    role has nothing that could excuse its absence, and that is the case
-    neither the TOML nor the digest can see — an emitter that drops it writes a
-    manifest, a response table and a docs table that agree with each other and
-    are all short the same field, and the firmware loses it with them.
+    ``declared`` is the array as the TOML spells it, and ``emitted`` the field
+    names an emitter derived from it — the two halves are taken from different
+    places on purpose, the first from the source and the second from the
+    emitter's own output, so the comparison can come out equal only when the
+    emitter kept every field. A field the emitter left out is not a loss when
+    the field itself carries a reason: omission_reason() is that test, and a
+    field with no reason has nothing that could excuse its absence. That is the
+    case neither the TOML nor a digest can see — an emitter that drops such a
+    field writes a manifest, a response table, a docs table and language
+    bindings that agree with each other and are all short the same field, and
+    every consumer of them loses it with them.
 
-    A side the command does not have is not a case here: an empty ``declared``
+    A side the owner does not have is not a case here: an empty ``declared``
     list has nothing to be short of, and the comparison comes out equal.
 
     The other direction is checked for the same reason: a field emitted under a
@@ -456,10 +529,12 @@ def field_coverage_errors(command: str, side: str, declared: List[dict],
     """
     declared_names = {f["name"] for f in declared}
     emitted_names = set(emitted)
-    problems = [f"{command}: {side} field '{f['name']}' declared but never emitted"
+    problems = [f"{owner}: {side} field '{f['name']}' declared but never emitted, "
+                f"and carries no reason (`role` / `omit_in_serialize` / empty "
+                f"`json`) to be left out"
                 for f in declared
-                if f["name"] not in emitted_names and "role" not in f]
-    problems += [f"{command}: {side} field '{name}' emitted but not declared"
+                if f["name"] not in emitted_names and omission_reason(f) is None]
+    problems += [f"{owner}: {side} field '{name}' emitted but not declared"
                  for name in emitted if name not in declared_names]
     return problems
 
@@ -467,17 +542,18 @@ def field_coverage_errors(command: str, side: str, declared: List[dict],
 def fail_uncovered_fields(problems: List[str]) -> None:
     """Report the declared fields an emitter left uncovered and stop.
 
-    One exit for both callers — the pre-flight validator and an emitter that
-    built its own field list — so a gap reads the same wherever it is found.
+    One exit for both callers — a pre-flight validator and an emitter that built
+    its own field list — so a gap reads the same wherever it is found.
     """
     if not problems:
         return
     for problem in problems:
         print(f"ERROR: emitter coverage — {problem}", file=sys.stderr)
-    print("       A request or response field with no `role` has to reach every "
-          "emitted field list of its side; one filtered out of the emitter is "
-          "lost by every artifact derived from it, and no consumer of them can "
-          "tell.", file=sys.stderr)
+    print("       A declared field has to reach every emitted field list derived "
+          "from it unless the field itself carries a reason to be left out "
+          "(`role`, `omit_in_serialize` or an empty `json` key); one filtered out "
+          "of an emitter is lost by every artifact derived from it, and no "
+          "consumer of them can tell.", file=sys.stderr)
     sys.exit(1)
 
 
@@ -497,6 +573,15 @@ def validate_field_coverage(proto: dict) -> None:
     Both sides of every command are compared, each under its own name. The
     request side is the one this check used to leave out, which left a request
     field an emitter dropped audible in nothing at all.
+
+    What runs here is the manifest emitter's half. The code emitters — gen_cpp,
+    gen_rust, gen_ts — derive field lists of their own, each with filters of its
+    own (a field marked ``omit_in_serialize`` or carrying no JSON key, the
+    response envelope gen_ts writes ahead of the declared fields), so each of
+    them calls field_coverage_errors() on the list it is about to write, from
+    inside itself. Comparing them against a list re-derived here would be a
+    second copy of every filter, which is the shape this file exists to remove:
+    the check has to read the list the emitter writes, not a description of it.
     """
     problems = [
         problem
@@ -597,7 +682,14 @@ def gen_cpp(proto: dict, out: Optional[Path] = None) -> str:
             for part in ns_parts:
                 w(f"namespace {part} {{")
         w(f"struct {name} {{")
-        for f in t["fields"]:
+        # Every declared field is carried, and the list is built before the
+        # lines are written so the coverage check reads the list this emitter
+        # writes rather than a description of it.
+        struct_fields = list(t["fields"])
+        fail_uncovered_fields(field_coverage_errors(
+            f"type {name}", "struct", t["fields"],
+            [f["name"] for f in struct_fields]))
+        for f in struct_fields:
             if f.get("omit_in_serialize"):
                 # Still emit the field (used internally) but mark it
                 pass
@@ -649,26 +741,35 @@ def gen_cpp(proto: dict, out: Optional[Path] = None) -> str:
         desc = sanitize_cpp_comment(t.get("description", ""))
         sw(f"    // Serialize {name} into a JsonObject")
         sw(f"    inline static void serialize{name}(JsonObject obj, const {fq} &v) {{")
-        for f in t["fields"]:
-            if f.get("omit_in_serialize"):
-                continue
-            json_key = f["json"]
-            field_name = f["name"]
-            if json_key:
-                sw(f'        obj["{json_key}"] = v.{field_name};')
+        # A field is written unless protocol.toml says it is not part of the
+        # serialized shape (`omit_in_serialize`) or gives it no key to be written
+        # under (`json = ""`). Built before the writes and compared against the
+        # declared array: a filter added here is a field the binding stops
+        # carrying, which the check reports instead of leaving it silent.
+        serialize_fields = [f for f in t["fields"]
+                            if f["json"] and not f.get("omit_in_serialize")]
+        fail_uncovered_fields(field_coverage_errors(
+            f"type {name}", "serialize", t["fields"],
+            [f["name"] for f in serialize_fields]))
+        for f in serialize_fields:
+            sw(f'        obj["{f["json"]}"] = v.{f["name"]};')
         sw("    }")
         sw()
 
         # Deserialize
         sw(f"    // Deserialize {name} from a JsonDocument")
         sw(f"    inline static void deserialize{name}(const JsonDocument &doc, {fq} &v) {{")
-        for f in t["fields"]:
-            if f.get("omit_in_serialize"):
-                continue
+        # The same reading as the serialized shape and a list of its own: the two
+        # loops are separate, so a filter that reaches only one of them is a
+        # filter only one of the two checks can report.
+        deserialize_fields = [f for f in t["fields"]
+                              if f["json"] and not f.get("omit_in_serialize")]
+        fail_uncovered_fields(field_coverage_errors(
+            f"type {name}", "deserialize", t["fields"],
+            [f["name"] for f in deserialize_fields]))
+        for f in deserialize_fields:
             json_key = f["json"]
             field_name = f["name"]
-            if not json_key:
-                continue
             default_val = f.get("default", 0)
             # Map mid defaults for GamepadRawInput joystick
             if ns == "ThetaGP::Gamepad" and name == "GamepadRawInput":
@@ -826,7 +927,13 @@ def gen_rust(proto: dict, out: Optional[Path] = None) -> str:
         w(f"/// {desc}")
         w("#[derive(Debug, Clone, Serialize, Deserialize)]")
         w(f"pub struct {name} {{")
-        for f in t["fields"]:
+        # Every declared field is carried, and the list is built before the lines
+        # so the coverage check reads what this emitter writes.
+        struct_fields = list(t["fields"])
+        fail_uncovered_fields(field_coverage_errors(
+            f"type {name}", "struct", t["fields"],
+            [f["name"] for f in struct_fields]))
+        for f in struct_fields:
             if f.get("omit_in_serialize"):
                 rust_type = RUST_TYPE_MAP.get(f["type"], "Value")
             else:
@@ -857,7 +964,14 @@ def gen_rust(proto: dict, out: Optional[Path] = None) -> str:
         w(f"pub struct {struct_name} {{")
         w('    pub cmd: String,')
         w('    pub queued: u32,')
-        for f in req:
+        # Each declared request field becomes a field of the struct; the list is
+        # built and compared before the lines are written, so a filter added here
+        # is reported rather than leaving the binding short a field.
+        request_fields = list(req)
+        fail_uncovered_fields(field_coverage_errors(
+            f"{cmd_info['domain']}.{cmd_info['name']}", "request", req,
+            [f["name"] for f in request_fields]))
+        for f in request_fields:
             t = RUST_TYPE_MAP.get(f["type"], "Value")
             serde_attr = f'#[serde(rename = "{f["json"]}")]'
             w(f"    {serde_attr}")
@@ -881,7 +995,14 @@ def gen_rust(proto: dict, out: Optional[Path] = None) -> str:
         w('    pub status: String,')
         w('    pub cmd: String,')
         w('    pub queued: u32,')
-        for f in resp:
+        # Each declared response field becomes an optional field of the struct —
+        # every one of them, so the list is the declared array and the check
+        # holds it there.
+        response_fields = list(resp)
+        fail_uncovered_fields(field_coverage_errors(
+            f"{domain}.{name}", "response", resp,
+            [f["name"] for f in response_fields]))
+        for f in response_fields:
             t = RUST_TYPE_MAP.get(f["type"], "Value")
             serde_attr = f'#[serde(rename = "{f["json"]}")]'
             w(f"    {serde_attr}")
@@ -901,6 +1022,22 @@ def gen_rust(proto: dict, out: Optional[Path] = None) -> str:
 # ═════════════════════════════════════════════════════════════════════════════
 # TypeScript Generator
 # ═════════════════════════════════════════════════════════════════════════════
+
+# The envelope of a response: the keys every response carries ahead of the fields
+# protocol.toml declares for it, and the type the frontend reads each one as, in
+# the order the response writes them. The response interface below writes these
+# lines itself; a declared response field naming one of these keys is a key the
+# response already carries, so the loop leaves it to the envelope rather than let
+# a second property appear under one name, and the coverage check counts such a
+# field as reaching the interface, because its key is there either way.
+#
+# gen_rust writes the same three lines from literals of its own, and the firmware
+# writes them from the format string its handlers open with (src/test/testsys.cpp).
+# protocol.toml declares none of the three, so the envelope is a shape every
+# consumer carries and the source does not describe.
+TS_RESPONSE_ENVELOPE = (("status", "string"), ("cmd", "string"), ("queued", "number"))
+TS_RESPONSE_ENVELOPE_KEYS = tuple(key for key, _ in TS_RESPONSE_ENVELOPE)
+
 
 def gen_ts(proto: dict, out: Optional[Path] = None) -> str:
     lines: List[str] = []
@@ -949,9 +1086,14 @@ def gen_ts(proto: dict, out: Optional[Path] = None) -> str:
         desc = sanitize_cpp_comment(t.get("description", ""))
         w(f"// {desc}")
         w(f"export interface {name} {{")
-        for f in t["fields"]:
-            if f.get("omit_in_serialize"):
-                continue
+        # A field marked `omit_in_serialize` is not part of the shape that
+        # travels. Built before the lines are written and compared against the
+        # declared array, so a filter added here is reported.
+        interface_fields = [f for f in t["fields"] if not f.get("omit_in_serialize")]
+        fail_uncovered_fields(field_coverage_errors(
+            f"type {name}", "interface", t["fields"],
+            [f["name"] for f in interface_fields]))
+        for f in interface_fields:
             ts_type = TS_TYPE_MAP.get(f["type"], "any")
             desc = sanitize_cpp_comment(f.get("description", ""))
             w(f"  // {desc}")
@@ -973,7 +1115,15 @@ def gen_ts(proto: dict, out: Optional[Path] = None) -> str:
             w(f"export interface {to_pascal(domain)}{to_pascal(name)}Request {{")
             w("  cmd: string;")
             w("  queued: number;")
-            for f in req:
+            # Each declared request field becomes a property of the interface;
+            # the list is built and compared before the lines are written, so a
+            # filter added here is reported rather than leaving the binding short
+            # an argument.
+            request_fields = list(req)
+            fail_uncovered_fields(field_coverage_errors(
+                full_name, "request", req,
+                [f["name"] for f in request_fields]))
+            for f in request_fields:
                 ts_type = TS_TYPE_MAP.get(f["type"], "any")
                 optional = "" if f.get("required", False) else "?"
                 w(f"  {f['json']}{optional}: {ts_type};")
@@ -983,16 +1133,22 @@ def gen_ts(proto: dict, out: Optional[Path] = None) -> str:
         w()
 
         # Response interface
-        BOILERPLATE_TS_RESPONSE_FIELDS = {"status", "cmd", "queued"}
         resp = cmd_info.get("response", [])
         if resp:
             w(f"export interface {to_pascal(domain)}{to_pascal(name)}Response {{")
-            w("  status: string;")
-            w("  cmd: string;")
-            w("  queued: number;")
-            for f in resp:
-                if f["json"] in BOILERPLATE_TS_RESPONSE_FIELDS:
-                    continue
+            for key, ts_type in TS_RESPONSE_ENVELOPE:
+                w(f"  {key}: {ts_type};")
+            # A field whose key the envelope above writes is left to it; every
+            # other declared field gets an optional line of its own. The list is
+            # built before the lines are written, and what the interface carries
+            # is taken from the two places it writes keys — so a field dropped
+            # from the list is reported instead of being noticed in the output.
+            fields = [f for f in resp if f["json"] not in TS_RESPONSE_ENVELOPE_KEYS]
+            fail_uncovered_fields(field_coverage_errors(
+                full_name, "response", resp,
+                [f["name"] for f in resp if f["json"] in TS_RESPONSE_ENVELOPE_KEYS]
+                + [f["name"] for f in fields]))
+            for f in fields:
                 ts_type = TS_TYPE_MAP.get(f["type"], "any")
                 w(f"  {f['json']}?: {ts_type};")
             w("}")
