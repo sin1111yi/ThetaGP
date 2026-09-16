@@ -39,6 +39,57 @@ static bool isNumberToken(const struct json_token &tok) {
   return tok.type == JSON_TYPE_NUMBER && tok.ptr && tok.len > 0;
 }
 
+// A token that spells a whole decimal integer and nothing else: an optional
+// minus, then digits that start with a non-zero one unless the number is the
+// single zero, then a value terminator. frozen ends a number token where the
+// digits end, so a document spelling 1x hands over the token "1"; the digits of
+// 1.9, 1e1, 0x1 and 01 stop inside the token. Digits taken out of either
+// spelling are a number the document never carried, and a bit index or an
+// enumerator is where such a number lands, so the whole spelling and the
+// character behind the token are both checked here.
+static bool isPlainIntToken(const struct json_token &tok, const char *input,
+                            int inputLen) {
+  if (!tok.ptr || tok.len <= 0) {
+    return false;
+  }
+
+  // A token that carries no digit covers nothing.
+  int i = (tok.ptr[0] == '-') ? 1 : 0;
+  if (i == tok.len) {
+    return false;
+  }
+  // JSON gives a leading zero to no number but zero itself.
+  if (tok.ptr[i] == '0' && i + 1 < tok.len) {
+    return false;
+  }
+  for (; i < tok.len; ++i) {
+    if (tok.ptr[i] < '0' || tok.ptr[i] > '9') {
+      return false;
+    }
+  }
+
+  // The token covers its digits only, so the character behind it is the one
+  // sign of a spelling the token did not cover. A document that ends at the
+  // token carries no character there.
+  const char *after = tok.ptr + tok.len;
+  if (after >= input + inputLen) {
+    return true;
+  }
+  switch (*after) {
+  case ' ':
+  case '\t':
+  case '\r':
+  case '\n':
+  case ',':
+  case '}':
+  case ']':
+  case '\0':
+    return true;
+  default:
+    return false;
+  }
+}
+
 const char *Json::buildFmt(const char *path, const char *spec) const {
   // Count segments and find last dot
   const char *p = path;
@@ -104,7 +155,8 @@ int Json::getInt(const char *path, int def) const {
   if (!_input) return def;
   struct json_token tok;
   const char *fmt = buildFmt(path, "%T");
-  if (json_scanf(_input, _inputLen, fmt, &tok) == 1 && isNumberToken(tok)) {
+  if (json_scanf(_input, _inputLen, fmt, &tok) == 1 && isNumberToken(tok) &&
+      isPlainIntToken(tok, _input, _inputLen)) {
     return tokenToInt(tok);
   }
   return def;
@@ -125,7 +177,7 @@ int Json::getArrInt(const char *path, int idx, int def) const {
 
   struct json_token tok;
   if (json_scanf_array_elem(_input, _inputLen, arrPath, idx, &tok) > 0 &&
-      isNumberToken(tok)) {
+      isNumberToken(tok) && isPlainIntToken(tok, _input, _inputLen)) {
     return tokenToInt(tok);
   }
   return def;

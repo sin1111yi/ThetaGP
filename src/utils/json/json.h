@@ -37,12 +37,16 @@ public:
   /** Point parser at external JSON string. len=-1 → strlen. */
   void parse(const char *s, int len = -1);
 
-  /** Int value at dot path, or def if missing/invalid. */
+  /**
+   * Int value at dot path, or def if the key is missing or is not spelled as a
+   * plain decimal integer.
+   */
   int getInt(const char *path, int def = 0) const;
 
   /**
    * Int value of the element at index idx of the array at path (path names the
-   * array, not the element), or def if the array or that element is missing.
+   * array, not the element), or def if the array or that element is missing, or
+   * the element is not spelled as a plain decimal integer.
    */
   int getArrInt(const char *path, int idx, int def = 0) const;
 
