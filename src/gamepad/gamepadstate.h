@@ -26,8 +26,8 @@
 
 #pragma once
 
-#include <cstdint>
 #include "gamepad/gamepadenums.h"
+#include <cstdint>
 
 /*
         Gamepad button mapping table:

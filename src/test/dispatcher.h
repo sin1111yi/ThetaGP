@@ -21,8 +21,8 @@
 
 #pragma once
 
-#include <cstdint>
 #include "utils/json/json.h"
+#include <cstdint>
 
 namespace ThetaGP::Test {
 

@@ -21,8 +21,8 @@
 
 #pragma once
 
-#include <cstdint>
 #include "build_info.h"
+#include <cstdint>
 
 namespace ThetaGP::Test {
 

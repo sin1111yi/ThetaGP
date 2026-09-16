@@ -21,8 +21,8 @@
 
 #include "test/framelayer.h"
 
-#include "utils/log/log.h"
 #include "tusb.h"
+#include "utils/log/log.h"
 
 #include <cstring>
 

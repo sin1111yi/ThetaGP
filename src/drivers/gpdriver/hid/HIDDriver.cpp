@@ -21,9 +21,9 @@
 
 #include "drivers/gpdriver/hid/HIDDriver.h"
 #include "build_info.h"
+#include "drivers/gpdriver/gpdriver.h"
 #include "drivers/gpdriver/hid/HIDDescriptors.h"
 #include "drivers/gpdriver/shared/driverhelper.h"
-#include "drivers/gpdriver/gpdriver.h"
 
 #include "gamepad/gamepad.h"
 

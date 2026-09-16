@@ -22,8 +22,8 @@
 #ifndef _TUSB_CONFIG_H_
 #define _TUSB_CONFIG_H_
 
-#include "build_info.h"
 #include "BoardConfig.h"
+#include "build_info.h"
 #include "utils/log/log.h"
 
 // Suppress deprecated volatile and pedantic warnings in TinyUSB upstream source
