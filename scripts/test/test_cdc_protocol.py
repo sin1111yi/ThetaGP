@@ -39,9 +39,22 @@
 # without the domain has nothing to compare, so "this build has no test domain"
 # no longer reads as a list of failures.
 
+# The expected response fields of a command are not written down here: they are
+# read from protocol/proto_fields.json, which scripts/gen_proto.py derives from
+# protocol/protocol.toml (the single source of truth for the protocol). A field
+# added to, removed from, or reordered in protocol.toml therefore reaches these
+# checks by regenerating, without an edit to this file. The manifest is a
+# generated artifact and is not committed (.gitignore), so a checkout that has
+# never run the generator has none — load_field_manifest() then stops the run
+# with the command that produces it, before the port is opened, rather than
+# letting every field check compare against an empty list.
+
 import json
 import os
+import sys
 import time
+from pathlib import Path
+
 from cdc_serial import open_serial, TestContext
 
 # The dispatcher answers a command it has no handler for with this reason
@@ -67,16 +80,44 @@ REGION_SIZES = {
     "itcm": 64512,      # 63 KB
 }
 
-# sys.get_usage response fields (protocol 1.1, four-item scope)
-USAGE_FIELDS = (
-    "cpu_load_percent", "task_count",
-    "mcu_flash_used_bytes", "mcu_flash_total_bytes",
-    "ram_used_bytes", "ram_total_bytes", "ram_reserved_bytes",
-    "ram_dtcm_used_bytes", "ram_axi_used_bytes",
-    "ram_d2_used_bytes", "ram_d3_used_bytes", "ram_itcm_used_bytes",
-    "ext_flash_total_sectors", "ext_flash_used_sectors",
-    "ext_flash_free_sectors", "ext_flash_reserved_sectors", "profile_count",
-)
+# The generated field manifest: protocol/proto_fields.json, one entry per
+# [[commands]] of protocol.toml, each with its ordered request/response fields.
+PROTOCOL_DIR = Path(__file__).resolve().parents[2] / "protocol"
+FIELDS_MANIFEST = PROTOCOL_DIR / "proto_fields.json"
+
+
+def load_field_manifest(path=FIELDS_MANIFEST):
+    """The generated field manifest, or a hard error naming how to produce it.
+
+    A missing manifest aborts the run with exit 2. It is deliberately not a
+    skipped check: the checks below read their expected fields from here, so a
+    run without it would silently compare against nothing — a result that looks
+    like the suite did its work when the input it works from was never there.
+    """
+    if not path.is_file():
+        print(f"ERROR: protocol field manifest not found: {path}", file=sys.stderr)
+        print("       It is derived from protocol/protocol.toml and is not "
+              "committed.", file=sys.stderr)
+        print("       Run: python3 scripts/gen_proto.py", file=sys.stderr)
+        sys.exit(2)
+    with open(path, "r", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def response_fields(manifest, cmd):
+    """The json names a command's response carries, in the declared order.
+
+    The order is the one the manifest kept from protocol.toml, which is the
+    order the firmware writes the fields in.
+    """
+    entry = manifest["commands"].get(cmd)
+    if entry is None:
+        print(f"ERROR: command '{cmd}' is not in {FIELDS_MANIFEST} — the "
+              f"manifest was generated from a different protocol.toml",
+              file=sys.stderr)
+        print("       Run: python3 scripts/gen_proto.py", file=sys.stderr)
+        sys.exit(2)
+    return tuple(f["json"] for f in entry["response"])
 
 
 def field_int(resp, key):
@@ -245,6 +286,11 @@ def task_info_sigma_us_per_s(tasks):
 
 
 def main():
+    # The expected sys.get_usage fields, from the generated manifest rather
+    # than a tuple copied into this file. Read before the port is opened: a
+    # missing manifest is an error, not a run with nothing to compare against.
+    usage_fields = response_fields(load_field_manifest(), "sys.get_usage")
+
     fd = open_serial()
     time.sleep(1)
     ctx = TestContext(fd)
@@ -385,7 +431,7 @@ def main():
     usage = ctx.send("sys.get_usage")
     ok("get_usage fields",
        usage is not None and usage.get("status") == "ok"
-       and has_fields(usage, USAGE_FIELDS))
+       and has_fields(usage, usage_fields))
 
     # Aggregate consistency — build independent regression checks
     usage_ram_used = sum_regions(usage, "ram_{region}_used_bytes")

@@ -35,6 +35,7 @@ lib/lvgl
 protocol/proto.h
 protocol/proto.rs
 protocol/types.ts
+protocol/proto_fields.json
 
 */test/__pycache__
 

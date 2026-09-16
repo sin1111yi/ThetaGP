@@ -6,12 +6,16 @@ Reads protocol/protocol.toml and generates type-safe serialization code:
   - C++   header (protocol/proto.h)  — device side, ArduinoJson v7
   - Rust  module (protocol/proto.rs) — Tauri backend, serde
   - TS    types   (protocol/types.ts) — frontend
+  - JSON  manifest (protocol/proto_fields.json) — ordered request/response
+          field lists per command, for consumers that must not hand-copy the
+          protocol shape: the CDC test suite reads it, the docs table can too
 
 Usage:
   python3 scripts/gen_proto.py                       # all targets
   python3 scripts/gen_proto.py --target cpp           # C++ only
   python3 scripts/gen_proto.py --target rust           # Rust only
   python3 scripts/gen_proto.py --target ts             # TS only
+  python3 scripts/gen_proto.py --target fields         # field manifest only
   python3 scripts/gen_proto.py --dry-run               # print to stdout
   python3 scripts/gen_proto.py --protocol custom.toml  # custom path
 
@@ -19,6 +23,7 @@ Requires: Python 3.11+ (uses stdlib tomllib)
 """
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -632,6 +637,66 @@ def gen_ts(proto: dict, out: Optional[Path] = None) -> str:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# Field manifest generator (JSON)
+# ═════════════════════════════════════════════════════════════════════════════
+
+def command_fields(entries: List[dict]) -> List[Dict[str, Any]]:
+    """One command's field array as a list of plain, ordered records.
+
+    Keeps only what describes the wire shape (name / type / json, plus the
+    `required` and `description` the TOML happens to carry), so a consumer
+    needs no TOML parser and no knowledge of this file's other tables.
+    """
+    out_fields: List[Dict[str, Any]] = []
+    for f in entries:
+        record: Dict[str, Any] = {"name": f["name"], "type": f["type"], "json": f["json"]}
+        if "required" in f:
+            record["required"] = bool(f["required"])
+        if "description" in f:
+            record["description"] = f["description"]
+        out_fields.append(record)
+    return out_fields
+
+
+def gen_fields(proto: dict, out: Optional[Path] = None) -> str:
+    """Ordered request/response field lists for every command, as JSON.
+
+    Same shape as the code generators, but language neutral: this is the
+    derivation path for consumers that would otherwise hand-copy the field
+    shapes out of protocol.toml. Order is the declaration order of the TOML
+    arrays — the order the firmware writes the fields in and the order the
+    consumers read them in — never a sorted or re-grouped one.
+    """
+    commands = proto.get("commands", [])
+
+    manifest = {
+        "generated_by": "scripts/gen_proto.py — DO NOT EDIT MANUALLY",
+        "source": "protocol/protocol.toml",
+        "protocol_version": proto.get("meta", {}).get("version", ""),
+        # Keyed "<domain>.<name>", the same full command name the wire uses.
+        # Insertion order = the TOML's [[commands]] order.
+        "commands": {
+            f"{cmd['domain']}.{cmd['name']}": {
+                "domain": cmd["domain"],
+                "name": cmd["name"],
+                "description": cmd.get("description", ""),
+                "request": command_fields(cmd.get("request", [])),
+                "response": command_fields(cmd.get("response", [])),
+            }
+            for cmd in commands
+        },
+    }
+
+    result = json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
+
+    if out:
+        out.write_text(result)
+        print(f"  [fields] wrote {out}", file=sys.stderr)
+
+    return result
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # CLI
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -648,8 +713,8 @@ Examples:
     )
     parser.add_argument("--protocol", default="protocol/protocol.toml",
                         help="Path to protocol.toml (default: protocol/protocol.toml)")
-    parser.add_argument("--target", default="cpp,rust,ts",
-                        help="Comma-separated targets: cpp,rust,ts (default: all)")
+    parser.add_argument("--target", default="cpp,rust,ts,fields",
+                        help="Comma-separated targets: cpp,rust,ts,fields (default: all)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print generated code to stdout instead of writing files")
     parser.add_argument("--outdir-cpp", default="protocol",
@@ -658,6 +723,8 @@ Examples:
                         help="Output dir for Rust generated module")
     parser.add_argument("--outdir-ts", default="protocol",
                         help="Output dir for TS generated types")
+    parser.add_argument("--outdir-fields", default="protocol",
+                        help="Output dir for the generated JSON field manifest")
 
     args = parser.parse_args()
     targets = [t.strip() for t in args.target.split(",")]
@@ -703,8 +770,13 @@ Examples:
             gen_ts(proto, out_file)
             if args.dry_run:
                 print(gen_ts(proto))
+        elif tgt == "fields":
+            out_file = None if args.dry_run else Path(args.outdir_fields) / "proto_fields.json"
+            gen_fields(proto, out_file)
+            if args.dry_run:
+                print(gen_fields(proto))
         else:
-            print(f"WARNING: Unknown target '{tgt}' (supported: cpp, rust, ts)",
+            print(f"WARNING: Unknown target '{tgt}' (supported: cpp, rust, ts, fields)",
                   file=sys.stderr)
 
     print("Done.", file=sys.stderr)
