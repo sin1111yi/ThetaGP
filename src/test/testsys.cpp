@@ -32,9 +32,26 @@
 #include "utils/meminfo.h"
 
 #include "protocol/proto.h"
+#include "protocol/proto_resp.h"
 
 #include "tusb.h"
 #include <cstring>
+#include <type_traits>
+
+// Expands a response field table (protocol/proto_resp.h) into the field writes
+// of a response. The JSON key and the printf conversion of a field come from
+// the table, and its value from the THETAGP_VALUE_<name> macro that the table's
+// name selects: a name the table carries and this file does not define, and a
+// value whose type is not the one the table declares, are both compile errors,
+// and no value can land under another field's key because nothing is paired by
+// position. A table is invoked as TABLE(THETAGP_RESP_FIELD), one invocation per
+// response, with no semicolon after it — each expansion ends itself.
+#define THETAGP_RESP_FIELD(name, type, spec, presence)                          \
+    static_assert(std::is_same<decltype(THETAGP_VALUE_##name), type>::value,    \
+                  #name ": value type differs from protocol.toml");             \
+    if (presence) {                                                             \
+        resp.printf("," #name ":" spec, THETAGP_VALUE_##name);                  \
+    }
 
 namespace ThetaGP::Test {
 
@@ -69,15 +86,24 @@ static void handleSysPing([[maybe_unused]] const char *cmd,
     FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
+// ── sys.get_fw_version ──
+// Response field values, keyed by the name protocol.toml declares them with.
+// The order and the conversions come from THETAGP_RESP_SYS_GET_FW_VERSION,
+// expanded in the handler below.
+#define THETAGP_VALUE_board      ((const char *)BOARD_NAME)
+#define THETAGP_VALUE_version    ((const char *)THETAGP_FW_VERSION)
+#define THETAGP_VALUE_build_date ((const char *)__DATE__)
+#define THETAGP_VALUE_build_time ((const char *)__TIME__)
+
 static void handleSysGetFwVersion([[maybe_unused]] const char *cmd,
                                   [[maybe_unused]] const Json &json) {
     int queued = json.getInt("queued");
     Json resp;
     resp.beginWrite(s_sysRespBuf, sizeof(s_sysRespBuf));
-    resp.printf("{status:%Q,cmd:%Q,queued:%d,board:%Q,version:%Q,"
-                "build_date:%Q,build_time:%Q}",
-                "ok", "sys.get_fw_version", queued + 1,
-                BOARD_NAME, THETAGP_FW_VERSION, __DATE__, __TIME__);
+    resp.printf("{status:%Q,cmd:%Q,queued:%d", "ok", "sys.get_fw_version",
+                queued + 1);
+    THETAGP_RESP_SYS_GET_FW_VERSION(THETAGP_RESP_FIELD)
+    resp.printf("}");
     uint16_t len = resp.end();
     FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
@@ -112,25 +138,34 @@ static void handleSysGetTaskInfo([[maybe_unused]] const char *cmd,
         // per-task averages are in tenths of a microsecond.
         uint32_t avgExecUs = info->averageExecutionTime10thUs / 10U;
         uint32_t avgDeltaUs = info->averageDeltaTime10thUs / 10U;
-        resp.printf("{status:%Q,cmd:%Q,queued:%d,tid:%d,"
-                    "name:%Q,sub:%Q,desiredUs:%lu,"
-                    "avgCycleUs:%lu,actualHz:%lu,maxExecUs:%lu,"
-                    "avgExecUs:%lu,totalExecUs:%lu,avgDeltaUs:%lu",
-                    "ok", "sys.get_task_info", queued + 1, tid,
-                    info->taskName, info->subTaskName,
-                    info->desiredPeriodUs,
-                    (unsigned long)avgUs,
-                    (unsigned long)actualHz,
-                    (unsigned long)info->maxExecutionTimeUs,
-                    (unsigned long)avgExecUs,
-                    (unsigned long)info->totalExecutionTimeUs,
-                    (unsigned long)avgDeltaUs);
+
+        // Response field values, keyed by the name protocol.toml declares them
+        // with. The order and the conversions come from
+        // THETAGP_RESP_SYS_GET_TASK_INFO, expanded below. The run counters are
+        // copied into TaskInfo only in a build that compiles them in, and the
+        // table reports them only there: without them there is no value to
+        // read, so the unused value is a zero.
+#define THETAGP_VALUE_tid          ((int32_t)tid)
+#define THETAGP_VALUE_name         ((const char *)info->taskName)
+#define THETAGP_VALUE_sub          ((const char *)info->subTaskName)
+#define THETAGP_VALUE_desiredUs    ((uint32_t)info->desiredPeriodUs)
+#define THETAGP_VALUE_avgCycleUs   ((uint32_t)avgUs)
+#define THETAGP_VALUE_actualHz     ((uint32_t)actualHz)
+#define THETAGP_VALUE_maxExecUs    ((uint32_t)info->maxExecutionTimeUs)
+#define THETAGP_VALUE_avgExecUs    ((uint32_t)avgExecUs)
+#define THETAGP_VALUE_totalExecUs  ((uint32_t)info->totalExecutionTimeUs)
+#define THETAGP_VALUE_avgDeltaUs   ((uint32_t)avgDeltaUs)
 #ifdef USE_TASK_COUNTERS
-        // Counters are reported only when the task counters are compiled in
-        resp.printf(",runCount:%lu,lateCount:%lu",
-                    (unsigned long)info->runCount,
-                    (unsigned long)info->lateCount);
+#define THETAGP_VALUE_runCount ((uint32_t)info->runCount)
+#define THETAGP_VALUE_lateCount ((uint32_t)info->lateCount)
+#else
+#define THETAGP_VALUE_runCount ((uint32_t)0)
+#define THETAGP_VALUE_lateCount ((uint32_t)0)
 #endif
+
+        resp.printf("{status:%Q,cmd:%Q,queued:%d", "ok", "sys.get_task_info",
+                    queued + 1);
+        THETAGP_RESP_SYS_GET_TASK_INFO(THETAGP_RESP_FIELD)
         resp.printf("}");
     } else {
         resp.printf("{status:%Q,cmd:%Q,queued:%d,tid:%d,"
@@ -176,35 +211,32 @@ static void handleSysGetUsage([[maybe_unused]] const char *cmd,
 
     Json resp;
     resp.beginWrite(s_sysRespBuf, sizeof(s_sysRespBuf));
-    resp.printf(
-        "{status:%Q,cmd:%Q,queued:%d,"
-        "cpu_load_percent:%u,"
-        "task_count:%u,"
-        "mcu_flash_used_bytes:%lu,mcu_flash_total_bytes:%lu,"
-        "ram_used_bytes:%lu,ram_total_bytes:%lu,ram_reserved_bytes:%lu,"
-        "ram_dtcm_used_bytes:%lu,ram_axi_used_bytes:%lu,"
-        "ram_d2_used_bytes:%lu,ram_d3_used_bytes:%lu,ram_itcm_used_bytes:%lu,"
-        "ext_flash_total_sectors:%lu,ext_flash_used_sectors:%lu,"
-        "ext_flash_free_sectors:%lu,ext_flash_reserved_sectors:%lu,"
-        "profile_count:%u}",
-        "ok", "sys.get_usage", queued + 1,
-        (unsigned)Gamepad::TaskManager::getAverageSystemLoadPercent(),
-        (unsigned)Gamepad::TaskManager::getTaskCount(),
-        (unsigned long)mcuFlashUsedBytes(),
-        (unsigned long)mcuFlashTotalBytes(),
-        (unsigned long)ramUsedBytes(),
-        (unsigned long)ramTotalBytes(),
-        (unsigned long)ramReservedBytes(),
-        (unsigned long)region(RegionId::Dtcm).used,
-        (unsigned long)region(RegionId::Axi).used,
-        (unsigned long)region(RegionId::D2).used,
-        (unsigned long)region(RegionId::D3).used,
-        (unsigned long)region(RegionId::Itcm).used,
-        (unsigned long)pstat.totalSectors,
-        (unsigned long)pstat.usedSectors,
-        (unsigned long)pstat.freeSectors,
-        (unsigned long)pstat.reservedSectors,
-        (unsigned)pstat.profileCount);
+
+    // Response field values, keyed by the name protocol.toml declares them
+    // with. The order and the conversions come from
+    // THETAGP_RESP_SYS_GET_USAGE, expanded below.
+#define THETAGP_VALUE_cpu_load_percent                                            \
+    ((uint32_t)Gamepad::TaskManager::getAverageSystemLoadPercent())
+#define THETAGP_VALUE_task_count ((uint32_t)Gamepad::TaskManager::getTaskCount())
+#define THETAGP_VALUE_mcu_flash_used_bytes ((uint32_t)mcuFlashUsedBytes())
+#define THETAGP_VALUE_mcu_flash_total_bytes ((uint32_t)mcuFlashTotalBytes())
+#define THETAGP_VALUE_ram_used_bytes ((uint32_t)ramUsedBytes())
+#define THETAGP_VALUE_ram_total_bytes ((uint32_t)ramTotalBytes())
+#define THETAGP_VALUE_ram_reserved_bytes ((uint32_t)ramReservedBytes())
+#define THETAGP_VALUE_ram_dtcm_used_bytes ((uint32_t)region(RegionId::Dtcm).used)
+#define THETAGP_VALUE_ram_axi_used_bytes ((uint32_t)region(RegionId::Axi).used)
+#define THETAGP_VALUE_ram_d2_used_bytes ((uint32_t)region(RegionId::D2).used)
+#define THETAGP_VALUE_ram_d3_used_bytes ((uint32_t)region(RegionId::D3).used)
+#define THETAGP_VALUE_ram_itcm_used_bytes ((uint32_t)region(RegionId::Itcm).used)
+#define THETAGP_VALUE_ext_flash_total_sectors ((uint32_t)pstat.totalSectors)
+#define THETAGP_VALUE_ext_flash_used_sectors ((uint32_t)pstat.usedSectors)
+#define THETAGP_VALUE_ext_flash_free_sectors ((uint32_t)pstat.freeSectors)
+#define THETAGP_VALUE_ext_flash_reserved_sectors ((uint32_t)pstat.reservedSectors)
+#define THETAGP_VALUE_profile_count ((uint32_t)pstat.profileCount)
+
+    resp.printf("{status:%Q,cmd:%Q,queued:%d", "ok", "sys.get_usage", queued + 1);
+    THETAGP_RESP_SYS_GET_USAGE(THETAGP_RESP_FIELD)
+    resp.printf("}");
     uint16_t len = resp.end();
     FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }

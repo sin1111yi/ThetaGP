@@ -16,6 +16,15 @@
 #   [error_codes]     — global error codes
 #   [domains]         — domain prefix registry
 #   [[async_messages]] — device-initiated async message definitions
+#
+# A field of a command may carry a `role`, a property of the field that outlives
+# its type and its position. The generator turns each role into an expectation
+# the consumers of this file hold:
+#   accounting    — the field is part of the per-task accounting subset the CDC
+#                   test suite requires in every build
+#                   (scripts/test/test_cdc_protocol.py)
+#   task_counters — the field is written to a response only in a build that
+#                   compiles the task counters in (USE_TASK_COUNTERS)
 # =============================================================================
 
 # ---------------------------------------------------------------------------
@@ -155,15 +164,15 @@ response = [
   { name = "tid",       type = "i32",   json = "tid" },
   { name = "name",      type = "string", json = "name" },
   { name = "sub",       type = "string", json = "sub" },
-  { name = "desiredUs",   type = "u32",   json = "desiredUs" },
-  { name = "avgCycleUs",  type = "u32",   json = "avgCycleUs" },
-  { name = "actualHz",    type = "u32",   json = "actualHz" },
-  { name = "maxExecUs",   type = "u32",   json = "maxExecUs" },
-  { name = "avgExecUs",   type = "u32",   json = "avgExecUs", description = "Moving-average execution time, microseconds" },
-  { name = "totalExecUs", type = "u32",   json = "totalExecUs", description = "Accumulated execution time since boot, microseconds" },
-  { name = "avgDeltaUs",  type = "u32",   json = "avgDeltaUs", description = "Moving-average interval between executions, microseconds" },
-  { name = "runCount",    type = "u32",   json = "runCount", description = "Times the task function has run, reported only in a build with the test API (testsys.cpp:128)" },
-  { name = "lateCount",   type = "u32",   json = "lateCount", description = "Times the task missed its deadline, reported only in a build with the test API (testsys.cpp:128)" },
+  { name = "desiredUs",   type = "u32",   json = "desiredUs", role = "accounting" },
+  { name = "avgCycleUs",  type = "u32",   json = "avgCycleUs", role = "accounting" },
+  { name = "actualHz",    type = "u32",   json = "actualHz", role = "accounting" },
+  { name = "maxExecUs",   type = "u32",   json = "maxExecUs", role = "accounting" },
+  { name = "avgExecUs",   type = "u32",   json = "avgExecUs", description = "Moving-average execution time, microseconds", role = "accounting" },
+  { name = "totalExecUs", type = "u32",   json = "totalExecUs", description = "Accumulated execution time since boot, microseconds", role = "accounting" },
+  { name = "avgDeltaUs",  type = "u32",   json = "avgDeltaUs", description = "Moving-average interval between executions, microseconds", role = "accounting" },
+  { name = "runCount",    type = "u32",   json = "runCount", description = "Times the task function has run, reported only in a build with the test API (testsys.cpp:128)", role = "task_counters" },
+  { name = "lateCount",   type = "u32",   json = "lateCount", description = "Times the task missed its deadline, reported only in a build with the test API (testsys.cpp:128)", role = "task_counters" },
 ]
 error_codes = [
   { name = "ERR_INVALID_PARAM", code = 2, description = "Invalid TID" },

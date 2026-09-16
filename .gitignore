@@ -36,6 +36,7 @@ protocol/proto.h
 protocol/proto.rs
 protocol/types.ts
 protocol/proto_fields.json
+protocol/proto_resp.h
 
 */test/__pycache__
 

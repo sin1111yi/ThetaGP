@@ -9,6 +9,10 @@ Reads protocol/protocol.toml and generates type-safe serialization code:
   - JSON  manifest (protocol/proto_fields.json) — ordered request/response
           field lists per command, for consumers that must not hand-copy the
           protocol shape: the CDC test suite reads it, the docs table can too
+  - C++   header (protocol/proto_resp.h) — response payload field tables in
+          declaration order, as X-macros, for the firmware that writes a
+          response: the order, the JSON keys and the printf conversions come
+          from here instead of from a format string written by hand
 
 Usage:
   python3 scripts/gen_proto.py                       # all targets
@@ -16,6 +20,7 @@ Usage:
   python3 scripts/gen_proto.py --target rust           # Rust only
   python3 scripts/gen_proto.py --target ts             # TS only
   python3 scripts/gen_proto.py --target fields         # field manifest only
+  python3 scripts/gen_proto.py --target resp           # response tables only
   python3 scripts/gen_proto.py --dry-run               # print to stdout
   python3 scripts/gen_proto.py --protocol custom.toml  # custom path
 
@@ -27,6 +32,7 @@ import hashlib
 import json
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
@@ -71,6 +77,39 @@ TS_TYPE_MAP = {
     "bool":   "boolean",
     "string": "string",
     "any":    "any",
+}
+
+# A response field's type → (the printf argument type, the conversion for it).
+# Decided once per type, here, so a field's specifier can never drift from the
+# type protocol.toml declares it with: the type is read from the source and the
+# pair is derived from it, both when the response table is generated and when
+# the firmware expands that table. A type with no pair is a field no table can
+# carry (its value has no printf form); the response table generator reports it.
+PRINTF_TYPE_MAP = {
+    "u8":     ("uint32_t", "%u"),
+    "u16":    ("uint32_t", "%u"),
+    "u32":    ("uint32_t", "%u"),
+    "i32":    ("int32_t", "%d"),
+    "bool":   ("int", "%B"),
+    "string": ("const char *", "%Q"),
+}
+
+# A field's `role` is a property that outlives its type and its position: who
+# else has to know about that field.
+#   accounting    — a member of the per-task accounting subset the CDC test
+#                   suite requires in every build
+#   task_counters — reported only in a build that compiles the task counters in
+#                   (USE_TASK_COUNTERS), so a response omits the field without
+#                   them
+ROLE_ACCOUNTING = "accounting"
+ROLE_TASK_COUNTERS = "task_counters"
+
+# The roles that make a response field conditional, and what the condition is:
+# the name of the flag the generated response table entry carries, and the
+# firmware macro that flag is defined from. A role absent here is always
+# present, and its table entry carries the constant 1.
+ROLE_PRESENCE = {
+    ROLE_TASK_COUNTERS: ("THETAGP_RESP_HAS_TASK_COUNTERS", "USE_TASK_COUNTERS"),
 }
 
 
@@ -143,6 +182,28 @@ def validate_domains(proto: dict) -> None:
     absent = sorted(NON_COMMAND_DOMAINS - declared)
     if miss or unk or absent:
         print(f"ERROR: [domains] mismatch — used-by-commands-but-undeclared: {miss or 'none'}; declared-but-unknown: {unk or 'none'}; registered-non-command-but-undeclared: {absent or 'none'}", file=sys.stderr)
+        sys.exit(1)
+
+
+def validate_field_roles(proto: dict) -> None:
+    """Abort unless every field `role` is one this generator acts on.
+
+    A role is a name this file and the artifacts it writes agree on, and one it
+    does not know is a name nothing derives anything from: the field would read
+    as marked while the suite's expectation and the response table of its
+    command both stayed as if it were not, so a misspelling has to stop
+    generation rather than leave a marking that does nothing.
+    """
+    known = {ROLE_ACCOUNTING} | set(ROLE_PRESENCE)
+    unknown = sorted({
+        f["role"]
+        for cmd in proto.get("commands", [])
+        for side in ("request", "response")
+        for f in cmd.get(side, [])
+        if "role" in f and f["role"] not in known
+    })
+    if unknown:
+        print(f"ERROR: unknown field role(s): {unknown} — known roles: {sorted(known)}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -655,8 +716,8 @@ def command_fields(entries: List[dict]) -> List[Dict[str, Any]]:
     """One command's field array as a list of plain, ordered records.
 
     Keeps only what describes the wire shape (name / type / json, plus the
-    `required` and `description` the TOML happens to carry), so a consumer
-    needs no TOML parser and no knowledge of this file's other tables.
+    `required`, `description` and `role` the TOML happens to carry), so a
+    consumer needs no TOML parser and no knowledge of this file's other tables.
     """
     out_fields: List[Dict[str, Any]] = []
     for f in entries:
@@ -665,6 +726,8 @@ def command_fields(entries: List[dict]) -> List[Dict[str, Any]]:
             record["required"] = bool(f["required"])
         if "description" in f:
             record["description"] = f["description"]
+        if "role" in f:
+            record["role"] = f["role"]
         out_fields.append(record)
     return out_fields
 
@@ -720,6 +783,108 @@ def gen_fields(proto: dict, out: Optional[Path] = None,
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# Response field table generator (C++ header, X-macro)
+# ═════════════════════════════════════════════════════════════════════════════
+
+def resp_macro(domain: str, name: str) -> str:
+    """The name of the X-macro table of command <domain>.<name>."""
+    return f"THETAGP_RESP_{domain.upper()}_{name.replace('-', '_').upper()}"
+
+
+def gen_resp(proto: dict, out: Optional[Path] = None) -> str:
+    """Response payload field tables, one X-macro per command, as C++.
+
+    Each table lists the response fields of one command in the order
+    protocol.toml declares them — the order the response writes them in — and
+    each entry carries the JSON key, the printf argument type, the conversion
+    for that type and the presence of the field. A consumer expands a table
+    with a macro of its own, so the same list drives the bytes on the wire and
+    anything that has to agree with them; the firmware's copy of the order, the
+    keys and the specifiers is this file, not a format string written by hand.
+
+    What the table cannot carry is the value of a field: that is firmware state,
+    and it is what the consumer's macro supplies. It supplies it *by name* —
+    X(<json name>, ...) selects the value for that name — so the two sides meet
+    on the name and not on position, and a field added to or renamed in
+    protocol.toml is a value the consumer does not have rather than a value
+    printed under the wrong key.
+
+    A field whose type has no printf form is a field no table can carry, and its
+    response would come out short of it; commands with such a field get no table
+    and are named in the header instead.
+    """
+    commands = proto.get("commands", [])
+    lines: List[str] = []
+
+    def w(line: str = "") -> None:
+        lines.append(line)
+
+    w("// =============================================================================")
+    w("// Auto-generated by scripts/gen_proto.py — DO NOT EDIT MANUALLY")
+    w("// Source: protocol/protocol.toml")
+    w(f"// Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    w("// =============================================================================")
+    w("#pragma once")
+    w("#include <cstdint>")
+    w()
+    w("// Response payload fields of a command, in the order the response writes")
+    w("// them, one table per command. A table is expanded with a macro of the")
+    w("// consumer's own, called once per field as")
+    w("//     X(<json name>, <printf argument type>, <conversion>, <presence>)")
+    w("// where the name selects the value to write, the type is what that value")
+    w("// has to be, the conversion is the printf specifier for it, and the")
+    w("// presence is 1 or a flag that is 0 in a build without the field.")
+    w()
+
+    # Presence flags, once per role a response field carries.
+    roles = {f.get("role") for cmd in commands for f in cmd.get("response", [])}
+    for role in sorted(r for r in roles if r in ROLE_PRESENCE):
+        flag, guard = ROLE_PRESENCE[role]
+        w(f"// role = \"{role}\": the field is written only in a build where")
+        w(f"// {guard} is defined.")
+        w(f"#ifdef {guard}")
+        w(f"#define {flag} 1")
+        w("#else")
+        w(f"#define {flag} 0")
+        w("#endif")
+        w()
+
+    unformattable: List[str] = []
+    for cmd in commands:
+        resp = cmd.get("response", [])
+        if not resp:
+            continue
+        full_name = f"{cmd['domain']}.{cmd['name']}"
+        missing = [f["name"] for f in resp if f["type"] not in PRINTF_TYPE_MAP]
+        if missing:
+            unformattable.append(f"{full_name} ({', '.join(missing)})")
+            continue
+        w(f"// {full_name} — {sanitize_cpp_comment(cmd.get('description', ''))}")
+        w(f"#define {resp_macro(cmd['domain'], cmd['name'])}(X) \\")
+        for i, f in enumerate(resp):
+            ctype, spec = PRINTF_TYPE_MAP[f["type"]]
+            flag = ROLE_PRESENCE.get(f.get("role"), ("1",))[0]
+            continuation = " \\" if i + 1 < len(resp) else ""
+            w(f'    X({f["name"]}, {ctype}, "{spec}", {flag}){continuation}')
+        w()
+
+    if unformattable:
+        w("// No table, because a response field of no printf form would be missing")
+        w("// from every response written through one:")
+        for entry in unformattable:
+            w(f"//   {entry}")
+        w()
+
+    result = "\n".join(lines) + "\n"
+
+    if out:
+        out.write_text(result)
+        print(f"  [resp] wrote {out}", file=sys.stderr)
+
+    return result
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # CLI
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -736,8 +901,8 @@ Examples:
     )
     parser.add_argument("--protocol", default="protocol/protocol.toml",
                         help="Path to protocol.toml (default: protocol/protocol.toml)")
-    parser.add_argument("--target", default="cpp,rust,ts,fields",
-                        help="Comma-separated targets: cpp,rust,ts,fields (default: all)")
+    parser.add_argument("--target", default="cpp,rust,ts,fields,resp",
+                        help="Comma-separated targets: cpp,rust,ts,fields,resp (default: all)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print generated code to stdout instead of writing files")
     parser.add_argument("--outdir-cpp", default="protocol",
@@ -748,6 +913,8 @@ Examples:
                         help="Output dir for TS generated types")
     parser.add_argument("--outdir-fields", default="protocol",
                         help="Output dir for the generated JSON field manifest")
+    parser.add_argument("--outdir-resp", default="protocol",
+                        help="Output dir for the generated C++ response field tables")
 
     args = parser.parse_args()
     targets = [t.strip() for t in args.target.split(",")]
@@ -759,6 +926,7 @@ Examples:
 
     proto = load_protocol(str(proto_path))
     validate_domains(proto)
+    validate_field_roles(proto)
 
     # Print summary
     types_list = proto.get("types", [])
@@ -798,8 +966,13 @@ Examples:
             gen_fields(proto, out_file, proto_path)
             if args.dry_run:
                 print(gen_fields(proto, source_path=proto_path))
+        elif tgt == "resp":
+            out_file = None if args.dry_run else Path(args.outdir_resp) / "proto_resp.h"
+            gen_resp(proto, out_file)
+            if args.dry_run:
+                print(gen_resp(proto))
         else:
-            print(f"WARNING: Unknown target '{tgt}' (supported: cpp, rust, ts, fields)",
+            print(f"WARNING: Unknown target '{tgt}' (supported: cpp, rust, ts, fields, resp)",
                   file=sys.stderr)
 
     print("Done.", file=sys.stderr)

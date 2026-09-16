@@ -55,6 +55,12 @@
 # against it would let every field check below pass against the wrong source.
 # That is a failure of the input, not of the device, so it stops the run the
 # same way a missing manifest does — regenerating is the fix.
+#
+# A subset of a response is stated the same way. Which fields of
+# sys.get_task_info the per-task accounting checks below require is the set
+# protocol.toml marks role = "accounting": a field that joins or leaves that set
+# does so in the source, and those checks follow it without an edit to this
+# file, exactly as they already follow the full field list.
 
 import hashlib
 import json
@@ -147,12 +153,8 @@ def load_field_manifest(path=FIELDS_MANIFEST, source=PROTOCOL_SOURCE):
     return manifest
 
 
-def response_fields(manifest, cmd):
-    """The json names a command's response carries, in the declared order.
-
-    The order is the one the manifest kept from protocol.toml, which is the
-    order the firmware writes the fields in.
-    """
+def command_entry(manifest, cmd):
+    """One command's entry in the manifest, or a hard error naming the fix."""
     entry = manifest["commands"].get(cmd)
     if entry is None:
         print(f"ERROR: command '{cmd}' is not in {FIELDS_MANIFEST} — the "
@@ -160,7 +162,30 @@ def response_fields(manifest, cmd):
               file=sys.stderr)
         print("       Run: python3 scripts/gen_proto.py", file=sys.stderr)
         sys.exit(2)
-    return tuple(f["json"] for f in entry["response"])
+    return entry
+
+
+def response_fields(manifest, cmd):
+    """The json names a command's response carries, in the declared order.
+
+    The order is the one the manifest kept from protocol.toml, which is the
+    order the firmware writes the fields in.
+    """
+    return tuple(f["json"] for f in command_entry(manifest, cmd)["response"])
+
+
+def role_fields(manifest, cmd, role):
+    """The json names of a command's response fields carrying one role.
+
+    A role is what the protocol source says about a field besides its type and
+    its place in the list. `accounting` marks a per-task accounting field: one
+    a response carries in every build, which is what makes a check on it mean
+    the same thing in each of them. Reading the subset here, from the same
+    artifact as the field list itself, is what keeps the marking and the checks
+    that depend on it from drifting apart.
+    """
+    return tuple(f["json"] for f in command_entry(manifest, cmd)["response"]
+                 if f.get("role") == role)
 
 
 def field_int(resp, key):
@@ -286,11 +311,19 @@ def ram_totals_match(usage, mem):
             and field_int(usage, "ram_reserved_bytes") == reserved)
 
 
-# sys.get_task_info — per-task accounting fields. avgExecUs / avgDeltaUs are
-# the two 8-sample moving averages carried in tenths of a microsecond by the
-# scheduler; the handler reports them in whole microseconds.
-TASK_INFO_FIELDS = ("desiredUs", "avgCycleUs", "actualHz", "maxExecUs",
-                    "avgExecUs", "totalExecUs", "avgDeltaUs")
+# sys.get_task_info — the per-task accounting checks. The fields they require
+# are the ones protocol.toml marks role = "accounting"; avgExecUs / avgDeltaUs
+# are the two 8-sample moving averages the scheduler carries in tenths of a
+# microsecond, which the handler reports in whole microseconds.
+
+# The five field names task_info_ok() reads to compare them against each other.
+# That is a fact about the check and not about the protocol, so they are named
+# here; that they are part of the accounting subset is a fact about the
+# protocol, so the subset is read from the source — and main() refuses to run if
+# the two no longer agree, rather than let a comparison keyed on a field the
+# subset dropped turn into a KeyError (or, worse, be skipped).
+TASK_INFO_INVARIANTS = ("avgCycleUs", "actualHz", "maxExecUs", "avgExecUs",
+                        "totalExecUs")
 
 # Existing TIDs: 0 SYSTEM/LOAD, 1 SYSTEM/UPDATE, 2 GAMEPAD/CORE,
 # 3 TEST/CMD_PROC. TIDs beyond the build's task set answer with
@@ -298,9 +331,14 @@ TASK_INFO_FIELDS = ("desiredUs", "avgCycleUs", "actualHz", "maxExecUs",
 TASK_IDS = (0, 1, 2, 3)
 
 
-def task_info_ok(info):
-    """Per-task invariants for one sys.get_task_info response."""
-    if not has_fields(info, TASK_INFO_FIELDS):
+def task_info_ok(info, fields):
+    """Per-task invariants for one sys.get_task_info response.
+
+    `fields` is the accounting subset the protocol declares: every one of them
+    has to be present and integral, and the TASK_INFO_INVARIANTS among them have
+    to agree with each other.
+    """
+    if not has_fields(info, fields):
         return False
     if info["avgExecUs"] > info["maxExecUs"]:
         return False
@@ -332,7 +370,23 @@ def main():
     # The expected sys.get_usage fields, from the generated manifest rather
     # than a tuple copied into this file. Read before the port is opened: a
     # missing manifest is an error, not a run with nothing to compare against.
-    usage_fields = response_fields(load_field_manifest(), "sys.get_usage")
+    manifest = load_field_manifest()
+    usage_fields = response_fields(manifest, "sys.get_usage")
+
+    # The per-task accounting fields the response has to carry, marked in the
+    # protocol source. The invariants above are stated in five of them, so a
+    # marking that no longer covers those five would leave them compared
+    # against a response that may not carry them at all: that is a change of
+    # the input, so it stops the run instead of scoring it.
+    task_fields = role_fields(manifest, "sys.get_task_info", "accounting")
+    unmarked = [f for f in TASK_INFO_INVARIANTS if f not in task_fields]
+    if unmarked:
+        print(f"ERROR: protocol.toml no longer marks {unmarked} as "
+              f"role=\"accounting\" on sys.get_task_info.", file=sys.stderr)
+        print("       The per-task invariants are stated in those fields; "
+              "without the marking they would be read from a subset that no "
+              "longer has to contain them.", file=sys.stderr)
+        sys.exit(2)
 
     fd = open_serial()
     time.sleep(1)
@@ -521,7 +575,7 @@ def main():
         info = ctx.send("sys.get_task_info", tid=tid)
         if info is not None and info.get("status") == "ok":
             tasks.append(info)
-        ok(f"task_info tid {tid}", task_info_ok(info))
+        ok(f"task_info tid {tid}", task_info_ok(info, task_fields))
 
     ok("task_info task count", len(tasks) >= 4,
        detail=f"{len(tasks)} of {len(TASK_IDS)} TIDs answered")

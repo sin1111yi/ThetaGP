@@ -76,6 +76,12 @@ fields = [
 - `default` — default value for request params
 - `omit_in_serialize` — if true, skip this field in JSON/C++ serialization
 - `ref_type` — for array fields, references the inner type name
+- `role` — a property of the field besides its type and its place, which the
+  consumers of this file act on:
+  - `accounting` — part of the per-task accounting subset the CDC test suite
+    requires in every build
+  - `task_counters` — written to a response only in a build that compiles the
+    task counters in (`USE_TASK_COUNTERS`)
 
 ### [[commands]] — command definitions
 
@@ -118,6 +124,8 @@ outputs:
 | `protocol/proto.h` | C++ | Device firmware (ArduinoJson) |
 | `protocol/proto.rs` | Rust | Tauri backend (serde) |
 | `protocol/types.ts` | TypeScript | Frontend (Vue/Svelte) |
+| `protocol/proto_fields.json` | JSON | Consumers that read the protocol shape: the CDC test suite |
+| `protocol/proto_resp.h` | C++ | Device firmware: the response field order, keys and printf conversions |
 
 ### Usage
 
@@ -129,6 +137,8 @@ python3 scripts/gen_proto.py
 python3 scripts/gen_proto.py --target cpp
 python3 scripts/gen_proto.py --target rust
 python3 scripts/gen_proto.py --target ts
+python3 scripts/gen_proto.py --target fields
+python3 scripts/gen_proto.py --target resp
 
 # Dry-run (print to stdout)
 python3 scripts/gen_proto.py --dry-run
