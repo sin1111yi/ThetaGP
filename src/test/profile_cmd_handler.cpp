@@ -405,13 +405,13 @@ static void handleProfileStatus(const char *cmd, const Json &json) {
   resp.printf("{cmd:%Q,queued:%d,status:%Q,active_profile_id:%d,"
               "profile_count:%d,next_addr:%lu,boot_meta_seq:%d,"
               "address_ring_seq:%d,total_sectors:%d,used_sectors:%d,"
-              "free_sectors:%d}",
+              "free_sectors:%d,reserved_sectors:%d}",
               cmd, q + 1, "ok",
               status.activeId, status.profileCount,
               (unsigned long)status.nextAddr,
               status.bootMetaSeq, status.addressRingSeq,
               status.totalSectors, status.usedSectors,
-              status.freeSectors);
+              status.freeSectors, status.reservedSectors);
   uint16_t len = resp.end();
   FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
