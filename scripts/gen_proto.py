@@ -116,6 +116,20 @@ def load_protocol(path: str) -> dict:
         return tomllib.load(f)
 
 
+# Domains carrying no [[commands]] entry (registered by the firmware dispatcher).
+NON_COMMAND_DOMAINS = {"test", "profile"}
+
+
+def validate_domains(proto: dict) -> None:
+    """Abort unless [domains] covers every [[commands]].domain and describes no unknown domain."""
+    declared, used = set(proto.get("domains", {})), {c.get("domain") for c in proto.get("commands", [])}
+    miss, unk = sorted(used - declared), sorted(declared - used - NON_COMMAND_DOMAINS)
+    absent = sorted(NON_COMMAND_DOMAINS - declared)
+    if miss or unk or absent:
+        print(f"ERROR: [domains] mismatch — used-by-commands-but-undeclared: {miss or 'none'}; declared-but-unknown: {unk or 'none'}; registered-non-command-but-undeclared: {absent or 'none'}", file=sys.stderr)
+        sys.exit(1)
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # C++ Generator
 # ═════════════════════════════════════════════════════════════════════════════
@@ -654,6 +668,7 @@ Examples:
         sys.exit(1)
 
     proto = load_protocol(str(proto_path))
+    validate_domains(proto)
 
     # Print summary
     types_list = proto.get("types", [])
