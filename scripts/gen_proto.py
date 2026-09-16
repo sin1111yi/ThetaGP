@@ -23,6 +23,7 @@ Requires: Python 3.11+ (uses stdlib tomllib)
 """
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -119,6 +120,16 @@ def rust_ident(name: str) -> str:
 def load_protocol(path: str) -> dict:
     with open(path, "rb") as f:
         return tomllib.load(f)
+
+
+def file_sha256(path: Path) -> str:
+    """SHA-256 of a file's bytes — the digest a generated artifact records.
+
+    Used to fingerprint the TOML a generated artifact was derived from, so a
+    consumer can tell an artifact that matches its source from one left behind
+    by a later edit to that source.
+    """
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 # Domains carrying no [[commands]] entry (registered by the firmware dispatcher).
@@ -658,7 +669,8 @@ def command_fields(entries: List[dict]) -> List[Dict[str, Any]]:
     return out_fields
 
 
-def gen_fields(proto: dict, out: Optional[Path] = None) -> str:
+def gen_fields(proto: dict, out: Optional[Path] = None,
+               source_path: Optional[Path] = None) -> str:
     """Ordered request/response field lists for every command, as JSON.
 
     Same shape as the code generators, but language neutral: this is the
@@ -666,12 +678,23 @@ def gen_fields(proto: dict, out: Optional[Path] = None) -> str:
     shapes out of protocol.toml. Order is the declaration order of the TOML
     arrays — the order the firmware writes the fields in and the order the
     consumers read them in — never a sorted or re-grouped one.
+
+    ``source_sha256`` fingerprints the TOML this manifest was derived from, so
+    a consumer holding a manifest is not left believing it describes the
+    protocol.toml on disk: the manifest is a generated artifact, and a stale
+    one would let a consumer check the protocol against the shape it no longer
+    has and pass. The fingerprint covers the TOML only — not this generator —
+    so a manifest whose source is unchanged stays valid across edits here, and
+    one whose source moved on must be regenerated.
     """
     commands = proto.get("commands", [])
+    source = Path(source_path) if source_path is not None else None
 
     manifest = {
         "generated_by": "scripts/gen_proto.py — DO NOT EDIT MANUALLY",
-        "source": "protocol/protocol.toml",
+        # What it was read from, and the digest of exactly those bytes.
+        "source": str(source) if source is not None else "protocol/protocol.toml",
+        "source_sha256": file_sha256(source) if source is not None else "",
         "protocol_version": proto.get("meta", {}).get("version", ""),
         # Keyed "<domain>.<name>", the same full command name the wire uses.
         # Insertion order = the TOML's [[commands]] order.
@@ -772,9 +795,9 @@ Examples:
                 print(gen_ts(proto))
         elif tgt == "fields":
             out_file = None if args.dry_run else Path(args.outdir_fields) / "proto_fields.json"
-            gen_fields(proto, out_file)
+            gen_fields(proto, out_file, proto_path)
             if args.dry_run:
-                print(gen_fields(proto))
+                print(gen_fields(proto, source_path=proto_path))
         else:
             print(f"WARNING: Unknown target '{tgt}' (supported: cpp, rust, ts, fields)",
                   file=sys.stderr)

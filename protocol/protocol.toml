@@ -156,12 +156,14 @@ response = [
   { name = "name",      type = "string", json = "name" },
   { name = "sub",       type = "string", json = "sub" },
   { name = "desiredUs",   type = "u32",   json = "desiredUs" },
-  { name = "avgCycleUs",  type = "f32",   json = "avgCycleUs" },
-  { name = "actualHz",    type = "f32",   json = "actualHz" },
+  { name = "avgCycleUs",  type = "u32",   json = "avgCycleUs" },
+  { name = "actualHz",    type = "u32",   json = "actualHz" },
   { name = "maxExecUs",   type = "u32",   json = "maxExecUs" },
   { name = "avgExecUs",   type = "u32",   json = "avgExecUs", description = "Moving-average execution time, microseconds" },
   { name = "totalExecUs", type = "u32",   json = "totalExecUs", description = "Accumulated execution time since boot, microseconds" },
   { name = "avgDeltaUs",  type = "u32",   json = "avgDeltaUs", description = "Moving-average interval between executions, microseconds" },
+  { name = "runCount",    type = "u32",   json = "runCount", description = "Times the task function has run, reported only in a build with the test API (testsys.cpp:128)" },
+  { name = "lateCount",   type = "u32",   json = "lateCount", description = "Times the task missed its deadline, reported only in a build with the test API (testsys.cpp:128)" },
 ]
 error_codes = [
   { name = "ERR_INVALID_PARAM", code = 2, description = "Invalid TID" },

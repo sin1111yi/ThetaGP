@@ -48,7 +48,15 @@
 # never run the generator has none — load_field_manifest() then stops the run
 # with the command that produces it, before the port is opened, rather than
 # letting every field check compare against an empty list.
+#
+# The manifest carries the sha256 of the protocol.toml it was derived from, and
+# load_field_manifest() recomputes it: a manifest left behind by an edit to
+# protocol.toml describes a shape the protocol no longer has, and comparing
+# against it would let every field check below pass against the wrong source.
+# That is a failure of the input, not of the device, so it stops the run the
+# same way a missing manifest does — regenerating is the fix.
 
+import hashlib
 import json
 import os
 import sys
@@ -85,14 +93,32 @@ REGION_SIZES = {
 PROTOCOL_DIR = Path(__file__).resolve().parents[2] / "protocol"
 FIELDS_MANIFEST = PROTOCOL_DIR / "proto_fields.json"
 
+# The protocol source the manifest is derived from. The manifest records this
+# file's sha256 when it is written, so a manifest that is there but older than
+# the source is detectable rather than silently authoritative.
+PROTOCOL_SOURCE = PROTOCOL_DIR / "protocol.toml"
 
-def load_field_manifest(path=FIELDS_MANIFEST):
+
+def source_sha256(path):
+    """SHA-256 of a file's bytes — what the manifest records of its source."""
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def load_field_manifest(path=FIELDS_MANIFEST, source=PROTOCOL_SOURCE):
     """The generated field manifest, or a hard error naming how to produce it.
 
     A missing manifest aborts the run with exit 2. It is deliberately not a
     skipped check: the checks below read their expected fields from here, so a
     run without it would silently compare against nothing — a result that looks
     like the suite did its work when the input it works from was never there.
+
+    A manifest that is present but stale aborts the same way, with exit 2: the
+    digest it recorded of its source no longer matches the source on disk, so
+    its field lists describe a protocol.toml that has been edited since. Those
+    lists are the expected values of every field check below, and a run against
+    them would pass while checking a protocol the firmware no longer speaks —
+    the failure would surface later, on the wire, as a mismatch blamed on the
+    device. Regenerating is the fix; nothing else clears the gate.
     """
     if not path.is_file():
         print(f"ERROR: protocol field manifest not found: {path}", file=sys.stderr)
@@ -101,7 +127,24 @@ def load_field_manifest(path=FIELDS_MANIFEST):
         print("       Run: python3 scripts/gen_proto.py", file=sys.stderr)
         sys.exit(2)
     with open(path, "r", encoding="utf-8") as fh:
-        return json.load(fh)
+        manifest = json.load(fh)
+    recorded = manifest.get("source_sha256")
+    actual = source_sha256(source)
+    if recorded != actual:
+        print(f"ERROR: protocol field manifest is stale: {path}", file=sys.stderr)
+        if recorded is None:
+            print("       It carries no source_sha256 — it was generated before "
+                  "the manifest recorded one.", file=sys.stderr)
+        else:
+            print(f"       It records source {manifest.get('source')} at "
+                  f"sha256 {recorded}.", file=sys.stderr)
+        print(f"       {source} is at sha256 {actual}.", file=sys.stderr)
+        print("       The manifest is older than the protocol it was derived "
+              "from, so the expected fields below it are out of date.",
+              file=sys.stderr)
+        print("       Run: python3 scripts/gen_proto.py", file=sys.stderr)
+        sys.exit(2)
+    return manifest
 
 
 def response_fields(manifest, cmd):
