@@ -405,6 +405,27 @@ def make_profile_json(tag, distinguish_field="bri"):
     }, separators=(",", ":"))
 
 
+def profile_sectors_close(resp):
+    """used + free + reserved == total for the external flash sectors.
+
+    The reserved sectors ahead of the User Ring are counted in neither used
+    nor free, so the sectors of the chip close only with that third term.
+    A missing or non-integer field yields False: firmware that does not
+    report reserved_sectors must fail this, not pass it.
+    """
+    def field_int(key):
+        value = (resp or {}).get(key)
+        return value if isinstance(value, int) else None
+
+    total = field_int("total_sectors")
+    used = field_int("used_sectors")
+    free = field_int("free_sectors")
+    reserved = field_int("reserved_sectors")
+    if total is None or used is None or free is None or reserved is None:
+        return False
+    return used + free + reserved == total
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Test execution
 # ═══════════════════════════════════════════════════════════════════════
@@ -462,6 +483,13 @@ def main():
               f"the profile domain is not present in this firmware")
         os.close(fd)
         return False
+    if not profile_sectors_close(r):
+        print("  ABORT: profile.status does not close used + free + reserved "
+              f"== total ({r.get('used_sectors')} + {r.get('free_sectors')} + "
+              f"{r.get('reserved_sectors')} != {r.get('total_sectors')}) — "
+              "the response carries no reserved_sectors field?")
+        os.close(fd)
+        return False
     print(f"  flash: {r.get('total_sectors')} sectors, "
           f"count={r.get('profile_count')}, active={r.get('active_profile_id')}")
 
@@ -503,6 +531,8 @@ def main():
     
         r = send(fd, "profile.status")
         check("profile.status initial", r and r.get("status") == "ok")
+        check("profile.status sectors close (used + free + reserved == total)",
+              profile_sectors_close(r))
     
         # Profile0 may already exist (written by auto-init on fresh flash).
         # If it exists, skip the raw upload; if not, upload the factory profile.
