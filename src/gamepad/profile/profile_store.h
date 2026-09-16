@@ -70,6 +70,11 @@ static_assert(PROFILE_ID_ACTIVE > PROFILE_MAX_ID,
 static_assert(PROFILE_STAGING_SIZE <= 0xFFFF,
               "PROFILE_STAGING_SIZE must fit as a uint16_t body length");
 
+// Erase sector size of the external SPI flash. The profile layout and the
+// sector accounting in getStatus() both count in these units.
+static constexpr uint32_t PROFILE_SECTOR_SIZE =
+    0x1000; /**< Erase sector size of the external SPI flash (4 KB) */
+
 static constexpr uint32_t BOOTMETA_BASE = 0x000000; /**< BootMeta Ring base */
 static constexpr uint32_t BOOTMETA_SIZE =
     0x000800; /**< BootMeta Ring size (2048 bytes) */
@@ -83,6 +88,16 @@ static constexpr uint32_t PROFILE0_BACKUP =
     0x002000; /**< Sector 2: Profile 0 backup */
 static constexpr uint32_t USER_RING_BASE =
     0x003000; /**< User Ring start address */
+
+// Sectors held back ahead of the User Ring: sector 0 carries the BootMeta Ring
+// (2 KB) and the Address Ring (2 KB), sector 1 holds Profile 0's primary copy
+// and sector 2 its backup. The count is derived from the ring base, so a layout
+// move carries the count with it; this constant is the only source for it.
+static constexpr uint32_t RESERVED_SECTORS =
+    USER_RING_BASE / PROFILE_SECTOR_SIZE;
+static_assert(USER_RING_BASE % PROFILE_SECTOR_SIZE == 0,
+              "the User Ring must start on a sector boundary, or the reserved "
+              "sector count would round down");
 
 static constexpr uint16_t BOOTMETA_MAGIC = 0x5442; /**< "TB" magic */
 
@@ -126,14 +141,18 @@ struct ProfileText {
 
 /** Runtime status of the profile system. */
 struct ProfileStatus {
-  uint16_t activeId = 0;       // currently active profile ID
-  uint8_t profileCount = 0;    // number of valid profiles (excluding empty)
-  uint32_t totalSectors = 0;   // total flash sectors
-  uint32_t usedSectors = 0;    // sectors occupied by profile data
-  uint32_t freeSectors = 0;    // sectors still available
-  uint32_t nextAddr = 0;       // User Ring next write pointer
-  uint16_t bootMetaSeq = 0;    // current BootMeta sequence number
-  uint16_t addressRingSeq = 0; // current Address Ring sequence number
+  uint16_t activeId = 0;        // currently active profile ID
+  uint8_t profileCount = 0;     // number of valid profiles (excluding empty)
+  uint32_t totalSectors = 0;    // total flash sectors
+  uint32_t usedSectors = 0;     // sectors occupied by profile data
+  uint32_t freeSectors = 0;     // sectors still available in the User Ring
+  uint32_t reservedSectors = 0; // sectors held by the reserved region ahead of
+                                // the User Ring (BootMeta Ring + Address Ring,
+                                // Profile 0 and its backup). used + free +
+                                // reserved == total holds by construction.
+  uint32_t nextAddr = 0;        // User Ring next write pointer
+  uint16_t bootMetaSeq = 0;     // current BootMeta sequence number
+  uint16_t addressRingSeq = 0;  // current Address Ring sequence number
 };
 
 // ── ProfileStore class ──

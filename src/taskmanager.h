@@ -75,6 +75,8 @@ public:
   static bool isValidTID(TID tid);
   static const TaskInfo *getTaskInfo(TID tid);
   static size_t getTaskCount() { return taskCount; }
+  // Percent of the window covered by taskSystemLoad(): the load of the last
+  // SYSTEM/LOAD period, not a long-term mean.
   static uint16_t getAverageSystemLoadPercent() {
     return averageSystemLoadPercent;
   }

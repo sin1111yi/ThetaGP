@@ -186,6 +186,7 @@ response = [
   { name = "ext_flash_total_sectors", type = "u32", json = "ext_flash_total_sectors" },
   { name = "ext_flash_used_sectors", type = "u32", json = "ext_flash_used_sectors" },
   { name = "ext_flash_free_sectors", type = "u32", json = "ext_flash_free_sectors" },
+  { name = "ext_flash_reserved_sectors", type = "u32", json = "ext_flash_reserved_sectors" },
   { name = "profile_count",          type = "u32", json = "profile_count" },
 ]
 error_codes = []

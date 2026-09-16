@@ -146,6 +146,13 @@ const TaskInfo *TaskManager::getTaskInfo(TID tid) {
   return &info;
 }
 
+// System load as measured over the most recent window only, not as an average
+// over uptime: this task runs at TASK_PERIOD_HZ(10) (100 ms) and the scheduler
+// accumulator below is zeroed by the read, so the value covers the execution
+// time of the tasks that ran since the previous call. One reading therefore
+// swings with whatever that window happened to contain. Per-task execution time
+// and rate come from the accumulating counters of getTaskInfo(), differenced
+// over a chosen interval.
 FAST_CODE void TaskManager::taskSystemLoad(uint32_t currentTimeUs) {
   FAST_DATA_ZERO_INIT static uint32_t lastExecutedAtUs = 0;
   uint32_t deltaTime = currentTimeUs - lastExecutedAtUs;

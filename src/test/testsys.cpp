@@ -185,7 +185,7 @@ static void handleSysGetUsage([[maybe_unused]] const char *cmd,
         "ram_dtcm_used_bytes:%lu,ram_axi_used_bytes:%lu,"
         "ram_d2_used_bytes:%lu,ram_d3_used_bytes:%lu,ram_itcm_used_bytes:%lu,"
         "ext_flash_total_sectors:%lu,ext_flash_used_sectors:%lu,"
-        "ext_flash_free_sectors:%lu,"
+        "ext_flash_free_sectors:%lu,ext_flash_reserved_sectors:%lu,"
         "profile_count:%u}",
         "ok", "sys.get_usage", queued + 1,
         (unsigned)Gamepad::TaskManager::getAverageSystemLoadPercent(),
@@ -203,6 +203,7 @@ static void handleSysGetUsage([[maybe_unused]] const char *cmd,
         (unsigned long)pstat.totalSectors,
         (unsigned long)pstat.usedSectors,
         (unsigned long)pstat.freeSectors,
+        (unsigned long)pstat.reservedSectors,
         (unsigned)pstat.profileCount);
     uint16_t len = resp.end();
     FrameLayer::getInstance().sendResponse(resp.c_str(), len);

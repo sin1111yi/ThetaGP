@@ -811,9 +811,11 @@ ProfileStatus ProfileStore::getStatus() const {
   auto &flash = Drivers::Device::FlashW25qxx::getInstance();
   const auto &info = flash.getInfo();
 
-  status.totalSectors = info.sizeBytes / 4096;
-  status.usedSectors = (_nextAddr - USER_RING_BASE) / 4096;
-  status.freeSectors = status.totalSectors - 3 - status.usedSectors;
+  status.totalSectors = info.sizeBytes / PROFILE_SECTOR_SIZE;
+  status.usedSectors = (_nextAddr - USER_RING_BASE) / PROFILE_SECTOR_SIZE;
+  status.reservedSectors = RESERVED_SECTORS;
+  status.freeSectors =
+      status.totalSectors - status.reservedSectors - status.usedSectors;
 
   return status;
 }
