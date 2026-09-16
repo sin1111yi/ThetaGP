@@ -111,7 +111,7 @@ void Keypad::scanCallback() {
 
     _pressedMask = debouncedMask;
 
-    RunLed::getInstance().update(micros());
+    RunLed::getInstance().update(SystemTimer::getInstance().getMicros());
   }
 
   // Raw cycles, kept unconverted so the counters hold the measurement at full
