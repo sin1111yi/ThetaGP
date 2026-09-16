@@ -20,6 +20,7 @@
  */
 
 #include "BoardConfig.h"
+#include "conf/ThetaGP_Config.h" // THETAGP_CFG_KEY_TOGGLE_EN, the keypad toggle switch
 
 #include "drivers/device/keypad.h"
 

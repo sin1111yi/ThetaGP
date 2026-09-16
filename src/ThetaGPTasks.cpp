@@ -24,6 +24,7 @@
 #include "build_info.h"
 
 #include "BoardConfig.h"
+#include "conf/ThetaGP_Config.h" // THETAGP_CFG_USB_REPORT_RATE_HZ, the gamepad task rate this file registers
 
 #include "gamepad/gamepad.h"
 #include "taskmanager.h"

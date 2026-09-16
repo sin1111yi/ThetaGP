@@ -51,13 +51,26 @@ struct KeypadConfig {
   static constexpr uint8_t DEBOUNCE_THRESHOLD = 12;
   static constexpr uint32_t GPIO_STABILIZE_DELAY_CYCLES = 50;
 
-  // A key is re-read once every DRIVE_LINES interrupts. Holding that refresh
-  // rate to at least twice the report rate keeps a change from being missed
-  // and leaves margin for it to settle before a report has to carry it.
-  static constexpr uint32_t DRIVE_LINES = BDCFG_KEYPAD_DRIVE_PIN_NUM;
-  static_assert(THETAGP_CFG_KEYPAD_SCAN_HZ / DRIVE_LINES >=
-                    2u * THETAGP_CFG_USB_REPORT_RATE_HZ,
-                "every key must be re-read at least twice per report");
+  // One scan callback walks every drive line (scanCallback -> the
+  // readInputScanMatrix loop over DRIVE_PIN_NUM), so a key is sampled once per
+  // scan and its sampling rate is THETAGP_CFG_KEYPAD_SCAN_HZ itself. The
+  // majority vote re-derives a key's stable state from a window of
+  // DEBOUNCE_SAMPLES of those samples — 16 samples, 12 of them for a press —
+  // so the stable-state refresh rate is that scan rate divided by the window,
+  // not the scan rate. THETAGP_CFG_KEYPAD_SCAN_HZ is the adjustable value
+  // (src/conf/ThetaGP_Config.h); the report rate is declared by the board
+  // ([usb] wired_report_hz in its BoardConfig.toml); the drive-line count
+  // follows the board's key matrix.
+  static_assert(
+      THETAGP_CFG_KEYPAD_SCAN_HZ >= THETAGP_CFG_USB_REPORT_RATE_HZ,
+      "keypad: a key is sampled once per scan callback and a scan callback "
+      "walks every drive line, so the sampling rate is "
+      "THETAGP_CFG_KEYPAD_SCAN_HZ. The scan rate has to reach the report "
+      "rate the board declares, and this build misses it. Raise "
+      "THETAGP_CFG_KEYPAD_SCAN_HZ in src/conf/ThetaGP_Config.h or lower the "
+      "board's [usb] wired_report_hz; the drive-line count follows the "
+      "board's key matrix and is not the knob to turn. The limit is a lower "
+      "bound, so a scan rate equal to the report rate passes.");
 
   enum class Mode : uint8_t {
     ScanMatrix,

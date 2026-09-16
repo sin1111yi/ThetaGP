@@ -20,6 +20,7 @@
  */
 
 #include "BoardConfig.h"
+#include "conf/ThetaGP_Config.h" // THETAGP_CFG_HAS_FLASH, the flash switch this file branches on
 
 #include "drivers/device/logger.h"
 #include "drivers/peripherals/peripheralsmgr.h"

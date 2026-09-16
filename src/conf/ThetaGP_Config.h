@@ -173,8 +173,9 @@
 #endif
 
 // ── Keypad scan path ──
-// Matrix scan rate. Drive lines are walked one per interrupt, so a single key
-// is re-read at this rate divided by the number of drive lines.
+// Matrix scan rate. One scan callback walks every drive line, so a single key
+// is sampled at this rate; the majority vote re-derives its stable state from
+// every DEBOUNCE_SAMPLES of those samples.
 #ifndef THETAGP_CFG_KEYPAD_SCAN_HZ
 #define THETAGP_CFG_KEYPAD_SCAN_HZ 32000
 #endif

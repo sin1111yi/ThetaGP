@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include "conf/ThetaGP_Config.h" // THETAGP_CFG_BUILD_TEST_API, the test-API switch this header gates its declarations on
 #include "utils/json/json.h"
 
 namespace ThetaGP::Test {

@@ -31,6 +31,26 @@ SPI_PERIPHERAL_ENUM_MAP = {f"SPI{i}": f"SpiInstance::Spi{i}" for i in range(1, 7
 FLASH_CHIP_MAP = {"w25qxx": "W25QXX"}
 
 
+def lookup_peripheral(enum_map: dict[str, str], bus: str, index: int,
+                      entry: dict) -> str:
+    """Map a declared peripheral onto the firmware instance it names.
+
+    The maps above carry one entry per instance the platform layer defines
+    (`UartInstance` in bus_uart.h, `SpiInstance` in bus_spi.h), so a value
+    outside a map has no hardware behind it: there is nothing to substitute,
+    and a made-up instance would put a descriptor for undeclared hardware into
+    the generated table.
+    """
+    value = entry["peripheral"]
+    enum_val = enum_map.get(value)
+    if enum_val is None:
+        raise ValueError(
+            f"bus.{bus}[{index}].peripheral is '{value}', which names no "
+            f"firmware instance. Valid values: {', '.join(sorted(enum_map))}"
+        )
+    return enum_val
+
+
 # ── Pin lines (LED, misc) ────────────────────────────────────────────────────
 
 def gen_pin_lines(cfg: dict) -> list[str]:
@@ -188,32 +208,37 @@ def gen_uart_lines(bus: dict | None) -> list[str]:
     for i in range(len(uart_list)):
         lines.append(f"#define {'BDCFG_USE_UART_' + str(i + 1):<28}")
 
-    bind_count = sum(1 for u in uart_list if u.get("bind"))
-    if bind_count == 0:
+    # Only an entry that declares both a binding and a peripheral becomes a bus
+    # instance, and the descriptor table below carries exactly those, in this
+    # order: the instance number — and with it BUS_UART_<n> — is a position in
+    # this list, not a position in the TOML array. Each instance carries its
+    # TOML index for the diagnostics below.
+    instances = [
+        (i, u)
+        for i, u in enumerate(uart_list)
+        if u.get("bind") and u.get("peripheral")
+    ]
+    if not instances:
         return lines
 
     lines.append("")
-    lines.append(f"#define BDCFG_USE_UART_COUNT {bind_count}")
+    lines.append(f"#define BDCFG_USE_UART_COUNT {len(instances)}")
     lines.append("")
 
-    for i, u in enumerate(uart_list):
-        if u.get("bind") and u.get("peripheral"):
-            lines.append(
-                f"#define {'BDCFG_' + u['bind'].upper() + '_UART':<28} BUS_UART_{i + 1}"
-            )
+    for j, (_, u) in enumerate(instances):
+        lines.append(
+            f"#define {'BDCFG_' + u['bind'].upper() + '_UART':<28} BUS_UART_{j + 1}"
+        )
 
     desc_entries: list[str] = []
-    for i, u in enumerate(uart_list):
-        if u.get("bind") and u.get("peripheral"):
-            enum_val = UART_PERIPHERAL_ENUM_MAP.get(
-                u["peripheral"], f"UartInstance::Uart{i + 1}"
-            )
-            tx_str = generate_pin_struct(u["tx"])
-            rx_str = generate_pin_struct(u.get("rx", u["tx"]))
-            baud = u.get("baud", 115200)
-            desc_entries.append(
-                f"    {{{enum_val}, {tx_str}, {rx_str}, {baud}}}"
-            )
+    for i, u in instances:
+        enum_val = lookup_peripheral(UART_PERIPHERAL_ENUM_MAP, "uart", i, u)
+        tx_str = generate_pin_struct(u["tx"])
+        rx_str = generate_pin_struct(u.get("rx", u["tx"]))
+        baud = u.get("baud", 115200)
+        desc_entries.append(
+            f"    {{{enum_val}, {tx_str}, {rx_str}, {baud}}}"
+        )
 
     if desc_entries:
         lines.append("")
@@ -242,39 +267,44 @@ def gen_spi_lines(bus: dict | None) -> list[str]:
     for i in range(len(flash_list)):
         lines.append(f"#define {'BDCFG_USE_SPI_' + str(i + 1):<28}")
 
-    bind_count = sum(1 for f in flash_list if f.get("bind"))
-    if bind_count == 0:
+    # Only an entry that declares both a binding and a peripheral becomes a bus
+    # instance, and the descriptor table below carries exactly those, in this
+    # order: the instance number — and with it BUS_SPI_<n> — is a position in
+    # this list, not a position in the TOML array. Each instance carries its
+    # TOML index for the diagnostics below.
+    instances = [
+        (i, f)
+        for i, f in enumerate(flash_list)
+        if f.get("bind") and f.get("peripheral")
+    ]
+    if not instances:
         return lines
 
     lines.append("")
-    lines.append(f"#define BDCFG_USE_SPI_COUNT {bind_count}")
+    lines.append(f"#define BDCFG_USE_SPI_COUNT {len(instances)}")
     lines.append("")
 
-    for i, f in enumerate(flash_list):
-        if f.get("bind") and f.get("peripheral"):
-            lines.append(
-                f"#define {'BDCFG_' + f['bind'].upper() + '_SPI':<28} BUS_SPI_{i + 1}"
-            )
+    for j, (_, f) in enumerate(instances):
+        lines.append(
+            f"#define {'BDCFG_' + f['bind'].upper() + '_SPI':<28} BUS_SPI_{j + 1}"
+        )
 
     desc_entries: list[str] = []
-    for i, f in enumerate(flash_list):
-        if f.get("bind") and f.get("peripheral"):
-            enum_val = SPI_PERIPHERAL_ENUM_MAP.get(
-                f["peripheral"], f"SpiInstance::Spi{i + 1}"
-            )
-            for pin_name in ("sclk", "mosi", "miso", "ncs"):
-                if pin_name not in f:
-                    raise ValueError(
-                        f"bus.spi[{i}].{pin_name} is required"
-                    )
-            sclk_str = generate_pin_struct(f["sclk"])
-            mosi_str = generate_pin_struct(f["mosi"])
-            miso_str = generate_pin_struct(f["miso"])
-            ncs_str = generate_pin_struct(f["ncs"])
-            bus_pins = f"{{{sclk_str}, {mosi_str}, {miso_str}}}"
-            desc_entries.append(
-                f"    {{{enum_val}, {bus_pins}, {ncs_str}}}"
-            )
+    for i, f in instances:
+        enum_val = lookup_peripheral(SPI_PERIPHERAL_ENUM_MAP, "spi", i, f)
+        for pin_name in ("sclk", "mosi", "miso", "ncs"):
+            if pin_name not in f:
+                raise ValueError(
+                    f"bus.spi[{i}].{pin_name} is required"
+                )
+        sclk_str = generate_pin_struct(f["sclk"])
+        mosi_str = generate_pin_struct(f["mosi"])
+        miso_str = generate_pin_struct(f["miso"])
+        ncs_str = generate_pin_struct(f["ncs"])
+        bus_pins = f"{{{sclk_str}, {mosi_str}, {miso_str}}}"
+        desc_entries.append(
+            f"    {{{enum_val}, {bus_pins}, {ncs_str}}}"
+        )
 
     if desc_entries:
         lines.append("")

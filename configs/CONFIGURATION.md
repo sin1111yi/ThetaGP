@@ -148,7 +148,7 @@ E1, E2, E3, E4, E5, E6, E7, E8
 | Field | Type | Description |
 |-------|------|-------------|
 | `bind` | string | Logical name (e.g. `logger`). Required for BDCFG_USE_UART_COUNT. |
-| `peripheral` | string | `UART1`–`UART8` or `LPUART1` |
+| `peripheral` | string | `UART1`–`UART8` — the instances the firmware defines (`UartInstance`). The MCU's `LPUART1` is not one of them. |
 | `tx` | string | TX pin (`PA0` format) |
 | `rx` | string | RX pin (`PA0` format), optional |
 | `baud` | int | Baud rate (default: 115200) |

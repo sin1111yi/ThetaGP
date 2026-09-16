@@ -20,6 +20,7 @@
  */
 
 #include "gamepad/config/configmgr.h"
+#include "conf/ThetaGP_Config.h" // THETAGP_CFG_HAS_FLASH, the flash switch this file branches on
 #include "gamepad/config/config_defaults.h"
 #include "gamepad/config/config_store.h"
 #include "gamepad/profile/profile_store.h"

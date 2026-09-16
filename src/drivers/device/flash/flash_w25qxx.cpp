@@ -20,6 +20,7 @@
  */
 
 #include "drivers/device/flash/flash_w25qxx.h"
+#include "conf/ThetaGP_Config.h" // THETAGP_CFG_HAS_FLASH, the flash switch this file branches on
 
 #include "drivers/peripherals/systick.h"
 #include "utils/log/log.h"

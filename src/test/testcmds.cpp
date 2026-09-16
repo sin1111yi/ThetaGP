@@ -20,6 +20,7 @@
  */
 
 #include "test/testcmds.h"
+#include "conf/ThetaGP_Config.h" // THETAGP_CFG_HAS_FLASH and THETAGP_CFG_BUILD_TEST_API, the firmware-layer switches this file reads
 #include "test/dispatcher.h"
 #include "test/framelayer.h"
 

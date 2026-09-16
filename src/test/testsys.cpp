@@ -20,6 +20,7 @@
  */
 
 #include "test/testsys.h"
+#include "conf/ThetaGP_Config.h" // THETAGP_CFG_HAS_FLASH, the flash switch this file branches on
 #include "test/dispatcher.h"
 #include "test/framelayer.h"
 

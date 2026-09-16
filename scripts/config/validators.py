@@ -4,6 +4,7 @@ BoardConfig.toml validators.
 All public entry point: validate_config(cfg) → list[str] of errors (empty = ok).
 """
 
+from .generators import SPI_PERIPHERAL_ENUM_MAP, UART_PERIPHERAL_ENUM_MAP
 from .pin_utils import validate_pin_format
 
 # ── Valid value sets ─────────────────────────────────────────────────────────
@@ -33,10 +34,14 @@ USB_REPORT_RATE_CEILING_HZ = {"high_speed": 8000, "full_speed": 1000}
 
 VALID_FLASH_CHIPS = {"none", "w25qxx"}
 
-VALID_UART_PERIPHERALS = {
-    "UART1", "UART2", "UART3", "UART4",
-    "UART5", "UART6", "UART7", "UART8", "LPUART1",
-}
+# The peripheral values the generator can turn into a firmware instance. Both
+# sets are read off the generator's own maps — one source for "what may be
+# written" and "what gets emitted" — so no value passes validation and then
+# fails to map. The firmware's instance enums (bus_uart.h, bus_spi.h) carry
+# exactly the entries in those maps: UART1–UART8 have no LPUART, SPI1–SPI6 have
+# no SPI7.
+VALID_UART_PERIPHERALS = set(UART_PERIPHERAL_ENUM_MAP)
+VALID_SPI_PERIPHERALS = set(SPI_PERIPHERAL_ENUM_MAP)
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
@@ -328,7 +333,7 @@ def _validate_wired_report_hz(usb: dict, errors: list[str]) -> None:
         )
 
 
-# ── Bus (UART) ───────────────────────────────────────────────────────────────
+# ── Bus (UART, SPI) ──────────────────────────────────────────────────────────
 
 def _validate_bus(bus: dict, errors: list[str]) -> None:
     uart_list = bus.get("uart", [])
@@ -352,6 +357,16 @@ def _validate_bus(bus: dict, errors: list[str]) -> None:
                 errors.append(f"bus.uart[{i}].rx: {err}")
         if "baud" in u and (not isinstance(u["baud"], int) or u["baud"] <= 0):
             errors.append(f"bus.uart[{i}].baud must be a positive number")
+
+    spi_list = bus.get("spi", [])
+    for i, s in enumerate(spi_list):
+        if "peripheral" not in s:
+            errors.append(f"bus.spi[{i}].peripheral is required")
+        elif s["peripheral"] not in VALID_SPI_PERIPHERALS:
+            errors.append(
+                f"bus.spi[{i}].peripheral '{s['peripheral']}' is invalid. "
+                f"Valid values: {', '.join(sorted(VALID_SPI_PERIPHERALS))}"
+            )
 
 
 # ── Flash ────────────────────────────────────────────────────────────────────
