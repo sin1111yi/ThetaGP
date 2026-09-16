@@ -126,6 +126,7 @@ outputs:
 | `protocol/types.ts` | TypeScript | Frontend (Vue/Svelte) |
 | `protocol/proto_fields.json` | JSON | Consumers that read the protocol shape: the CDC test suite |
 | `protocol/proto_resp.h` | C++ | Device firmware: the response field order, keys and printf conversions |
+| `docs/generated/protocol-fields.md` | Markdown | The docs: the response field tables `docs/cdc-json-protocol.md` points at |
 
 ### Usage
 
@@ -139,6 +140,7 @@ python3 scripts/gen_proto.py --target rust
 python3 scripts/gen_proto.py --target ts
 python3 scripts/gen_proto.py --target fields
 python3 scripts/gen_proto.py --target resp
+python3 scripts/gen_proto.py --target fields-md
 
 # Dry-run (print to stdout)
 python3 scripts/gen_proto.py --dry-run

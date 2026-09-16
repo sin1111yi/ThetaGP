@@ -29,18 +29,19 @@ cmake_minimum_required(VERSION 3.22)
 #   protocol/types.ts          — TypeScript types (frontend)
 #   protocol/proto_fields.json — ordered request/response field lists
 #   protocol/proto_resp.h      — C++ response field tables (firmware)
+#   docs/generated/protocol-fields.md — response field tables (docs, Markdown)
 find_program(PYTHON3 python3)
 if(PYTHON3)
     set(PROTO_TOML "${CMAKE_SOURCE_DIR}/protocol/protocol.toml")
     if(EXISTS "${PROTO_TOML}")
-        message(STATUS "Generating protocol files from protocol.toml (cpp, rust, ts, fields, resp) ...")
+        message(STATUS "Generating protocol files from protocol.toml (cpp, rust, ts, fields, resp, fields-md) ...")
         execute_process(
             COMMAND ${PYTHON3} "${CMAKE_SOURCE_DIR}/scripts/gen_proto.py"
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
             RESULT_VARIABLE PROTO_GEN_RESULT
         )
         if(PROTO_GEN_RESULT EQUAL 0)
-            message(STATUS "Generated protocol/proto.h, protocol/proto.rs, protocol/types.ts, protocol/proto_fields.json, protocol/proto_resp.h")
+            message(STATUS "Generated protocol/proto.h, protocol/proto.rs, protocol/types.ts, protocol/proto_fields.json, protocol/proto_resp.h, docs/generated/protocol-fields.md")
         else()
             message(WARNING "Protocol generation failed (exit=${PROTO_GEN_RESULT})")
         endif()
