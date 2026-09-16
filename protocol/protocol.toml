@@ -40,7 +40,7 @@ description = "CDC ACM JSON command protocol for ThetaGP embedded gamepad"
 # ---------------------------------------------------------------------------
 [domains]
 sys = "System commands (ping, reset, DFU)"
-config = "Configuration commands (reserved)"
+config = "Configuration commands"
 test = "Test commands (flash/memory diagnostics)"
 profile = "Profile commands (flash-backed profile management)"
 

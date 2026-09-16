@@ -1429,16 +1429,19 @@ def gen_fields_md(proto: dict, out: Optional[Path] = None,
         w(f"  Source sha256: {file_sha256(source)}")
     w("-->")
     w()
-    w("# CDC 响应字段表（派生自 `protocol/protocol.toml`）")
+    w("# CDC response field tables (derived from `protocol/protocol.toml`)")
     w()
-    w("`python3 scripts/gen_proto.py --target fields-md` 的输出：每个有响应负载的命令")
-    w("一张表。字段名（JSON 键）、类型与顺序逐字取自 `protocol.toml` 的 `response`")
-    w("数组 —— 类型写的是 TOML 里声明的名字（`u32` / `string` / …），不经翻译，")
-    w("以便逐字对拍；顺序即响应写出字段的顺序。")
+    w("The output of `python3 scripts/gen_proto.py --target fields-md`: one table per\n"
+      "command that carries a response payload. Field names (the JSON keys), types and\n"
+      "order are taken verbatim from the `response` arrays in `protocol.toml` — a type\n"
+      "is spelled as the TOML declares it (`u32` / `string` / …) rather than translated,\n"
+      "so the two can be compared word for word; the order is the order the fields are\n"
+      "written in.")
     w()
-    w("**本文件是派生物，手改无效**：协议改动一律改 `protocol.toml` 再重跑生成器。")
+    w("**This file is a derivative; editing it does nothing.** Change `protocol.toml`\n"
+      "and run the generator again.")
     w()
-    w(f"协议版本：`{proto.get('meta', {}).get('version', '')}`")
+    w(f"Protocol version: `{proto.get('meta', {}).get('version', '')}`")
     w()
 
     for cmd in commands:
@@ -1468,7 +1471,7 @@ def gen_fields_md(proto: dict, out: Optional[Path] = None,
         if desc:
             w(desc)
             w()
-        w("| 字段 | 类型 | 数据源或说明 |")
+        w("| Field | Type | Source or note |")
         w("|------|------|--------------|")
         for row in rows:
             w(f"| `{row['json']}` | {row['type']} | {row['note']} |")
@@ -1476,9 +1479,10 @@ def gen_fields_md(proto: dict, out: Optional[Path] = None,
 
     empty = [f"{c['domain']}.{c['name']}" for c in commands if not c.get("response")]
     if empty:
-        w("## 无响应负载的命令")
+        w("## Commands with no response payload")
         w()
-        w("这些命令的 `response` 为空：响应只有通用字段（`status` / `cmd` / `queued`）：")
+        w("These commands declare an empty `response`: their reply carries the envelope\n"
+      "fields only (`status` / `cmd` / `queued`):")
         w()
         for name in empty:
             w(f"- `{name}`")
