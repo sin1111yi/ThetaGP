@@ -33,8 +33,8 @@
 
 #include "protocol/proto.h"
 
-#include <cstring>
 #include "tusb.h"
+#include <cstring>
 
 namespace ThetaGP::Test {
 

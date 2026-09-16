@@ -20,12 +20,12 @@
  */
 
 #include "test/init.h"
-#include "test/framelayer.h"
 #include "conf/ThetaGP_Config.h" // THETAGP_CFG_HAS_FLASH, the flash switch this file branches on
 #include "test/dispatcher.h"
-#include "test/testsys.h"
-#include "test/testcmds.h"
+#include "test/framelayer.h"
 #include "test/profile_cmd_handler.h"
+#include "test/testcmds.h"
+#include "test/testsys.h"
 
 #include "drivers/gpdriver/usbdriver.h"
 #include "utils/log/log.h"

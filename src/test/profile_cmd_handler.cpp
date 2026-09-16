@@ -19,14 +19,15 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "conf/ThetaGP_Config.h"
+
 #include "test/profile_cmd_handler.h"
-#include "conf/ThetaGP_Config.h" // THETAGP_CFG_HAS_FLASH, the flash switch this file branches on
 #include "test/dispatcher.h"
 #include "test/framelayer.h"
 
+#include "drivers/device/flash/flash_w25qxx.h"
 #include "gamepad/config/configmgr.h"
 #include "gamepad/profile/profile_store.h"
-#include "drivers/device/flash/flash_w25qxx.h"
 
 #include "utils/log/log.h"
 

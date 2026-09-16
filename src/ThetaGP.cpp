@@ -27,8 +27,8 @@
 #include "gamepad/scheduler/scheduler.h"
 #include "utils/log/log.h"
 
-#include "gamepad/gamepad.h"
 #include "gamepad/config/configmgr.h"
+#include "gamepad/gamepad.h"
 #include "taskmanager.h"
 
 #include "drivers/device/devicemgr.h"
