@@ -16,7 +16,7 @@
 #
 # Test: CDC JSON protocol — sys domain + test domain
 # Target: CDC ACM virtual serial port on firmware built with
-#         -DTHETAGP_CFG_TEST=ON
+#         -DBUILD_TEST_API=ON (source sees THETAGP_CFG_BUILD_TEST_API=1)
 #
 # Note: The gamepad/HID injection commands (test.set_mode, inject_*,
 # set_override, etc.) were removed in commit 2408e32 (refactor(test):
@@ -262,10 +262,10 @@ def main():
     print("\n=== Stage 2: test domain (read-only commands) ===")
 
     # Precondition: does this build carry the test domain at all? It is compiled
-    # in by THETAGP_CFG_TEST, and test.mem_info is the one command in it that no
-    # board-specific #ifdef removes, so it is the probe. Without this
-    # precondition a build without the domain scores every check below as FAIL,
-    # which reads like a regression instead of "this board is not the one this
+    # in by the test-API switch (THETAGP_CFG_BUILD_TEST_API), and test.mem_info is
+    # the one command in it that no board-specific #ifdef removes, so it is the probe.
+    # Without this precondition a build without the domain scores every check below as
+    # FAIL, which reads like a regression instead of "this board is not the one this
     # stage is about".
     mem_probe = ctx.send("test.mem_info")
     mem = mem_probe if status_of(mem_probe) == "ok" else None
@@ -274,7 +274,7 @@ def main():
     else:
         ctx.skip("test domain present",
                  "test.mem_info -> %s: this build has no test domain "
-                 "(THETAGP_CFG_TEST=OFF), so the whole of Stage 2 is out of "
+                 "(the test-API switch is off), so the whole of Stage 2 is out of "
                  "scope for it" % brief(mem_probe))
 
     # Board fact, read from the board itself rather than assumed: not every
