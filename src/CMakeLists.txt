@@ -203,38 +203,6 @@ if(BUILD_TEST_API)
     )
 endif()
 
-# Keypad scan rate of this build. The value the firmware ships with lives in
-# src/conf/ThetaGP_Config.h and its macro is #ifndef-guarded, so a definition
-# from here wins without the header being edited — which is what makes a rate
-# other than the source default (a 64 kHz variant, say) a build-layer choice
-# rather than a source change. Empty means "use the source default", so the
-# default build needs no flag. The command line names it BUILD_*, like the other
-# build-layer switches; the source sees THETAGP_CFG_KEYPAD_SCAN_HZ.
-set(BUILD_KEYPAD_SCAN_HZ "" CACHE STRING
-    "Keypad matrix scan rate in Hz, overriding THETAGP_CFG_KEYPAD_SCAN_HZ (empty = source default)")
-
-if(BUILD_KEYPAD_SCAN_HZ)
-    target_compile_definitions(${CMAKE_PROJECT_NAME}
-        PRIVATE
-        THETAGP_CFG_KEYPAD_SCAN_HZ=${BUILD_KEYPAD_SCAN_HZ}
-    )
-endif()
-
-# Key-toggle report test hook (THETAGP_CFG_KEY_TOGGLE_EN in
-# src/conf/ThetaGP_Config.h). With it on, the keypad read returns a mask with one
-# bit flipped per call, so every HID report differs from the previous one and the
-# driver's change gate fires on every gamepad tick. It is what makes a host-side
-# report-rate measurement possible at all — an idle pad changes nothing and
-# therefore sends nothing — and it is compiled out when off, so it stays a
-# build-layer choice rather than a source default.
-option(BUILD_KEY_TOGGLE "Enable the keypad key-toggle report test hook" OFF)
-if(BUILD_KEY_TOGGLE)
-    target_compile_definitions(${CMAKE_PROJECT_NAME}
-        PRIVATE
-        THETAGP_CFG_KEY_TOGGLE_EN=1
-    )
-endif()
-
 # Set output directory and link script
 set_target_properties(${CMAKE_PROJECT_NAME}
     PROPERTIES
