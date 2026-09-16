@@ -120,6 +120,21 @@ private:
   volatile uint32_t _pressedMask = 0;
   HardwareTimer _scanTimer;
 
+  // ── Scan time (minimum measurement point) ──
+  // Cycles the DWT counter advanced across one scanCallback: a read at entry, a
+  // read at exit, then three accumulating writes. Nothing else runs in the ISR —
+  // no division, no print, no peripheral access — so the measurement costs about
+  // one load per scan, and the host does the arithmetic.
+  //
+  // Cumulative since boot and never reset: an average is sum / count and a worst
+  // case is max, both computed on the host. The sum accumulates the cycle counter
+  // itself, so a 32-bit accumulator would wrap within 2^32 / CPU clock ≈ 9 s of
+  // wall time; it is 64-bit for that reason.
+  volatile uint32_t _scanCyclesCount = 0;
+  volatile uint32_t _scanCyclesLast = 0;
+  volatile uint32_t _scanCyclesMax = 0;
+  volatile uint64_t _scanCyclesSum = 0;
+
   static constexpr KeypadConfig::Mode _mode = BDCFG_KEYPAD_DRIVE_MODE;
   static constexpr KeypadConfig::Active _active = BDCFG_KEYPAD_ACTIVE_MODE;
 
@@ -149,6 +164,18 @@ public:
 
   bool isKeyPressed(uint8_t keyId) const;
 
+  // Readout of the scan-time counters above, in DWT cycles. The snapshot is
+  // taken with the scan interrupt masked, so count, last, max and sum all
+  // describe the same instant.
+  struct ScanStats {
+    uint32_t count;
+    uint32_t last;
+    uint32_t max;
+    uint64_t sum;
+  };
+
+  void getScanStats(ScanStats &out) const;
+
   static constexpr uint8_t getKeyId(uint8_t driveIdx, uint8_t senseIdx) {
     if (driveIdx >= DRIVE_PIN_NUM || senseIdx >= SENSE_PIN_NUM)
       return KEYPAD_NO_KEY;
@@ -176,6 +203,8 @@ public:
 
   static constexpr size_t getMaxKeyId() { return MAX_KEY_INDEX; }
   static constexpr size_t getMaskArraySize() { return MASK_ARRAY_SIZE; }
+  static constexpr size_t getDriveLineCount() { return DRIVE_PIN_NUM; }
+  static constexpr size_t getSenseLineCount() { return SENSE_PIN_NUM; }
 };
 
 } // namespace ThetaGP::Drivers::Device

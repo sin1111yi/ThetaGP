@@ -26,9 +26,11 @@
 
 #include "drivers/device/run_led.h"
 #include "drivers/peripherals/gpio.h"
+#include "drivers/peripherals/nvic.h"
 #include "drivers/peripherals/peripheralsmgr.h"
 #include "drivers/peripherals/systick.h"
 
+#include "utils/atomic.h"
 #include "utils/log/log.h"
 
 namespace ThetaGP::Drivers::Device {
@@ -67,6 +69,13 @@ void Keypad::init() {
 }
 
 void Keypad::scanCallback() {
+  // Minimum measurement point: one read of the DWT cycle counter at each end of
+  // the callback. cycleCounterInit() (platform/STM32/peripherals/systick.c) has
+  // already enabled the counter — PeripheralsManager::initPeripherals() runs
+  // before this timer starts — so nothing is initialized here. The reads and the
+  // stamp write below are the whole cost of the measurement.
+  const uint32_t startCycles = DWT->CYCCNT;
+
   uint32_t mask = 0;
   (this->*_readInput)(&mask);
 
@@ -78,28 +87,44 @@ void Keypad::scanCallback() {
   }
 
   _scanCount = (_scanCount + 1) % KeypadConfig::DEBOUNCE_SAMPLES;
-  if (_scanCount != 0) {
-    return;
-  }
 
-  // Majority vote and update state
-  uint32_t debouncedMask = 0;
+  if (_scanCount == 0) {
+    // Majority vote and update state
+    uint32_t debouncedMask = 0;
 
-  for (size_t i = 0; i < MAX_KEYS; i++) {
-    KeySampler &s = _samplers[i];
-    const uint8_t count = __builtin_popcount(s.history);
-    s.stableState = count >= KeypadConfig::DEBOUNCE_THRESHOLD
-                        ? KeyState::Pressed
-                        : KeyState::Released;
+    for (size_t i = 0; i < MAX_KEYS; i++) {
+      KeySampler &s = _samplers[i];
+      const uint8_t count = __builtin_popcount(s.history);
+      s.stableState = count >= KeypadConfig::DEBOUNCE_THRESHOLD
+                          ? KeyState::Pressed
+                          : KeyState::Released;
 
-    if (s.stableState == KeyState::Pressed) {
-      debouncedMask |= (1U << i);
+      if (s.stableState == KeyState::Pressed) {
+        debouncedMask |= (1U << i);
+      }
     }
+
+    _pressedMask = debouncedMask;
+
+    RunLed::getInstance().update(micros());
   }
 
-  _pressedMask = debouncedMask;
+  const uint32_t elapsed = DWT->CYCCNT - startCycles;
+  _scanCyclesLast = elapsed;
+  _scanCyclesSum += elapsed;
+  if (elapsed > _scanCyclesMax) {
+    _scanCyclesMax = elapsed;
+  }
+  _scanCyclesCount++;
+}
 
-  RunLed::getInstance().update(micros());
+void Keypad::getScanStats(ScanStats &out) const {
+  ATOMIC_BLOCK(NVIC_PRIO_MAX) {
+    out.count = _scanCyclesCount;
+    out.last = _scanCyclesLast;
+    out.max = _scanCyclesMax;
+    out.sum = _scanCyclesSum;
+  }
 }
 
 void Keypad::readInputScanMatrix(uint32_t *mask) {

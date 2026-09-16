@@ -25,6 +25,8 @@
 #include "test/framelayer.h"
 
 #include "drivers/device/flash/flash_w25qxx.h"
+#include "drivers/device/keypad.h"
+#include "drivers/peripherals/systick.h"
 #include "gamepad/config/configmgr.h"
 #include "gamepad/profile/profile_store.h"
 
@@ -231,6 +233,58 @@ static void handleFlashRead(const char *cmd, const Json &json) {
 
 #endif // THETAGP_CFG_HAS_FLASH
 
+// ── test.keypad_scan ──
+// Keypad scan time as the DWT cycle counter saw it inside Keypad::scanCallback.
+// The four counters are raw cycles and the CPU clock is stated beside them, so
+// the host converts to microseconds (and divides sum by count for the average)
+// instead of the firmware dividing in the scan path. A test-domain command: it
+// is hand-dispatched below rather than declared in protocol.toml, like the other
+// test.* commands.
+
+static void handleKeypadScan(const char *cmd, const Json &json) {
+    Drivers::Device::Keypad::ScanStats stats;
+    Drivers::Device::Keypad::getInstance().getScanStats(stats);
+
+    // clockMicrosToCycles() is the project's own cycles-per-microsecond constant
+    // (usTicks in platform/STM32/peripherals/systick.c), taken from the SYSCLK the
+    // RCC is actually running at — not from a documented frequency.
+    const uint32_t cpuHz = clockMicrosToCycles(1) * 1000000U;
+    int queued = json.getInt("queued");
+
+    Json resp;
+    resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
+    resp.printf("{status:%Q,cmd:%Q,queued:%d,"
+                "cpu_hz:%lu,scan_hz:%lu,drive_lines:%lu,sense_lines:%lu,"
+                "count:%lu,last:%lu,max:%lu,sum:",
+                "ok", cmd, queued + 1,
+                (unsigned long)cpuHz,
+                (unsigned long)Drivers::Device::KeypadConfig::DEFAULT_SCAN_FREQ,
+                (unsigned long)Drivers::Device::Keypad::getDriveLineCount(),
+                (unsigned long)Drivers::Device::Keypad::getSenseLineCount(),
+                (unsigned long)stats.count,
+                (unsigned long)stats.last,
+                (unsigned long)stats.max);
+    // The sum is 64-bit and this toolchain's printf carries no long long
+    // conversion — a "%llu" reaches the output as the literal "lu" — so the
+    // value is written as decimal digits in three 32-bit chunks rather than
+    // being widened inside a format string.
+    const uint32_t low9 = (uint32_t)(stats.sum % 1000000000ULL);
+    const uint64_t rest = stats.sum / 1000000000ULL;
+    const uint32_t mid9 = (uint32_t)(rest % 1000000000ULL);
+    const uint32_t high = (uint32_t)(rest / 1000000000ULL);
+    if (high != 0) {
+        resp.printf("%lu%09lu%09lu}", (unsigned long)high,
+                    (unsigned long)mid9, (unsigned long)low9);
+    } else if (mid9 != 0) {
+        resp.printf("%lu%09lu}", (unsigned long)mid9,
+                    (unsigned long)low9);
+    } else {
+        resp.printf("%lu}", (unsigned long)low9);
+    }
+    uint16_t len = resp.end();
+    FrameLayer::getInstance().sendResponse(resp.c_str(), len);
+}
+
 // ---------------------------------------------------------------------------
 // registerHandlers — self-register with the Dispatcher and Proto
 // ---------------------------------------------------------------------------
@@ -274,6 +328,10 @@ void TestCmdHandler::handle(const char *cmd, const Json &json) {
 #endif // THETAGP_CFG_HAS_FLASH
     if (strcmp(cmd, "test.mem_info") == 0) {
         handleMemInfo(cmd, json);
+        return;
+    }
+    if (strcmp(cmd, "test.keypad_scan") == 0) {
+        handleKeypadScan(cmd, json);
         return;
     }
 
