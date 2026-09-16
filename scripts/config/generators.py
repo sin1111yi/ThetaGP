@@ -17,6 +17,14 @@ MCU_HEADER_MAP = {
 
 USB_PERIPHERAL_MAP = {"USB1": "OTG1", "USB2": "OTG2", "ULPI": "ULPI"}
 USB_SPEED_MAP = {"high_speed": "HS", "full_speed": "FS"}
+# Reports per second each link can carry. Every speed in USB_SPEED_MAP needs an
+# entry; the check below runs at import so adding a speed cannot silently drop
+# the ceiling that validation and its messages are built from.
+USB_SPEED_CEILING_HZ = {"high_speed": 8000, "full_speed": 1000}
+if set(USB_SPEED_CEILING_HZ) != set(USB_SPEED_MAP):
+    raise RuntimeError(
+        "USB_SPEED_CEILING_HZ must cover exactly the speeds in USB_SPEED_MAP"
+    )
 
 KEYPAD_DRIVE_MODE_MAP = {
     "scan_matrix": "ScanMatrix",

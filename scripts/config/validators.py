@@ -12,16 +12,18 @@ from .generators import (
     SPI_PERIPHERAL_ENUM_MAP,
     UART_PERIPHERAL_ENUM_MAP,
     USB_PERIPHERAL_MAP,
+    USB_SPEED_CEILING_HZ,
     USB_SPEED_MAP,
 )
 from .pin_utils import validate_pin_format
 
 # ── Valid value sets ─────────────────────────────────────────────────────────
 #
-# Every set below is read off the generator's own map, so one table decides
-# both "what may be written" and "what gets emitted": no value passes
+# The sets that mirror a generator map are read off that map, so one table
+# decides both "what may be written" and "what gets emitted": no value passes
 # validation and then fails to map, and no value the generator can emit is
-# unreachable from a config file.
+# unreachable from a config file. BUTTON_SUFFIX_LIST below has no generator map
+# and is written by hand.
 
 VALID_MCU_SERIES = set(MCU_HEADER_MAP)
 
@@ -44,7 +46,7 @@ VALID_USB_SPEEDS = set(USB_SPEED_MAP)
 # Reports per second each link speed can poll the interrupt endpoint at: one
 # transaction per 1 ms frame on full speed, one per 125 us microframe on high
 # speed.
-USB_REPORT_RATE_CEILING_HZ = {"high_speed": 8000, "full_speed": 1000}
+USB_REPORT_RATE_CEILING_HZ = USB_SPEED_CEILING_HZ  # the generator's table, not a second copy
 
 # "none" is in no map: it is the board stating it has no chip, which the
 # generator answers with the switch alone.
@@ -326,16 +328,23 @@ def _validate_wired_report_hz(usb: dict, errors: list[str]) -> None:
         return
 
     speed = usb.get("speed")
-    ceiling = None
     if isinstance(speed, str):
         ceiling = USB_REPORT_RATE_CEILING_HZ.get(speed)
-    if ceiling is not None and rate > ceiling:
-        errors.append(
-            f"usb.wired_report_hz is {rate} but usb.speed '{speed}' polls "
-            f"the interrupt endpoint at most {ceiling} times per second, so "
-            f"the key must not exceed {ceiling}: full_speed polls at most "
-            f"1000 times per second and high_speed at most 8000"
-        )
+        if ceiling is None:
+            errors.append(
+                f"usb.speed '{speed}' has no report-rate ceiling in the "
+                f"generator's table, so the rate cannot be checked against it"
+            )
+        elif rate > ceiling:
+            limits = ", ".join(
+                f"{name} polls at most {limit} times per second"
+                for name, limit in sorted(USB_REPORT_RATE_CEILING_HZ.items())
+            )
+            errors.append(
+                f"usb.wired_report_hz is {rate} but usb.speed '{speed}' polls "
+                f"the interrupt endpoint at most {ceiling} times per second, so "
+                f"the key must not exceed {ceiling}: {limits}"
+            )
     if 1000000 % rate != 0:
         errors.append(
             f"usb.wired_report_hz is {rate}, which does not divide 1000000. "
