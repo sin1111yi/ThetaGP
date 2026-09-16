@@ -55,3 +55,4 @@ scripts/test/hid_observe.py
 scripts/test/hid_observe_capture.md
 scripts/test/mock_fw_cdc.py
 scripts/test/show_refusals.py
+protocol/protocol-fields.md

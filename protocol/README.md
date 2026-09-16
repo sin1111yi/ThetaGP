@@ -9,8 +9,9 @@ Python test scripts).
 
 ```
 protocol/
-├── protocol.toml       ← protocol definition
-└── README.md           ← this file
+├── protocol.toml       ← protocol definition (the source of truth, tracked)
+├── README.md           ← this file (tracked)
+└── <generated outputs> ← written by scripts/gen_proto.py, not tracked (.gitignore)
 ```
 
 ## TOML structure
@@ -29,8 +30,9 @@ description = "CDC ACM JSON command protocol for ThetaGP embedded gamepad"
 ```toml
 [domains]
 sys = "System commands (ping, reset, DFU)"
-test = "Test and injection commands"
-config = "Configuration commands (reserved)"
+config = "Configuration commands"
+test = "Test commands (flash/memory diagnostics)"
+profile = "Profile commands (flash-backed profile management)"
 ```
 
 Each key is the domain prefix used in `domain.command_name` (e.g. `test.inject_gamepad_state`).
@@ -69,13 +71,16 @@ fields = [
 ]
 ```
 
-**Supported types**: `u8`, `u16`, `u32`, `bool`, `string`, `any`, `array`
+**Supported types**: `u8`, `u16`, `u32`, `i32`, `bool`, `string`, `any` — the set
+`scripts/gen_proto.py` maps for every target, and the set an unregistered type is
+rejected against
 
 **Optional field flags**:
 - `required` — for command request params (default: false)
 - `default` — default value for request params
 - `omit_in_serialize` — if true, skip this field in JSON/C++ serialization
-- `ref_type` — for array fields, references the inner type name
+- `ref_type` — for array fields, references the inner type name. No field uses one,
+  and `scripts/gen_proto.py` does not read the flag today
 - `role` — a property of the field besides its type and its place, which the
   consumers of this file act on:
   - `accounting` — part of the per-task accounting subset the CDC test suite
@@ -145,12 +150,12 @@ outputs:
 
 | Output file | Language | Consumer |
 |---|---|---|
-| `protocol/proto.h` | C++ | Device firmware (ArduinoJson) |
+| `protocol/proto.h` | C++ | Device firmware (the project's own JSON layer) |
 | `protocol/proto.rs` | Rust | Tauri backend (serde) |
 | `protocol/types.ts` | TypeScript | Frontend (Vue/Svelte) |
 | `protocol/proto_fields.json` | JSON | Consumers that read the protocol shape: the CDC test suite |
 | `protocol/proto_resp.h` | C++ | Device firmware: the response field order, keys and printf conversions |
-| `protocol/protocol-fields.md` | Markdown | The docs: the response field tables `docs/cdc-json-protocol.md` points at. Tracked, unlike the five above: it is read rather than compiled, so a reader of the repository gets it without running the generator |
+| `protocol/protocol-fields.md` | Markdown | The docs: the response field tables `docs/cdc-json-protocol.md` points at. Not tracked, like the five above: every output here is a derivative of `protocol.toml`, and the repository carries the source and this file only |
 
 ### Usage
 
@@ -182,7 +187,9 @@ python3 scripts/gen_proto.py --protocol path/to/protocol.toml
 
 ## Design principles
 
-1. **Single source of truth**: All protocol changes go only into `protocol.toml`
+1. **Single source of truth**: All protocol changes go only into `protocol.toml`. The
+   repository tracks that file and this README; every output derived from it is
+   generated locally and ignored
 2. **No manual sync**: Generated files are never hand-edited
 3. **Readable output**: Generated C++/Rust/TS code has proper comments and formatting
 4. **Backward compatible**: Existing hand-written code (`testcmds.cpp`) can coexist
