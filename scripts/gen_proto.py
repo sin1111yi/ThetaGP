@@ -34,7 +34,7 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 # ── Try tomllib (3.11+), fallback to tomli ──────────────────────────────────
 try:
@@ -56,6 +56,7 @@ CPP_TYPE_MAP = {
     "u8":     "uint8_t",
     "u16":    "uint16_t",
     "u32":    "uint32_t",
+    "i32":    "int32_t",
     "bool":   "bool",
     "string": "const char *",
     "any":    "JsonVariant",
@@ -65,6 +66,7 @@ RUST_TYPE_MAP = {
     "u8":     "u8",
     "u16":    "u16",
     "u32":    "u32",
+    "i32":    "i32",
     "bool":   "bool",
     "string": "String",
     "any":    "serde_json::Value",
@@ -74,10 +76,23 @@ TS_TYPE_MAP = {
     "u8":     "number",
     "u16":    "number",
     "u32":    "number",
+    "i32":    "number",
     "bool":   "boolean",
     "string": "string",
     "any":    "any",
 }
+
+# The three tables above are the whole vocabulary a field's `type` may draw on,
+# and validate_types() holds the TOML to it: a type named in protocol.toml that
+# no table maps is not an error any generator reports — each one falls back to
+# its escape hatch (JsonVariant / serde_json::Value / any) and emits a field
+# that deserializes as an untyped blob while protocol.toml still reads as if it
+# were declared. That is a silent loss of the very typing this generator exists
+# to provide, so it stops generation instead.
+# Named, because validate_types() reports which of them is short a type.
+TYPE_MAPS = (("CPP_TYPE_MAP", CPP_TYPE_MAP),
+             ("RUST_TYPE_MAP", RUST_TYPE_MAP),
+             ("TS_TYPE_MAP", TS_TYPE_MAP))
 
 # A response field's type → (the printf argument type, the conversion for it).
 # Decided once per type, here, so a field's specifier can never drift from the
@@ -171,6 +186,44 @@ def file_sha256(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+# The generator's own sources: every file whose bytes take part in deriving the
+# artifacts this script writes. Their digest is recorded in the field manifest
+# beside its source's, because the manifest's shape comes from the emitter as
+# much as from the TOML: an emitter that starts filtering fields, renaming keys
+# or changing an order writes a different manifest from the same input, and a
+# consumer holding only the source digest would keep checking the protocol
+# against the older shape and pass.
+#
+# The list *is* the coverage the digest is computed over, and the manifest
+# carries it verbatim so a consumer recomputes the same digest without a second
+# copy of the list here. It starts with the entry point: splitting this file
+# into modules extends the list rather than replacing the entry, and the entry
+# point's own bytes change when it starts importing the new module, so a
+# manifest a pre-split generator left behind fails the check on the entry point
+# alone — before the added file's coverage is even reached.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+GENERATOR_SOURCES = ("scripts/gen_proto.py",)
+
+
+def generator_sha256(sources: Tuple[str, ...] = GENERATOR_SOURCES,
+                     root: Path = REPO_ROOT) -> str:
+    """One SHA-256 over the generator's own sources, as the manifest records it.
+
+    Each file contributes its path relative to the repository root and its
+    bytes, NUL-separated, in the order named. The path is part of the digest, so
+    the same bytes under another name (a moved or renamed emitter) do not read
+    as the same generator, and a file has to be named to be covered rather than
+    being covered by having been found.
+    """
+    digest = hashlib.sha256()
+    for name in sources:
+        digest.update(name.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update((root / name).read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
 # Domains carrying no [[commands]] entry (registered by the firmware dispatcher).
 NON_COMMAND_DOMAINS = {"test", "profile"}
 
@@ -182,6 +235,42 @@ def validate_domains(proto: dict) -> None:
     absent = sorted(NON_COMMAND_DOMAINS - declared)
     if miss or unk or absent:
         print(f"ERROR: [domains] mismatch — used-by-commands-but-undeclared: {miss or 'none'}; declared-but-unknown: {unk or 'none'}; registered-non-command-but-undeclared: {absent or 'none'}", file=sys.stderr)
+        sys.exit(1)
+
+
+def validate_types(proto: dict) -> None:
+    """Abort unless every `type` protocol.toml uses is mapped by all three tables.
+
+    The counterparts of validate_domains() and validate_field_roles(), for the
+    one name in the TOML the generators otherwise only read: a type is looked up
+    with a fallback, so one that is unnamed in a table does not fail — it
+    degrades to the untyped escape hatch of that target and the build keeps
+    going. A misspelling (`u64` for `u32`) or a type nobody added yet therefore
+    reaches the generated artifacts as a field of no static type, which is
+    indistinguishable from a deliberate `any`. Reported per table, because a
+    name can be added to one of them and missed in another, and exit 1 like the
+    other validators: the input is wrong, so no artifact should be written from
+    it.
+    """
+    used = sorted(
+        {f["type"] for t in proto.get("types", []) for f in t.get("fields", [])}
+        | {f["type"] for cmd in proto.get("commands", [])
+           for side in ("request", "response") for f in cmd.get(side, [])}
+    )
+    unmapped = [(name, [t for t in used if t not in table])
+                for name, table in TYPE_MAPS]
+    if any(missing for _, missing in unmapped):
+        for name, missing in unmapped:
+            if missing:
+                print(f"ERROR: {name} has no mapping for type(s): {missing}",
+                      file=sys.stderr)
+        print(f"       Types used by protocol.toml: {used}", file=sys.stderr)
+        print(f"       Mapped types: {sorted(set().union(*(set(t) for _, t in TYPE_MAPS)))}",
+              file=sys.stderr)
+        print("       A type a table does not map is emitted as that target's "
+              "untyped value (JsonVariant / serde_json::Value / any) instead of "
+              "the declared one; add the mapping or fix the type name.",
+              file=sys.stderr)
         sys.exit(1)
 
 
@@ -746,9 +835,18 @@ def gen_fields(proto: dict, out: Optional[Path] = None,
     a consumer holding a manifest is not left believing it describes the
     protocol.toml on disk: the manifest is a generated artifact, and a stale
     one would let a consumer check the protocol against the shape it no longer
-    has and pass. The fingerprint covers the TOML only — not this generator —
-    so a manifest whose source is unchanged stays valid across edits here, and
-    one whose source moved on must be regenerated.
+    has and pass.
+
+    ``generator_sha256`` fingerprints the generator it was emitted by, over the
+    files ``generator_sources`` names. Two digests rather than one, because the
+    shape of this manifest is derived from two things that move independently:
+    the TOML says which fields there are, the emitter says which of them it
+    writes and under which keys. Either one changing makes the field lists below
+    wrong for a consumer, and the source digest alone misses the emitter's half
+    — an emitter that stopped emitting a field would leave this manifest valid
+    against an unchanged protocol.toml, and a consumer comparing a response
+    against the shorter list that was regenerated would find nothing missing.
+    Regenerating after either change is what clears both digests.
     """
     commands = proto.get("commands", [])
     source = Path(source_path) if source_path is not None else None
@@ -758,6 +856,12 @@ def gen_fields(proto: dict, out: Optional[Path] = None,
         # What it was read from, and the digest of exactly those bytes.
         "source": str(source) if source is not None else "protocol/protocol.toml",
         "source_sha256": file_sha256(source) if source is not None else "",
+        # What emitted it, and the digest of exactly those bytes. The list is
+        # what the digest was computed over, so a consumer recomputes the same
+        # digest from it rather than from a list of its own that could lag a
+        # generator split.
+        "generator_sources": list(GENERATOR_SOURCES),
+        "generator_sha256": generator_sha256(),
         "protocol_version": proto.get("meta", {}).get("version", ""),
         # Keyed "<domain>.<name>", the same full command name the wire uses.
         # Insertion order = the TOML's [[commands]] order.
@@ -926,6 +1030,7 @@ Examples:
 
     proto = load_protocol(str(proto_path))
     validate_domains(proto)
+    validate_types(proto)
     validate_field_roles(proto)
 
     # Print summary

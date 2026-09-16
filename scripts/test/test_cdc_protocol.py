@@ -56,6 +56,15 @@
 # That is a failure of the input, not of the device, so it stops the run the
 # same way a missing manifest does — regenerating is the fix.
 #
+# The manifest carries a second digest beside that one, of the generator that
+# emitted it, and that is recomputed too. The field lists come from the emitter
+# as much as from the TOML, so a manifest whose protocol.toml is untouched can
+# still have been written by an emitter that has changed since — and that is the
+# quieter of the two stalenesses, because a field the emitter stopped writing
+# makes the lists read from here shorter, and a check that only looks up the
+# fields it expects finds the ones it expects and passes. Both digests have to
+# match the files on disk, or the run stops.
+#
 # A subset of a response is stated the same way. Which fields of
 # sys.get_task_info the per-task accounting checks below require is the set
 # protocol.toml marks role = "accounting": a field that joins or leaves that set
@@ -96,7 +105,8 @@ REGION_SIZES = {
 
 # The generated field manifest: protocol/proto_fields.json, one entry per
 # [[commands]] of protocol.toml, each with its ordered request/response fields.
-PROTOCOL_DIR = Path(__file__).resolve().parents[2] / "protocol"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+PROTOCOL_DIR = REPO_ROOT / "protocol"
 FIELDS_MANIFEST = PROTOCOL_DIR / "proto_fields.json"
 
 # The protocol source the manifest is derived from. The manifest records this
@@ -104,10 +114,101 @@ FIELDS_MANIFEST = PROTOCOL_DIR / "proto_fields.json"
 # the source is detectable rather than silently authoritative.
 PROTOCOL_SOURCE = PROTOCOL_DIR / "protocol.toml"
 
+# The generator the manifest is emitted by: the entry point, the file a run
+# names. It is not the coverage — the manifest names the files its own digest
+# was computed over and those are what is hashed below — it is the one file
+# every coverage has to include, so the coverage cannot be narrowed to nothing
+# that matters.
+GENERATOR_ENTRY = REPO_ROOT / "scripts" / "gen_proto.py"
+
 
 def source_sha256(path):
     """SHA-256 of a file's bytes — what the manifest records of its source."""
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def generator_sha256(sources):
+    """The manifest's generator digest, recomputed from the files it names.
+
+    The generator derives it the same way — each source's path relative to the
+    repository root, then its bytes, NUL-separated, in the order named — so the
+    two sides agree on the algorithm and not on a value copied between them.
+    """
+    digest = hashlib.sha256()
+    for name in sources:
+        digest.update(name.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update((REPO_ROOT / name).read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def check_generator(manifest, path):
+    """Abort unless the manifest was emitted by the generator on disk.
+
+    The other half of a manifest's provenance: ``source_sha256`` says which
+    protocol.toml was read, this says which emitter read it. A manifest can
+    match its source and still be stale — the emitter decides which fields reach
+    the manifest, under which keys and in which order, so one that has changed
+    since produces a manifest that describes neither the TOML on disk nor the
+    firmware. Exit 2, on the same terms as the source check: it is a failure of
+    the input, the fix is to regenerate, and a run that went ahead would be
+    scoring the protocol against a shape nothing derives any more.
+
+    The files hashed are the ones the manifest names, so a generator that grows
+    a module extends its own coverage without an edit here; the entry point is
+    required to be among them, so that coverage cannot be narrowed to something
+    that is not the generator; and a manifest that names sources outside the
+    repository, or files that are not there, is not something this can check, so
+    it stops the run rather than being believed. A manifest old enough to carry
+    no generator digest at all is stale by the same reasoning as one that
+    carries no source digest: it cannot say what emitted it.
+    """
+    entry = GENERATOR_ENTRY.relative_to(REPO_ROOT).as_posix()
+    recorded = manifest.get("generator_sha256")
+    sources = manifest.get("generator_sources")
+
+    def unverifiable(reason):
+        print(f"ERROR: protocol field manifest is stale: {path}", file=sys.stderr)
+        print(f"       {reason}", file=sys.stderr)
+        print("       Its field lists were emitted by a generator this run "
+              "cannot check against, so what they describe is unknown.",
+              file=sys.stderr)
+        print("       Run: python3 scripts/gen_proto.py", file=sys.stderr)
+        sys.exit(2)
+
+    if not isinstance(sources, list) or not sources:
+        unverifiable("It carries no generator_sources — it was generated "
+                     "before the manifest recorded the generator it came from.")
+    if entry not in sources:
+        unverifiable(f"It names generator_sources {sources}, which does not "
+                     f"include the generator entry point {entry}.")
+    for name in sources:
+        if (not isinstance(name, str) or Path(name).is_absolute()
+                or ".." in Path(name).parts):
+            unverifiable(f"It names the generator source {name!r}, which is "
+                         "not a path inside the repository.")
+        if not (REPO_ROOT / name).is_file():
+            unverifiable(f"It names the generator source {name!r}, which is "
+                         "not on disk.")
+    actual = generator_sha256(sources)
+    if recorded != actual:
+        print(f"ERROR: protocol field manifest is stale: {path}", file=sys.stderr)
+        if recorded is None:
+            print("       It carries no generator_sha256 — it was generated "
+                  "before the manifest recorded the generator it came from.",
+                  file=sys.stderr)
+        else:
+            print(f"       It records the generator {', '.join(sources)} "
+                  f"at sha256 {recorded}.", file=sys.stderr)
+        print(f"       That generator is at sha256 {actual}.", file=sys.stderr)
+        print("       The manifest was emitted by a different generator, so "
+              "the expected fields below it are the ones that generator "
+              "wrote, not the ones the generator on disk derives from "
+              "protocol.toml.", file=sys.stderr)
+        print("       Run: python3 scripts/gen_proto.py", file=sys.stderr)
+        sys.exit(2)
+    return manifest
 
 
 def load_field_manifest(path=FIELDS_MANIFEST, source=PROTOCOL_SOURCE):
@@ -125,6 +226,10 @@ def load_field_manifest(path=FIELDS_MANIFEST, source=PROTOCOL_SOURCE):
     them would pass while checking a protocol the firmware no longer speaks —
     the failure would surface later, on the wire, as a mismatch blamed on the
     device. Regenerating is the fix; nothing else clears the gate.
+
+    The generator is checked the same way, by check_generator(): a manifest is
+    only current if both the protocol it was read from and the emitter that read
+    it are the ones on disk, since the fields below are derived from both.
     """
     if not path.is_file():
         print(f"ERROR: protocol field manifest not found: {path}", file=sys.stderr)
@@ -150,7 +255,7 @@ def load_field_manifest(path=FIELDS_MANIFEST, source=PROTOCOL_SOURCE):
               file=sys.stderr)
         print("       Run: python3 scripts/gen_proto.py", file=sys.stderr)
         sys.exit(2)
-    return manifest
+    return check_generator(manifest, path)
 
 
 def command_entry(manifest, cmd):
