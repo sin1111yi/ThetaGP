@@ -75,7 +75,7 @@ USAGE_FIELDS = (
     "ram_dtcm_used_bytes", "ram_axi_used_bytes",
     "ram_d2_used_bytes", "ram_d3_used_bytes", "ram_itcm_used_bytes",
     "ext_flash_total_sectors", "ext_flash_used_sectors",
-    "ext_flash_free_sectors", "profile_count",
+    "ext_flash_free_sectors", "ext_flash_reserved_sectors", "profile_count",
 )
 
 
@@ -176,13 +176,18 @@ def reserve_ok(mem):
 
 
 def ext_flash_ok(usage):
-    """used + free <= total for the external SPI flash."""
+    """used + free + reserved == total for the external SPI flash.
+
+    The reserved sectors ahead of the User Ring appear in neither used nor
+    free, so the sectors of the chip close only with that third term.
+    """
     total = field_int(usage, "ext_flash_total_sectors")
     used = field_int(usage, "ext_flash_used_sectors")
     free = field_int(usage, "ext_flash_free_sectors")
-    if total is None or used is None or free is None:
+    reserved = field_int(usage, "ext_flash_reserved_sectors")
+    if total is None or used is None or free is None or reserved is None:
         return False
-    return used + free <= total
+    return used + free + reserved == total
 
 
 def ram_totals_match(usage, mem):
