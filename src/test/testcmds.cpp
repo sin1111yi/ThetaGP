@@ -26,6 +26,7 @@
 
 #include "drivers/device/flash/flash_w25qxx.h"
 #include "drivers/device/keypad.h"
+#include "drivers/device/systimer.h"
 #include "gamepad/config/configmgr.h"
 #include "gamepad/profile/profile_store.h"
 
@@ -233,14 +234,18 @@ static void handleFlashRead(const char *cmd, const Json &json) {
 #endif // THETAGP_CFG_HAS_FLASH
 
 // ── test.keypad_scan ──
-// Keypad scan time as the device layer's clock (SystemTimer::getMicros) saw it
-// inside Keypad::scanCallback. The counters are microseconds — that clock's own
-// resolution, one tick per microsecond — so no clock frequency is reported and
-// the host only divides sum_us by count for the average instead of dividing in
-// the scan path. A test-domain command: it is hand-dispatched below rather than
-// declared in protocol.toml, like the other test.* commands.
+// Keypad scan time as the device layer's clock (SystemTimer::getCycleCounter) saw
+// it inside Keypad::scanCallback. The counters are cycles — that counter ticks
+// once per CPU cycle, so a ten-microsecond callback is measured to the cycle
+// rather than to the microsecond — and the response carries the clock's own
+// cycles-per-microsecond factor, so a host converts any count without being told
+// the CPU frequency. Converting last/max happens here, once per command, instead
+// of in the scan path. A test-domain command: it is hand-dispatched below rather
+// than declared in protocol.toml, like the other test.* commands.
 
 static void handleKeypadScan(const char *cmd, const Json &json) {
+    auto &timer = Drivers::Device::SystemTimer::getInstance();
+
     Drivers::Device::Keypad::ScanStats stats;
     Drivers::Device::Keypad::getInstance().getScanStats(stats);
 
@@ -249,21 +254,27 @@ static void handleKeypadScan(const char *cmd, const Json &json) {
     Json resp;
     resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
     resp.printf("{status:%Q,cmd:%Q,queued:%d,"
-                "scan_hz:%lu,drive_lines:%lu,sense_lines:%lu,"
-                "count:%lu,last_us:%lu,max_us:%lu,sum_us:",
+                "scan_hz:%lu,drive_lines:%lu,sense_lines:%lu,cycles_per_us:%lu,"
+                "count:%lu,last_cycles:%lu,max_cycles:%lu,"
+                "last_us:%lu,max_us:%lu,sum_cycles:",
                 "ok", cmd, queued + 1,
                 (unsigned long)Drivers::Device::KeypadConfig::DEFAULT_SCAN_FREQ,
                 (unsigned long)Drivers::Device::Keypad::getDriveLineCount(),
                 (unsigned long)Drivers::Device::Keypad::getSenseLineCount(),
+                // The clock's own conversion factor, so a host converts any of
+                // the counts below without being told the CPU frequency.
+                (unsigned long)timer.microsToCycles(1),
                 (unsigned long)stats.count,
-                (unsigned long)stats.last_us,
-                (unsigned long)stats.max_us);
-    // The sum is 64-bit and this toolchain's printf carries no long long
-    // conversion — a "%llu" reaches the output as the literal "lu" — so the
-    // value is written as decimal digits in three 32-bit chunks rather than
-    // being widened inside a format string.
-    const uint32_t low9 = (uint32_t)(stats.sum_us % 1000000000ULL);
-    const uint64_t rest = stats.sum_us / 1000000000ULL;
+                (unsigned long)stats.last_cycles,
+                (unsigned long)stats.max_cycles,
+                (unsigned long)timer.cyclesToMicros((int32_t)stats.last_cycles),
+                (unsigned long)timer.cyclesToMicros((int32_t)stats.max_cycles));
+    // The sum is cycles and 64-bit; this toolchain's printf carries no long long
+    // conversion — a "%llu" reaches the output as the literal "lu" — so the value
+    // is written as decimal digits in three 32-bit chunks rather than being
+    // widened inside a format string.
+    const uint32_t low9 = (uint32_t)(stats.sum_cycles % 1000000000ULL);
+    const uint64_t rest = stats.sum_cycles / 1000000000ULL;
     const uint32_t mid9 = (uint32_t)(rest % 1000000000ULL);
     const uint32_t high = (uint32_t)(rest / 1000000000ULL);
     if (high != 0) {

@@ -127,22 +127,21 @@ private:
   // access — so the measurement costs about one clock read per scan, and the host
   // does the subtraction.
   //
-  // The timestamp's tick is one microsecond and a scan is about ten of them, so
-  // last_us and max_us are quantized to whole microseconds (±1 µs, i.e. ~5% at
-  // the worst case). Each per-scan difference is truncated before it is summed,
-  // so sum_us and sum_us / count both read low by roughly 0.5 µs per scan and no
-  // correction is applied — a mean taken from here is a lower bound, not the
-  // scan's true mean.
+  // Cycles, not microseconds. The counter ticks once per CPU cycle, so a scan of
+  // roughly ten microseconds reads as five thousand counts and keeps that
+  // resolution; converting at the stamp would round every reading to a step of
+  // about 1/480 of the value. The readout converts, and only where microseconds
+  // are wanted.
   //
-  // Cumulative since boot and never reset: an average is sum_us / count and a
-  // worst case is max_us, both computed on the host. The sum accumulates elapsed
-  // time only, never idle time, so at the current scan rate it grows by ≈3.3e5
-  // µs per wall second — a 32-bit accumulator would wrap in about 3.6 h of wall
-  // time; it is 64-bit for that reason.
-  volatile uint32_t _scanUsCount = 0;
-  volatile uint32_t _scanUsLast = 0;
-  volatile uint32_t _scanUsMax = 0;
-  volatile uint64_t _scanUsSum = 0;
+  // Cumulative since boot and never reset: an average is sum_cycles / count and a
+  // worst case is max_cycles, both computed on the host. The sum accumulates the
+  // scan's own time only, never idle time, so at the current scan rate it grows
+  // by ≈4.8e8 counts per wall second — a 32-bit accumulator would wrap in about
+  // nine seconds; it is 64-bit for that reason.
+  volatile uint32_t _scanCyclesCount = 0;
+  volatile uint32_t _scanCyclesLast = 0;
+  volatile uint32_t _scanCyclesMax = 0;
+  volatile uint64_t _scanCyclesSum = 0;
 
   static constexpr KeypadConfig::Mode _mode = BDCFG_KEYPAD_DRIVE_MODE;
   static constexpr KeypadConfig::Active _active = BDCFG_KEYPAD_ACTIVE_MODE;
@@ -173,14 +172,15 @@ public:
 
   bool isKeyPressed(uint8_t keyId) const;
 
-  // Readout of the scan-time counters above, in microseconds. The snapshot is
-  // taken with the scan interrupt masked, so count, last_us, max_us and sum_us
-  // all describe the same instant.
+  // Readout of the scan-time counters above, in cycles. The snapshot is taken
+  // with the scan interrupt masked, so all four describe the same instant. The
+  // consumer converts: cyclesToMicros() for one reading, or its own division for
+  // a mean off sum_cycles, which is past what the 32-bit conversion takes.
   struct ScanStats {
     uint32_t count;
-    uint32_t last_us;
-    uint32_t max_us;
-    uint64_t sum_us;
+    uint32_t last_cycles;
+    uint32_t max_cycles;
+    uint64_t sum_cycles;
   };
 
   void getScanStats(ScanStats &out) const;
