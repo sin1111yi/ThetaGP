@@ -143,13 +143,35 @@ PRINTF_LESS_TYPES = ("any",)
 ROLE_ACCOUNTING = "accounting"
 ROLE_TASK_COUNTERS = "task_counters"
 
-# The roles that make a response field conditional, and what the condition is:
-# the name of the flag the generated response table entry carries, and the
-# firmware macro that flag is defined from. A role absent here is always
-# present, and its table entry carries the constant 1.
-ROLE_PRESENCE = {
+# The registry of roles, and the whole of what this generator knows about one:
+# the compile switch the generated artifacts carry for that role — the name of
+# the flag a generated response table entry is written with, and the firmware
+# macro that flag is defined from — or None for a role no switch decides.
+#
+# A registry and not a set of names, because a role is only worth tagging a
+# field with when something downstream acts on it: a name this table does not
+# carry is a name nothing derives anything from, and validate_field_roles()
+# stops generation on it rather than let the field read as marked while every
+# artifact and every consumer stays as if it were not.
+#
+# `accounting`'s None is deliberate, and is the one entry with no switch to
+# name: the fields it marks are meant to be in every build (the CDC test
+# suite's per-task accounting checks require them unconditionally), so a
+# response table writes them with the constant presence 1, and what acts on the
+# role is that suite, which reads the mark out of the field manifest. Giving it
+# a switch would invent a condition the protocol does not have.
+ROLE_SWITCHES: Dict[str, Optional[Tuple[str, str]]] = {
     ROLE_TASK_COUNTERS: ("THETAGP_RESP_HAS_TASK_COUNTERS", "USE_TASK_COUNTERS"),
+    ROLE_ACCOUNTING: None,
 }
+
+# The roles that make a response field conditional, and what the condition is:
+# the switch and the guard ROLE_SWITCHES registers for them. Derived from the
+# registry rather than written beside it, so the two cannot disagree — a role a
+# table entry can be conditional on is exactly a role the registry gives a
+# switch. A role absent here is always present, and its table entry carries the
+# constant 1.
+ROLE_PRESENCE = {role: switch for role, switch in ROLE_SWITCHES.items() if switch}
 
 
 def to_pascal(name: str) -> str:
@@ -286,6 +308,13 @@ def validate_types(proto: dict) -> None:
     map leaves gen_resp() no table to write for its command, so the command
     keeps a response the firmware writes by hand. The exception is
     PRINTF_LESS_TYPES, the named types for which no conversion exists at all.
+
+    Those last two response-side tables are checked against each other as well:
+    a type in PRINTF_LESS_TYPES is one no conversion writes, so a type in both
+    it and PRINTF_TYPE_MAP is a field gen_resp() would write a table for while
+    the exception list says no table can be written from it. Only one of the
+    two can be right, and which one is a decision about the type — so an
+    overlap is reported rather than resolved.
     """
     request = {f["type"] for cmd in proto.get("commands", [])
                for f in cmd.get("request", [])}
@@ -299,11 +328,31 @@ def validate_types(proto: dict) -> None:
     # requiring a conversion for it would report types nothing is missing.
     no_printf = [t for t in sorted(response)
                  if t not in PRINTF_TYPE_MAP and t not in PRINTF_LESS_TYPES]
-    if any(missing for _, missing in unmapped) or no_printf:
+    # The reverse of the line above, and the one direction the TOML cannot
+    # state: a type in PRINTF_LESS_TYPES is one the response side has decided no
+    # conversion writes, and one in PRINTF_TYPE_MAP is one it has a (printf
+    # argument type, conversion) pair for. A type in both would say at once that
+    # the firmware cannot write a value of that type and which conversion
+    # writes it — and gen_resp() follows the map, so the field would be given
+    # exactly the table the exception list says cannot exist, with the list
+    # unchanged and nothing else to notice. Disjointness is a property of those
+    # two tables and of nothing in protocol.toml, so it is checked here, beside
+    # them, rather than by any rule about the types a field may name.
+    overlap = sorted(set(PRINTF_LESS_TYPES) & set(PRINTF_TYPE_MAP))
+    if any(missing for _, missing in unmapped) or no_printf or overlap:
         for name, missing in unmapped:
             if missing:
                 print(f"ERROR: {name} has no mapping for type(s): {missing}",
                       file=sys.stderr)
+        if overlap:
+            print(f"ERROR: type(s) in both PRINTF_TYPE_MAP and "
+                  f"PRINTF_LESS_TYPES: {overlap}", file=sys.stderr)
+            print("       PRINTF_LESS_TYPES names the types no printf "
+                  "conversion writes, so a type it names does not belong in "
+                  "PRINTF_TYPE_MAP: a response field of such a type would be "
+                  "written through the mapping, which is the table the "
+                  "exception list says cannot be written. Drop it from one of "
+                  "the two.", file=sys.stderr)
         if no_printf:
             print(f"ERROR: PRINTF_TYPE_MAP has no mapping for type(s): {no_printf}",
                   file=sys.stderr)
@@ -326,42 +375,80 @@ def validate_types(proto: dict) -> None:
 
 
 def validate_field_roles(proto: dict) -> None:
-    """Abort unless every field `role` is one this generator acts on.
+    """Abort unless every field `role` is a role this generator is registered for.
 
-    A role is a name this file and the artifacts it writes agree on, and one it
-    does not know is a name nothing derives anything from: the field would read
-    as marked while the suite's expectation and the response table of its
-    command both stayed as if it were not, so a misspelling has to stop
-    generation rather than leave a marking that does nothing.
+    A role is a name this file and the artifacts it writes agree on, so the
+    name is looked up in the registry (ROLE_SWITCHES) once per field and once
+    per side, and a field tagged with a name that is not there stops generation
+    naming the command, the side, the field and the role. That much a generator
+    can hold: a registered role is one it has something to derive for — the
+    compile switch that decides whether the field is written — and a name it
+    does not carry is one no artifact acts on, so the field would read as
+    marked while the response table of its command and the suite's expectation
+    both stayed as if it were not. A misspelling has to stop generation rather
+    than leave a marking that does nothing, and so has a `role` spelled empty.
+
+    What this cannot hold is whether a field should carry a role at all. That
+    is a statement about the field and not about the name, and neither the TOML
+    nor this file states the field's intent: a registered role on a field that
+    does not in fact vary with its condition still reads as conditional, and
+    every check downstream follows the declaration and agrees with it —
+    field_coverage_errors() takes a `role` as the license to leave the field
+    out of an emitted list, which is exactly why a wrong license is not
+    something generation can see. It has to be reviewed where the field is
+    declared; here, only a role nobody registered is refused.
     """
-    known = {ROLE_ACCOUNTING} | set(ROLE_PRESENCE)
-    unknown = sorted({
-        f["role"]
-        for cmd in proto.get("commands", [])
-        for side in ("request", "response")
-        for f in cmd.get(side, [])
-        if "role" in f and f["role"] not in known
-    })
-    if unknown:
-        print(f"ERROR: unknown field role(s): {unknown} — known roles: {sorted(known)}", file=sys.stderr)
+    unregistered: List[str] = []
+    for cmd in proto.get("commands", []):
+        command = f"{cmd['domain']}.{cmd['name']}"
+        for side in ("request", "response"):
+            for f in cmd.get(side, []):
+                role = f.get("role")
+                if role is not None and role not in ROLE_SWITCHES:
+                    unregistered.append(
+                        f"{command}: {side} field '{f['name']}' carries "
+                        f"role {role!r}, which is not registered")
+    if unregistered:
+        for entry in unregistered:
+            print(f"ERROR: unregistered field role — {entry}", file=sys.stderr)
+        print("       Registered roles, each with the compile switch the "
+              f"generated artifacts carry for it: {ROLE_SWITCHES}", file=sys.stderr)
+        print("       A role is a name this generator and the artifacts it "
+              "writes agree on; register it in ROLE_SWITCHES with the switch "
+              "it decides, or drop the tag from the field.", file=sys.stderr)
+        print("       Not checked, and not checkable here: whether the field "
+              "should carry a role at all. A role is what lets an emitter "
+              "leave a field out of its lists, so a registered role on a field "
+              "that does not vary with it reads as conditional to every check "
+              "downstream and to the review of the declaration.", file=sys.stderr)
         sys.exit(1)
 
 
-def field_coverage_errors(command: str, declared: List[dict],
+def field_coverage_errors(command: str, side: str, declared: List[dict],
                           emitted: List[str]) -> List[str]:
-    """Every way one emitted field list fails to cover a command's response.
+    """Every way one emitted field list fails to cover one side of a command.
 
-    ``declared`` is a command's ``response`` array as the TOML spells it, and
-    ``emitted`` the field names an emitter derived from it — the two halves are
-    taken from different places on purpose, the first from the source and the
-    second from the emitter's own output, so the comparison can come out equal
-    only when the emitter kept every field. A field carrying a ``role`` is not a
-    loss when an emitted list leaves it out: the role is what makes the field
-    conditional, and a view that excludes it is the design. A field with no role
-    has nothing that could excuse its absence, and that is the case neither the
-    TOML nor the digest can see — an emitter that drops it writes a manifest, a
-    response table and a docs table that agree with each other and are all short
-    the same field, and the firmware loses it with them.
+    ``side`` is ``"request"`` or ``"response"``, and is carried into every
+    problem it reports: the two sides are compared the same way but are not the
+    same loss, and a field list that lost one reads identically either way — a
+    request field dropped is a command that no longer reads an argument it
+    declares, a response field dropped a response that no longer carries a
+    value. Naming the side is what lets the reader tell them apart.
+
+    ``declared`` is that side's array as the TOML spells it, and ``emitted``
+    the field names an emitter derived from it — the two halves are taken from
+    different places on purpose, the first from the source and the second from
+    the emitter's own output, so the comparison can come out equal only when
+    the emitter kept every field. A field carrying a ``role`` is not a loss
+    when an emitted list leaves it out: the role is what makes the field
+    conditional, and a view that excludes it is the design. A field with no
+    role has nothing that could excuse its absence, and that is the case
+    neither the TOML nor the digest can see — an emitter that drops it writes a
+    manifest, a response table and a docs table that agree with each other and
+    are all short the same field, and the firmware loses it with them.
+
+    A side the command does not have is not a case here: an empty ``declared``
+    list has nothing to be short of, and the comparison comes out equal.
 
     The other direction is checked for the same reason: a field emitted under a
     name the TOML does not declare is a key no consumer can pair with a value,
@@ -369,16 +456,16 @@ def field_coverage_errors(command: str, declared: List[dict],
     """
     declared_names = {f["name"] for f in declared}
     emitted_names = set(emitted)
-    problems = [f"{command}: field '{f['name']}' declared but never emitted"
+    problems = [f"{command}: {side} field '{f['name']}' declared but never emitted"
                 for f in declared
                 if f["name"] not in emitted_names and "role" not in f]
-    problems += [f"{command}: field '{name}' emitted but not declared"
+    problems += [f"{command}: {side} field '{name}' emitted but not declared"
                  for name in emitted if name not in declared_names]
     return problems
 
 
 def fail_uncovered_fields(problems: List[str]) -> None:
-    """Report the response fields an emitter left uncovered and stop.
+    """Report the declared fields an emitter left uncovered and stop.
 
     One exit for both callers — the pre-flight validator and an emitter that
     built its own field list — so a gap reads the same wherever it is found.
@@ -387,15 +474,15 @@ def fail_uncovered_fields(problems: List[str]) -> None:
         return
     for problem in problems:
         print(f"ERROR: emitter coverage — {problem}", file=sys.stderr)
-    print("       A response field with no `role` has to reach every emitted "
-          "field list; one filtered out of the emitter is lost by the "
-          "manifest, the response table and the docs table together, and no "
-          "consumer of them can tell.", file=sys.stderr)
+    print("       A request or response field with no `role` has to reach every "
+          "emitted field list of its side; one filtered out of the emitter is "
+          "lost by every artifact derived from it, and no consumer of them can "
+          "tell.", file=sys.stderr)
     sys.exit(1)
 
 
 def validate_field_coverage(proto: dict) -> None:
-    """Abort unless the manifest emitter emits every response field it declares.
+    """Abort unless the manifest emitter emits every field of both sides it declares.
 
     The counterpart of validate_domains() and validate_types() for the one claim
     neither the TOML nor a digest can carry: that an emitter *emits* what the
@@ -406,13 +493,18 @@ def validate_field_coverage(proto: dict) -> None:
     it. So the names themselves are compared, before anything is written: the
     declared side from the TOML, the emitted side from command_fields(), the
     records every consumer of the manifest reads.
+
+    Both sides of every command are compared, each under its own name. The
+    request side is the one this check used to leave out, which left a request
+    field an emitter dropped audible in nothing at all.
     """
     problems = [
         problem
         for cmd in proto.get("commands", [])
+        for side in ("request", "response")
         for problem in field_coverage_errors(
-            f"{cmd['domain']}.{cmd['name']}", cmd.get("response", []),
-            [r["name"] for r in command_fields(cmd.get("response", []))])
+            f"{cmd['domain']}.{cmd['name']}", side, cmd.get(side, []),
+            [r["name"] for r in command_fields(cmd.get(side, []))])
     ]
     fail_uncovered_fields(problems)
 
@@ -972,6 +1064,31 @@ def gen_fields(proto: dict, out: Optional[Path] = None,
     commands = proto.get("commands", [])
     source = Path(source_path) if source_path is not None else None
 
+    # Both field lists of a command are built and checked before any of them is
+    # written, so the comparison is between what this emitter is about to write
+    # and what the TOML declares, and not between the declared array and
+    # itself: a record dropped while the lists are built is a field this
+    # manifest stops carrying while protocol.toml still has it, and a consumer
+    # reading the manifest cannot see it — the list it reads is the one that
+    # lost the field. Both sides, because a request field list is one too: a
+    # request field dropped here is a command whose arguments no longer match
+    # the ones the protocol declares, and it used to be dropped in silence.
+    entries: Dict[str, Dict[str, Any]] = {}
+    for cmd in commands:
+        full_name = f"{cmd['domain']}.{cmd['name']}"
+        sides = {side: command_fields(cmd.get(side, []))
+                 for side in ("request", "response")}
+        for side, emitted in sides.items():
+            fail_uncovered_fields(field_coverage_errors(
+                full_name, side, cmd.get(side, []), [r["name"] for r in emitted]))
+        entries[full_name] = {
+            "domain": cmd["domain"],
+            "name": cmd["name"],
+            "description": cmd.get("description", ""),
+            "request": sides["request"],
+            "response": sides["response"],
+        }
+
     manifest = {
         "generated_by": "scripts/gen_proto.py — DO NOT EDIT MANUALLY",
         # What it was read from, and the digest of exactly those bytes.
@@ -986,16 +1103,7 @@ def gen_fields(proto: dict, out: Optional[Path] = None,
         "protocol_version": proto.get("meta", {}).get("version", ""),
         # Keyed "<domain>.<name>", the same full command name the wire uses.
         # Insertion order = the TOML's [[commands]] order.
-        "commands": {
-            f"{cmd['domain']}.{cmd['name']}": {
-                "domain": cmd["domain"],
-                "name": cmd["name"],
-                "description": cmd.get("description", ""),
-                "request": command_fields(cmd.get("request", [])),
-                "response": command_fields(cmd.get("response", [])),
-            }
-            for cmd in commands
-        },
+        "commands": entries,
     }
 
     result = json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
@@ -1196,7 +1304,8 @@ def gen_fields_md(proto: dict, out: Optional[Path] = None,
             "note": md_cell(f.get("description", "")) or "—",
         } for f in resp]
         fail_uncovered_fields(
-            field_coverage_errors(full_name, resp, [r["name"] for r in rows]))
+            field_coverage_errors(full_name, "response", resp,
+                                  [r["name"] for r in rows]))
         w(f"## `{full_name}`")
         w()
         desc = md_cell(cmd.get("description", ""))
