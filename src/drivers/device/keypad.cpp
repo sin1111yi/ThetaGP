@@ -25,6 +25,7 @@
 #include "drivers/device/keypad.h"
 
 #include "drivers/device/run_led.h"
+#include "drivers/device/systimer.h"
 #include "drivers/peripherals/gpio.h"
 #include "drivers/peripherals/nvic.h"
 #include "drivers/peripherals/peripheralsmgr.h"
@@ -69,12 +70,18 @@ void Keypad::init() {
 }
 
 void Keypad::scanCallback() {
-  // Minimum measurement point: one read of the DWT cycle counter at each end of
-  // the callback. cycleCounterInit() (platform/STM32/peripherals/systick.c) has
-  // already enabled the counter — PeripheralsManager::initPeripherals() runs
-  // before this timer starts — so nothing is initialized here. The reads and the
-  // stamp write below are the whole cost of the measurement.
-  const uint32_t startCycles = DWT->CYCCNT;
+  // Minimum measurement point: one read of the device layer's microsecond clock at
+  // each end of the callback. SystemTimer::getMicros() is how the rest of the
+  // device layer takes time (the scheduler reads its clock the same way), and the
+  // keypad is a device, so it takes the time from the device-layer timer rather
+  // than from a peripheral register. The clock is safe to read from here: it ends
+  // up in micros() (platform/STM32/peripherals/systick.c), which routes itself to
+  // the interrupt path when it is called from an interrupt, so this callback does
+  // not have to pick a context-specific entry point.
+  //
+  // Counts microseconds, so stamping it here and writing three accumulators below
+  // is the whole cost of the measurement, and the host does the subtraction.
+  const uint32_t startUs = SystemTimer::getInstance().getMicros();
 
   uint32_t mask = 0;
   (this->*_readInput)(&mask);
@@ -109,21 +116,28 @@ void Keypad::scanCallback() {
     RunLed::getInstance().update(micros());
   }
 
-  const uint32_t elapsed = DWT->CYCCNT - startCycles;
-  _scanCyclesLast = elapsed;
-  _scanCyclesSum += elapsed;
-  if (elapsed > _scanCyclesMax) {
-    _scanCyclesMax = elapsed;
+  // The clock's tick is one microsecond, so this difference is a whole number of
+  // microseconds already and needs no conversion. The stamp is not free, though:
+  // each end reads the device clock, which costs an atomic block and a division
+  // inside micros(), so the pair adds roughly half a microsecond to the number
+  // measured here — this reading includes its own cost. A single reading is also
+  // quantized to one microsecond, which is the error on last_us and max_us; the
+  // sum is not biased by that, because both ends are truncated from one clock.
+  const uint32_t elapsedUs = SystemTimer::getInstance().getMicros() - startUs;
+  _scanUsLast = elapsedUs;
+  _scanUsSum += elapsedUs;
+  if (elapsedUs > _scanUsMax) {
+    _scanUsMax = elapsedUs;
   }
-  _scanCyclesCount++;
+  _scanUsCount++;
 }
 
 void Keypad::getScanStats(ScanStats &out) const {
   ATOMIC_BLOCK(NVIC_PRIO_MAX) {
-    out.count = _scanCyclesCount;
-    out.last = _scanCyclesLast;
-    out.max = _scanCyclesMax;
-    out.sum = _scanCyclesSum;
+    out.count = _scanUsCount;
+    out.last_us = _scanUsLast;
+    out.max_us = _scanUsMax;
+    out.sum_us = _scanUsSum;
   }
 }
 

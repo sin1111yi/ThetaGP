@@ -121,19 +121,28 @@ private:
   HardwareTimer _scanTimer;
 
   // ── Scan time (minimum measurement point) ──
-  // Cycles the DWT counter advanced across one scanCallback: a read at entry, a
-  // read at exit, then three accumulating writes. Nothing else runs in the ISR —
-  // no division, no print, no peripheral access — so the measurement costs about
-  // one load per scan, and the host does the arithmetic.
+  // Microseconds the device layer's clock (SystemTimer::getMicros) advanced across
+  // one scanCallback: a read at entry, a read at exit, then three accumulating
+  // writes. Nothing else runs in the ISR — no division, no print, no peripheral
+  // access — so the measurement costs about one clock read per scan, and the host
+  // does the subtraction.
   //
-  // Cumulative since boot and never reset: an average is sum / count and a worst
-  // case is max, both computed on the host. The sum accumulates the cycle counter
-  // itself, so a 32-bit accumulator would wrap within 2^32 / CPU clock ≈ 9 s of
-  // wall time; it is 64-bit for that reason.
-  volatile uint32_t _scanCyclesCount = 0;
-  volatile uint32_t _scanCyclesLast = 0;
-  volatile uint32_t _scanCyclesMax = 0;
-  volatile uint64_t _scanCyclesSum = 0;
+  // The timestamp's tick is one microsecond and a scan is about ten of them, so
+  // last_us and max_us are quantized to whole microseconds (±1 µs, i.e. ~5% at
+  // the worst case). Each per-scan difference is truncated before it is summed,
+  // so sum_us and sum_us / count both read low by roughly 0.5 µs per scan and no
+  // correction is applied — a mean taken from here is a lower bound, not the
+  // scan's true mean.
+  //
+  // Cumulative since boot and never reset: an average is sum_us / count and a
+  // worst case is max_us, both computed on the host. The sum accumulates elapsed
+  // time only, never idle time, so at the current scan rate it grows by ≈3.3e5
+  // µs per wall second — a 32-bit accumulator would wrap in about 3.6 h of wall
+  // time; it is 64-bit for that reason.
+  volatile uint32_t _scanUsCount = 0;
+  volatile uint32_t _scanUsLast = 0;
+  volatile uint32_t _scanUsMax = 0;
+  volatile uint64_t _scanUsSum = 0;
 
   static constexpr KeypadConfig::Mode _mode = BDCFG_KEYPAD_DRIVE_MODE;
   static constexpr KeypadConfig::Active _active = BDCFG_KEYPAD_ACTIVE_MODE;
@@ -164,14 +173,14 @@ public:
 
   bool isKeyPressed(uint8_t keyId) const;
 
-  // Readout of the scan-time counters above, in DWT cycles. The snapshot is
-  // taken with the scan interrupt masked, so count, last, max and sum all
-  // describe the same instant.
+  // Readout of the scan-time counters above, in microseconds. The snapshot is
+  // taken with the scan interrupt masked, so count, last_us, max_us and sum_us
+  // all describe the same instant.
   struct ScanStats {
     uint32_t count;
-    uint32_t last;
-    uint32_t max;
-    uint64_t sum;
+    uint32_t last_us;
+    uint32_t max_us;
+    uint64_t sum_us;
   };
 
   void getScanStats(ScanStats &out) const;
