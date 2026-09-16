@@ -9,9 +9,11 @@ Reads protocol/protocol.toml and generates type-safe serialization code:
   - JSON  manifest (protocol/proto_fields.json) — ordered request/response
           field lists per command, for consumers that must not hand-copy the
           protocol shape: the CDC test suite reads it, the docs table can too
-  - MD    table    (docs/generated/protocol-fields.md) — the response fields of
+  - MD    table    (protocol/protocol-fields.md) — the response fields of
           every command as the Markdown table the docs point at, so the table a
-          reader is handed is derived from the same TOML as the firmware's
+          reader is handed is derived from the same TOML as the firmware's; it
+          sits beside protocol.toml and is tracked, because it is the one
+          artifact read by a person rather than compiled by a build
   - C++   header (protocol/proto_resp.h) — response payload field tables in
           declaration order, as X-macros, for the firmware that writes a
           response: the order, the JSON keys and the printf conversions come
@@ -112,6 +114,24 @@ PRINTF_TYPE_MAP = {
     "bool":   ("int", "%B"),
     "string": ("const char *", "%Q"),
 }
+
+# The types a *response* field may name that have no printf form at all, and so
+# are a gap in nothing: PRINTF_TYPE_MAP pairs a declared type with the one C
+# type an argument of it has and the one conversion that writes it, and `any` is
+# a value whose JSON type is not known until it is read — the value of one key
+# is a number and of another a string (docs/cdc-json-protocol.md, config.get_key,
+# whose example response carries "value":1, a number). The firmware's only
+# printf is frozen's json_printf (src/utils/json/json.h), whose specifiers
+# (%B, %Q, %.*Q, %V, %H, %M) each take a fixed C type chosen at the call site,
+# and a response field table entry is `static_assert`ed against one: no
+# conversion writes a value of unknown type, so a mapping for `any` would have to
+# invent a C type for it and would then write a JSON string where the protocol
+# says number. A response field of such a type is therefore not mapped but
+# reported instead: gen_resp() writes no table for its command and names it in
+# the header, so the omission is in the artifact and not in the rule.
+# Names, not a blanket "unmappable" exemption: a type nobody has decided about
+# is still a type PRINTF_TYPE_MAP has to map or the run stops.
+PRINTF_LESS_TYPES = ("any",)
 
 # A field's `role` is a property that outlives its type and its position: who
 # else has to know about that field.
@@ -243,7 +263,7 @@ def validate_domains(proto: dict) -> None:
 
 
 def validate_types(proto: dict) -> None:
-    """Abort unless every `type` protocol.toml uses is mapped by all three tables.
+    """Abort unless every `type` protocol.toml uses is mapped by the tables its use needs.
 
     The counterparts of validate_domains() and validate_field_roles(), for the
     one name in the TOML the generators otherwise only read: a type is looked up
@@ -255,19 +275,38 @@ def validate_types(proto: dict) -> None:
     name can be added to one of them and missed in another, and exit 1 like the
     other validators: the input is wrong, so no artifact should be written from
     it.
+
+    Which tables a type has to be in depends on where the TOML uses it. A
+    request field is read by each target out of its own table — CPP, RUST, TS —
+    and needs no printf form. A *response* field is written by the firmware
+    through a printf conversion as well, so its type has to be in
+    PRINTF_TYPE_MAP too, and a rule that stopped at the three would pass exactly
+    the case of a name added to them and missed in the fourth. That fourth
+    mapping is the one with no fallback: a response field of a type it does not
+    map leaves gen_resp() no table to write for its command, so the command
+    keeps a response the firmware writes by hand. The exception is
+    PRINTF_LESS_TYPES, the named types for which no conversion exists at all.
     """
-    used = sorted(
-        {f["type"] for t in proto.get("types", []) for f in t.get("fields", [])}
-        | {f["type"] for cmd in proto.get("commands", [])
-           for side in ("request", "response") for f in cmd.get(side, [])}
-    )
+    request = {f["type"] for cmd in proto.get("commands", [])
+               for f in cmd.get("request", [])}
+    response = {f["type"] for cmd in proto.get("commands", [])
+                for f in cmd.get("response", [])}
+    nested = {f["type"] for t in proto.get("types", []) for f in t.get("fields", [])}
+    used = sorted(nested | request | response)
     unmapped = [(name, [t for t in used if t not in table])
                 for name, table in TYPE_MAPS]
-    if any(missing for _, missing in unmapped):
+    # Only the response side: a request field is not written by a printf, and
+    # requiring a conversion for it would report types nothing is missing.
+    no_printf = [t for t in sorted(response)
+                 if t not in PRINTF_TYPE_MAP and t not in PRINTF_LESS_TYPES]
+    if any(missing for _, missing in unmapped) or no_printf:
         for name, missing in unmapped:
             if missing:
                 print(f"ERROR: {name} has no mapping for type(s): {missing}",
                       file=sys.stderr)
+        if no_printf:
+            print(f"ERROR: PRINTF_TYPE_MAP has no mapping for type(s): {no_printf}",
+                  file=sys.stderr)
         print(f"       Types used by protocol.toml: {used}", file=sys.stderr)
         print(f"       Mapped types: {sorted(set().union(*(set(t) for _, t in TYPE_MAPS)))}",
               file=sys.stderr)
@@ -275,6 +314,14 @@ def validate_types(proto: dict) -> None:
               "untyped value (JsonVariant / serde_json::Value / any) instead of "
               "the declared one; add the mapping or fix the type name.",
               file=sys.stderr)
+        if no_printf:
+            print("       PRINTF_TYPE_MAP is the response side's fourth table: a "
+                  "response field is written through a printf conversion, so a "
+                  "field of a type it does not map leaves its command no "
+                  "response table (gen_resp() names it in the header) and the "
+                  "build still succeeds.", file=sys.stderr)
+            print(f"       Types with no printf form at all, not a gap in it: "
+                  f"{list(PRINTF_LESS_TYPES)}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -298,6 +345,76 @@ def validate_field_roles(proto: dict) -> None:
     if unknown:
         print(f"ERROR: unknown field role(s): {unknown} — known roles: {sorted(known)}", file=sys.stderr)
         sys.exit(1)
+
+
+def field_coverage_errors(command: str, declared: List[dict],
+                          emitted: List[str]) -> List[str]:
+    """Every way one emitted field list fails to cover a command's response.
+
+    ``declared`` is a command's ``response`` array as the TOML spells it, and
+    ``emitted`` the field names an emitter derived from it — the two halves are
+    taken from different places on purpose, the first from the source and the
+    second from the emitter's own output, so the comparison can come out equal
+    only when the emitter kept every field. A field carrying a ``role`` is not a
+    loss when an emitted list leaves it out: the role is what makes the field
+    conditional, and a view that excludes it is the design. A field with no role
+    has nothing that could excuse its absence, and that is the case neither the
+    TOML nor the digest can see — an emitter that drops it writes a manifest, a
+    response table and a docs table that agree with each other and are all short
+    the same field, and the firmware loses it with them.
+
+    The other direction is checked for the same reason: a field emitted under a
+    name the TOML does not declare is a key no consumer can pair with a value,
+    arriving on the wire as a field the protocol never had.
+    """
+    declared_names = {f["name"] for f in declared}
+    emitted_names = set(emitted)
+    problems = [f"{command}: field '{f['name']}' declared but never emitted"
+                for f in declared
+                if f["name"] not in emitted_names and "role" not in f]
+    problems += [f"{command}: field '{name}' emitted but not declared"
+                 for name in emitted if name not in declared_names]
+    return problems
+
+
+def fail_uncovered_fields(problems: List[str]) -> None:
+    """Report the response fields an emitter left uncovered and stop.
+
+    One exit for both callers — the pre-flight validator and an emitter that
+    built its own field list — so a gap reads the same wherever it is found.
+    """
+    if not problems:
+        return
+    for problem in problems:
+        print(f"ERROR: emitter coverage — {problem}", file=sys.stderr)
+    print("       A response field with no `role` has to reach every emitted "
+          "field list; one filtered out of the emitter is lost by the "
+          "manifest, the response table and the docs table together, and no "
+          "consumer of them can tell.", file=sys.stderr)
+    sys.exit(1)
+
+
+def validate_field_coverage(proto: dict) -> None:
+    """Abort unless the manifest emitter emits every response field it declares.
+
+    The counterpart of validate_domains() and validate_types() for the one claim
+    neither the TOML nor a digest can carry: that an emitter *emits* what the
+    TOML declares. The manifest records the generator's digest, so a change to
+    an emitter is visible, but a digest only says the emitter moved — it cannot
+    say whether the list it wrote is short a field, and an emitter that stopped
+    emitting one writes artifacts that are mutually consistent and all missing
+    it. So the names themselves are compared, before anything is written: the
+    declared side from the TOML, the emitted side from command_fields(), the
+    records every consumer of the manifest reads.
+    """
+    problems = [
+        problem
+        for cmd in proto.get("commands", [])
+        for problem in field_coverage_errors(
+            f"{cmd['domain']}.{cmd['name']}", cmd.get("response", []),
+            [r["name"] for r in command_fields(cmd.get("response", []))])
+    ]
+    fail_uncovered_fields(problems)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -1046,7 +1163,6 @@ def gen_fields_md(proto: dict, out: Optional[Path] = None,
     w(f"  Source: {source if source is not None else 'protocol/protocol.toml'}")
     if source is not None:
         w(f"  Source sha256: {file_sha256(source)}")
-    w(f"  Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     w("-->")
     w()
     w("# CDC 响应字段表（派生自 `protocol/protocol.toml`）")
@@ -1065,7 +1181,23 @@ def gen_fields_md(proto: dict, out: Optional[Path] = None,
         resp = cmd.get("response", [])
         if not resp:
             continue
-        w(f"## `{cmd['domain']}.{cmd['name']}`")
+        full_name = f"{cmd['domain']}.{cmd['name']}"
+        # The rows are built before any of them is written, so that the coverage
+        # check below compares what this emitter writes against what the TOML
+        # declares and not the declared array against itself: a row dropped
+        # while building them is a field the table stops carrying while
+        # protocol.toml still has it, which is the loss the table cannot show.
+        rows = [{
+            "name": f["name"],
+            "json": md_cell(f["json"]),
+            "type": md_cell(f["type"]),
+            # `—` and not an empty cell: a placeholder shows the column was
+            # considered for the field and the TOML carries nothing for it.
+            "note": md_cell(f.get("description", "")) or "—",
+        } for f in resp]
+        fail_uncovered_fields(
+            field_coverage_errors(full_name, resp, [r["name"] for r in rows]))
+        w(f"## `{full_name}`")
         w()
         desc = md_cell(cmd.get("description", ""))
         if desc:
@@ -1073,11 +1205,8 @@ def gen_fields_md(proto: dict, out: Optional[Path] = None,
             w()
         w("| 字段 | 类型 | 数据源或说明 |")
         w("|------|------|--------------|")
-        for f in resp:
-            # `—` and not an empty cell: a placeholder shows the column was
-            # considered for the field and the TOML carries nothing for it.
-            note = md_cell(f.get("description", "")) or "—"
-            w(f"| `{md_cell(f['json'])}` | {md_cell(f['type'])} | {note} |")
+        for row in rows:
+            w(f"| `{row['json']}` | {row['type']} | {row['note']} |")
         w()
 
     empty = [f"{c['domain']}.{c['name']}" for c in commands if not c.get("response")]
@@ -1131,7 +1260,7 @@ Examples:
                         help="Output dir for the generated JSON field manifest")
     parser.add_argument("--outdir-resp", default="protocol",
                         help="Output dir for the generated C++ response field tables")
-    parser.add_argument("--outdir-fields-md", default="docs/generated",
+    parser.add_argument("--outdir-fields-md", default="protocol",
                         help="Output dir for the generated Markdown response field tables")
 
     args = parser.parse_args()
@@ -1146,6 +1275,7 @@ Examples:
     validate_domains(proto)
     validate_types(proto)
     validate_field_roles(proto)
+    validate_field_coverage(proto)
 
     # Print summary
     types_list = proto.get("types", [])
@@ -1191,8 +1321,11 @@ Examples:
             if args.dry_run:
                 print(gen_resp(proto))
         elif tgt == "fields-md":
-            # The Markdown tables are read, not compiled, so they sit with the
-            # docs that point at them rather than beside the generated code.
+            # The Markdown tables are read, not compiled, so they sit beside the
+            # TOML they are derived from and in the repository, not with the
+            # generated code: docs/ is not tracked, and the one artifact meant
+            # for a reader has to be readable in the repository without running
+            # this script first.
             out_file = (None if args.dry_run
                         else Path(args.outdir_fields_md) / "protocol-fields.md")
             gen_fields_md(proto, out_file, proto_path)

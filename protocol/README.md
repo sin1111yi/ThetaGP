@@ -126,7 +126,7 @@ outputs:
 | `protocol/types.ts` | TypeScript | Frontend (Vue/Svelte) |
 | `protocol/proto_fields.json` | JSON | Consumers that read the protocol shape: the CDC test suite |
 | `protocol/proto_resp.h` | C++ | Device firmware: the response field order, keys and printf conversions |
-| `docs/generated/protocol-fields.md` | Markdown | The docs: the response field tables `docs/cdc-json-protocol.md` points at |
+| `protocol/protocol-fields.md` | Markdown | The docs: the response field tables `docs/cdc-json-protocol.md` points at. Tracked, unlike the five above: it is read rather than compiled, so a reader of the repository gets it without running the generator |
 
 ### Usage
 
