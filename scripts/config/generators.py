@@ -31,24 +31,31 @@ SPI_PERIPHERAL_ENUM_MAP = {f"SPI{i}": f"SpiInstance::Spi{i}" for i in range(1, 7
 FLASH_CHIP_MAP = {"w25qxx": "W25QXX"}
 
 
+def lookup_value(mapping: dict[str, str], label: str, value,
+                 what: str = "firmware value") -> str:
+    """Map a declared config value onto the constant the firmware defines.
+
+    The maps above carry one entry per value the platform layer defines
+    (`UartInstance` in bus_uart.h, `SpiInstance` in bus_spi.h, the USB
+    peripheral macros, the MCU headers), so a value outside a map has nothing
+    behind it in the firmware: there is no default to fall back on, and a
+    made-up entry would put a constant for undeclared hardware into the
+    generated file.
+    """
+    mapped = mapping.get(value)
+    if mapped is None:
+        raise ValueError(
+            f"{label} is '{value}', which names no {what}. "
+            f"Valid values: {', '.join(sorted(mapping))}"
+        )
+    return mapped
+
+
 def lookup_peripheral(enum_map: dict[str, str], bus: str, index: int,
                       entry: dict) -> str:
-    """Map a declared peripheral onto the firmware instance it names.
-
-    The maps above carry one entry per instance the platform layer defines
-    (`UartInstance` in bus_uart.h, `SpiInstance` in bus_spi.h), so a value
-    outside a map has no hardware behind it: there is nothing to substitute,
-    and a made-up instance would put a descriptor for undeclared hardware into
-    the generated table.
-    """
-    value = entry["peripheral"]
-    enum_val = enum_map.get(value)
-    if enum_val is None:
-        raise ValueError(
-            f"bus.{bus}[{index}].peripheral is '{value}', which names no "
-            f"firmware instance. Valid values: {', '.join(sorted(enum_map))}"
-        )
-    return enum_val
+    """Map a declared peripheral onto the firmware instance it names."""
+    return lookup_value(enum_map, f"bus.{bus}[{index}].peripheral",
+                        entry["peripheral"], what="firmware instance")
 
 
 # ── Pin lines (LED, misc) ────────────────────────────────────────────────────
@@ -80,11 +87,11 @@ def gen_keypad_lines(kp: dict | None) -> list[str]:
     lines: list[str] = []
     dm = kp.get("drive_mode", "").lower()
 
-    mode_val = KEYPAD_DRIVE_MODE_MAP.get(dm, "")
+    mode_val = lookup_value(KEYPAD_DRIVE_MODE_MAP, "keypad.drive_mode", dm)
     lines.append(f"#define {'BDCFG_KEYPAD_DRIVE_MODE':<28} KeypadConfig::Mode::{mode_val}")
 
     am = kp.get("active_mode", "none").lower()
-    active_val = KEYPAD_ACTIVE_MODE_MAP.get(am, "None")
+    active_val = lookup_value(KEYPAD_ACTIVE_MODE_MAP, "keypad.active_mode", am)
     lines.append(f"#define {'BDCFG_KEYPAD_ACTIVE_MODE':<28} KeypadConfig::Active::{active_val}")
 
     if dm == "scan_matrix":
@@ -181,10 +188,11 @@ def gen_usb_lines(usb: dict | None) -> list[str]:
         return []
     lines: list[str] = []
     if "hw_periph" in usb:
-        pv = USB_PERIPHERAL_MAP.get(usb["hw_periph"], "USB1_OTG")
+        pv = lookup_value(USB_PERIPHERAL_MAP, "usb.hw_periph",
+                          usb["hw_periph"])
         lines.append(f"#define BDCFG_IF_{pv}")
     if "speed" in usb:
-        sv = USB_SPEED_MAP.get(usb["speed"], "FS")
+        sv = lookup_value(USB_SPEED_MAP, "usb.speed", usb["speed"])
         lines.append(f"#define BDCFG_SPEED_{sv}")
     if "wired_report_hz" in usb:
         lines.append(
@@ -356,7 +364,8 @@ def assemble_header(
     flash_lines: list[str],
 ) -> str:
     """Assemble the full BoardConfig.h content."""
-    mcu_header = MCU_HEADER_MAP.get(mcu_series, "")
+    mcu_header = lookup_value(MCU_HEADER_MAP, "board_info.mcu_series",
+                              mcu_series)
 
     content = (
         "/*\n"
@@ -381,10 +390,10 @@ def assemble_header(
         "#pragma once\n"
     )
 
-    if mcu_header:
-        content += f"\n{mcu_header}\n\n"
-    else:
-        content += "\n"
+    # The series only appears through its map, so the MCU header is always
+    # there: a series with no header is a config error, reported by the
+    # lookup above.
+    content += f"\n{mcu_header}\n\n"
 
     for line in pin_lines:
         content += line + "\n"

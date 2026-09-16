@@ -4,15 +4,29 @@ BoardConfig.toml validators.
 All public entry point: validate_config(cfg) → list[str] of errors (empty = ok).
 """
 
-from .generators import SPI_PERIPHERAL_ENUM_MAP, UART_PERIPHERAL_ENUM_MAP
+from .generators import (
+    FLASH_CHIP_MAP,
+    KEYPAD_ACTIVE_MODE_MAP,
+    KEYPAD_DRIVE_MODE_MAP,
+    MCU_HEADER_MAP,
+    SPI_PERIPHERAL_ENUM_MAP,
+    UART_PERIPHERAL_ENUM_MAP,
+    USB_PERIPHERAL_MAP,
+    USB_SPEED_MAP,
+)
 from .pin_utils import validate_pin_format
 
 # ── Valid value sets ─────────────────────────────────────────────────────────
+#
+# Every set below is read off the generator's own map, so one table decides
+# both "what may be written" and "what gets emitted": no value passes
+# validation and then fails to map, and no value the generator can emit is
+# unreachable from a config file.
 
-VALID_MCU_SERIES = {"STM32H7", "STM32F4", "STM32F1"}
+VALID_MCU_SERIES = set(MCU_HEADER_MAP)
 
-VALID_DRIVE_MODES = {"scan_matrix", "io_direct", "spi_74hc165"}
-VALID_ACTIVE_MODES = {"none", "low", "high"}
+VALID_DRIVE_MODES = set(KEYPAD_DRIVE_MODE_MAP)
+VALID_ACTIVE_MODES = set(KEYPAD_ACTIVE_MODE_MAP)
 
 BUTTON_SUFFIX_LIST = {
     "UP", "DOWN", "LEFT", "RIGHT",
@@ -24,22 +38,20 @@ BUTTON_SUFFIX_LIST = {
     "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8",
 }
 
-VALID_USB_PERIPHS = {"USB1", "USB2", "ULPI"}
-VALID_USB_SPEEDS = {"high_speed", "full_speed"}
+VALID_USB_PERIPHS = set(USB_PERIPHERAL_MAP)
+VALID_USB_SPEEDS = set(USB_SPEED_MAP)
 
 # Reports per second each link speed can poll the interrupt endpoint at: one
 # transaction per 1 ms frame on full speed, one per 125 us microframe on high
 # speed.
 USB_REPORT_RATE_CEILING_HZ = {"high_speed": 8000, "full_speed": 1000}
 
-VALID_FLASH_CHIPS = {"none", "w25qxx"}
+# "none" is in no map: it is the board stating it has no chip, which the
+# generator answers with the switch alone.
+VALID_FLASH_CHIPS = {"none"} | set(FLASH_CHIP_MAP)
 
-# The peripheral values the generator can turn into a firmware instance. Both
-# sets are read off the generator's own maps — one source for "what may be
-# written" and "what gets emitted" — so no value passes validation and then
-# fails to map. The firmware's instance enums (bus_uart.h, bus_spi.h) carry
-# exactly the entries in those maps: UART1–UART8 have no LPUART, SPI1–SPI6 have
-# no SPI7.
+# The firmware's instance enums (bus_uart.h, bus_spi.h) carry exactly the
+# entries in those maps: UART1–UART8 have no LPUART, SPI1–SPI6 have no SPI7.
 VALID_UART_PERIPHERALS = set(UART_PERIPHERAL_ENUM_MAP)
 VALID_SPI_PERIPHERALS = set(SPI_PERIPHERAL_ENUM_MAP)
 
@@ -367,6 +379,15 @@ def _validate_bus(bus: dict, errors: list[str]) -> None:
                 f"bus.spi[{i}].peripheral '{s['peripheral']}' is invalid. "
                 f"Valid values: {', '.join(sorted(VALID_SPI_PERIPHERALS))}"
             )
+        # Every SPI line carries its own pin: the driver passes all four to the
+        # descriptor table, so none of them has a pin it could borrow.
+        for pin_name in ("sclk", "mosi", "miso", "ncs"):
+            if pin_name not in s:
+                errors.append(f"bus.spi[{i}].{pin_name} pin is required")
+            else:
+                err = validate_pin_format(s[pin_name])
+                if err:
+                    errors.append(f"bus.spi[{i}].{pin_name}: {err}")
 
 
 # ── Flash ────────────────────────────────────────────────────────────────────
