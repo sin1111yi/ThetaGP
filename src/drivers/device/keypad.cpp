@@ -24,7 +24,6 @@
 
 #include "drivers/device/keypad.h"
 
-#include "drivers/device/run_led.h"
 #include "drivers/device/systimer.h"
 #include "drivers/peripherals/gpio.h"
 #include "drivers/peripherals/nvic.h"
@@ -84,35 +83,44 @@ void Keypad::scanCallback() {
   uint32_t mask = 0;
   (this->*_readInput)(&mask);
 
-  // Update sample history for all 32 keys
+  // Per-scan decision, one key at a time, from the raw mask this scan read.
+  // A sample that agrees with a key's committed state clears both of its runs,
+  // so a run of the opposite level counts only while it stays unbroken and a
+  // burst shorter than the threshold that guards that direction leaves no trace
+  // at all. A run that reaches its threshold commits the level it counted and
+  // then starts over.
+  uint32_t committedMask = 0;
+
   for (size_t i = 0; i < MAX_KEYS; i++) {
     KeySampler &s = _samplers[i];
     const bool pressed = (mask & (1U << i)) != 0;
-    s.history = ((s.history << 1) | pressed) & 0xFFFF;
-  }
+    const bool stable = (s.stableState == KeyState::Pressed);
 
-  _scanCount = (_scanCount + 1) % KeypadConfig::DEBOUNCE_SAMPLES;
-
-  if (_scanCount == 0) {
-    // Majority vote and update state
-    uint32_t debouncedMask = 0;
-
-    for (size_t i = 0; i < MAX_KEYS; i++) {
-      KeySampler &s = _samplers[i];
-      const uint8_t count = __builtin_popcount(s.history);
-      s.stableState = count >= KeypadConfig::DEBOUNCE_THRESHOLD
-                          ? KeyState::Pressed
-                          : KeyState::Released;
-
-      if (s.stableState == KeyState::Pressed) {
-        debouncedMask |= (1U << i);
+    if (pressed == stable) {
+      s.pressRun = 0;
+      s.releaseRun = 0;
+    } else if (pressed) {
+      s.releaseRun = 0;
+      if (++s.pressRun >= KeypadConfig::PRESS_SAMPLES) {
+        s.stableState = KeyState::Pressed;
+        s.pressRun = 0;
+      }
+    } else {
+      s.pressRun = 0;
+      if (++s.releaseRun >= KeypadConfig::RELEASE_SAMPLES) {
+        s.stableState = KeyState::Released;
+        s.releaseRun = 0;
       }
     }
 
-    _pressedMask = debouncedMask;
-
-    RunLed::getInstance().update(SystemTimer::getInstance().getMicros());
+    if (s.stableState == KeyState::Pressed) {
+      committedMask |= (1U << i);
+    }
   }
+
+  // The committed mask is assembled whole and published once, so a reader sees
+  // either the previous mask or this one, never a mixture of two keys.
+  _pressedMask = committedMask;
 
   // Raw cycles, kept unconverted so the counters hold the measurement at full
   // resolution; the readout converts. The pair of stamps costs a few cycles and

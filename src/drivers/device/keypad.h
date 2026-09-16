@@ -47,30 +47,89 @@ static constexpr uint8_t KEYPAD_NO_KEY = 0xFF;
 
 struct KeypadConfig {
   static constexpr uint32_t DEFAULT_SCAN_FREQ = THETAGP_CFG_KEYPAD_SCAN_HZ;
-  static constexpr uint8_t DEBOUNCE_SAMPLES = 16;
-  static constexpr uint8_t DEBOUNCE_THRESHOLD = 12;
+
+  // Consecutive scans of one level that a key's line has to hold before the
+  // key's committed state follows it, one threshold per direction. These are
+  // run lengths, not window sizes: a sample that agrees with the committed
+  // state clears both runs, so a run shorter than its threshold leaves no
+  // trace, and a level change commits exactly that many scans after the last
+  // opposed sample — no window has to fill, and nothing is carried over from
+  // before it.
+  static constexpr uint8_t PRESS_SAMPLES = 2;
+  static constexpr uint8_t RELEASE_SAMPLES = 32;
+
   static constexpr uint32_t GPIO_STABILIZE_DELAY_CYCLES = 50;
 
   // One scan callback walks every drive line (scanCallback -> the
   // readInputScanMatrix loop over DRIVE_PIN_NUM), so a key is sampled once per
-  // scan and its sampling rate is THETAGP_CFG_KEYPAD_SCAN_HZ itself. The
-  // majority vote re-derives a key's stable state from a window of
-  // DEBOUNCE_SAMPLES of those samples — 16 samples, 12 of them for a press —
-  // so the stable-state refresh rate is that scan rate divided by the window,
-  // not the scan rate. THETAGP_CFG_KEYPAD_SCAN_HZ is the adjustable value
+  // scan and its sampling rate is THETAGP_CFG_KEYPAD_SCAN_HZ itself. Every scan
+  // is also a decision point, so the committed-state refresh rate is that same
+  // scan rate: there is no window and no vote behind it, only the two run
+  // counters a key keeps. THETAGP_CFG_KEYPAD_SCAN_HZ is the adjustable value
   // (src/conf/ThetaGP_Config.h); the report rate is declared by the board
   // ([usb] wired_report_hz in its BoardConfig.toml); the drive-line count
   // follows the board's key matrix.
-  static_assert(
-      THETAGP_CFG_KEYPAD_SCAN_HZ >= THETAGP_CFG_USB_REPORT_RATE_HZ,
-      "keypad: a key is sampled once per scan callback and a scan callback "
-      "walks every drive line, so the sampling rate is "
-      "THETAGP_CFG_KEYPAD_SCAN_HZ. The scan rate has to reach the report "
-      "rate the board declares, and this build misses it. Raise "
-      "THETAGP_CFG_KEYPAD_SCAN_HZ in src/conf/ThetaGP_Config.h or lower the "
-      "board's [usb] wired_report_hz; the drive-line count follows the "
-      "board's key matrix and is not the knob to turn. The limit is a lower "
-      "bound, so a scan rate equal to the report rate passes.");
+  //
+  // The thresholds are counts of scans, so their meaning in time moves with the
+  // scan rate and the report rate. The assertions below pin that meaning at
+  // compile time instead of leaving it to the configuration: each one names the
+  // property it protects, and a build that would break it does not compile.
+  static_assert(THETAGP_CFG_KEYPAD_SCAN_HZ >=
+                    PRESS_SAMPLES * THETAGP_CFG_USB_REPORT_RATE_HZ,
+                "keypad: a press is committed only after PRESS_SAMPLES "
+                "consecutive scans of the pressed level, and every scan is a "
+                "decision point, so the confirmation takes PRESS_SAMPLES scan "
+                "periods. It has to complete inside one report period, or a "
+                "report tick can miss the confirmation entirely. Raise "
+                "THETAGP_CFG_KEYPAD_SCAN_HZ in src/conf/ThetaGP_Config.h or "
+                "lower the board's [usb] wired_report_hz; the quantity that has "
+                "to fit in a report period is the confirmation, not the "
+                "sampling rate.");
+
+  static_assert(RELEASE_SAMPLES >= PRESS_SAMPLES,
+                "keypad: the release threshold has to be at least the press "
+                "threshold. With a shorter release run the release direction "
+                "is the easier one to trigger, so a burst of the opposite level "
+                "that cannot commit a press can still commit a release, and a "
+                "held key gets chopped in half by its own bounce.");
+
+  static_assert(PRESS_SAMPLES >= 2 && RELEASE_SAMPLES >= 2,
+                "keypad: both thresholds have to be at least 2 samples, so that "
+                "no single sample can change a key's committed state. At 1 a "
+                "threshold filters nothing: one sample commits, it stays "
+                "committed until the opposite threshold is reached, and a "
+                "single sampling artifact becomes a host-visible key event.");
+
+  static_assert(static_cast<uint32_t>(RELEASE_SAMPLES) <= 255,
+                "keypad: a key's run counters are uint8_t, so a threshold above "
+                "255 would wrap and the key would never leave its committed "
+                "state. Keep both thresholds inside the counter's range.");
+
+  static_assert(1000 * (RELEASE_SAMPLES - PRESS_SAMPLES) <=
+                    THETAGP_CFG_KEYPAD_SCAN_HZ,
+                "keypad: the release threshold stretches the reported duration "
+                "of a press by (RELEASE_SAMPLES - PRESS_SAMPLES) scan periods "
+                "against its physical duration. That stretch is capped at 1 ms, "
+                "a tenth of the shortest tap a hand performs, and this pair of "
+                "thresholds exceeds the cap. Lower RELEASE_SAMPLES, raise "
+                "PRESS_SAMPLES, or raise THETAGP_CFG_KEYPAD_SCAN_HZ.");
+
+  static_assert(1000 * RELEASE_SAMPLES >= THETAGP_CFG_KEYPAD_SCAN_HZ,
+                "keypad: the release confirmation window is RELEASE_SAMPLES "
+                "scan periods long and has to be at least 1 ms, the report "
+                "period of the slowest link the product declares. Below it a "
+                "short committed press can fall between two report ticks and be "
+                "dropped. Raise RELEASE_SAMPLES or lower "
+                "THETAGP_CFG_KEYPAD_SCAN_HZ.");
+
+  static_assert(RELEASE_SAMPLES * THETAGP_CFG_USB_REPORT_RATE_HZ >=
+                    THETAGP_CFG_KEYPAD_SCAN_HZ,
+                "keypad: the release confirmation window is RELEASE_SAMPLES "
+                "scan periods long and has to cover the report period this "
+                "build runs at, or a minimum-length press falls between two "
+                "report ticks and is dropped. Raise RELEASE_SAMPLES, lower "
+                "THETAGP_CFG_KEYPAD_SCAN_HZ, or raise the board's [usb] "
+                "wired_report_hz.");
 
   enum class Mode : uint8_t {
     ScanMatrix,
@@ -109,13 +168,18 @@ private:
   static constexpr size_t MASK_ARRAY_SIZE = 1; // 32 keys = 1 uint32_t
   static constexpr size_t MAX_KEYS = 32;
 
+  // One key's committed state and the two run counters behind it: the number
+  // of consecutive samples that have opposed that state, one counter per
+  // direction. Any sample that agrees with the state clears both, so only an
+  // unbroken run of the opposite level can move the key, and the counter that
+  // crossed its threshold is reset on the crossing.
   struct KeySampler {
-    uint16_t history = 0;
+    uint8_t pressRun = 0;
+    uint8_t releaseRun = 0;
     KeyState stableState = KeyState::Released;
   };
 
   std::array<KeySampler, MAX_KEYS> _samplers;
-  uint8_t _scanCount = 0;
 
   volatile uint32_t _pressedMask = 0;
   HardwareTimer _scanTimer;

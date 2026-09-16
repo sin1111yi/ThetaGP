@@ -26,6 +26,7 @@
 
 #include "ThetaGP.h"
 
+#include "drivers/device/run_led.h"
 #include "drivers/device/systimer.h"
 
 #include "tusb.h"
@@ -165,6 +166,8 @@ FAST_CODE void TaskManager::taskSystemLoad(uint32_t currentTimeUs) {
   }
 }
 
-FAST_CODE void TaskManager::taskMain(uint32_t currentTimeUs) { UNUSED(currentTimeUs); }
+FAST_CODE void TaskManager::taskMain(uint32_t currentTimeUs) {
+  Drivers::Device::RunLed::getInstance().update(currentTimeUs);
+}
 
 } // namespace ThetaGP::Gamepad
