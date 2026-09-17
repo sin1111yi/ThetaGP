@@ -76,7 +76,7 @@ def validate_config(cfg: dict) -> list[str]:
 # ── board_info ───────────────────────────────────────────────────────────────
 
 def _validate_board_info(bi: dict, errors: list[str]) -> None:
-    required = ["identifier", "name", "mcu", "mcu_series"]
+    required = ["identifier", "name", "mcu", "mcu_series", "chip"]
     for field in required:
         if field not in bi:
             errors.append(f"board_info.{field} is required")
