@@ -284,6 +284,30 @@ def validate_domains(proto: dict) -> None:
         sys.exit(1)
 
 
+def validate_envelope(proto: dict) -> None:
+    """Abort unless no command declares a response field the framework writes.
+
+    The envelope is added to every reply by the response builder. A command that
+    declared one of those keys as its own would be emitted by the targets that
+    skip the envelope, and by the targets that write it separately the key would
+    change hands: the field's declared type and optionality are lost, and a
+    coverage check comparing declared against emitted counts the key as covered
+    because something wrote it. Refusing the declaration keeps that unsayable.
+    """
+    offenders = sorted(
+        f"{c.get('domain')}.{c.get('name')}:{f.get('name')}"
+        for c in proto.get("commands", [])
+        for f in c.get("response", [])
+        if f.get("json") in RESPONSE_ENVELOPE_KEYS)
+    if offenders:
+        print(f"ERROR: a command declares a response key the framework writes — "
+              f"{offenders}. The envelope ({', '.join(RESPONSE_ENVELOPE_KEYS)}) belongs to "
+              f"the response builder; declaring one takes the field's own type and "
+              f"optionality away in the targets that emit the envelope separately.",
+              file=sys.stderr)
+        sys.exit(1)
+
+
 def validate_types(proto: dict) -> None:
     """Abort unless every `type` protocol.toml uses is mapped by the tables its use needs.
 
@@ -1035,8 +1059,17 @@ def gen_rust(proto: dict, out: Optional[Path] = None) -> str:
 # writes them from the format string its handlers open with (src/test/testsys.cpp).
 # protocol.toml declares none of the three, so the envelope is a shape every
 # consumer carries and the source does not describe.
-TS_RESPONSE_ENVELOPE = (("status", "string"), ("cmd", "string"), ("queued", "number"))
-TS_RESPONSE_ENVELOPE_KEYS = tuple(key for key, _ in TS_RESPONSE_ENVELOPE)
+# The response envelope: the keys every reply carries because the response builder
+# writes them, not because a command declares them. No command may declare one —
+# an emitter that also skips the envelope keys would drop that field's type and
+# optionality in silence — so the tuple is named once here and the validator below
+# refuses the declaration.
+RESPONSE_ENVELOPE = (("status", "string"), ("cmd", "string"), ("queued", "number"))
+RESPONSE_ENVELOPE_KEYS = tuple(key for key, _ in RESPONSE_ENVELOPE)
+
+# The TypeScript emitter writes the envelope itself; it reads the same tuple.
+TS_RESPONSE_ENVELOPE = RESPONSE_ENVELOPE
+TS_RESPONSE_ENVELOPE_KEYS = RESPONSE_ENVELOPE_KEYS
 
 
 def gen_ts(proto: dict, out: Optional[Path] = None) -> str:
@@ -1542,6 +1575,7 @@ Examples:
 
     proto = load_protocol(str(proto_path))
     validate_domains(proto)
+    validate_envelope(proto)
     validate_types(proto)
     validate_field_roles(proto)
     validate_field_coverage(proto)
