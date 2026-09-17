@@ -207,6 +207,28 @@ private:
   volatile uint32_t _scanCyclesMax = 0;
   volatile uint64_t _scanCyclesSum = 0;
 
+  // ── Commit counters (ADR-0006 O-6) ──
+  // Two counters written only where a key's committed state changes, so the scan
+  // path pays nothing for them: the increments sit inside the two branches that
+  // already existed at the commit points, and a scan that commits nothing runs
+  // no compare, no stamp and no division on their behalf. They are what turns
+  // the filter's unverified bounce tolerance (ADR-0006 §8, KU-1) into a number
+  // read off the board: a lost tap leaves the count where it was, a double
+  // commit moves it twice for one physical action — a tap is one press commit
+  // plus one release commit.
+  //
+  // Lateness is in scans, not microseconds. One scan is one sample and one
+  // decision point, so the unit the filter works in is the count of them, and
+  // the readout converts (it holds the scan rate; the driver never divides).
+  // The value stamped is the run the key held when it crossed its threshold:
+  // the number of consecutive samples that opposed the committed state, the
+  // first of them being the sample the change was first seen in, the last being
+  // the one that commits. By construction that run is exactly the direction's
+  // threshold, so this is a bound the board confirms rather than a number that
+  // varies — see the report for what that does and does not buy.
+  volatile uint32_t _commitCount = 0;
+  volatile uint8_t _maxCommitLatencyScans = 0;
+
   static constexpr KeypadConfig::Mode _mode = BDCFG_KEYPAD_DRIVE_MODE;
   static constexpr KeypadConfig::Active _active = BDCFG_KEYPAD_ACTIVE_MODE;
 
@@ -248,6 +270,17 @@ public:
   };
 
   void getScanStats(ScanStats &out) const;
+
+  // Readout of the commit counters above. `count` is every commit since boot,
+  // press and release together; `max_latency_scans` is the longest a level
+  // change ever took to commit, in scans. The snapshot is taken with the scan
+  // interrupt masked, so both describe one instant.
+  struct CommitStats {
+    uint32_t count;
+    uint8_t max_latency_scans;
+  };
+
+  void getCommitStats(CommitStats &out) const;
 
   static constexpr uint8_t getKeyId(uint8_t driveIdx, uint8_t senseIdx) {
     if (driveIdx >= DRIVE_PIN_NUM || senseIdx >= SENSE_PIN_NUM)

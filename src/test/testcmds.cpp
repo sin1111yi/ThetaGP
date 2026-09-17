@@ -242,12 +242,30 @@ static void handleFlashRead(const char *cmd, const Json &json) {
 // the CPU frequency. Converting last/max happens here, once per command, instead
 // of in the scan path. A test-domain command: it is hand-dispatched below rather
 // than declared in protocol.toml, like the other test.* commands.
+//
+// The same response carries the commit counters of ADR-0006 O-6:
+// `commit_count` is every committed state change since boot (a press commit and
+// a release commit per tap, so a tap that never commits shows up as a count that
+// did not move), and `max_commit_latency_us` is the longest one of them took,
+// converted here from the driver's unit of scans through the config's scan rate.
+
+static uint32_t commitLatencyUs(const Drivers::Device::Keypad::CommitStats &stats) {
+    // The driver holds lateness in scans and does not divide; the conversion
+    // belongs to the readout, where the scan rate is a constant and this runs
+    // once per command. Scans first, then the division: the other order would
+    // floor the 32 000 Hz scan period to 31 µs and lose a microsecond per scan.
+    return (uint32_t)stats.max_latency_scans * 1000000UL /
+           Drivers::Device::KeypadConfig::DEFAULT_SCAN_FREQ;
+}
 
 static void handleKeypadScan(const char *cmd, const Json &json) {
     auto &timer = Drivers::Device::SystemTimer::getInstance();
 
     Drivers::Device::Keypad::ScanStats stats;
     Drivers::Device::Keypad::getInstance().getScanStats(stats);
+
+    Drivers::Device::Keypad::CommitStats commits;
+    Drivers::Device::Keypad::getInstance().getCommitStats(commits);
 
     int queued = json.getInt("queued");
 
@@ -256,7 +274,9 @@ static void handleKeypadScan(const char *cmd, const Json &json) {
     resp.printf("{status:%Q,cmd:%Q,queued:%d,"
                 "scan_hz:%lu,drive_lines:%lu,sense_lines:%lu,cycles_per_us:%lu,"
                 "count:%lu,last_cycles:%lu,max_cycles:%lu,"
-                "last_us:%lu,max_us:%lu,sum_cycles:",
+                "last_us:%lu,max_us:%lu,"
+                "commit_count:%lu,max_commit_latency_us:%lu,"
+                "sum_cycles:",
                 "ok", cmd, queued + 1,
                 (unsigned long)Drivers::Device::KeypadConfig::DEFAULT_SCAN_FREQ,
                 (unsigned long)Drivers::Device::Keypad::getDriveLineCount(),
@@ -268,7 +288,9 @@ static void handleKeypadScan(const char *cmd, const Json &json) {
                 (unsigned long)stats.last_cycles,
                 (unsigned long)stats.max_cycles,
                 (unsigned long)timer.cyclesToMicros((int32_t)stats.last_cycles),
-                (unsigned long)timer.cyclesToMicros((int32_t)stats.max_cycles));
+                (unsigned long)timer.cyclesToMicros((int32_t)stats.max_cycles),
+                (unsigned long)commits.count,
+                (unsigned long)commitLatencyUs(commits));
     // The sum is cycles and 64-bit; this toolchain's printf carries no long long
     // conversion — a "%llu" reaches the output as the literal "lu" — so the value
     // is written as decimal digits in three 32-bit chunks rather than being

@@ -103,12 +103,27 @@ void Keypad::scanCallback() {
       s.releaseRun = 0;
       if (++s.pressRun >= KeypadConfig::PRESS_SAMPLES) {
         s.stableState = KeyState::Pressed;
+        // Commit point — press. The run that has just crossed its threshold is
+        // this commit's lateness in scans, so it is stamped while the counter
+        // still holds it. Both counters are written here and at the release
+        // commit below and nowhere else, so a scan that commits nothing pays
+        // nothing for them: no compare, no stamp, no division on the scan path
+        // (ADR-0006 O-6).
+        _commitCount++;
+        if (s.pressRun > _maxCommitLatencyScans) {
+          _maxCommitLatencyScans = s.pressRun;
+        }
         s.pressRun = 0;
       }
     } else {
       s.pressRun = 0;
       if (++s.releaseRun >= KeypadConfig::RELEASE_SAMPLES) {
         s.stableState = KeyState::Released;
+        // Commit point — release, stamped the same way as the press one.
+        _commitCount++;
+        if (s.releaseRun > _maxCommitLatencyScans) {
+          _maxCommitLatencyScans = s.releaseRun;
+        }
         s.releaseRun = 0;
       }
     }
@@ -141,6 +156,17 @@ void Keypad::getScanStats(ScanStats &out) const {
     out.last_cycles = _scanCyclesLast;
     out.max_cycles = _scanCyclesMax;
     out.sum_cycles = _scanCyclesSum;
+  }
+}
+
+void Keypad::getCommitStats(CommitStats &out) const {
+  // One masked block for both fields, the same way the scan-time snapshot is
+  // taken: a commit landing between the two reads would otherwise be counted
+  // without its lateness stamped, or have its lateness stamped without the
+  // count. The block is in the reader, so the ISR keeps its cost.
+  ATOMIC_BLOCK(NVIC_PRIO_MAX) {
+    out.count = _commitCount;
+    out.max_latency_scans = _maxCommitLatencyScans;
   }
 }
 
