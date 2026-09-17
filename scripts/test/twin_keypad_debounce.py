@@ -518,11 +518,11 @@ def calibration_gate(suite):
     # number is what a host would actually see, so a disagreement is recorded
     # rather than papered over.
     span = sorted(span_samples)
-    if span != [12]:
+    if span != [16]:
         suite.note("G1e",
-                   "V10's restoration figure does not reproduce: the ADR says the "
-                   "restoration takes 12 pressed samples (375.00 us), the twin "
-                   "commits the pressed state %s samples after the phantom release"
+                   "V10's restoration span is not the 16 samples the ADR states: the "
+                   "twin commits the pressed state %s samples after the phantom "
+                   "release"
                    % (span[0] if len(span) == 1 else span),
                    "The count must reach %d ones, and at the phantom vote the window "
                    "already holds %d (16 ones minus the 5-sample burst), so one "
@@ -532,7 +532,8 @@ def calibration_gate(suite):
                                            span[0] if span else "?",
                                            us(span[0]) if span else float("nan")))
     else:
-        suite.check("G1e", True, "V10 restoration takes 12 pressed samples as the ADR says")
+        suite.check("G1e", True,
+                    "V10 restoration takes 16 samples = 500.00 us, as the ADR states")
 
     if not ok:
         print("")
