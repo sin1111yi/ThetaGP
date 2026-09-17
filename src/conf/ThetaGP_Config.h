@@ -45,9 +45,6 @@
 //     THETAGP_CFG_KEY_TOGGLE_EN             0     test hook, flips one key bit per read
 //   keypad scan path
 //     THETAGP_CFG_KEYPAD_SCAN_HZ            32000
-//     THETAGP_CFG_KEYPAD_DEBOUNCE_PRESS_US  125
-//     THETAGP_CFG_KEYPAD_DEBOUNCE_HOLD_US   3000
-//     THETAGP_CFG_KEYPAD_GPIO_SETTLE_US     1
 //   config-layer defaults (see the blocks for units and meanings)
 //     SOCD_MODE 4      FOUR_WAY_MODE 0   DPAD_MODE 0
 //     INV_X/Y/RX/RY 0  SWAP_STICKS 0
@@ -174,8 +171,8 @@
 
 // ── Keypad scan path ──
 // Matrix scan rate. One scan callback walks every drive line, so a single key
-// is sampled at this rate; the majority vote re-derives its stable state from
-// every DEBOUNCE_SAMPLES of those samples.
+// is sampled at this rate. The filter commits a level change from the same
+// samples, one decision per scan; its windows live in keypad.h.
 #ifndef THETAGP_CFG_KEYPAD_SCAN_HZ
 #define THETAGP_CFG_KEYPAD_SCAN_HZ 32000
 #endif
@@ -183,25 +180,6 @@
 // A zero rate would leave the scan timer with no period to run at.
 #if THETAGP_CFG_KEYPAD_SCAN_HZ == 0
 #error "THETAGP_CFG_KEYPAD_SCAN_HZ must be positive"
-#endif
-
-// Level-confirmation window. A raw level that contradicts the committed state
-// must hold this long before the change is committed.
-#ifndef THETAGP_CFG_KEYPAD_DEBOUNCE_PRESS_US
-#define THETAGP_CFG_KEYPAD_DEBOUNCE_PRESS_US 125
-#endif
-
-// Lock window, started at every commit. Level flips inside it are swallowed
-// rather than becoming a second commit, which is what absorbs contact bounce.
-#ifndef THETAGP_CFG_KEYPAD_DEBOUNCE_HOLD_US
-#define THETAGP_CFG_KEYPAD_DEBOUNCE_HOLD_US 3000
-#endif
-
-// Settle wait after a drive line changes level, before its columns are
-// sampled. The default assumes a 30-50 kOhm pull-up against 10-20 pF of trace
-// and pin capacitance; a board that changes either must recompute it.
-#ifndef THETAGP_CFG_KEYPAD_GPIO_SETTLE_US
-#define THETAGP_CFG_KEYPAD_GPIO_SETTLE_US 1
 #endif
 
 // ── Config-layer defaults ──

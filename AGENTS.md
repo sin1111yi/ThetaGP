@@ -477,9 +477,12 @@ is wrapped in `#ifndef` so a board-specific value can override it, which is
 why `ThetaGP_Config.h` is included **after** `BoardConfig.h`.
 
 A firmware parameter may still be decided by the board's electrical
-properties — `THETAGP_CFG_KEYPAD_GPIO_SETTLE_US` is one: its default assumes
-a 30–50 kΩ pull-up against 10–20 pF, so a board that changes the pull-up or
-lengthens the trace must recompute it. Such values stay in
+properties. The keypad's drive-line settle wait is the current case: it lives
+in the driver as `KeypadConfig::GPIO_STABILIZE_DELAY_CYCLES` (`keypad.h`) and
+its default assumes a 30–50 kΩ pull-up against 10–20 pF, so a board that
+changes the pull-up or lengthens the trace must recompute it. No board
+overrides it today; a board that needs to should promote it to a
+`THETAGP_CFG_` macro rather than editing the driver. Such values stay in
 `ThetaGP_Config.h` because the default holds for ordinary boards; state the
 assumption in the comment so a misfiring keypad points straight at it.
 
