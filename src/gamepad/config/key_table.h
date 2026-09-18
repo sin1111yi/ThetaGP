@@ -72,6 +72,13 @@ constexpr uint8_t keyTypeWidth(KeyType type) {
   return 0;
 }
 
+// Most entries the table may carry, and the longest a key name may be. The key
+// list reply of the control protocol is built in a buffer sized from both, so
+// growing the table past the count or a name past the length is a build error
+// rather than a reply cut short at run time.
+inline constexpr uint8_t kKeyTableMaxEntries = 12;
+inline constexpr size_t kKeyTableMaxNameLen = 24;
+
 // The keys this build accepts, in the order the protocol lists them. A key the
 // table does not carry names no field, so no value can be set through it.
 const KeyEntry *keyTable();

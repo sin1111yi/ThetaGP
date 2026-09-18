@@ -33,6 +33,7 @@
 #include "utils/log/log.h"
 
 #include <climits>
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
 
@@ -48,9 +49,31 @@ COMMON_ZERO_INIT static char s_cfgRespBuf[2048];
 // The error codes the config domain answers with, as the protocol declares
 // them: a key the table does not carry, a value outside what the key accepts
 // and a request that names no key at all are all invalid parameters, while a
-// command this build cannot carry out names the missing facility instead.
+// command this build cannot carry out names the missing facility instead, and
+// one the state of the device refuses names that state.
 constexpr int kErrInvalidParam = 2;
 constexpr int kErrNotSupported = 6;
+constexpr int kErrInvalidState = 8;
+
+// One entry of the key list reply:
+//   {"key":"<name>","min":<min>,"max":<max>,"reboot":<bool>}
+// with a comma in front of every entry but the first. Its fixed text is the
+// literal below, a key name is at most kKeyTableMaxNameLen bytes, and each of
+// the two range values is a signed 32-bit decimal, so at most 11 bytes.
+constexpr size_t kListKeyEntryMaxBytes =
+    sizeof("{\"key\":\"\",\"min\":,\"max\":,\"reboot\":false},") - 1 +
+    kKeyTableMaxNameLen + 11 + 11;
+
+// The buffer the entries are built in: a table at the entry limit of the key
+// table is listed whole, and a table past it is a build error (the key table
+// holds its own count to that limit).
+constexpr size_t kListKeysBufSize =
+    static_cast<size_t>(kKeyTableMaxEntries) * kListKeyEntryMaxBytes + 1;
+
+// The reply a whole list makes is the entries plus the envelope, the count and
+// the brackets around them.
+static_assert(sizeof(s_cfgRespBuf) > kListKeysBufSize + 64,
+              "config reply buffer: too small for the key list reply");
 
 // The value standing for a destination that was assigned none. It is the one
 // value outside minVal..maxVal that a key carrying kKeyFlagAcceptsUnmapped
@@ -58,9 +81,10 @@ constexpr int kErrNotSupported = 6;
 constexpr int32_t kUnmappedValue =
     static_cast<int32_t>(detail::kBtnMapUnmapped);
 
-// What a `value` that is absent, or spelled as anything but a plain integer,
-// reads as. No key of the table accepts it, so it tells "no integer arrived"
-// from a real one without a second field to look at.
+// The lowest signed 32-bit integer. A `value` that is absent, or spelled as
+// anything but a plain integer, reads as this, and no key of the table accepts
+// a value that low, so a request that arrives with it is refused as carrying no
+// accepted integer.
 constexpr int kNoIntValue = INT_MIN;
 
 // ── Value access ──
@@ -149,8 +173,10 @@ static uint8_t *fieldOf(const KeyEntry &entry) {
 }
 
 // The entry the request's `key` field names, null-terminated into `name` so
-// the reply can echo it. Returns nullptr when the field is missing, too long
-// for the buffer, or names no key of the table.
+// the reply can echo it. A field longer than `name` is cut to fit the buffer
+// rather than refused, and what is left is not the name the caller wrote, so
+// the lookup below turns it away. Returns nullptr when the field is missing or
+// names no key of the table.
 static const KeyEntry *requestedKey(const Json &json, char *name, size_t cap) {
   if (!json.getStrCopy("key", name, static_cast<int>(cap))) {
     return nullptr;
@@ -204,7 +230,13 @@ static void handleConfigSetKey(const char *cmd, const Json &json) {
     const int32_t value =
         static_cast<int32_t>(json.getInt("value", kNoIntValue));
     if (value == kNoIntValue) {
-      sendError(kErrInvalidParam, "missing or non-integer value");
+      // A value of exactly this number reaches here as well: it is the one
+      // integer the sentinel stands for, and no key accepts it. Whether the
+      // field was there tells the two apart, so a number that was sent is not
+      // answered with a claim that nothing arrived.
+      sendError(kErrInvalidParam,
+                json.has("value") ? "value is not an integer this key accepts"
+                                  : "missing value");
       return;
     }
     if (!elementAccepted(*entry, value)) {
@@ -249,12 +281,14 @@ static void handleConfigGetKey(const char *cmd, const Json &json) {
 
   if (entry->type == KeyType::U8Array) {
     // The run of elements is rendered as text and handed over whole: the write
-    // side has no specifier that walks a run of integers. Widest an element
-    // can be is 11 characters of a signed 32-bit decimal plus a separator,
-    // and a key carries at most 32 of them, so the buffer below cannot
-    // truncate.
+    // side has no specifier that walks a run of integers. An element of an
+    // array key is one byte of the store, so it reads as at most 3 characters
+    // beside its separator, and this buffer holds 96 of them — past the longest
+    // run the table carries today. A run that still overflows it is refused
+    // below rather than cut short and sent as a value.
     char elems[32 * 12 + 1];
     size_t used = 0;
+    bool truncated = false;
     for (uint16_t i = 0; i < entry->count; ++i) {
       const int n = snprintf(elems + used, sizeof(elems) - used,
                              (i == 0) ? "%ld" : ",%ld",
@@ -264,10 +298,21 @@ static void handleConfigGetKey(const char *cmd, const Json &json) {
       }
       used += static_cast<size_t>(n);
       if (used >= sizeof(elems)) {
+        truncated = true;
         used = sizeof(elems) - 1;
         break;
       }
     }
+
+    if (truncated) {
+      // A run cut short is not the value the key holds, so it is refused
+      // instead of being sent as one.
+      LOG_ERROR("ConfigCmdHandler: value of %s does not fit %u bytes",
+                entry->key, static_cast<unsigned>(sizeof(elems)));
+      sendError(kErrNotSupported, "value does not fit the reply buffer");
+      return;
+    }
+
     elems[used] = '\0';
     resp.printf("{cmd:%Q,queued:%d,status:%Q,key:%Q,value:[%s]}", cmd, q + 1,
                 "ok", entry->key, elems);
@@ -288,7 +333,10 @@ static void handleConfigGetKey(const char *cmd, const Json &json) {
 static void handleConfigListKeys(const char *cmd, const Json &json) {
   const int q = json.getInt("queued");
 
-  char entries[512];
+  // Sized for a table at the entry limit of the key table, so the list of a
+  // table within that limit is always whole (the limit is held in
+  // key_table.cpp).
+  char entries[kListKeysBufSize];
   size_t used = 0;
   bool truncated = false;
   const KeyEntry *table = keyTable();
@@ -331,14 +379,34 @@ static void handleConfigListKeys(const char *cmd, const Json &json) {
 
 // ── config.save ──
 // Writes the configuration in effect to the profile it belongs to. A board
-// with no storage answers the same shaped reply with persisted false: the
-// values are in effect, they just do not outlive the power cycle, and that is
-// a fact of the reply rather than a failure of the command.
+// without a storage chip keeps the configuration in RAM, and answers persisted
+// false: the values are in effect, they just do not outlive the power cycle,
+// and that is a fact of the reply rather than a failure of the command. A board
+// that has storage writes and says so, or refuses and names what stopped it, so
+// that persisted true is only ever the answer to a write that reached the
+// flash.
 
 static void handleConfigSave(const char *cmd, const Json &json) {
   const int q = json.getInt("queued");
 
-  const bool persisted = ConfigMgr::getInstance().saveProfile();
+  bool persisted = false;
+
+#if THETAGP_CFG_HAS_FLASH
+  // The factory profile is the board's baseline and the configuration layer
+  // refuses to write it: the reply names that state instead of reporting a
+  // write that was never attempted.
+  if (ConfigMgr::getInstance().activeProfileId() == 0) {
+    sendError(kErrInvalidState, "the active profile is the factory one");
+    return;
+  }
+  if (!ConfigMgr::getInstance().saveProfile()) {
+    sendError(kErrInvalidState, "the active profile could not be written");
+    return;
+  }
+  persisted = true;
+#else
+  // Nothing to write to: the values stay in effect for this session only.
+#endif
 
   Json resp;
   resp.beginWrite(s_cfgRespBuf, sizeof(s_cfgRespBuf));

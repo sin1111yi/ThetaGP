@@ -70,6 +70,43 @@ constexpr bool entriesStayInStore() {
 static_assert(entriesStayInStore(),
               "key table: an entry runs past ConfigStore");
 
+// The value a `value` field that is absent, or spelled as anything but a plain
+// integer, arrives as. No entry may accept it: a key whose range reached it
+// would take a value the caller never sent.
+constexpr bool rangesExcludeWireSentinel() {
+  for (const KeyEntry &entry : kKeyTable) {
+    if (entry.minVal == INT32_MIN) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static_assert(rangesExcludeWireSentinel(),
+              "key table: a key accepts the value a missing value reads as");
+
+// The key list reply of the control protocol is sized for kKeyTableMaxEntries
+// entries of kKeyTableMaxNameLen bytes of key name each. Both limits are held
+// here, so the reply cannot meet a table it has no room for.
+constexpr bool entriesWithinListLimits() {
+  if (kKeyTableCount > kKeyTableMaxEntries) {
+    return false;
+  }
+  for (const KeyEntry &entry : kKeyTable) {
+    size_t nameLen = 0;
+    while (entry.key[nameLen] != '\0') {
+      ++nameLen;
+    }
+    if (nameLen > kKeyTableMaxNameLen) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static_assert(entriesWithinListLimits(),
+              "key table: the key list reply is not sized for this table");
+
 // The table carries the keys the code reads, and the three map keys are those.
 static_assert(kKeyTableCount == 3, "key table: the connected keys are three");
 

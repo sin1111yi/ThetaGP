@@ -57,6 +57,7 @@ ERR_INTERNAL        = { code = 3,  description = "Device internal error" }
 ERR_BUSY            = { code = 4,  description = "Device busy, retry later" }
 ERR_NOT_SUPPORTED   = { code = 6,  description = "Command not supported in current state" }
 ERR_BUFFER_OVERFLOW = { code = 7,  description = "Response too long to send" }
+ERR_INVALID_STATE   = { code = 8,  description = "Command refused by the state the device is in" }
 
 # ---------------------------------------------------------------------------
 # Response Envelope
@@ -307,7 +308,7 @@ response = [
   { name = "value", type = "any",    json = "value" },
 ]
 error_codes = [
-  { name = "ERR_NOT_SUPPORTED", code = 6, description = "Not yet implemented" },
+  { name = "ERR_NOT_SUPPORTED", code = 6, description = "The value is longer than the reply buffer" },
   { name = "ERR_INVALID_PARAM", code = 2, description = "Unknown key" },
 ]
 
@@ -320,7 +321,9 @@ response = [
   { name = "count", type = "u32", json = "count", description = "Number of entries in the keys array" },
   { name = "keys",  type = "any", json = "keys",  description = "Array of one object per supported key; each object's wire keys are `key` (the key name), `min` and `max` (its accepted range) and `reboot` (whether the key needs a reboot to take effect). The entries come from the firmware's key table, not from a list written here, and the declared type is `any` because the type vocabulary carries no array-of-object type" },
 ]
-error_codes = []
+error_codes = [
+  { name = "ERR_NOT_SUPPORTED", code = 6, description = "The key list is longer than the reply buffer" },
+]
 
 [[commands]]
 name = "save"
@@ -331,7 +334,8 @@ response = [
   { name = "persisted", type = "bool", json = "persisted", description = "Whether the configuration was written to the device's persistent storage; false on a board that has none, where the values are in effect but will not survive a power cycle" },
 ]
 error_codes = [
-  { name = "ERR_NOT_SUPPORTED", code = 6, description = "Not yet implemented" },
+  { name = "ERR_NOT_SUPPORTED", code = 6, description = "No persistent storage on this board" },
+  { name = "ERR_INVALID_STATE", code = 8, description = "The active profile is the factory one, or the write to it failed" },
 ]
 
 [[commands]]
@@ -341,7 +345,8 @@ description = "Load configuration from persistent storage (reserved)"
 request = []
 response = []
 error_codes = [
-  { name = "ERR_NOT_SUPPORTED", code = 6, description = "Not yet implemented" },
+  { name = "ERR_NOT_SUPPORTED", code = 6, description = "No persistent storage on this board" },
+  { name = "ERR_INVALID_PARAM", code = 2, description = "The active profile could not be read" },
 ]
 
 [[commands]]
