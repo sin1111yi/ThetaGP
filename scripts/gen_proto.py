@@ -295,6 +295,10 @@ def validate_domains(proto: dict) -> None:
 # them from there rather than each carrying a literal of its own;
 # validate_envelope() holds the declaration to what they need, and refuses a
 # command that declares one of these keys on the side it appears on.
+#
+# The keys an error reply adds behind `status` are declared the same way, in
+# protocol.toml's [error_reply], and held by validate_error_reply() below: one
+# shape for the envelope, one for what an error reply adds to it.
 
 # The two sides a message has, named as the `appears` column names them.
 ENVELOPE_SIDES = ("request", "reply")
@@ -305,6 +309,12 @@ ENVELOPE_SIDES = ("request", "reply")
 # some of them, or in none. The emitters answer it with one rule, applied on
 # whichever side the key appears — `always` is a required field, `some` an
 # optional one (`Option<T>` / `?:`), `never` no field for that side at all.
+#
+# The vocabulary belongs to the message and not to this section: [error_reply]
+# declares its keys in the same three words — nothing is emitted from those, and
+# there the column decides only which side's fields the keys are reserved
+# against — so validate_error_reply() reads the words with the constants below
+# rather than spelling a second vocabulary of its own.
 #
 # What `some` does not say is which of the side's messages carry the key, or
 # that two keys of `some` are missing from the same ones: it is per key and per
@@ -426,9 +436,10 @@ def validate_envelope(proto: dict) -> None:
 
     What is not checked, because nothing in the source states it: whether these
     are the keys the firmware's format strings write. Those copies are still
-    written by hand — 38 format strings across src/test/testsys.cpp,
-    testcmds.cpp, profile_cmd_handler.cpp and dispatcher.cpp — and comparing
-    them is a review and a device-side check, not something this file can read.
+    written by hand — 46 format strings across src/test/testsys.cpp,
+    testcmds.cpp, profile_cmd_handler.cpp, config_cmd_handler.cpp and
+    dispatcher.cpp — and comparing them is a review and a device-side check, not
+    something this file can read.
     """
     section = proto.get("envelope", {})
     if not isinstance(section, dict):
@@ -582,6 +593,228 @@ def validate_envelope(proto: dict) -> None:
         print(f"       [envelope] declares: "
               f"{ {name: entry for name, entry in section.items()} }",
               file=sys.stderr)
+        sys.exit(1)
+
+
+# The error reply: the keys a reply carries because it failed — the code for
+# what went wrong and the sentence saying it. Declared in protocol.toml's
+# [error_reply] section, one entry per key, with the columns [envelope] gives
+# its keys, so the shape of a reply that failed is stated in the source of truth
+# and not only in the firmware's format strings. No emitter in this file writes
+# the keys from either section: this one is the contract those hand-written
+# copies are read against. validate_error_reply() holds the declaration to what
+# a reader of it needs, and reserves its keys against a command that declares
+# one — they belong to the error reply builders, so a command field under one
+# would be a second answer to where the key on the wire comes from.
+
+
+def error_reply_fields(proto: dict) -> List[Dict[str, Any]]:
+    """The declared error-reply keys, in declaration order, section key as field name.
+
+    The counterpart of envelope_fields(), and deliberately the same shape: the
+    section key supplies the field name, and validate_error_reply() refuses an
+    entry that declares a `name` column of its own, so the name a reader takes
+    from here is the key the section declares.
+    """
+    return [{**entry, "name": name} for name, entry in proto.get("error_reply", {}).items()]
+
+
+def error_reply_on_side(proto: dict, side: str) -> List[Dict[str, Any]]:
+    """The error-reply keys one side's messages carry, in declaration order.
+
+    The same question the envelope's `appears` column asks, answered in the same
+    three words, which is why the same constants serve both: a key whose cell
+    for that side is `never` is one that side's messages do not carry, and one
+    the reservation in validate_error_reply() therefore holds nothing against
+    there. `side` is one of ENVELOPE_SIDES — held to that vocabulary by
+    validate_error_reply(), which is also why an entry whose `appears` column is
+    missing, or short the cell for a side, is left out of the answer instead of
+    raising: the column checks report that fault, and this is asked beside them
+    so a declaration with two faults is reported as both rather than as
+    whichever one stopped the run.
+    """
+    return [field for field in error_reply_fields(proto)
+            if isinstance(field.get("appears"), dict)
+            and field["appears"].get(side) not in (None, ENVELOPE_NEVER)]
+
+
+def validate_error_reply(proto: dict) -> None:
+    """Abort unless [error_reply] is a declaration a reader can act on, and no command shadows it.
+
+    The error reply is the shape a reply takes when the request failed: the
+    envelope's `status` says so, and these keys say what went wrong. Six things
+    about the section are checked here — the first five the counterparts of what
+    validate_envelope() holds its own section to, because the two declare one
+    kind of thing in one shape:
+
+    1. The section exists and declares at least one key. An error reply the
+       source of truth does not describe is a shape its consumers can only read
+       out of the firmware's format strings, which is what this section exists
+       to end.
+    2. Every entry is a table carrying the four columns a reader needs: the JSON
+       key it travels under, the wire type, the `appears` column, and the
+       description. An entry short of a JSON key is a key nothing pairs with a
+       value, short of a type one no target can type, and short of `appears` one
+       whose occurrence is unknown — which is the half of the declaration the
+       reservation below is read from.
+    3. Every entry's `appears` column names the two sides and gives each one of
+       the three words [envelope] documents, read with the same constants: the
+       question is the same one, so a word of this section's own would be a
+       second vocabulary for it. The sides are the same two messages either way
+       — a request carries no error code and no reason.
+    4. Every entry's JSON key is its section key. Nothing renames a key on the
+       way to the wire, so a pair that differed would be one key under two
+       spellings, one per reader.
+    5. No entry declares a `name` column. The section key is the field name
+       error_reply_fields() hands a reader, so a column of its own is a second
+       answer to the same question and the one that would be read.
+    6. Every declared type is one the three language maps carry and one a printf
+       conversion writes. The type maps, because that is the vocabulary a field
+       of this file is declared with, so a name outside them is not a type any
+       other declaration here could use either; the printf map, because these
+       keys are written by the firmware's own printf format strings, so a key of
+       no printf form is one no reply can carry.
+
+    On top of those, and the reason this validator is more than a reader's aid:
+    no command may declare a field under one of these keys, by either column, on
+    a side the column says the key appears on. The keys belong to the error
+    reply builders — a handler's sendError() and the dispatcher's own refusals —
+    so a command that declares one is a second answer to where the key on the
+    wire comes from, and the two answers disagree: the command's field carries
+    its own type and optionality, while the builder writes the key on whichever
+    reply failed. Which side is reserved is the `appears` column's business, as
+    it is for the envelope: a key of `never` on a side writes no line there and
+    shadows nothing, so a column that says a key appears on no request leaves
+    the request types free of it.
+
+    What is not checked, for the reason the envelope's validator gives: whether
+    these are the keys the firmware's format strings write. Those copies are
+    still written by hand — 13 format strings write `error_code` and 15 write
+    `reason` — so comparing them is a review and a device-side check, not
+    something this file can read.
+    """
+    section = proto.get("error_reply", {})
+    if not isinstance(section, dict):
+        print("ERROR: error reply — [error_reply] is not a table of per-key "
+              "entries (type / json / appears / description).", file=sys.stderr)
+        sys.exit(1)
+
+    problems: List[str] = []
+    if not section:
+        problems.append("the [error_reply] section is missing or declares no "
+                        "key, so the keys every error reply carries would be "
+                        "declared nowhere in the source of truth")
+
+    for name, entry in section.items():
+        if not isinstance(entry, dict):
+            problems.append(f"[error_reply].{name} is not a table "
+                            f"(expected type / json / appears / description)")
+            continue
+        for column in ("json", "type", "description"):
+            if not entry.get(column):
+                problems.append(f"[error_reply].{name} declares no {column!r}")
+        # The `appears` column, in the envelope's three words: what it answers
+        # per side is which sides reserve the key below, so a missing or
+        # misspelled one is a key reserved against the wrong side's fields —
+        # and, for a reader, a key of unknown occurrence.
+        appears = entry.get("appears")
+        if not isinstance(appears, dict):
+            problems.append(f"[error_reply].{name} declares no 'appears' column "
+                            f"(the key's occurrence per side, e.g. "
+                            f"{{ request = \"never\", reply = \"some\" }}) — "
+                            f"without it the key's occurrence is unstated and "
+                            f"the reservation below has no side to hold it to")
+        else:
+            for side in ENVELOPE_SIDES:
+                if side not in appears:
+                    problems.append(f"[error_reply].{name}.appears declares no "
+                                    f"{side!r} cell — the same question is asked "
+                                    f"of every key on both sides, and a side "
+                                    f"left out is one whose messages the "
+                                    f"declaration says nothing about")
+                elif appears[side] not in ENVELOPE_APPEARANCES:
+                    problems.append(f"[error_reply].{name}.appears declares "
+                                    f"{side} = {appears[side]!r}, which is not "
+                                    f"one of {list(ENVELOPE_APPEARANCES)} — the "
+                                    f"same vocabulary [envelope] declares its "
+                                    f"keys in")
+            unknown = sorted(set(appears) - set(ENVELOPE_SIDES))
+            if unknown:
+                problems.append(f"[error_reply].{name}.appears names {unknown}, "
+                                f"which is not a side a message has "
+                                f"(sides: {list(ENVELOPE_SIDES)}) — a "
+                                f"misspelled side leaves the cell it was meant "
+                                f"to be never read")
+        if entry.get("json") and entry["json"] != name:
+            problems.append(f"[error_reply].{name} declares json = "
+                            f"{entry['json']!r}, a key of its own where its "
+                            f"section key is already {name!r} — the section key "
+                            f"is the name a reader pairs with this entry, and "
+                            f"nothing renames a key on the way to the wire")
+        if "name" in entry:
+            problems.append(f"[error_reply].{name} declares a 'name' column "
+                            f"({entry['name']!r}) — its section key is the field "
+                            f"name error_reply_fields() hands a reader, so the "
+                            f"column is a second name for one key and the one "
+                            f"that would be read")
+
+    entries = [entry for entry in section.values() if isinstance(entry, dict)]
+    json_keys = [entry["json"] for entry in entries if entry.get("json")]
+    duplicates = sorted({key for key in json_keys if json_keys.count(key) > 1})
+    if duplicates:
+        problems.append(f"two error-reply entries travel under the same JSON "
+                        f"key(s): {duplicates}")
+    declared_types = sorted({entry["type"] for entry in entries if entry.get("type")})
+    unmapped = sorted(t for t in declared_types
+                      if any(t not in table for _, table in TYPE_MAPS))
+    if unmapped:
+        problems.append(f"error-reply type(s) the language type maps do not "
+                        f"carry: {unmapped} — a type name outside that "
+                        f"vocabulary is not one any other declaration in this "
+                        f"file could use either")
+    no_printf = sorted(t for t in declared_types if t not in PRINTF_TYPE_MAP)
+    if no_printf:
+        problems.append(f"error-reply type(s) no printf conversion writes: "
+                        f"{no_printf} — the firmware writes these keys through "
+                        f"its own format strings, so a key of such a type is "
+                        f"one no error reply can carry (types a conversion "
+                        f"writes: {sorted(PRINTF_TYPE_MAP)})")
+
+    # The keys are the error reply builders', not a command's, on whichever side
+    # the column says they appear: the reserved set is what that side carries,
+    # so a key of `never` there reserves nothing. Reported per side, because the
+    # two sides are two different arrays in the TOML and two different types in
+    # the targets.
+    for field_side, message_side in (("request", "request"), ("response", "reply")):
+        carried = error_reply_on_side(proto, message_side)
+        if not carried:
+            continue
+        reserved_json = {field["json"] for field in carried if field.get("json")}
+        reserved_name = {field["name"] for field in carried}
+        offenders = [
+            f"{cmd['domain']}.{cmd['name']}:{field.get('name')} — "
+            + (f"its json key {field.get('json')!r} is an error-reply key"
+               if field.get("json") in reserved_json
+               else "its field name is an error-reply field name")
+            for cmd in proto.get("commands", [])
+            for field in cmd.get(field_side, [])
+            if field.get("json") in reserved_json or field.get("name") in reserved_name
+        ]
+        if offenders:
+            problems.append(
+                f"a command declares a {field_side} field the error reply "
+                f"already writes: {offenders}. The error reply "
+                f"({', '.join(sorted(reserved_json))}) is written by the error "
+                f"reply builders — a handler's sendError() and the dispatcher's "
+                f"own refusals — and not by a command: a field declared here is "
+                f"a second answer to where the key on the wire comes from, with "
+                f"the command's type and optionality where the builder writes "
+                f"the key on whichever reply failed.")
+
+    if problems:
+        for problem in problems:
+            print(f"ERROR: error reply — {problem}", file=sys.stderr)
+        print(f"       [error_reply] declares: {section}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -1885,6 +2118,7 @@ Examples:
     proto = load_protocol(str(proto_path))
     validate_domains(proto)
     validate_envelope(proto)
+    validate_error_reply(proto)
     validate_types(proto)
     validate_field_roles(proto)
     validate_field_coverage(proto)

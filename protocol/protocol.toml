@@ -17,6 +17,8 @@
 #   [domains]         — domain prefix registry
 #   [envelope]        — response envelope (the keys a reply and a request
 #                       carry, and how completely each side carries them)
+#   [error_reply]     — error reply (the keys an error reply carries behind the
+#                       envelope, and in which messages they appear)
 #   [[async_messages]] — device-initiated async message definitions
 #
 # A field of a command may carry a `role`, a property of the field that outlives
@@ -73,19 +75,23 @@ ERR_INVALID_STATE   = { code = 8,  description = "Command refused by the state t
 #   * Not every reply carries all three keys, and the `appears` column below is
 #     where that is declared per key. The dispatcher's two replies to a request
 #     whose `cmd` or `queued` it could not read carry `status` alone of these,
-#     with no `cmd` and no `queued` (src/test/dispatcher.cpp:55, :75), and the
-#     `profile.end` trailer carries `cmd` and `status` with no `queued`
+#     with no `cmd` and no `queued` (src/test/dispatcher.cpp:55, :75) --
+#     the configuration domain's error helper writes that same shape
+#     (src/test/config_cmd_handler.cpp:163) -- and the `profile.end` trailer
+#     carries `cmd` and `status` with no `queued`
 #     (src/test/profile_cmd_handler.cpp:246). A request carries `cmd` and
 #     `queued` and no `status`, and the device refuses one missing either of the
 #     two (src/test/dispatcher.cpp:70-80).
-#   * There is no one order. `status,cmd,queued` leads 20 of the firmware's 38
-#     format strings, `cmd,queued,status` leads 15, and the trailer above orders
-#     `cmd,status`. Each emitter writes the order declared here, so a consumer
-#     keys off the names and not the positions.
-#   * `error_code` and `reason` are declared nowhere in this file, and no
-#     emitter here writes them: the firmware writes them by hand in 11 and 12
-#     of its format strings respectively. A binding generated from this section
-#     does not carry them.
+#   * There is no one order. `status,cmd,queued` leads 20 of the firmware's 46
+#     format strings, `cmd,queued,status` leads 22, the trailer above orders
+#     `cmd,status`, and the three replies that carry none of `cmd`/`queued` --
+#     src/test/dispatcher.cpp:55, :75 and src/test/config_cmd_handler.cpp:163 --
+#     lead with `status,error_code,reason`. Each emitter writes the order
+#     declared here, so a consumer keys off the names and not the positions.
+#   * `error_code` and `reason` are not declared here: they are the error
+#     reply's, which [error_reply] below declares, and no emitter in this file
+#     writes them from either section. A binding generated from this one does
+#     not carry them.
 #
 # One entry per key: the TOML key is the field name a target writes it as, `json`
 # is the key it travels under (gen_rust writes the TOML key where gen_ts writes
@@ -96,9 +102,10 @@ ERR_INVALID_STATE   = { code = 8,  description = "Command refused by the state t
 # fields and gen_ts a response interface's leading lines from this section, and
 # now a request type's leading fields and lines too, so the shape of both
 # messages starts in one place instead of in a literal per target. The
-# firmware's format strings are still written by hand -- 38 of them across four
+# firmware's format strings are still written by hand -- 46 of them across five
 # files: src/test/testsys.cpp (8), src/test/testcmds.cpp (12),
-# src/test/profile_cmd_handler.cpp (15) and src/test/dispatcher.cpp (3).
+# src/test/profile_cmd_handler.cpp (15), src/test/config_cmd_handler.cpp (8) and
+# src/test/dispatcher.cpp (3).
 # Deriving them needs the response field table mechanism (proto_resp.h)
 # extended to the envelope, which is a change of its own.
 #
@@ -128,7 +135,62 @@ ERR_INVALID_STATE   = { code = 8,  description = "Command refused by the state t
 [envelope]
 status = { type = "string", json = "status", appears = { request = "never",  reply = "always" }, description = "Outcome of the command: ok or error" }
 cmd    = { type = "string", json = "cmd",    appears = { request = "always", reply = "some"   }, description = "Full name of the command this reply answers, e.g. sys.ping. A request carries the command being asked for under the same key, which is why the column says it appears on both sides" }
-queued = { type = "u32",    json = "queued", appears = { request = "always", reply = "some"   }, description = "The request's queued value plus one, echoed so a host can pair a reply with its request. The accepted range is 0..2147483647: a literal wider than an int saturates at that bound rather than wrapping (src/utils/json/json.cpp:13-36) and is accepted as it stands, while a missing, negative or non-integer value is refused with error_code 2 and a reply that carries neither this key nor cmd (src/test/dispatcher.cpp:70-80). 31 of the 35 replies that carry this key echo the request's value plus one; the four staged profile.start replies echo a literal 0 instead (src/test/profile_cmd_handler.cpp:146,153,158,165)" }
+queued = { type = "u32",    json = "queued", appears = { request = "always", reply = "some"   }, description = "The request's queued value plus one, echoed so a host can pair a reply with its request. The accepted range is 0..2147483647: a literal wider than an int saturates at that bound rather than wrapping (src/utils/json/json.cpp:13-36) and is accepted as it stands, while a missing, negative or non-integer value is refused with error_code 2 and a reply that carries neither this key nor cmd (src/test/dispatcher.cpp:70-80). 38 of the 42 replies that carry this key echo the request's value plus one; the four staged profile.start replies echo a literal 0 instead (src/test/profile_cmd_handler.cpp:146,153,158,165)" }
+
+# ---------------------------------------------------------------------------
+# Error Reply
+# ---------------------------------------------------------------------------
+# The keys an error reply carries behind `status`: the code for what went wrong,
+# and the sentence saying it. They belong to the error reply builders -- a
+# handler's sendError() and the dispatcher's own refusals -- and not to a
+# command: no command may declare one of these keys as a response field, and
+# validate_error_reply() refuses one that does, naming command and field, for
+# the same reason validate_envelope() refuses a field under an envelope key.
+#
+# Three things about the shape, as the firmware writes it:
+#
+#   * The value of `error_code` is the `code` of one of the [error_codes]
+#     entries above, written as a number rather than as a name (2 for
+#     ERR_INVALID_PARAM, 1 for ERR_UNKNOWN_CMD). ERR_NONE's 0 is not one of
+#     them, so the key appears only in a reply whose status is error -- and it
+#     is never written without `reason` beside it. Which numbers a command's
+#     reply can carry is the `error_codes` array that command declares; this is
+#     the key they arrive in.
+#   * `reason` is written without `error_code` in two replies: the staged
+#     profile.start refusals report a failed write as a sentence with no code
+#     (src/test/profile_cmd_handler.cpp:146, :158). Both keys are of `some` on
+#     the reply side for the plainer reason as well, that a reply of any other
+#     status carries neither.
+#   * No emitter in this file writes either key or emits a field for one: the
+#     firmware writes them by hand in 13 and 15 of its 46 format strings
+#     respectively -- src/test/testsys.cpp (3 each), src/test/testcmds.cpp (4
+#     each), src/test/profile_cmd_handler.cpp (2 and 4),
+#     src/test/config_cmd_handler.cpp (1 each) and src/test/dispatcher.cpp (3
+#     each). Deriving those format strings needs the response field table
+#     mechanism (proto_resp.h) extended to these keys, which is a change of its
+#     own; what this section states meanwhile is the contract, so a host reads
+#     the keys, their types and where they appear from here rather than out of
+#     those format strings.
+#
+# One entry per key, with the columns [envelope] gives its keys: the TOML key is
+# the name a target would write such a field as, `json` is the key it travels
+# under, `type` is drawn from the same vocabulary a field's `type` is, `appears`
+# says in which messages of each side the key shows up, and `description` is
+# what a reader of a reply needs to know about it. `appears` takes the same
+# three words [envelope] documents -- `always`, `some`, `never` -- because the
+# question is the same on each side, and the section's validator reads the same
+# vocabulary. Both keys are `request = "never"` and are not reserved there: a
+# request carries no code and no sentence, so no request type writes a line for
+# one.
+#
+# What the section does not state is whether these are the keys and the shape
+# the firmware's format strings write. Those copies are still written by hand,
+# so comparing them is a review and a device-side check, not something this file
+# can read.
+
+[error_reply]
+error_code = { type = "i32",    json = "error_code", appears = { request = "never", reply = "some" }, description = "Numeric code for what went wrong: the `code` of one of the [error_codes] entries above, written as a number rather than as a name (2 for ERR_INVALID_PARAM, 1 for ERR_UNKNOWN_CMD, and so on). It is not a status of its own: a reply that succeeded says so in `status` and carries neither this key nor `reason`, so the key appears only where the status is error, and always with `reason` beside it. Which of the numbers a command's reply can carry is the `error_codes` array that command declares; this is the key they arrive in" }
+reason     = { type = "string", json = "reason",     appears = { request = "never", reply = "some" }, description = "What was wrong with the request, in words: the sentence the firmware logs beside the code, and the only key that separates two failures sharing one code (test.flash_read's invalid length and the dispatcher's unknown command are both error_code 1 -- src/test/testcmds.cpp:227, src/test/dispatcher.cpp:99). Written in 15 of the firmware's format strings: with `error_code` in each of the 13 that carry one, and alone in the two staged profile.start refusals that report a failed write with no code (src/test/profile_cmd_handler.cpp:146, :158). Its text is the firmware's, not a value declared here: a host switches on `error_code` and shows this to a reader, so the two are not to be read as one key in two spellings" }
 
 # ---------------------------------------------------------------------------
 # Enumerations
