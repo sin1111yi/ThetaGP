@@ -340,12 +340,12 @@ response = [
 ]
 error_codes = []
 
-# --- config domain (reserved) ---
+# --- config domain ---
 
 [[commands]]
 name = "set_key"
 domain = "config"
-description = "Set a configuration key-value pair (reserved)"
+description = "Write one key of the configuration the device is running: a scalar key takes a number and an array key exactly as many elements as the key holds, and the write reaches the configuration in effect, not the storage (`config.save` is what writes that out). A key the table does not carry, a value the key does not accept and a request whose value is missing are all refused with ERR_INVALID_PARAM (2); an array value is checked element by element before the first byte is written, so a refused write leaves the key as it was."
 request = [
   { name = "key",   type = "string", json = "key",   required = true },
   { name = "value", type = "any",    json = "value", required = true },
@@ -354,14 +354,13 @@ response = [
   { name = "key", type = "string", json = "key" },
 ]
 error_codes = [
-  { name = "ERR_NOT_SUPPORTED", code = 6, description = "Not yet implemented" },
   { name = "ERR_INVALID_PARAM", code = 2, description = "Invalid key or value" },
 ]
 
 [[commands]]
 name = "get_key"
 domain = "config"
-description = "Get a configuration key value (reserved)"
+description = "Read one key of the configuration the device is running back: a scalar key reads back as a number and an array key as a JSON array of numbers in element order. A key the table does not carry is refused with ERR_INVALID_PARAM (2), and a value whose rendered form does not fit the reply buffer is refused with ERR_NOT_SUPPORTED (6) rather than sent cut short."
 request = [
   { name = "key", type = "string", json = "key", required = true },
 ]
@@ -370,8 +369,8 @@ response = [
   { name = "value", type = "any",    json = "value" },
 ]
 error_codes = [
-  { name = "ERR_NOT_SUPPORTED", code = 6, description = "The value is longer than the reply buffer" },
-  { name = "ERR_INVALID_PARAM", code = 2, description = "Unknown key" },
+  { name = "ERR_NOT_SUPPORTED", code = 6, description = "The rendered value does not fit the reply buffer, so it is refused rather than sent cut short" },
+  { name = "ERR_INVALID_PARAM", code = 2, description = "Missing or unknown key" },
 ]
 
 [[commands]]
@@ -390,20 +389,19 @@ error_codes = [
 [[commands]]
 name = "save"
 domain = "config"
-description = "Save configuration to persistent storage (reserved)"
+description = "Write the configuration in effect to the profile it belongs to (the active one): a board with a storage chip answers `persisted` true for a write that reached the flash, or refuses with ERR_INVALID_STATE (8) -- naming either the factory profile (id 0, which the write refuses rather than attempts) or a write that failed. A board with no storage chip answers `ok` with `persisted` false: the values are in effect, and the reply says they will not survive a power cycle."
 request = []
 response = [
   { name = "persisted", type = "bool", json = "persisted", description = "Whether the configuration was written to the device's persistent storage; false on a board that has none, where the values are in effect but will not survive a power cycle" },
 ]
 error_codes = [
-  { name = "ERR_NOT_SUPPORTED", code = 6, description = "No persistent storage on this board" },
   { name = "ERR_INVALID_STATE", code = 8, description = "The active profile is the factory one, or the write to it failed" },
 ]
 
 [[commands]]
 name = "load"
 domain = "config"
-description = "Load configuration from persistent storage (reserved)"
+description = "Read the profile the configuration in effect belongs to (the active one) back over it, starting from the compiled-in defaults; the active profile id is never changed. A board with no storage chip is refused with ERR_NOT_SUPPORTED (6), naming the missing facility rather than a read that failed, and a profile whose body cannot be read is refused with ERR_INVALID_PARAM (2)."
 request = []
 response = []
 error_codes = [
@@ -414,11 +412,9 @@ error_codes = [
 [[commands]]
 name = "factory_reset"
 domain = "config"
-description = "Restore factory defaults and save (reserved)"
+description = "Replace the configuration in effect with the compiled-in defaults, writing nothing to persistent storage: writing it out is `config.save`'s job, so the reply answers `ok` with `persisted` always false."
 request = []
 response = [
   { name = "persisted", type = "bool", json = "persisted", description = "Whether the configuration left in effect by the reset was written to the device's persistent storage; false on a board that has none. The reset replaces the in-effect configuration; writing it out is config.save's job" },
 ]
-error_codes = [
-  { name = "ERR_NOT_SUPPORTED", code = 6, description = "Not yet implemented" },
-]
+error_codes = []
