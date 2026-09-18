@@ -40,9 +40,13 @@ constexpr KeyEntry kKeyTable[] = {
      1, 0, static_cast<int32_t>(Enums::SOCDMode::Count) - 1, 0},
     {"map.four_way", "map.four_way", offsetof(ConfigStore, four_way_mode),
      KeyType::U8, 1, 0, 1, 0},
+    // A slot of the button map holds either a button bit index or 255, the
+    // value standing for a slot the board maps to no button. 255 lies outside
+    // 0..kBtnMaskBits-1, so the entry carries the flag that admits it; without
+    // that flag a map holding unmapped slots could not be written back.
     {"map.btn_map", "map.btn_map", offsetof(ConfigStore, btn_map),
      KeyType::U8Array, static_cast<uint8_t>(sizeof(ConfigStore::btn_map)), 0,
-     detail::kBtnMaskBits - 1, 0},
+     detail::kBtnMaskBits - 1, kKeyFlagAcceptsUnmapped},
 };
 
 constexpr uint8_t kKeyTableCount =

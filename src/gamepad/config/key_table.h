@@ -44,12 +44,19 @@ struct KeyEntry {
   uint8_t count; // element count for array keys, 1 otherwise
   int32_t minVal;
   int32_t maxVal;
-  uint8_t flags; // bit0: requiresReboot
+  uint8_t flags; // bit0: requiresReboot, bit1: acceptsUnmapped
 };
 
 // flags bit0: a value reaches the key's field, and what the code reading that
 // field does with it changes at the next boot on.
 inline constexpr uint8_t kKeyFlagRequiresReboot = 0x01;
+
+// flags bit1: the key's field also holds the unmapped sentinel beside the
+// minVal..maxVal range, so the sentinel is an accepted value even though it
+// lies outside that range. A field whose elements each name a destination is
+// where this holds: the element of a destination nothing was assigned to
+// carries the sentinel, and a caller has to be able to set it back.
+inline constexpr uint8_t kKeyFlagAcceptsUnmapped = 0x02;
 
 // Bytes one element of a value of this type takes. A type outside the enum
 // takes none.

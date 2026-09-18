@@ -21,6 +21,7 @@
 
 #include "test/init.h"
 #include "conf/ThetaGP_Config.h" // THETAGP_CFG_HAS_FLASH, the flash switch this file branches on
+#include "test/config_cmd_handler.h"
 #include "test/dispatcher.h"
 #include "test/framelayer.h"
 #include "test/profile_cmd_handler.h"
@@ -37,6 +38,12 @@ void initTestSystem() {
 
     // Always registered handlers
     SysHandler::registerHandlers();
+
+    // The configuration commands answer on every board: save/load report
+    // whether the values reached storage instead of being unknown commands
+    // where there is none.
+    ConfigCmdHandler::registerHandlers();
+
 #if THETAGP_CFG_HAS_FLASH
     ProfileCmdHandler::registerHandlers();
 #endif
