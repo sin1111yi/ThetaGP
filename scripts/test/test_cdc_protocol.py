@@ -105,6 +105,21 @@
 # [error_codes]. A copy kept in this file would stay green while the protocol
 # source renamed a key, which is the shape of failure the envelope assertions
 # are here to catch.
+#
+# The save reply's dropped-keys report is read off the wire twice over, because
+# the reply alone cannot say whether it is right: the count it carries is a
+# statement about two bodies — the one the save replaced and the one it wrote —
+# and both are on the wire (profile.get, the command the store's own read rules
+# answer). The stage reads them around a save and holds the reply to what they
+# say: a save that carried every key over has no count to report and its reply
+# must not carry the key at all (`optional = true` in protocol.toml, and the
+# write site's `if (droppedKeys > 0)`), which is the one failure a compiler and
+# the generator cannot see — a site that keeps the flag name and loses the
+# condition compiles and generates exactly as before, and only the reply's bytes
+# give it away. This is the judgement the stage's other save checks do not make:
+# they read `persisted`, the shape, and the profile's content, and a count that
+# is always written, or written from the wrong pair of bodies, satisfies all
+# three.
 
 import hashlib
 import json
@@ -114,7 +129,7 @@ import time
 import tomllib
 from pathlib import Path
 
-from cdc_serial import open_serial, readline, TestContext
+from cdc_serial import open_serial, readline, read_bytes, TestContext
 
 # The dispatcher answers a command it has no handler for with this reason
 # (dispatcher.cpp:95-102). It is the only thing that separates "this command is
@@ -702,6 +717,164 @@ def int_value(value):
     return isinstance(value, int) and not isinstance(value, bool)
 
 
+# ── The save reply's dropped-keys report ───────────────────────────────────
+
+# The two limits Json::missingKeyCount's lookup walks within (json.cpp: the
+# chain of names it carries and the dotted path it builds a format from). They
+# are transcription of a fact about the firmware's comparison, which is why they
+# are stated here: past either one the firmware answers "unknown" as 0, and a
+# check that scored the reply against a count this file derived past them would
+# be demanding a number the device has no way to produce.
+KEY_CHAIN_MAX = 8
+LOOKUP_PATH_MAX = 122
+
+
+def plain_name(name):
+    """Whether a member name can be spelled as one name of a dotted path.
+
+    The firmware's isPlainName (json.cpp): an empty name reaches nothing, and one
+    carrying '.' would be read as two names while one carrying the brackets of an
+    array element would be read as an element.
+    """
+    return bool(name) and not any(c in name for c in ".[]")
+
+
+def key_paths(node, chain=()):
+    """Every object key of a parsed body, by its chain of names, and whether the
+    firmware's comparison is defined for all of them.
+
+    A key is a member of an object, named by the chain that reaches it; the
+    elements an array holds are not keys, and the member holding the array is
+    one. That is Json::missingKeyCount's definition of a key (json.h), and it is
+    what makes this count comparable with the one the reply reports.
+
+    The second half is namability: a name that cannot be spelled into a lookup, a
+    chain deeper than KEY_CHAIN_MAX names and a path longer than LOOKUP_PATH_MAX
+    bytes are the three cases the firmware answers 0 for, and the caller has to
+    SKIP rather than score the reply against a number that is really "unknown".
+    The name checks run on the name itself and not on the joined path, where a
+    name carrying '.' would read as two names.
+    """
+    paths = []
+    namable = True
+    if isinstance(node, dict):
+        for name, value in node.items():
+            if not plain_name(name):
+                namable = False
+            path = ".".join(chain + (name,))
+            paths.append(path)
+            if len(chain) + 1 > KEY_CHAIN_MAX or len(path) > LOOKUP_PATH_MAX:
+                namable = False
+            inner, inner_namable = key_paths(value, chain + (name,))
+            paths.extend(inner)
+            namable = namable and inner_namable
+    return paths, namable
+
+
+def not_carried_over(replaced, written):
+    """Keys of the replaced body the written body does not carry, or None.
+
+    `replaced` and `written` are the two bodies the save had in hand, as
+    profile.get reported them. None is the answer for a pair the firmware's
+    comparison has none for — a body that does not parse, or a key of either
+    body it cannot name (key_paths) — so the caller SKIPs instead of scoring
+    against a number nothing derives.
+    """
+    try:
+        source = json.loads(replaced)
+        carrier = json.loads(written)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    source_paths, source_namable = key_paths(source)
+    carrier_paths, carrier_namable = key_paths(carrier)
+    if not source_namable or not carrier_namable:
+        return None
+    carried = set(carrier_paths)
+    return sum(1 for path in source_paths if path not in carried)
+
+
+def drop_report_ok(reply, expected, key):
+    """Whether a save reply reports exactly what the save did not carry over.
+
+    `expected` is not_carried_over()'s count over the two bodies on the wire,
+    and `key` is the name protocol.toml gives the field. The rule is the one the
+    protocol states for it, and the whole of it: the key is written only when
+    that number is not zero, and what it says is that number. Two failures meet
+    here and neither is visible to the compiler or the generator, because both
+    are about *when* and *what* a site writes rather than whether the field
+    exists:
+
+      * a site that keeps the field and loses the condition — writing the key
+        unconditionally, which answers a save that left nothing behind with a
+        `dropped_keys` of 0, and a save that carried every key over with the one
+        reply this command has always sent;
+      * a site that writes a count of its own — one taken against the wrong pair
+        of bodies, or against only part of one — which passes any check that
+        only asks whether the number is plausible and fails here.
+
+    A save that carried every key over therefore answers without the key at all,
+    byte for byte as this reply read before the field existed (HEAD's format
+    string for config.save is `{cmd:%Q,queued:%d,status:%Q,persisted:%B}`, so
+    the reply ends at `persisted`), and that is what the last clause below
+    asserts.
+    """
+    if not isinstance(reply, dict) or reply.get("status") != "ok":
+        return False
+    if expected == 0:
+        return key not in reply
+    return int_value(reply.get(key)) and reply.get(key) == expected
+
+
+def save_bodies(ctx, pid):
+    """The body profile.get reports for one profile, or None.
+
+    The reply is three frames: a `profile.start` header carrying the length, the
+    body's raw bytes, and a `profile.end` trailer (profile_cmd_handler.cpp
+    :220-248). The length rule is the one ProfileStore::readBody uses — the body
+    read to the first 0x00 or 0xFF — and the address rule is the one the store's
+    own readProfile(id) uses, the newest Address-Ring entry for that id, so what
+    this returns is the body the firmware's own read got.
+
+    None when the command did not answer with a body: an error reply, a timeout,
+    or a header with no usable length. Every caller turns that into a SKIP — a
+    board that does not answer profile.get has nothing here to compare against,
+    which is a fact about the board and not a result of the check.
+    """
+    req = {"cmd": "profile.get", "queued": ctx.queued, "id": pid}
+    line = json.dumps(req, separators=(",", ":"))
+    print(f">>> {line}")
+    os.write(ctx.fd, (line + "\r\n").encode())
+    ctx.queued += 1
+    while True:
+        header = readline(ctx.fd)
+        if header is None:
+            print("!!! TIMEOUT")
+            return None
+        try:
+            obj = json.loads(header)
+        except json.JSONDecodeError:
+            print(f"[garbage] {header}")
+            continue
+        if obj.get("status") == "async":
+            continue
+        break
+    if obj.get("cmd") != "profile.start":
+        print(f"[unexpected reply] {header}")
+        return None
+    length = obj.get("len")
+    if not int_value(length) or length <= 0:
+        return None
+    raw = read_bytes(ctx.fd, length)
+    trailer = readline(ctx.fd)  # the profile.end frame, consumed here
+    print(f"<<< {header}")
+    print(f"<<< [body {length} bytes] "
+          f"{raw.decode('utf-8', 'replace') if raw else '(none)'}")
+    print(f"<<< {trailer}")
+    if raw is None:
+        return None
+    return raw.decode("utf-8", "replace")
+
+
 def key_value_ok(value, low, high, count, accepts_unmapped):
     """A value read back for a key: inside the domain that key declares.
 
@@ -853,6 +1026,26 @@ def main():
     # checks comparing against nothing. command_entry() exits 2 naming the fix.
     for cmd in CONFIG_COMMANDS:
         command_entry(manifest, cmd)
+
+    # The name config.save reports its count of left-behind keys under. Which
+    # field that is is a fact about the protocol, so it is read from the source
+    # (the manifest's response fields for the command) and the stage requires
+    # exactly one optional field: the check at the end of the save branch is
+    # stated in that field's rule — written when the count is not zero, absent
+    # when it is — so a protocol that marks two of them, or none, leaves the
+    # check nothing to score, and that is a failure of the input rather than a
+    # result on the device.
+    save_optional = [f["json"] for f in command_entry(manifest, "config.save")["response"]
+                     if f.get("optional")]
+    if len(save_optional) != 1:
+        print(f"ERROR: protocol.toml marks {save_optional or 'no'} response field "
+              f"of config.save as optional.", file=sys.stderr)
+        print("       The save branch's dropped-keys check is stated in exactly "
+              "one such field: it holds the reply to the two bodies the save had "
+              "in hand, and without the marking it has no key to look for.",
+              file=sys.stderr)
+        sys.exit(2)
+    dropped_key = save_optional[0]
 
     # The reply shapes the protocol declares, read from the protocol source:
     # the manifest carries no envelope (T-35), and the keys and codes a reply is
@@ -1418,6 +1611,52 @@ def main():
                      and config_ok(resp, "config.get_key", sent)
                      and field(resp, "value") == snapshot["map.btn_map"],
                      detail=brief(resp))
+
+        # What the reply says the save left behind, held to the two bodies the
+        # save had in hand rather than to the reply's own word: the body it
+        # replaces (profile.get on the active id, the same body its own read
+        # returns) and the body it writes in its place. The count is a statement
+        # about that pair and nothing else (configmgr.h), so this is the one
+        # judgement about it that does not rest on the device's arithmetic: the
+        # expected number is derived here, from the bytes on the wire, and the
+        # reply has to agree with it — absent when the two bodies carry the same
+        # keys, equal when they do not.
+        #
+        # The save below is the stage's own undo made again: the in-effect
+        # configuration is the snapshot the checks above restored, so the body
+        # written in place of the one read is the body that was there, and this
+        # check leaves nothing new to undo.
+        replaced = save_bodies(ctx, active_id)
+        resp, sent = cfg_send("config.save")
+        reported = config_ok(resp, "config.save", sent)
+        written = save_bodies(ctx, active_id)
+        if replaced is None or written is None:
+            ctx.skip("config.save reports exactly what it did not carry over",
+                     "profile.get answered no body for profile %d, so the pair "
+                     "the count is about is not readable here: replaced=%s, "
+                     "written=%s" % (active_id, brief(replaced), brief(written)))
+        else:
+            expected = not_carried_over(replaced, written)
+            if expected is None:
+                ctx.skip("config.save reports exactly what it did not carry over",
+                         "a key of the two bodies cannot be named the way the "
+                         "count names keys (a name carrying '.', '[' or ']', a "
+                         "chain deeper than %d names, a path longer than %d "
+                         "bytes), which is the pair the firmware answers 0 for"
+                         % (KEY_CHAIN_MAX, LOOKUP_PATH_MAX))
+            else:
+                check_config("config.save reports exactly what it did not "
+                             "carry over",
+                             reported and drop_report_ok(resp, expected,
+                                                         dropped_key),
+                             detail="the replaced body has %d key(s) the written "
+                                    "body does not, so the reply %s; it read: %s"
+                                    % (expected,
+                                       "has no %s to report" % dropped_key
+                                       if expected == 0 else
+                                       "has to report %s=%d" % (dropped_key,
+                                                                expected),
+                                       brief(resp)))
 
     # config.factory_reset — replaces the configuration in effect with the
     # compiled defaults and writes nothing out: the reply says so with persisted

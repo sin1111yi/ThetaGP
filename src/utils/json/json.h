@@ -68,7 +68,22 @@ public:
   /** Bool value at dot path, or def if missing. */
   bool getBool(const char *path, bool def = false) const;
 
-  /** True if the key exists at the given path. */
+  /**
+   * What this document holds at `path`: Present, Absent, or Unknown when the
+   * path cannot be spelled into a lookup at all — a path longer than the format
+   * the lookup walks with can hold, or an empty one. The distinction matters to
+   * callers that count: "absent" is a fact about the document, "unknown" is the
+   * absence of an answer.
+   */
+  enum class KeyLookup { Present, Absent, Unknown };
+  KeyLookup lookup(const char *path) const;
+
+  /**
+   * True if the key exists at the given path.
+   *
+   * False for a path the lookup cannot be built for, which is not "yes" either
+   * way; lookup() tells the two apart.
+   */
   bool has(const char *path) const;
 
   /** Number of elements in array at path. */
@@ -76,6 +91,29 @@ public:
 
   /** Direct frozen scanf (for batch operations). */
   int scanf(const char *fmt, ...) const;
+
+  // ── Parse: key comparison ───────────────────────────────────
+
+  /**
+   * Number of object keys `source` carries that this document does not.
+   *
+   * A key is identified by the chain of names that reaches it, not by the
+   * walker's spelling of its path: a key named `a.b` is not the `b` of `a`, and
+   * a key whose name ends in `]` is not an array element. A member an array
+   * holds is an element rather than a key — the key holding the array is
+   * counted, its elements are not. A name `source` repeats is counted as often
+   * as it appears, because what is counted is the occurrences that are not here
+   * and not the distinct names.
+   *
+   * 0 means "nothing is known to be left behind", which is also the answer when
+   * the comparison has none: when either body does not parse whole, when a
+   * name cannot be spelled into a lookup (one carrying '.', '[' or ']'), when a
+   * chain is deeper or its path longer than the lookup can walk (8 names, 122
+   * bytes), or when this document has no lookup for a key of the source. A
+   * count that is quietly short or quietly long is worse than none, so an
+   * incomplete comparison reports nothing rather than part of the truth.
+   */
+  uint32_t missingKeyCount(const Json &source) const;
 
   // ── Write ───────────────────────────────────────────────────
 

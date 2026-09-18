@@ -32,6 +32,11 @@
 
 #include "utils/log/log.h"
 
+// The generated response field tables, for the flag an `optional` response
+// field carries (THETAGP_RESP_OPTIONAL_*): the declaration of what a reply may
+// leave out, which the write site below is held to.
+#include "protocol/proto_resp.h"
+
 #include <climits>
 #include <cstddef>
 #include <cstdio>
@@ -385,11 +390,23 @@ static void handleConfigListKeys(const char *cmd, const Json &json) {
 // that has storage writes and says so, or refuses and names what stopped it, so
 // that persisted true is only ever the answer to a write that reached the
 // flash.
+//
+// The write replaces a body that may carry keys this configuration does not:
+// the reply names how many of them the save left behind, so a host pushing keys
+// the firmware has no field for learns that they are gone instead of finding out
+// later. Nothing was carried over — and a reply says nothing — when the save
+// carried every key of that body over, which is what a save of a configuration
+// the device itself wrote does.
 
 static void handleConfigSave(const char *cmd, const Json &json) {
   const int q = json.getInt("queued");
 
   bool persisted = false;
+
+  // Keys of the body this save replaces that it does not write: reported rather
+  // than dropped in silence. Every path that writes nothing leaves it at 0,
+  // which is also what a save that carried everything over answers.
+  uint32_t droppedKeys = 0;
 
 #if THETAGP_CFG_HAS_FLASH
   // The factory profile is the board's baseline and the configuration layer
@@ -399,19 +416,41 @@ static void handleConfigSave(const char *cmd, const Json &json) {
     sendError(kErrInvalidState, "the active profile is the factory one");
     return;
   }
-  if (!ConfigMgr::getInstance().saveProfile()) {
+  if (!ConfigMgr::getInstance().saveProfile(&droppedKeys)) {
     sendError(kErrInvalidState, "the active profile could not be written");
     return;
   }
   persisted = true;
 #else
-  // Nothing to write to: the values stay in effect for this session only.
+  // Nothing to write to: the values stay in effect for this session only, and a
+  // save that wrote nothing has nothing to have left behind.
 #endif
 
   Json resp;
   resp.beginWrite(s_cfgRespBuf, sizeof(s_cfgRespBuf));
-  resp.printf("{cmd:%Q,queued:%d,status:%Q,persisted:%B}", cmd, q + 1, "ok",
+  resp.printf("{cmd:%Q,queued:%d,status:%Q,persisted:%B", cmd, q + 1, "ok",
               persisted ? 1 : 0);
+  // The count is a field of this reply like any other, so it is written inside
+  // the object: a field behind the closing brace is not part of it. A save that
+  // left nothing behind writes no field at all, and the reply is then the bytes
+  // this command has always sent.
+  //
+  // Which is the rule protocol.toml declares the field with (`optional = true`,
+  // [commands] config.save): the key is left out when the save has no count to
+  // report, and what it says of the field is that a reply *may* leave it out.
+  // That declaration reaches this file as the flag the generator emits beside
+  // this command's table, and the check below is this site's half of it — the
+  // two say the same thing or neither compiles. A header that no longer
+  // declares the field optional is one whose replies keep the key whatever the
+  // save did, which is not what the write below does: the declaration coming
+  // off the field has to be a decision about this code, taken here.
+#ifndef THETAGP_RESP_OPTIONAL_CONFIG_SAVE_DROPPED_KEYS
+#error "config.save.dropped_keys is written only when the save has a count to report (src/test/config_cmd_handler.cpp) but protocol.toml no longer declares the field `optional = true` — take the write or the declaration with the other one"
+#endif
+  if (droppedKeys > 0) {
+    resp.printf(",dropped_keys:%u", static_cast<unsigned>(droppedKeys));
+  }
+  resp.printf("}");
   uint16_t len = resp.end();
   FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }

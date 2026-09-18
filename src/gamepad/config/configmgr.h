@@ -37,7 +37,22 @@ public:
 
   bool init();
   bool loadProfile(uint16_t profileId);
-  bool saveProfile();
+
+  /** Write the configuration in effect to the profile it belongs to.
+   *
+   * `droppedKeys`, when it is not null, is handed what the write did not carry
+   * over from the body it replaced: the number of object keys of that body the
+   * body written in its place does not hold (Json::missingKeyCount, which is
+   * where the count is defined). The body compared against is the one of the
+   * profile this call writes to, read back by that id — not whichever profile
+   * the store calls active, which a host upload moves on its own. A write that
+   * carried every key over leaves it at 0, and so does every call that returns
+   * without writing: the count is only ever raised by a write that reached the
+   * flash, so a caller reports it as a fact of a save that happened. It stays 0
+   * when the body being replaced cannot be read back, and when the comparison
+   * has no answer (Json::missingKeyCount): a write that happened is not evidence
+   * of one that dropped nothing. */
+  bool saveProfile(uint32_t *droppedKeys = nullptr);
   uint16_t activeProfileId() const;
   uint8_t profileCount() const;
 

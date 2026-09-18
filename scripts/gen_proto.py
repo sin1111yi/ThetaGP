@@ -250,6 +250,12 @@ def file_sha256(path: Path) -> str:
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GENERATOR_SOURCES = ("scripts/gen_proto.py",)
 
+# The firmware sources, and the root the check on an `optional` field's flag
+# reads (validate_optional_flags_reached()): the declaration is only held to
+# anything if a translation unit compiles against the flag it emits, and those
+# are the sources the device is built from.
+FIRMWARE_SOURCE_ROOT = REPO_ROOT / "src"
+
 
 def generator_sha256(sources: Tuple[str, ...] = GENERATOR_SOURCES,
                      root: Path = REPO_ROOT) -> str:
@@ -1078,6 +1084,68 @@ def validate_field_optionality(proto: dict) -> None:
         print("       `optional` takes `true` or `false`: it is read as a "
               "boolean by gen_fields() and by "
               "scripts/test/test_cdc_protocol.py.", file=sys.stderr)
+        sys.exit(1)
+
+
+def validate_optional_flags_reached(proto: dict,
+                                    root: Path = FIRMWARE_SOURCE_ROOT) -> None:
+    """Abort unless some firmware source reaches the flag of every `optional` field.
+
+    An `optional = true` response field gets a compile-time flag from
+    gen_resp() (protocol/proto_resp.h), and naming that flag is the whole of
+    what ties the declaration to the code that has to keep it true: the write
+    site names it, so the declaration coming off the field is a compile error at
+    the site and not a silent drift. The flag nobody names is therefore the
+    binding half-gone — the field reads as optional in this file and in the
+    manifest while every consumer of the firmware sees a field that is always
+    there — which is the defect validate_field_roles() and
+    validate_field_optionality() refuse in the forms they can see (a role
+    nothing derives from, a marking on the wrong side). A write site renamed,
+    reverted or moved out from under the flag is what leaves it behind.
+
+    What this cannot hold is whether the site that names the flag writes the key
+    conditionally, which is the half of the binding no compiler reaches:
+    conditionality is not a fact of the declaration — the column says a reply
+    *may* leave the key out and not when it does — and "this write is under a
+    condition" is not something a translation unit states. So a site that keeps
+    the name and drops the condition is a review or a device-side check, not
+    this run; what is checked here is the weaker fact that the binding still
+    exists at all.
+    """
+    def reached(flag: str, files: List[Path]) -> bool:
+        for path in files:
+            try:
+                if flag in path.read_text(encoding="utf-8", errors="ignore"):
+                    return True
+            except OSError:
+                continue
+        return False
+
+    files = sorted(p for p in root.rglob("*")
+                   if p.is_file() and p.suffix in (".c", ".cc", ".cpp",
+                                                   ".h", ".hh", ".hpp"))
+    unreached: List[str] = []
+    for cmd in proto.get("commands", []):
+        for f in cmd.get("response", []):
+            if not f.get("optional"):
+                continue
+            flag = optional_flag(cmd["domain"], cmd["name"], f["name"])
+            if not reached(flag, files):
+                unreached.append(f"{cmd['domain']}.{cmd['name']}.{f['json']} "
+                                 f"({flag})")
+    if unreached:
+        for entry in unreached:
+            print(f"ERROR: a response field is declared `optional = true` and "
+                  f"no firmware source reaches its flag — {entry}",
+                  file=sys.stderr)
+        print(f"       The flag is emitted from the declaration into "
+              f"protocol/proto_resp.h so that the write site can be held to it, "
+              f"and a site that stops naming it is a declaration the code does "
+              f"not answer to.", file=sys.stderr)
+        print("       Either write the key under the flag at the site that "
+              "writes it, or take `optional = true` off the field: a marking "
+              "nothing acts on is a defect this file does not let pass.",
+              file=sys.stderr)
         sys.exit(1)
 
 
@@ -2032,6 +2100,23 @@ def resp_macro(domain: str, name: str) -> str:
     return f"THETAGP_RESP_{domain.upper()}_{name.replace('-', '_').upper()}"
 
 
+def optional_flag(domain: str, name: str, field: str) -> str:
+    """The name of the compile-time flag a response field declared `optional` carries.
+
+    One flag per field, so the write site the declaration is about can name it:
+    what the flag carries is "a reply of this command may leave this key out",
+    and it is the whole of what this emitter can derive from the column — the
+    rule saying *when* the key is left out is firmware prose, written where the
+    write is (protocol.toml, [commands] config.save). Naming it at that site is
+    what holds the declaration to the code, and it is why the name is derived
+    here rather than spelled there: an `optional = true` that comes off the
+    field takes the flag with it and stops that site from compiling
+    (src/test/config_cmd_handler.cpp).
+    """
+    return (f"THETAGP_RESP_OPTIONAL_{domain.upper()}_"
+            f"{name.replace('-', '_').upper()}_{field.upper()}")
+
+
 def gen_resp(proto: dict, out: Optional[Path] = None) -> str:
     """Response payload field tables, one X-macro per command, as C++.
 
@@ -2075,6 +2160,13 @@ def gen_resp(proto: dict, out: Optional[Path] = None) -> str:
     w("// where the name selects the value to write, the type is what that value")
     w("// has to be, the conversion is the printf specifier for it, and the")
     w("// presence is 1 or a flag that is 0 in a build without the field.")
+    w("//")
+    w("// A second flag, THETAGP_RESP_OPTIONAL_<command>_<field>, answers a")
+    w("// different question about a field: whether a *reply* has to carry the")
+    w("// key, which the presence above does not say. The field is in every")
+    w("// build that writes it; what the flag carries is that the command's")
+    w("// replies may leave the key out, and the write site names it, so a")
+    w("// declaration that comes off the field stops that site from compiling.")
     w()
 
     # Presence flags, once per role a response field carries.
@@ -2088,6 +2180,31 @@ def gen_resp(proto: dict, out: Optional[Path] = None) -> str:
         w("#else")
         w(f"#define {flag} 0")
         w("#endif")
+        w()
+
+    # Presence flags, once per response field the TOML declares `optional`:
+    # a reply of the command may leave the key out. Such a field still gets a
+    # table entry below, with the constant presence 1 — whether a *build* writes
+    # the field at all and whether a *reply* has to carry it are two questions,
+    # and a presence column holds one answer, so the second question gets a flag
+    # of its own instead of a second meaning for that column.
+    #
+    # The flag is the whole of what this emitter derives from the column, and it
+    # is emitted so that the declaration travels to the code that has to keep it
+    # true: the write site names the flag (src/test/config_cmd_handler.cpp for
+    # config.save.dropped_keys), so a field whose `optional = true` comes off
+    # stops that site from compiling rather than leaving a declaration no code
+    # answers to. What the flag cannot carry is *when* the key is left out:
+    # that rule has no column to be derived from and is written where the write
+    # is (protocol.toml, [commands] config.save).
+    optional_fields = [(cmd, f) for cmd in commands
+                       for f in cmd.get("response", []) if f.get("optional")]
+    for cmd, f in optional_fields:
+        w(f"// {cmd['domain']}.{cmd['name']} declares {f['json']} "
+          f"`optional = true` (protocol.toml):")
+        w("// a reply of that command may leave the key out.")
+        w(f"#define {optional_flag(cmd['domain'], cmd['name'], f['name'])} 1")
+    if optional_fields:
         w()
 
     unformattable: List[str] = []
@@ -2303,6 +2420,7 @@ Examples:
     validate_types(proto)
     validate_field_roles(proto)
     validate_field_optionality(proto)
+    validate_optional_flags_reached(proto)
     validate_field_coverage(proto)
     validate_command_error_codes(proto)
 

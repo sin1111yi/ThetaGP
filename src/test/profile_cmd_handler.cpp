@@ -420,7 +420,10 @@ static void handleProfileStatus(const char *cmd, const Json &json) {
 // Delegate to ConfigManager::saveProfile()
 
 static void handleProfileSave(const char *cmd, const Json &json) {
-  if (!ConfigMgr::getInstance().saveProfile()) {
+  // Keys of the body this save replaces that it does not write: reported rather
+  // than dropped in silence, under the key config.save reports them under.
+  uint32_t droppedKeys = 0;
+  if (!ConfigMgr::getInstance().saveProfile(&droppedKeys)) {
     sendError(cmd, json, 1, "saveProfile failed");
     return;
   }
@@ -428,9 +431,16 @@ static void handleProfileSave(const char *cmd, const Json &json) {
   int q = json.getInt("queued");
   Json resp;
   resp.beginWrite(s_profRespBuf, sizeof(s_profRespBuf));
-  resp.printf("{cmd:%Q,queued:%d,status:%Q,id:%d}",
-              cmd, q + 1, "ok",
+  resp.printf("{cmd:%Q,queued:%d,status:%Q,id:%d", cmd, q + 1, "ok",
               ConfigMgr::getInstance().activeProfileId());
+  // The count is a field of this reply like any other, so it is written inside
+  // the object: a field behind the closing brace is not part of it. A save that
+  // left nothing behind writes no field at all, and the reply is then the bytes
+  // this command has always sent.
+  if (droppedKeys > 0) {
+    resp.printf(",dropped_keys:%u", static_cast<unsigned>(droppedKeys));
+  }
+  resp.printf("}");
   uint16_t len = resp.end();
   FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }

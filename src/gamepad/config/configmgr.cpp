@@ -24,8 +24,11 @@
 #include "gamepad/config/config_defaults.h"
 #include "gamepad/config/config_store.h"
 #include "gamepad/profile/profile_store.h"
+#include "utils/json/json.h" // Json::missingKeyCount, the key comparison
 
 #include "utils/log/log.h"
+
+#include <cstring> // memcpy, copying the body being replaced out of the store
 
 namespace ThetaGP::Gamepad::Config {
 
@@ -150,11 +153,54 @@ bool ConfigManager::loadProfile(uint16_t profileId) {
   return ok;
 }
 
-bool ConfigManager::saveProfile() {
+// ── saveProfile() ──
+// The body this save replaces, read back before the write: a save that does not
+// carry a key of it over says so instead of dropping it in silence.
+//
+// A buffer of its own, and read before the body being written is serialized:
+// the read the profile store offers goes through its staging buffer, which the
+// serializer's output lives in, so it has to happen first and be copied out.
+static COMMON_ZERO_INIT uint8_t s_replaced[PROFILE_STAGING_SIZE];
+
+bool ConfigManager::saveProfile(uint32_t *droppedKeys) {
   ProfileStore &store = ProfileStore::getInstance();
+
+  // What the caller is handed is raised by the write below and by nothing
+  // else, so every path that returns before it leaves this at 0.
+  if (droppedKeys) {
+    *droppedKeys = 0;
+  }
+
   if (_activeId == 0) {
     LOG_WARN("ConfigManager: cannot save to factory Profile0");
     return false;
+  }
+
+  // How many keys of the body being replaced the new body does not carry. The
+  // replaced body is the one of the profile this save writes to, read by its id
+  // rather than as "the active one": createProfile moves the store's active id
+  // on its own — a profile the host just uploaded becomes the active one while
+  // this layer still writes the profile it has in hand — and a count taken
+  // against that other body describes a replacement that is not this one. Its
+  // keys are looked up in the body about to be written rather than in a list of
+  // the keys the serializer writes, so a key added to the profile shape moves
+  // this count with it.
+  bool haveReplaced = false;
+  uint16_t replacedLen = 0;
+  if (droppedKeys) {
+    ProfileText replaced;
+    if (store.readProfile(_activeId, &replaced) && replaced.len > 0) {
+      // readBody reports at most PROFILE_JSON_MAX bytes, one below the size of
+      // this buffer.
+      replacedLen = replaced.len;
+      memcpy(s_replaced, replaced.data, replacedLen);
+      haveReplaced = true;
+    } else {
+      // Nothing to compare against. The write below still happens; what it does
+      // not carry over stays unreported rather than reported as none.
+      LOG_WARN("ConfigManager: the body being replaced could not be read; the "
+               "save cannot say what it does not carry over");
+    }
   }
 
   // The whole staging buffer is offered, so the largest body the flash layer
@@ -168,13 +214,29 @@ bool ConfigManager::saveProfile() {
     return false;
   }
 
+  uint32_t notCarriedOver = 0;
+  if (droppedKeys && haveReplaced) {
+    Json fresh;
+    fresh.parse(reinterpret_cast<const char *>(s_staging), jsonLen);
+    Json replaced;
+    replaced.parse(reinterpret_cast<const char *>(s_replaced), replacedLen);
+    notCarriedOver = fresh.missingKeyCount(replaced);
+  }
+
   if (!store.modifyProfile(_activeId, reinterpret_cast<const char *>(s_staging),
                            jsonLen)) {
     LOG_ERROR("ConfigManager: save failed id=%u", _activeId);
     return false;
   }
 
-  LOG_INFO("ConfigManager: save OK id=%u, len=%u", _activeId, jsonLen);
+  // Handed over only after the write reached the flash: the count is a fact of
+  // the save that happened, not of the one that was prepared.
+  if (droppedKeys) {
+    *droppedKeys = notCarriedOver;
+  }
+
+  LOG_INFO("ConfigManager: save OK id=%u, len=%u, dropped=%u", _activeId,
+           jsonLen, static_cast<unsigned>(notCarriedOver));
   return true;
 }
 
@@ -203,7 +265,15 @@ bool ConfigManager::init() {
 
 bool ConfigManager::loadProfile(uint16_t) { return false; }
 
-bool ConfigManager::saveProfile() { return false; }
+bool ConfigManager::saveProfile(uint32_t *droppedKeys) {
+  // No storage to write to, so no body is replaced and nothing can be left
+  // behind: the call writes nothing, which leaves the caller's count at 0 —
+  // the same answer every path that returns without a write gives.
+  if (droppedKeys) {
+    *droppedKeys = 0;
+  }
+  return false;
+}
 
 uint8_t ConfigManager::profileCount() const { return 1; }
 
