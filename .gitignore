@@ -5,6 +5,7 @@
 .vscode
 .trae
 .cache
+.pytest_cache
 .commit_tmp
 
 .clangd
