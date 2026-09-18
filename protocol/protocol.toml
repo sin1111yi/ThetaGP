@@ -15,7 +15,8 @@
 #   [[commands]]      — per-command definitions
 #   [error_codes]     — global error codes
 #   [domains]         — domain prefix registry
-#   [envelope]        — response envelope (the keys every reply carries)
+#   [envelope]        — response envelope (the keys a reply and a request
+#                       carry, and how completely each side carries them)
 #   [[async_messages]] — device-initiated async message definitions
 #
 # A field of a command may carry a `role`, a property of the field that outlives
@@ -68,11 +69,14 @@ ERR_BUFFER_OVERFLOW = { code = 7,  description = "Response too long to send" }
 # Three things the firmware does not hold to, so a reply is read from the
 # sources under src/test/ rather than from this section:
 #
-#   * Not every reply carries all three keys. The dispatcher's two replies to a
-#     request whose `cmd` or `queued` it could not read carry `status` alone of
-#     these, with no `cmd` and no `queued` (src/test/dispatcher.cpp:55, :75),
-#     and the `profile.end` trailer carries `cmd` and `status` with no `queued`
-#     (src/test/profile_cmd_handler.cpp:246).
+#   * Not every reply carries all three keys, and the `appears` column below is
+#     where that is declared per key. The dispatcher's two replies to a request
+#     whose `cmd` or `queued` it could not read carry `status` alone of these,
+#     with no `cmd` and no `queued` (src/test/dispatcher.cpp:55, :75), and the
+#     `profile.end` trailer carries `cmd` and `status` with no `queued`
+#     (src/test/profile_cmd_handler.cpp:246). A request carries `cmd` and
+#     `queued` and no `status`, and the device refuses one missing either of the
+#     two (src/test/dispatcher.cpp:70-80).
 #   * There is no one order. `status,cmd,queued` leads 20 of the firmware's 38
 #     format strings, `cmd,queued,status` leads 15, and the trailer above orders
 #     `cmd,status`. Each emitter writes the order declared here, so a consumer
@@ -85,20 +89,45 @@ ERR_BUFFER_OVERFLOW = { code = 7,  description = "Response too long to send" }
 # One entry per key: the TOML key is the field name a target writes it as, `json`
 # is the key it travels under (gen_rust writes the TOML key where gen_ts writes
 # the `json` column, so validate_envelope() holds the two equal), `type` is
-# drawn from the same vocabulary a field's `type` is, and `description` is what
-# a reader of a reply needs to know about it. gen_rust writes a response
-# struct's leading fields and gen_ts a response interface's leading lines from
-# this section, so the shape of a reply starts in one place instead of in a
-# literal per target. The firmware's format strings are still written by hand --
-# 38 of them across four files: src/test/testsys.cpp (8),
-# src/test/testcmds.cpp (12), src/test/profile_cmd_handler.cpp (15) and
-# src/test/dispatcher.cpp (3). Deriving them needs the response field table
-# mechanism (proto_resp.h) extended to the envelope, which is a change of its
-# own.
+# drawn from the same vocabulary a field's `type` is, `appears` says in which
+# messages of each side the key shows up, and `description` is what a reader of
+# a reply needs to know about it. gen_rust writes a response struct's leading
+# fields and gen_ts a response interface's leading lines from this section, and
+# now a request type's leading fields and lines too, so the shape of both
+# messages starts in one place instead of in a literal per target. The
+# firmware's format strings are still written by hand -- 38 of them across four
+# files: src/test/testsys.cpp (8), src/test/testcmds.cpp (12),
+# src/test/profile_cmd_handler.cpp (15) and src/test/dispatcher.cpp (3).
+# Deriving them needs the response field table mechanism (proto_resp.h)
+# extended to the envelope, which is a change of its own.
+#
+# `appears` is one column with one cell per side, and both cells take the same
+# three words, because the question is the same on each side -- is the key in
+# every message of this side, in some of them, or in none:
+#
+#   always — every message of that side carries the key
+#   some   — some of them do and some do not. Which ones is the firmware's
+#            business: it is evidence under src/test/ (see the first bullet
+#            above), not something this section states per key
+#   never  — none of them does
+#
+# The two targets read the column instead of assuming a key is always there: a
+# key of `always` is written required (`pub status: String` / `status: string`),
+# one of `some` optional (`pub cmd: Option<String>` / `cmd?: string`), and one
+# of `never` is not written for that side at all -- on whichever side it
+# appears. That is why the column is here: without it every key is written
+# required on both sides, and a binding that requires `cmd`/`queued` in a reply
+# refuses to deserialize the error replies the device really sends
+# (src/test/dispatcher.cpp:55, :75), while a request type that writes `status`
+# carries a key no request has. What the column does not say is the shape of a
+# whole message: `some` on `cmd` and on `queued` does not state that the replies
+# they are missing from are the same ones, and `error_code`/`reason` -- which
+# the error replies carry and this section still does not declare -- stay
+# outside it.
 [envelope]
-status = { type = "string", json = "status", description = "Outcome of the command: ok or error" }
-cmd    = { type = "string", json = "cmd",    description = "Full name of the command this reply answers, e.g. sys.ping" }
-queued = { type = "u32",    json = "queued", description = "The request's queued value plus one, echoed so a host can pair a reply with its request. The accepted range is 0..2147483647: a literal wider than an int saturates at that bound rather than wrapping (src/utils/json/json.cpp:13-36) and is accepted as it stands, while a missing, negative or non-integer value is refused with error_code 2 and a reply that carries neither this key nor cmd (src/test/dispatcher.cpp:70-80). 31 of the 35 replies that carry this key echo the request's value plus one; the four staged profile.start replies echo a literal 0 instead (src/test/profile_cmd_handler.cpp:146,153,158,165)" }
+status = { type = "string", json = "status", appears = { request = "never",  reply = "always" }, description = "Outcome of the command: ok or error" }
+cmd    = { type = "string", json = "cmd",    appears = { request = "always", reply = "some"   }, description = "Full name of the command this reply answers, e.g. sys.ping. A request carries the command being asked for under the same key, which is why the column says it appears on both sides" }
+queued = { type = "u32",    json = "queued", appears = { request = "always", reply = "some"   }, description = "The request's queued value plus one, echoed so a host can pair a reply with its request. The accepted range is 0..2147483647: a literal wider than an int saturates at that bound rather than wrapping (src/utils/json/json.cpp:13-36) and is accepted as it stands, while a missing, negative or non-integer value is refused with error_code 2 and a reply that carries neither this key nor cmd (src/test/dispatcher.cpp:70-80). 31 of the 35 replies that carry this key echo the request's value plus one; the four staged profile.start replies echo a literal 0 instead (src/test/profile_cmd_handler.cpp:146,153,158,165)" }
 
 # ---------------------------------------------------------------------------
 # Enumerations

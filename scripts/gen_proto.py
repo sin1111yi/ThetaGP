@@ -285,14 +285,37 @@ def validate_domains(proto: dict) -> None:
 
 
 # The response envelope: the keys a reply carries because the response builder
-# writes them, not because a command declares them. Declared in protocol.toml's
-# [envelope] section — one entry per key, carrying the wire type, the JSON key it
-# travels under, the description a reader gets, and (as the section key) the field
-# name every target writes — so the leading keys of a reply come from the source
-# of truth like the rest of its shape. The emitters below read them from there
-# rather than each carrying a literal of its own; validate_envelope() holds the
-# declaration to what they need, and refuses a command that declares one of these
-# keys.
+# writes them, and the keys a request carries because the host writes them —
+# neither is declared by a command. Declared in protocol.toml's [envelope]
+# section — one entry per key, carrying the wire type, the JSON key it travels
+# under, the `appears` column (in which messages of each side the key shows up,
+# and how completely), the description a reader gets, and (as the section key)
+# the field name every target writes — so the leading keys of both messages come
+# from the source of truth like the rest of their shape. The emitters below read
+# them from there rather than each carrying a literal of its own;
+# validate_envelope() holds the declaration to what they need, and refuses a
+# command that declares one of these keys on the side it appears on.
+
+# The two sides a message has, named as the `appears` column names them.
+ENVELOPE_SIDES = ("request", "reply")
+
+# How completely a side's messages carry a key, and the whole vocabulary both
+# cells of `appears` draw on. One vocabulary for the two sides, because the
+# question is the same on each: is the key in every message of this side, in
+# some of them, or in none. The emitters answer it with one rule, applied on
+# whichever side the key appears — `always` is a required field, `some` an
+# optional one (`Option<T>` / `?:`), `never` no field for that side at all.
+#
+# What `some` does not say is which of the side's messages carry the key, or
+# that two keys of `some` are missing from the same ones: it is per key and per
+# side, not per message shape. The reply shapes that omit a key are firmware
+# evidence (src/test/dispatcher.cpp:55, :75 and src/test/profile_cmd_handler.cpp:246
+# for the two spellings of `cmd`/`queued`'s absence) and stay in the comments of
+# the section rather than becoming a second thing this column has to express.
+ENVELOPE_ALWAYS, ENVELOPE_SOME, ENVELOPE_NEVER = "always", "some", "never"
+ENVELOPE_APPEARANCES = (ENVELOPE_ALWAYS, ENVELOPE_SOME, ENVELOPE_NEVER)
+
+
 def envelope_fields(proto: dict) -> List[Dict[str, Any]]:
     """The declared response envelope, in declaration order — the wire order.
 
@@ -304,6 +327,30 @@ def envelope_fields(proto: dict) -> List[Dict[str, Any]]:
     return [{**entry, "name": name} for name, entry in proto.get("envelope", {}).items()]
 
 
+def envelope_on_side(proto: dict, side: str) -> List[Dict[str, Any]]:
+    """The envelope keys one side's messages carry, in declaration order.
+
+    Each entry carries the section's own columns plus `required`: whether *every*
+    message of that side carries the key, which is the one thing an emitter needs
+    beyond the key's name and type. A key of `appears.<side> = "some"` is written
+    optional in both targets, a key of `"always"` required, and one of `"never"`
+    is not written for that side at all — so this is what keeps a reply's leading
+    fields from claiming more than the firmware writes (the dispatcher's error
+    replies carry `status` alone of the envelope's keys) and a request's leading
+    fields from claiming a key no request has (`status`).
+
+    That a side's messages carry all of them is therefore explicitly not assumed:
+    a request carries `cmd` and `queued` and no `status`, a reply carries `status`
+    and — on the firmware's format strings — `cmd`/`queued` only when it answers
+    a request it could read. `side` is one of ENVELOPE_SIDES; validate_envelope()
+    is what holds the column to that vocabulary and to the two sides, so a
+    declaration reaching here has both cells.
+    """
+    return [{**field, "required": field["appears"][side] == ENVELOPE_ALWAYS}
+            for field in envelope_fields(proto)
+            if field["appears"][side] != ENVELOPE_NEVER]
+
+
 def envelope_json_keys(proto: dict) -> Tuple[str, ...]:
     """The JSON keys of the declared envelope, as gen_ts compares a field against them."""
     return tuple(field["json"] for field in envelope_fields(proto))
@@ -312,18 +359,21 @@ def envelope_json_keys(proto: dict) -> Tuple[str, ...]:
 def validate_envelope(proto: dict) -> None:
     """Abort unless [envelope] is a declaration the emitters can act on, and no command shadows it.
 
-    The envelope is the leading part of every reply, and six things about it are
-    checked here — each one a way the declaration would read as describing the
-    replies while nothing writes or types them that way:
+    The envelope is the leading part of every reply and of every request with a
+    payload, and eight things about it are checked here — each one a way the
+    declaration would read as describing the messages while nothing writes or
+    types them that way:
 
     1. The section exists and declares at least one key. An envelope with no
        entry leaves gen_rust and gen_ts writing no leading field and no leading
        line at all, while the firmware still writes the keys.
-    2. Every entry is a table carrying the three columns the emitters read: the
-       JSON key it travels under, the wire type, and the description a reader is
-       given. An entry short of a JSON key is a key nothing can be paired with a
-       value; short of a type, a line neither language's emitter can write; and
-       two entries under one JSON key are one key written twice.
+    2. Every entry is a table carrying the four columns the emitters read: the
+       JSON key it travels under, the wire type, the `appears` column, and the
+       description a reader is given. An entry short of a JSON key is a key
+       nothing can be paired with a value; short of a type, a line neither
+       language's emitter can write; short of `appears`, a key whose optionality
+       is unknown (item 4); and two entries under one JSON key are one key
+       written twice.
     3. Every declared type is one the three language maps carry and one a printf
        conversion writes. The three maps, because gen_rust and gen_ts look the
        name up in their own and a type missing from one degrades to that
@@ -331,13 +381,36 @@ def validate_envelope(proto: dict) -> None:
        printf map, because these keys are written by the response builder, so a
        key of no printf form is one no format string can carry — `any` is
        exactly such a type.
-    4. No command declares a response field under an envelope key, by either
+    4. Every entry's `appears` column names the two sides and gives each one of
+       three values, the whole vocabulary: `always` (every message of that side
+       carries the key), `some` (some do and some do not) or `never` (none
+       does). This is the column the emitters read to decide a field's
+       optionality, on either side: `always` is written required, `some`
+       optional, `never` not written for that side. An entry without the column
+       leaves both targets writing the key as required on every side — the shape
+       the firmware's error replies then fail to deserialize into, since they
+       carry `status` alone of these keys (src/test/dispatcher.cpp:55, :75) —
+       and a value outside the vocabulary leaves the emitters with nothing to
+       decide from. What the column is not held to is *which* of a side's
+       messages omit a key of `some`: that is firmware evidence under src/test/
+       and not something this file can read (see item 4's counterparts in the
+       section's comments).
+    5. No command declares a response field under an envelope key, by either
        column. Both, because each emitter pairs a field with the envelope
        differently: a field whose `json` is an envelope key is left to the
        envelope by gen_ts and loses its own declared type and optionality there,
        and a field whose `name` is one would be a second `pub status` in
        gen_rust's response struct.
-    5. Every entry's JSON key is its section key. The two targets read a
+    6. No command declares a *request* field under a key the request side
+       carries. The request types write the request side of this section ahead
+       of the fields a command declares for them, exactly as the response types
+       write the reply side ahead of theirs, so the same collision is possible on
+       the other side — a second `pub cmd` in gen_rust's request struct, a second
+       `cmd:` line in gen_ts's request interface. Only the keys of
+       `appears.request` that are not `never` are reserved here, because those
+       are the lines the request types write; a key of `never` on that side
+       writes no line and shadows nothing.
+    7. Every entry's JSON key is its section key. The two targets read a
        different column for the same field — gen_rust writes the section key as
        the field name, gen_ts writes the `json` column as the wire key — so a
        pair that differs gives one reply two spellings, one per target, and
@@ -345,10 +418,10 @@ def validate_envelope(proto: dict) -> None:
        interface renames it. No rename buys anything here either, because the
        envelope is written by the response builder and not by a command: the
        section key is the field name and the JSON key, so the two are one name.
-    6. No entry declares a `name` column. The section key is the field name
+    8. No entry declares a `name` column. The section key is the field name
        envelope_fields() hands the emitters, so a `name` column is a second
        answer to the same question, and it is the one that reaches the targets —
-       while check 4 above still reserves the section key, so the shadowing it
+       while check 5 above still reserves the section key, so the shadowing it
        catches and the field a target writes would be two different names.
 
     What is not checked, because nothing in the source states it: whether these
@@ -370,11 +443,47 @@ def validate_envelope(proto: dict) -> None:
     for name, entry in section.items():
         if not isinstance(entry, dict):
             problems.append(f"[envelope].{name} is not a table "
-                            f"(expected type / json / description)")
+                            f"(expected type / json / appears / description)")
             continue
         for column in ("json", "type", "description"):
             if not entry.get(column):
                 problems.append(f"[envelope].{name} declares no {column!r}")
+        # The `appears` column: one cell per side, each in the one vocabulary the
+        # emitters decide a field's optionality from. Checked here rather than
+        # left to the emitters, because the two failures below both reach a
+        # target as a key written on a side where the firmware does not write it:
+        # a missing column and a misspelled side read the same way to an emitter
+        # looking a side up, and a value outside the vocabulary is one no
+        # comparison in either emitter can be true of.
+        appears = entry.get("appears")
+        if not isinstance(appears, dict):
+            problems.append(f"[envelope].{name} declares no 'appears' column "
+                            f"(the key's occurrence per side, e.g. "
+                            f"{{ request = \"always\", reply = \"some\" }}) — "
+                            f"both targets take optionality from it, so without "
+                            f"it they write the key as required on every side")
+        else:
+            for side in ENVELOPE_SIDES:
+                if side not in appears:
+                    problems.append(f"[envelope].{name}.appears declares no "
+                                    f"{side!r} cell — the same question is asked "
+                                    f"of every key on both sides, and a side "
+                                    f"left out is one the targets write the key "
+                                    f"on without an answer to it")
+                elif appears[side] not in ENVELOPE_APPEARANCES:
+                    problems.append(f"[envelope].{name}.appears declares "
+                                    f"{side} = {appears[side]!r}, which is not "
+                                    f"one of {list(ENVELOPE_APPEARANCES)} — the "
+                                    f"value is what tells the targets to write "
+                                    f"the key required, optional, or not at all "
+                                    f"on that side")
+            unknown = sorted(set(appears) - set(ENVELOPE_SIDES))
+            if unknown:
+                problems.append(f"[envelope].{name}.appears names {unknown}, "
+                                f"which is not a side a message has "
+                                f"(sides: {list(ENVELOPE_SIDES)}) — a "
+                                f"misspelled side leaves the cell it was meant "
+                                f"to be the targets never read")
         # The section key is the field name a target writes, so the JSON key a
         # reply travels under is the same name — gen_rust reads the section key
         # and gen_ts the column, and a pair that differs is one field under two
@@ -434,6 +543,38 @@ def validate_envelope(proto: dict) -> None:
                         f"envelope separately, and a second field of the same "
                         f"name breaks the target that writes the name it "
                         f"declares.")
+
+    # The other side of the same rule, and the reason it is the request side of
+    # the column that decides what is reserved: the request types write the keys
+    # a request carries ahead of the fields a command declares for them, exactly
+    # as the response types write the reply side ahead of theirs. A key of
+    # `appears.request = "never"` writes no line there and shadows nothing, so it
+    # is not reserved — the request type is where that key would collide, and it
+    # is not written.
+    request_names = {name for name, entry in section.items()
+                     if isinstance(entry, dict)
+                     and isinstance(entry.get("appears"), dict)
+                     and entry["appears"].get("request") != ENVELOPE_NEVER}
+    request_json = {entry["json"] for name, entry in section.items()
+                    if name in request_names and entry.get("json")}
+    request_offenders = [
+        f"{cmd['domain']}.{cmd['name']}:{field.get('name')} — "
+        + (f"its json key {field.get('json')!r} is an envelope key a request carries"
+           if field.get("json") in request_json
+           else "its field name is an envelope field name a request carries")
+        for cmd in proto.get("commands", [])
+        for field in cmd.get("request", [])
+        if field.get("json") in request_json or field.get("name") in request_names
+    ]
+    if request_offenders:
+        problems.append(f"a command declares a request field the envelope "
+                        f"already writes: {request_offenders}. The request side "
+                        f"of the envelope "
+                        f"({', '.join(sorted(request_json))}) is written by the "
+                        f"host ahead of the fields a command declares, so "
+                        f"declaring one is a second field of the same name in "
+                        f"the request type — a duplicate `pub` in gen_rust's "
+                        f"struct and a duplicate key in gen_ts's interface.")
 
     if problems:
         for problem in problems:
@@ -1024,9 +1165,10 @@ def gen_rust(proto: dict, out: Optional[Path] = None) -> str:
     enums = proto.get("enums", [])
     commands = proto.get("commands", [])
     error_codes = proto.get("error_codes", {})
-    # The reply's leading fields, as protocol.toml declares them, so this emitter
-    # writes a response struct's first fields from the source of truth.
-    envelope = envelope_fields(proto)
+    # A message's leading fields, as protocol.toml declares them, so this emitter
+    # writes a request struct's and a response struct's first fields from the
+    # source of truth — envelope_on_side() per side, called where each is
+    # written.
 
     def w(line: str = "") -> None:
         lines.append(line)
@@ -1125,11 +1267,18 @@ def gen_rust(proto: dict, out: Optional[Path] = None) -> str:
         struct_name = f"{to_pascal(domain)}{to_pascal(name)}Request"
         w("#[derive(Debug, Clone, Serialize, Deserialize)]")
         w(f"pub struct {struct_name} {{")
-        # A request carries the command name and the queue counter, not the
-        # reply's envelope ([envelope] also declares `status`), so these two
-        # lines are written here rather than derived from that section.
-        w('    pub cmd: String,')
-        w('    pub queued: u32,')
+        # A request carries the request side of [envelope] — the keys
+        # protocol.toml declares as appearing in one — ahead of the fields the
+        # command declares, so these lines come from that section like the
+        # response struct's leading fields do, and the column decides their
+        # optionality: a key of `appears.request = "always"` is required here,
+        # one of `"some"` optional, and one of `"never"` is not written at all.
+        for f in envelope_on_side(proto, "request"):
+            t = RUST_TYPE_MAP[f["type"]]
+            if f["required"]:
+                w(f"    pub {rust_ident(f['name'])}: {t},")
+            else:
+                w(f"    pub {rust_ident(f['name'])}: Option<{t}>,")
         # Each declared request field becomes a field of the struct; the list is
         # built and compared before the lines are written, so a filter added here
         # is reported rather than leaving the binding short a field.
@@ -1160,9 +1309,17 @@ def gen_rust(proto: dict, out: Optional[Path] = None) -> str:
         w(f"pub struct {struct_name} {{")
         # The envelope leads every response struct — the keys the response
         # builder writes, in the order protocol.toml declares them, read from
-        # that section rather than from a literal of this emitter's own.
-        for f in envelope:
-            w(f"    pub {rust_ident(f['name'])}: {RUST_TYPE_MAP[f['type']]},")
+        # that section rather than from a literal of this emitter's own, and
+        # with the optionality its `appears` column gives them: a key every
+        # reply carries (`status`) is written plain, one only some replies carry
+        # (`cmd`, `queued` — the error replies have neither) as Option, so the
+        # struct deserializes the replies the firmware really sends.
+        for f in envelope_on_side(proto, "reply"):
+            t = RUST_TYPE_MAP[f["type"]]
+            if f["required"]:
+                w(f"    pub {rust_ident(f['name'])}: {t},")
+            else:
+                w(f"    pub {rust_ident(f['name'])}: Option<{t}>,")
         # Each declared response field becomes an optional field of the struct —
         # every one of them, so the list is the declared array and the check
         # holds it there.
@@ -1192,10 +1349,11 @@ def gen_rust(proto: dict, out: Optional[Path] = None) -> str:
 # ═════════════════════════════════════════════════════════════════════════════
 
 # The response envelope is declared in protocol.toml ([envelope]) and read out of
-# it by envelope_fields(), so the response struct of gen_rust and the response
-# interface of gen_ts write a reply's leading keys from the source of truth
-# instead of each carrying a literal copy of them. See validate_envelope() for
-# what the declaration is held to.
+# it by envelope_on_side(), so the request types and the response types of
+# gen_rust and gen_ts write a message's leading keys from the source of truth
+# instead of each carrying a literal copy of them — and so the `appears` column
+# decides, per side, whether a key is required, optional or not written there.
+# See validate_envelope() for what the declaration is held to.
 
 
 def gen_ts(proto: dict, out: Optional[Path] = None) -> str:
@@ -1204,9 +1362,8 @@ def gen_ts(proto: dict, out: Optional[Path] = None) -> str:
     enums = proto.get("enums", [])
     commands = proto.get("commands", [])
     error_codes = proto.get("error_codes", {})
-    # The reply's leading keys, as protocol.toml declares them, so this emitter
-    # writes a response interface's first lines from the source of truth.
-    envelope = envelope_fields(proto)
+    # The reply's leading keys as gen_ts compares a declared field against them:
+    # a field whose key the envelope already writes is left to the envelope.
     envelope_keys = envelope_json_keys(proto)
 
     def w(line: str = "") -> None:
@@ -1276,8 +1433,13 @@ def gen_ts(proto: dict, out: Optional[Path] = None) -> str:
         w(f"// {full_name} — Request ({desc})")
         if req:
             w(f"export interface {to_pascal(domain)}{to_pascal(name)}Request {{")
-            w("  cmd: string;")
-            w("  queued: number;")
+            # The request's leading keys come from [envelope]'s request side, not
+            # from two lines written here — and a key of `appears.request =
+            # "some"` would be written optional, the same rule the response
+            # interface below applies to the reply side.
+            for f in envelope_on_side(proto, "request"):
+                optional = "" if f["required"] else "?"
+                w(f"  {f['json']}{optional}: {TS_TYPE_MAP[f['type']]};")
             # Each declared request field becomes a property of the interface;
             # the list is built and compared before the lines are written, so a
             # filter added here is reported rather than leaving the binding short
@@ -1292,15 +1454,26 @@ def gen_ts(proto: dict, out: Optional[Path] = None) -> str:
                 w(f"  {f['json']}{optional}: {ts_type};")
             w("}")
         else:
-            w(f"export type {to_pascal(domain)}{to_pascal(name)}Request = {{ cmd: string; queued: number; }};")
+            # A command with no request fields still has a request, and its
+            # leading keys are the envelope's request side — the same source as
+            # the interface above, so the inline shape cannot drift from it.
+            head = " ".join(
+                f"{f['json']}{'?' if not f['required'] else ''}: {TS_TYPE_MAP[f['type']]};"
+                for f in envelope_on_side(proto, "request"))
+            w(f"export type {to_pascal(domain)}{to_pascal(name)}Request = {{ {head} }};")
         w()
 
         # Response interface
         resp = cmd_info.get("response", [])
         if resp:
             w(f"export interface {to_pascal(domain)}{to_pascal(name)}Response {{")
-            for f in envelope:
-                w(f"  {f['json']}: {TS_TYPE_MAP[f['type']]};")
+            # The reply's leading keys, from [envelope]'s reply side: a key every
+            # reply carries is written plain and one only some replies carry
+            # optional (`cmd?`, `queued?` — the error replies carry `status`
+            # alone of these).
+            for f in envelope_on_side(proto, "reply"):
+                optional = "" if f["required"] else "?"
+                w(f"  {f['json']}{optional}: {TS_TYPE_MAP[f['type']]};")
             # A field whose key the envelope above writes is left to it; every
             # other declared field gets an optional line of its own. The list is
             # built before the lines are written, and what the interface carries
