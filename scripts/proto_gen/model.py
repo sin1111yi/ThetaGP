@@ -5,18 +5,52 @@ protocol.toml declares the messages; this module is what the rest of the
 generator reads them through — the three type maps plus PRINTF_TYPE_MAP, the
 role registry and the presence it derives, the [envelope] and [error_reply]
 readers, and the helpers the emitters and the validators both use
-(omission_reason, field_coverage_errors, fail_uncovered_fields, command_fields,
-optional_flag).
+(fail, omission_reason, field_coverage_errors, fail_uncovered_fields,
+command_fields, optional_flag).
 
 Moved out of scripts/gen_proto.py without a change to any of it: the module
 split is mechanical, and nothing here behaves differently for having a file of
-its own.
+its own. The one thing added since is fail(): the exit every error site in the
+generation run goes through, so no validator and no emitter writes a print and
+an exit of its own.
 """
 import hashlib
 import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Stopping
+# ═════════════════════════════════════════════════════════════════════════════
+
+def fail(*lines: str) -> None:
+    """Report a failure — one line, or several — and stop the run with exit 1.
+
+    Every line reaches stderr as it stands, in the order given, and the run
+    then ends non-zero. The text is the caller's, and that is deliberate: the
+    `ERROR: ` prefix a report's subject line carries and the seven-space indent
+    of the detail lines under it are part of the strings the call site builds,
+    so they are spelled where the text is known rather than added here.
+
+    Because the reports are not all one line and not all one problem. A
+    validator that collected several problems writes one prefixed line per
+    problem and one indented note under them all (validate_envelope,
+    validate_types, validate_command_error_codes); the coverage check writes
+    indented notes alone (fail_uncovered_fields); a validator with a single
+    fault writes the one line that states it (validate_domains). No prefix this
+    function added could leave all of those as they are — and they are read
+    both by a person and, word for word, by the suite's negative cases, so the
+    shape of a failure is decided once, at the site that knows it.
+
+    What every call site shares is this: its lines reach stderr and the run
+    stops here, so reporting an error is one call and nothing else.
+    """
+    for line in lines:
+        print(line, file=sys.stderr)
+    sys.exit(1)
+
 
 # ── Try tomllib (3.11+), fallback to tomli ──────────────────────────────────
 try:
@@ -25,9 +59,8 @@ except ImportError:
     try:
         import tomli as tomllib
     except ImportError:
-        print("ERROR: Python 3.11+ (stdlib tomllib) or 'tomli' pip package required.",
-              file=sys.stderr)
-        sys.exit(1)
+        fail("ERROR: Python 3.11+ (stdlib tomllib) or 'tomli' pip package "
+             "required.")
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -465,14 +498,12 @@ def fail_uncovered_fields(problems: List[str]) -> None:
     """
     if not problems:
         return
-    for problem in problems:
-        print(f"ERROR: emitter coverage — {problem}", file=sys.stderr)
-    print("       A declared field has to reach every emitted field list derived "
-          "from it unless the field itself carries a reason to be left out "
-          "(`role`, `omit_in_serialize` or an empty `json` key); one filtered out "
-          "of an emitter is lost by every artifact derived from it, and no "
-          "consumer of them can tell.", file=sys.stderr)
-    sys.exit(1)
+    fail(*[f"ERROR: emitter coverage — {problem}" for problem in problems],
+         "       A declared field has to reach every emitted field list derived "
+         "from it unless the field itself carries a reason to be left out "
+         "(`role`, `omit_in_serialize` or an empty `json` key); one filtered out "
+         "of an emitter is lost by every artifact derived from it, and no "
+         "consumer of them can tell.")
 
 
 def command_fields(entries: List[dict]) -> List[Dict[str, Any]]:

@@ -42,7 +42,7 @@ from proto_gen.emit_fields import gen_fields, gen_fields_md
 from proto_gen.emit_resp import gen_resp
 from proto_gen.emit_rust import gen_rust
 from proto_gen.emit_ts import gen_ts
-from proto_gen.model import load_protocol
+from proto_gen.model import fail, load_protocol
 from proto_gen.validate import (
     validate_command_error_codes,
     validate_domains,
@@ -94,8 +94,7 @@ Examples:
     proto_path = Path(args.protocol)
 
     if not proto_path.exists():
-        print(f"ERROR: Protocol file not found: {proto_path}", file=sys.stderr)
-        sys.exit(1)
+        fail(f"ERROR: Protocol file not found: {proto_path}")
 
     proto = load_protocol(str(proto_path))
     validate_domains(proto)

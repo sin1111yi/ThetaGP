@@ -5,14 +5,14 @@ One function per thing the source of truth has to be true of before an artifact
 is written: the domains, the two declared message shapes ([envelope],
 [error_reply]), the type vocabulary, the field roles, the optionality columns,
 the declared-but-never-emitted fields, the coverage of every emitter's own
-field lists, and the per-command error-code arrays. Each one prints and exits
-non-zero on its own; main() calls them all before the first emitter runs, so a
-protocol the artifacts cannot describe is not written at all.
+field lists, and the per-command error-code arrays. Each one reports what it
+found through model.fail() — the lines it collected, then exit non-zero, in one
+place for the whole run; main() calls them all before the first emitter runs,
+so a protocol the artifacts cannot describe is not written at all.
 
 Moved out of scripts/gen_proto.py without a change to any check or any message:
 the suite's negative cases match these strings word for word.
 """
-import sys
 from pathlib import Path
 from typing import List
 
@@ -28,6 +28,7 @@ from proto_gen.model import (
     TYPE_MAPS,
     command_fields,
     error_reply_on_side,
+    fail,
     fail_uncovered_fields,
     field_coverage_errors,
     optional_flag,
@@ -39,8 +40,7 @@ def validate_domains(proto: dict) -> None:
     miss, unk = sorted(used - declared), sorted(declared - used - NON_COMMAND_DOMAINS)
     absent = sorted(NON_COMMAND_DOMAINS - declared)
     if miss or unk or absent:
-        print(f"ERROR: [domains] mismatch — used-by-commands-but-undeclared: {miss or 'none'}; declared-but-unknown: {unk or 'none'}; registered-non-command-but-undeclared: {absent or 'none'}", file=sys.stderr)
-        sys.exit(1)
+        fail(f"ERROR: [domains] mismatch — used-by-commands-but-undeclared: {miss or 'none'}; declared-but-unknown: {unk or 'none'}; registered-non-command-but-undeclared: {absent or 'none'}")
 
 
 def validate_envelope(proto: dict) -> None:
@@ -120,9 +120,8 @@ def validate_envelope(proto: dict) -> None:
     """
     section = proto.get("envelope", {})
     if not isinstance(section, dict):
-        print("ERROR: response envelope — [envelope] is not a table of "
-              "per-key entries (type / json / description).", file=sys.stderr)
-        sys.exit(1)
+        fail("ERROR: response envelope — [envelope] is not a table of "
+             "per-key entries (type / json / description).")
 
     problems: List[str] = []
     if not section:
@@ -265,12 +264,9 @@ def validate_envelope(proto: dict) -> None:
                         f"struct and a duplicate key in gen_ts's interface.")
 
     if problems:
-        for problem in problems:
-            print(f"ERROR: response envelope — {problem}", file=sys.stderr)
-        print(f"       [envelope] declares: "
-              f"{ {name: entry for name, entry in section.items()} }",
-              file=sys.stderr)
-        sys.exit(1)
+        fail(*[f"ERROR: response envelope — {problem}" for problem in problems],
+             f"       [envelope] declares: "
+             f"{ {name: entry for name, entry in section.items()} }")
 
 
 def validate_error_reply(proto: dict) -> None:
@@ -330,9 +326,8 @@ def validate_error_reply(proto: dict) -> None:
     """
     section = proto.get("error_reply", {})
     if not isinstance(section, dict):
-        print("ERROR: error reply — [error_reply] is not a table of per-key "
-              "entries (type / json / appears / description).", file=sys.stderr)
-        sys.exit(1)
+        fail("ERROR: error reply — [error_reply] is not a table of per-key "
+             "entries (type / json / appears / description).")
 
     problems: List[str] = []
     if not section:
@@ -447,10 +442,8 @@ def validate_error_reply(proto: dict) -> None:
                 f"the key on whichever reply failed.")
 
     if problems:
-        for problem in problems:
-            print(f"ERROR: error reply — {problem}", file=sys.stderr)
-        print(f"       [error_reply] declares: {section}", file=sys.stderr)
-        sys.exit(1)
+        fail(*[f"ERROR: error reply — {problem}" for problem in problems],
+             f"       [error_reply] declares: {section}")
 
 
 def validate_types(proto: dict) -> None:
@@ -518,38 +511,38 @@ def validate_types(proto: dict) -> None:
     # them, rather than by any rule about the types a field may name.
     overlap = sorted(set(PRINTF_LESS_TYPES) & set(PRINTF_TYPE_MAP))
     if any(missing for _, missing in unmapped) or no_printf or overlap:
+        # Built in the order the lines are read: one prefixed line per problem,
+        # then the notes under them — which is the shape these reports have
+        # always had, and the order the checks find them in.
+        report: List[str] = []
         for name, missing in unmapped:
             if missing:
-                print(f"ERROR: {name} has no mapping for type(s): {missing}",
-                      file=sys.stderr)
+                report.append(f"ERROR: {name} has no mapping for type(s): {missing}")
         if overlap:
-            print(f"ERROR: type(s) in both PRINTF_TYPE_MAP and "
-                  f"PRINTF_LESS_TYPES: {overlap}", file=sys.stderr)
-            print("       PRINTF_LESS_TYPES names the types no printf "
-                  "conversion writes, so a type it names does not belong in "
-                  "PRINTF_TYPE_MAP: a response field of such a type would be "
-                  "written through the mapping, which is the table the "
-                  "exception list says cannot be written. Drop it from one of "
-                  "the two.", file=sys.stderr)
+            report.append(f"ERROR: type(s) in both PRINTF_TYPE_MAP and "
+                          f"PRINTF_LESS_TYPES: {overlap}")
+            report.append("       PRINTF_LESS_TYPES names the types no printf "
+                          "conversion writes, so a type it names does not belong in "
+                          "PRINTF_TYPE_MAP: a response field of such a type would be "
+                          "written through the mapping, which is the table the "
+                          "exception list says cannot be written. Drop it from one of "
+                          "the two.")
         if no_printf:
-            print(f"ERROR: PRINTF_TYPE_MAP has no mapping for type(s): {no_printf}",
-                  file=sys.stderr)
-        print(f"       Types used by protocol.toml: {used}", file=sys.stderr)
-        print(f"       Mapped types: {sorted(set().union(*(set(t) for _, t in TYPE_MAPS)))}",
-              file=sys.stderr)
-        print("       A type a table does not map is emitted as that target's "
-              "untyped value (JsonVariant / serde_json::Value / any) instead of "
-              "the declared one; add the mapping or fix the type name.",
-              file=sys.stderr)
+            report.append(f"ERROR: PRINTF_TYPE_MAP has no mapping for type(s): {no_printf}")
+        report.append(f"       Types used by protocol.toml: {used}")
+        report.append(f"       Mapped types: {sorted(set().union(*(set(t) for _, t in TYPE_MAPS)))}")
+        report.append("       A type a table does not map is emitted as that target's "
+                      "untyped value (JsonVariant / serde_json::Value / any) instead of "
+                      "the declared one; add the mapping or fix the type name.")
         if no_printf:
-            print("       PRINTF_TYPE_MAP is the response side's fourth table: a "
-                  "response field is written through a printf conversion, so a "
-                  "field of a type it does not map leaves its command no "
-                  "response table (gen_resp() names it in the header) and the "
-                  "build still succeeds.", file=sys.stderr)
-            print(f"       Types with no printf form at all, not a gap in it: "
-                  f"{list(PRINTF_LESS_TYPES)}", file=sys.stderr)
-        sys.exit(1)
+            report.append("       PRINTF_TYPE_MAP is the response side's fourth table: a "
+                          "response field is written through a printf conversion, so a "
+                          "field of a type it does not map leaves its command no "
+                          "response table (gen_resp() names it in the header) and the "
+                          "build still succeeds.")
+            report.append(f"       Types with no printf form at all, not a gap in it: "
+                          f"{list(PRINTF_LESS_TYPES)}")
+        fail(*report)
 
     # The exception list's own names, against the two things an entry can be
     # wrong about: whether the name is a type at all, and whether the response
@@ -563,29 +556,25 @@ def validate_types(proto: dict) -> None:
                   if any(t not in table for _, table in TYPE_MAPS)]
     no_field = [t for t in sorted(PRINTF_LESS_TYPES) if t not in response]
     if not_a_type or no_field:
+        report: List[str] = []
         if not_a_type:
-            print(f"ERROR: PRINTF_LESS_TYPES names types the type maps do not "
-                  f"carry: {not_a_type}", file=sys.stderr)
-            print("       A field's type is read out of those tables, so a name "
-                  "they do not map is not a type protocol.toml can be declared "
-                  "with: the entry excepts nothing and no other check reads it.",
-                  file=sys.stderr)
+            report.append(f"ERROR: PRINTF_LESS_TYPES names types the type maps do not "
+                          f"carry: {not_a_type}")
+            report.append("       A field's type is read out of those tables, so a name "
+                          "they do not map is not a type protocol.toml can be declared "
+                          "with: the entry excepts nothing and no other check reads it.")
         if no_field:
-            print(f"ERROR: PRINTF_LESS_TYPES names types no response field "
-                  f"declares: {no_field}", file=sys.stderr)
-            print("       The list is the response side's exception — the types "
-                  "no printf conversion writes — so an entry no response field "
-                  "draws on excepts nothing: it reads as a decision about a "
-                  "type while the field it was written for is gone.",
-                  file=sys.stderr)
-        print(f"       PRINTF_LESS_TYPES: {list(PRINTF_LESS_TYPES)}",
-              file=sys.stderr)
-        print(f"       Types the type maps carry: "
-              f"{sorted(set().union(*(set(t) for _, t in TYPE_MAPS)))}",
-              file=sys.stderr)
-        print(f"       Types a response field declares: {sorted(response)}",
-              file=sys.stderr)
-        sys.exit(1)
+            report.append(f"ERROR: PRINTF_LESS_TYPES names types no response field "
+                          f"declares: {no_field}")
+            report.append("       The list is the response side's exception — the types "
+                          "no printf conversion writes — so an entry no response field "
+                          "draws on excepts nothing: it reads as a decision about a "
+                          "type while the field it was written for is gone.")
+        report.append(f"       PRINTF_LESS_TYPES: {list(PRINTF_LESS_TYPES)}")
+        report.append(f"       Types the type maps carry: "
+                      f"{sorted(set().union(*(set(t) for _, t in TYPE_MAPS)))}")
+        report.append(f"       Types a response field declares: {sorted(response)}")
+        fail(*report)
 
 
 def validate_field_roles(proto: dict) -> None:
@@ -624,19 +613,17 @@ def validate_field_roles(proto: dict) -> None:
                         f"{command}: {side} field '{f['name']}' carries "
                         f"role {role!r}, which is not registered")
     if unregistered:
-        for entry in unregistered:
-            print(f"ERROR: unregistered field role — {entry}", file=sys.stderr)
-        print("       Registered roles, each with the compile switch the "
-              f"generated artifacts carry for it: {ROLE_SWITCHES}", file=sys.stderr)
-        print("       A role is a name this generator and the artifacts it "
-              "writes agree on; register it in ROLE_SWITCHES with the switch "
-              "it decides, or drop the tag from the field.", file=sys.stderr)
-        print("       Not checked, and not checkable here: whether the field "
-              "should carry a role at all. A role is what lets an emitter "
-              "leave a field out of its lists, so a registered role on a field "
-              "that does not vary with it reads as conditional to every check "
-              "downstream and to the review of the declaration.", file=sys.stderr)
-        sys.exit(1)
+        fail(*[f"ERROR: unregistered field role — {entry}" for entry in unregistered],
+             "       Registered roles, each with the compile switch the "
+             f"generated artifacts carry for it: {ROLE_SWITCHES}",
+             "       A role is a name this generator and the artifacts it "
+             "writes agree on; register it in ROLE_SWITCHES with the switch "
+             "it decides, or drop the tag from the field.",
+             "       Not checked, and not checkable here: whether the field "
+             "should carry a role at all. A role is what lets an emitter "
+             "leave a field out of its lists, so a registered role on a field "
+             "that does not vary with it reads as conditional to every check "
+             "downstream and to the review of the declaration.")
 
 
 def validate_field_optionality(proto: dict) -> None:
@@ -695,25 +682,21 @@ def validate_field_optionality(proto: dict) -> None:
                     f"= {f['optional']!r} ({type(f['optional']).__name__}), "
                     f"which is not a boolean")
     if wrong_side or not_a_bool:
-        for entry in not_a_bool:
-            print(f"ERROR: a field's optionality is not a boolean — {entry}",
-                  file=sys.stderr)
-        for entry in wrong_side:
-            print(f"ERROR: a field declares its optionality in the other "
-                  f"side's column — {entry}", file=sys.stderr)
-        print("       A request field's absence is `required` (the absent "
-              "column means optional there, so `required = false` is the "
-              "marking) and a response field's is `optional = true` (the "
-              "absent column means required there, as it always has).",
-              file=sys.stderr)
-        print("       A column on the wrong side is a marking nothing acts "
-              "on — the manifest copies it and every emitter, the response "
-              "table and the bindings ignore it, so the field travels as the "
-              "one its column does not say it is.", file=sys.stderr)
-        print("       `optional` takes `true` or `false`: it is read as a "
-              "boolean by gen_fields() and by "
-              "scripts/test/test_cdc_protocol.py.", file=sys.stderr)
-        sys.exit(1)
+        fail(*[f"ERROR: a field's optionality is not a boolean — {entry}"
+               for entry in not_a_bool],
+             *[f"ERROR: a field declares its optionality in the other "
+               f"side's column — {entry}" for entry in wrong_side],
+             "       A request field's absence is `required` (the absent "
+             "column means optional there, so `required = false` is the "
+             "marking) and a response field's is `optional = true` (the "
+             "absent column means required there, as it always has).",
+             "       A column on the wrong side is a marking nothing acts "
+             "on — the manifest copies it and every emitter, the response "
+             "table and the bindings ignore it, so the field travels as the "
+             "one its column does not say it is.",
+             "       `optional` takes `true` or `false`: it is read as a "
+             "boolean by gen_fields() and by "
+             "scripts/test/test_cdc_protocol.py.")
 
 
 def validate_optional_flags_reached(proto: dict,
@@ -763,19 +746,16 @@ def validate_optional_flags_reached(proto: dict,
                 unreached.append(f"{cmd['domain']}.{cmd['name']}.{f['json']} "
                                  f"({flag})")
     if unreached:
-        for entry in unreached:
-            print(f"ERROR: a response field is declared `optional = true` and "
-                  f"no firmware source reaches its flag — {entry}",
-                  file=sys.stderr)
-        print(f"       The flag is emitted from the declaration into "
-              f"protocol/proto_resp.h so that the write site can be held to it, "
-              f"and a site that stops naming it is a declaration the code does "
-              f"not answer to.", file=sys.stderr)
-        print("       Either write the key under the flag at the site that "
-              "writes it, or take `optional = true` off the field: a marking "
-              "nothing acts on is a defect this file does not let pass.",
-              file=sys.stderr)
-        sys.exit(1)
+        fail(*[f"ERROR: a response field is declared `optional = true` and "
+               f"no firmware source reaches its flag — {entry}"
+               for entry in unreached],
+             f"       The flag is emitted from the declaration into "
+             f"protocol/proto_resp.h so that the write site can be held to it, "
+             f"and a site that stops naming it is a declaration the code does "
+             f"not answer to.",
+             "       Either write the key under the flag at the site that "
+             "writes it, or take `optional = true` off the field: a marking "
+             "nothing acts on is a defect this file does not let pass.")
 
 
 def validate_field_coverage(proto: dict) -> None:
@@ -896,13 +876,10 @@ def validate_command_error_codes(proto: dict) -> None:
                                 f"table is where it is given")
 
     if problems:
-        for problem in problems:
-            print(f"ERROR: command error codes — {problem}", file=sys.stderr)
-        print("       A command's `error_codes` array names the codes its reply "
-              "can carry, so every entry has to be a key of [error_codes] at the "
-              "number that key carries. Nothing emits the arrays, so an entry "
-              "that drifts — a name the table does not have, or a number the "
-              "table gives another name — reads as a permission the command does "
-              "not have and no artifact or reader would ever show it.",
-              file=sys.stderr)
-        sys.exit(1)
+        fail(*[f"ERROR: command error codes — {problem}" for problem in problems],
+             "       A command's `error_codes` array names the codes its reply "
+             "can carry, so every entry has to be a key of [error_codes] at the "
+             "number that key carries. Nothing emits the arrays, so an entry "
+             "that drifts — a name the table does not have, or a number the "
+             "table gives another name — reads as a permission the command does "
+             "not have and no artifact or reader would ever show it.")
