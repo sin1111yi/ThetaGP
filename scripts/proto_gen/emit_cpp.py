@@ -40,7 +40,6 @@ def gen_cpp(proto: dict, out: Optional[Path] = None) -> str:
     w(f"// Generated: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     w("// =============================================================================")
     w("#pragma once")
-    w('#include "utils/json/json.h"')
     w("#include <cstdint>")
     w("#include <cstring>")
 
