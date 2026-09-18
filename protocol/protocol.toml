@@ -15,6 +15,7 @@
 #   [[commands]]      — per-command definitions
 #   [error_codes]     — global error codes
 #   [domains]         — domain prefix registry
+#   [envelope]        — response envelope (the keys every reply carries)
 #   [[async_messages]] — device-initiated async message definitions
 #
 # A field of a command may carry a `role`, a property of the field that outlives
@@ -32,7 +33,7 @@
 # ---------------------------------------------------------------------------
 [meta]
 name = "ThetaGP CDC JSON Protocol"
-version = "1.1"
+version = "1.2"
 description = "CDC ACM JSON command protocol for ThetaGP embedded gamepad"
 
 # ---------------------------------------------------------------------------
@@ -55,6 +56,49 @@ ERR_INTERNAL        = { code = 3,  description = "Device internal error" }
 ERR_BUSY            = { code = 4,  description = "Device busy, retry later" }
 ERR_NOT_SUPPORTED   = { code = 6,  description = "Command not supported in current state" }
 ERR_BUFFER_OVERFLOW = { code = 7,  description = "Response too long to send" }
+
+# ---------------------------------------------------------------------------
+# Response Envelope
+# ---------------------------------------------------------------------------
+# The keys a successful reply carries in front of the fields a command declares
+# for it. They belong to the response builder, not to a command: no command may
+# declare one of these keys as a response field and validate_envelope() refuses
+# one that does, naming command and field.
+#
+# Three things the firmware does not hold to, so a reply is read from the
+# sources under src/test/ rather than from this section:
+#
+#   * Not every reply carries all three keys. The dispatcher's two replies to a
+#     request whose `cmd` or `queued` it could not read carry `status` alone of
+#     these, with no `cmd` and no `queued` (src/test/dispatcher.cpp:55, :75),
+#     and the `profile.end` trailer carries `cmd` and `status` with no `queued`
+#     (src/test/profile_cmd_handler.cpp:246).
+#   * There is no one order. `status,cmd,queued` leads 20 of the firmware's 38
+#     format strings, `cmd,queued,status` leads 15, and the trailer above orders
+#     `cmd,status`. Each emitter writes the order declared here, so a consumer
+#     keys off the names and not the positions.
+#   * `error_code` and `reason` are declared nowhere in this file, and no
+#     emitter here writes them: the firmware writes them by hand in 11 and 12
+#     of its format strings respectively. A binding generated from this section
+#     does not carry them.
+#
+# One entry per key: the TOML key is the field name a target writes it as, `json`
+# is the key it travels under (gen_rust writes the TOML key where gen_ts writes
+# the `json` column, so validate_envelope() holds the two equal), `type` is
+# drawn from the same vocabulary a field's `type` is, and `description` is what
+# a reader of a reply needs to know about it. gen_rust writes a response
+# struct's leading fields and gen_ts a response interface's leading lines from
+# this section, so the shape of a reply starts in one place instead of in a
+# literal per target. The firmware's format strings are still written by hand --
+# 38 of them across four files: src/test/testsys.cpp (8),
+# src/test/testcmds.cpp (12), src/test/profile_cmd_handler.cpp (15) and
+# src/test/dispatcher.cpp (3). Deriving them needs the response field table
+# mechanism (proto_resp.h) extended to the envelope, which is a change of its
+# own.
+[envelope]
+status = { type = "string", json = "status", description = "Outcome of the command: ok or error" }
+cmd    = { type = "string", json = "cmd",    description = "Full name of the command this reply answers, e.g. sys.ping" }
+queued = { type = "u32",    json = "queued", description = "The request's queued value plus one, echoed so a host can pair a reply with its request. The accepted range is 0..2147483647: a literal wider than an int saturates at that bound rather than wrapping (src/utils/json/json.cpp:13-36) and is accepted as it stands, while a missing, negative or non-integer value is refused with error_code 2 and a reply that carries neither this key nor cmd (src/test/dispatcher.cpp:70-80). 31 of the 35 replies that carry this key echo the request's value plus one; the four staged profile.start replies echo a literal 0 instead (src/test/profile_cmd_handler.cpp:146,153,158,165)" }
 
 # ---------------------------------------------------------------------------
 # Enumerations
@@ -207,18 +251,6 @@ error_codes = []
 # --- config domain (reserved) ---
 
 [[commands]]
-name = "get_device_info"
-domain = "config"
-description = "Get device board name and firmware version"
-request = []
-response = [
-  { name = "board",      type = "string", json = "board" },
-  { name = "fw_version", type = "string", json = "fw_version" },
-  { name = "serial",     type = "string", json = "serial", description = "Device serial number" },
-]
-error_codes = []
-
-[[commands]]
 name = "set_key"
 domain = "config"
 description = "Set a configuration key-value pair (reserved)"
@@ -251,11 +283,24 @@ error_codes = [
 ]
 
 [[commands]]
+name = "list_keys"
+domain = "config"
+description = "List the configuration keys this firmware supports, with each key's range and whether it needs a reboot"
+request = []
+response = [
+  { name = "count", type = "u32", json = "count", description = "Number of entries in the keys array" },
+  { name = "keys",  type = "any", json = "keys",  description = "Array of one object per supported key; each object's wire keys are `key` (the key name), `min` and `max` (its accepted range) and `reboot` (whether the key needs a reboot to take effect). The entries come from the firmware's key table, not from a list written here, and the declared type is `any` because the type vocabulary carries no array-of-object type" },
+]
+error_codes = []
+
+[[commands]]
 name = "save"
 domain = "config"
 description = "Save configuration to persistent storage (reserved)"
 request = []
-response = []
+response = [
+  { name = "persisted", type = "bool", json = "persisted", description = "Whether the configuration was written to the device's persistent storage; false on a board that has none, where the values are in effect but will not survive a power cycle" },
+]
 error_codes = [
   { name = "ERR_NOT_SUPPORTED", code = 6, description = "Not yet implemented" },
 ]
@@ -275,7 +320,9 @@ name = "factory_reset"
 domain = "config"
 description = "Restore factory defaults and save (reserved)"
 request = []
-response = []
+response = [
+  { name = "persisted", type = "bool", json = "persisted", description = "Whether the configuration left in effect by the reset was written to the device's persistent storage; false on a board that has none. The reset replaces the in-effect configuration; writing it out is config.save's job" },
+]
 error_codes = [
   { name = "ERR_NOT_SUPPORTED", code = 6, description = "Not yet implemented" },
 ]

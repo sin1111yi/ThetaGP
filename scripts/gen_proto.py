@@ -284,26 +284,162 @@ def validate_domains(proto: dict) -> None:
         sys.exit(1)
 
 
-def validate_envelope(proto: dict) -> None:
-    """Abort unless no command declares a response field the framework writes.
+# The response envelope: the keys a reply carries because the response builder
+# writes them, not because a command declares them. Declared in protocol.toml's
+# [envelope] section — one entry per key, carrying the wire type, the JSON key it
+# travels under, the description a reader gets, and (as the section key) the field
+# name every target writes — so the leading keys of a reply come from the source
+# of truth like the rest of its shape. The emitters below read them from there
+# rather than each carrying a literal of its own; validate_envelope() holds the
+# declaration to what they need, and refuses a command that declares one of these
+# keys.
+def envelope_fields(proto: dict) -> List[Dict[str, Any]]:
+    """The declared response envelope, in declaration order — the wire order.
 
-    The envelope is added to every reply by the response builder. A command that
-    declared one of those keys as its own would be emitted by the targets that
-    skip the envelope, and by the targets that write it separately the key would
-    change hands: the field's declared type and optionality are lost, and a
-    coverage check comparing declared against emitted counts the key as covered
-    because something wrote it. Refusing the declaration keeps that unsayable.
+    The section key supplies the field name, and it wins over anything the entry
+    itself carries: validate_envelope() refuses an entry that declares a `name`
+    column, so a key of the entry's own can never reach a target as a field name
+    while the shadow check below still reserves the section key.
     """
-    offenders = sorted(
-        f"{c.get('domain')}.{c.get('name')}:{f.get('name')}"
-        for c in proto.get("commands", [])
-        for f in c.get("response", [])
-        if f.get("json") in RESPONSE_ENVELOPE_KEYS)
+    return [{**entry, "name": name} for name, entry in proto.get("envelope", {}).items()]
+
+
+def envelope_json_keys(proto: dict) -> Tuple[str, ...]:
+    """The JSON keys of the declared envelope, as gen_ts compares a field against them."""
+    return tuple(field["json"] for field in envelope_fields(proto))
+
+
+def validate_envelope(proto: dict) -> None:
+    """Abort unless [envelope] is a declaration the emitters can act on, and no command shadows it.
+
+    The envelope is the leading part of every reply, and six things about it are
+    checked here — each one a way the declaration would read as describing the
+    replies while nothing writes or types them that way:
+
+    1. The section exists and declares at least one key. An envelope with no
+       entry leaves gen_rust and gen_ts writing no leading field and no leading
+       line at all, while the firmware still writes the keys.
+    2. Every entry is a table carrying the three columns the emitters read: the
+       JSON key it travels under, the wire type, and the description a reader is
+       given. An entry short of a JSON key is a key nothing can be paired with a
+       value; short of a type, a line neither language's emitter can write; and
+       two entries under one JSON key are one key written twice.
+    3. Every declared type is one the three language maps carry and one a printf
+       conversion writes. The three maps, because gen_rust and gen_ts look the
+       name up in their own and a type missing from one degrades to that
+       target's untyped value while the source still reads as declared; the
+       printf map, because these keys are written by the response builder, so a
+       key of no printf form is one no format string can carry — `any` is
+       exactly such a type.
+    4. No command declares a response field under an envelope key, by either
+       column. Both, because each emitter pairs a field with the envelope
+       differently: a field whose `json` is an envelope key is left to the
+       envelope by gen_ts and loses its own declared type and optionality there,
+       and a field whose `name` is one would be a second `pub status` in
+       gen_rust's response struct.
+    5. Every entry's JSON key is its section key. The two targets read a
+       different column for the same field — gen_rust writes the section key as
+       the field name, gen_ts writes the `json` column as the wire key — so a
+       pair that differs gives one reply two spellings, one per target, and
+       nothing fails: the Rust struct keeps the field it always had while the TS
+       interface renames it. No rename buys anything here either, because the
+       envelope is written by the response builder and not by a command: the
+       section key is the field name and the JSON key, so the two are one name.
+    6. No entry declares a `name` column. The section key is the field name
+       envelope_fields() hands the emitters, so a `name` column is a second
+       answer to the same question, and it is the one that reaches the targets —
+       while check 4 above still reserves the section key, so the shadowing it
+       catches and the field a target writes would be two different names.
+
+    What is not checked, because nothing in the source states it: whether these
+    are the keys the firmware's format strings write. Those copies are still
+    written by hand — 38 format strings across src/test/testsys.cpp,
+    testcmds.cpp, profile_cmd_handler.cpp and dispatcher.cpp — and comparing
+    them is a review and a device-side check, not something this file can read.
+    """
+    section = proto.get("envelope", {})
+    if not isinstance(section, dict):
+        print("ERROR: response envelope — [envelope] is not a table of "
+              "per-key entries (type / json / description).", file=sys.stderr)
+        sys.exit(1)
+
+    problems: List[str] = []
+    if not section:
+        problems.append("the [envelope] section is missing or declares no key, "
+                        "so every generated reply would lose its leading keys")
+    for name, entry in section.items():
+        if not isinstance(entry, dict):
+            problems.append(f"[envelope].{name} is not a table "
+                            f"(expected type / json / description)")
+            continue
+        for column in ("json", "type", "description"):
+            if not entry.get(column):
+                problems.append(f"[envelope].{name} declares no {column!r}")
+        # The section key is the field name a target writes, so the JSON key a
+        # reply travels under is the same name — gen_rust reads the section key
+        # and gen_ts the column, and a pair that differs is one field under two
+        # spellings, one per target, with neither emitter reporting it.
+        if entry.get("json") and entry["json"] != name:
+            problems.append(f"[envelope].{name} declares json = {entry['json']!r}, "
+                            f"a key of its own where its section key is already "
+                            f"{name!r} — gen_rust writes the field as {name!r} "
+                            f"while gen_ts writes the key {entry['json']!r}, so "
+                            f"the two targets would name one field differently")
+        # The section key is already this entry's field name; a `name` column is
+        # a second answer, and the one envelope_fields() would hand the targets —
+        # while the shadow check below goes on reserving the section key.
+        if "name" in entry:
+            problems.append(f"[envelope].{name} declares a 'name' column "
+                            f"({entry['name']!r}) — its section key is the field "
+                            f"name every target writes, so the column is a "
+                            f"second name for one field and the one gen_rust "
+                            f"would write while the reserved-name check below "
+                            f"still reserves {name!r}")
+
+    entries = [entry for entry in section.values() if isinstance(entry, dict)]
+    json_keys = [entry["json"] for entry in entries if entry.get("json")]
+    duplicates = sorted({key for key in json_keys if json_keys.count(key) > 1})
+    if duplicates:
+        problems.append(f"two envelope entries travel under the same JSON "
+                        f"key(s): {duplicates}")
+    declared_types = sorted({entry["type"] for entry in entries if entry.get("type")})
+    unmapped = sorted(t for t in declared_types
+                      if any(t not in table for _, table in TYPE_MAPS))
+    if unmapped:
+        problems.append(f"envelope type(s) the language type maps do not carry: "
+                        f"{unmapped}")
+    no_printf = sorted(t for t in declared_types if t not in PRINTF_TYPE_MAP)
+    if no_printf:
+        problems.append(f"envelope type(s) no printf conversion writes: "
+                        f"{no_printf} — the response builder writes these keys, "
+                        f"so a key of such a type is one no reply can carry "
+                        f"(types a conversion writes: {sorted(PRINTF_TYPE_MAP)})")
+
+    reserved_json, reserved_name = set(json_keys), set(section)
+    offenders = [
+        f"{cmd['domain']}.{cmd['name']}:{field.get('name')} — "
+        + (f"its json key {field.get('json')!r} is an envelope key"
+           if field.get("json") in reserved_json
+           else "its field name is an envelope field name")
+        for cmd in proto.get("commands", [])
+        for field in cmd.get("response", [])
+        if field.get("json") in reserved_json or field.get("name") in reserved_name
+    ]
     if offenders:
-        print(f"ERROR: a command declares a response key the framework writes — "
-              f"{offenders}. The envelope ({', '.join(RESPONSE_ENVELOPE_KEYS)}) belongs to "
-              f"the response builder; declaring one takes the field's own type and "
-              f"optionality away in the targets that emit the envelope separately.",
+        problems.append(f"a command declares a response field the envelope "
+                        f"already writes: {offenders}. The envelope "
+                        f"({', '.join(sorted(reserved_json))}) belongs to the response "
+                        f"builder; declaring one takes the field's own type and "
+                        f"optionality away in the targets that write the "
+                        f"envelope separately, and a second field of the same "
+                        f"name breaks the target that writes the name it "
+                        f"declares.")
+
+    if problems:
+        for problem in problems:
+            print(f"ERROR: response envelope — {problem}", file=sys.stderr)
+        print(f"       [envelope] declares: "
+              f"{ {name: entry for name, entry in section.items()} }",
               file=sys.stderr)
         sys.exit(1)
 
@@ -888,6 +1024,9 @@ def gen_rust(proto: dict, out: Optional[Path] = None) -> str:
     enums = proto.get("enums", [])
     commands = proto.get("commands", [])
     error_codes = proto.get("error_codes", {})
+    # The reply's leading fields, as protocol.toml declares them, so this emitter
+    # writes a response struct's first fields from the source of truth.
+    envelope = envelope_fields(proto)
 
     def w(line: str = "") -> None:
         lines.append(line)
@@ -986,6 +1125,9 @@ def gen_rust(proto: dict, out: Optional[Path] = None) -> str:
         struct_name = f"{to_pascal(domain)}{to_pascal(name)}Request"
         w("#[derive(Debug, Clone, Serialize, Deserialize)]")
         w(f"pub struct {struct_name} {{")
+        # A request carries the command name and the queue counter, not the
+        # reply's envelope ([envelope] also declares `status`), so these two
+        # lines are written here rather than derived from that section.
         w('    pub cmd: String,')
         w('    pub queued: u32,')
         # Each declared request field becomes a field of the struct; the list is
@@ -1016,9 +1158,11 @@ def gen_rust(proto: dict, out: Optional[Path] = None) -> str:
         struct_name = f"{to_pascal(domain)}{to_pascal(name)}Response"
         w("#[derive(Debug, Clone, Serialize, Deserialize)]")
         w(f"pub struct {struct_name} {{")
-        w('    pub status: String,')
-        w('    pub cmd: String,')
-        w('    pub queued: u32,')
+        # The envelope leads every response struct — the keys the response
+        # builder writes, in the order protocol.toml declares them, read from
+        # that section rather than from a literal of this emitter's own.
+        for f in envelope:
+            w(f"    pub {rust_ident(f['name'])}: {RUST_TYPE_MAP[f['type']]},")
         # Each declared response field becomes an optional field of the struct —
         # every one of them, so the list is the declared array and the check
         # holds it there.
@@ -1047,29 +1191,11 @@ def gen_rust(proto: dict, out: Optional[Path] = None) -> str:
 # TypeScript Generator
 # ═════════════════════════════════════════════════════════════════════════════
 
-# The envelope of a response: the keys every response carries ahead of the fields
-# protocol.toml declares for it, and the type the frontend reads each one as, in
-# the order the response writes them. The response interface below writes these
-# lines itself; a declared response field naming one of these keys is a key the
-# response already carries, so the loop leaves it to the envelope rather than let
-# a second property appear under one name, and the coverage check counts such a
-# field as reaching the interface, because its key is there either way.
-#
-# gen_rust writes the same three lines from literals of its own, and the firmware
-# writes them from the format string its handlers open with (src/test/testsys.cpp).
-# protocol.toml declares none of the three, so the envelope is a shape every
-# consumer carries and the source does not describe.
-# The response envelope: the keys every reply carries because the response builder
-# writes them, not because a command declares them. No command may declare one —
-# an emitter that also skips the envelope keys would drop that field's type and
-# optionality in silence — so the tuple is named once here and the validator below
-# refuses the declaration.
-RESPONSE_ENVELOPE = (("status", "string"), ("cmd", "string"), ("queued", "number"))
-RESPONSE_ENVELOPE_KEYS = tuple(key for key, _ in RESPONSE_ENVELOPE)
-
-# The TypeScript emitter writes the envelope itself; it reads the same tuple.
-TS_RESPONSE_ENVELOPE = RESPONSE_ENVELOPE
-TS_RESPONSE_ENVELOPE_KEYS = RESPONSE_ENVELOPE_KEYS
+# The response envelope is declared in protocol.toml ([envelope]) and read out of
+# it by envelope_fields(), so the response struct of gen_rust and the response
+# interface of gen_ts write a reply's leading keys from the source of truth
+# instead of each carrying a literal copy of them. See validate_envelope() for
+# what the declaration is held to.
 
 
 def gen_ts(proto: dict, out: Optional[Path] = None) -> str:
@@ -1078,6 +1204,10 @@ def gen_ts(proto: dict, out: Optional[Path] = None) -> str:
     enums = proto.get("enums", [])
     commands = proto.get("commands", [])
     error_codes = proto.get("error_codes", {})
+    # The reply's leading keys, as protocol.toml declares them, so this emitter
+    # writes a response interface's first lines from the source of truth.
+    envelope = envelope_fields(proto)
+    envelope_keys = envelope_json_keys(proto)
 
     def w(line: str = "") -> None:
         lines.append(line)
@@ -1169,17 +1299,19 @@ def gen_ts(proto: dict, out: Optional[Path] = None) -> str:
         resp = cmd_info.get("response", [])
         if resp:
             w(f"export interface {to_pascal(domain)}{to_pascal(name)}Response {{")
-            for key, ts_type in TS_RESPONSE_ENVELOPE:
-                w(f"  {key}: {ts_type};")
+            for f in envelope:
+                w(f"  {f['json']}: {TS_TYPE_MAP[f['type']]};")
             # A field whose key the envelope above writes is left to it; every
             # other declared field gets an optional line of its own. The list is
             # built before the lines are written, and what the interface carries
             # is taken from the two places it writes keys — so a field dropped
             # from the list is reported instead of being noticed in the output.
-            fields = [f for f in resp if f["json"] not in TS_RESPONSE_ENVELOPE_KEYS]
+            # (validate_envelope() refuses such a declaration, so the first half
+            # of the coverage input is empty in a protocol that generates.)
+            fields = [f for f in resp if f["json"] not in envelope_keys]
             fail_uncovered_fields(field_coverage_errors(
                 full_name, "response", resp,
-                [f["name"] for f in resp if f["json"] in TS_RESPONSE_ENVELOPE_KEYS]
+                [f["name"] for f in resp if f["json"] in envelope_keys]
                 + [f["name"] for f in fields]))
             for f in fields:
                 ts_type = TS_TYPE_MAP.get(f["type"], "any")
@@ -1514,8 +1646,12 @@ def gen_fields_md(proto: dict, out: Optional[Path] = None,
     if empty:
         w("## Commands with no response payload")
         w()
+        # The keys named here are the envelope as protocol.toml declares it, not
+        # three names written into this sentence: a reply without payload still
+        # carries them, and which keys those are is the section's business.
+        envelope_keys = "`" + "` / `".join(f["json"] for f in envelope_fields(proto)) + "`"
         w("These commands declare an empty `response`: their reply carries the envelope\n"
-      "fields only (`status` / `cmd` / `queued`):")
+          f"fields only ({envelope_keys}):")
         w()
         for name in empty:
             w(f"- `{name}`")
