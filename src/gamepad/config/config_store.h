@@ -72,8 +72,11 @@ struct ConfigStore {
   int16_t cal_ry;
 };
 
-// Parse JSON profile body into ConfigStore.
-void parseProfile(const char *json, ConfigStore *cfg);
+// Parse the JSON profile body `json[0 .. len)` into ConfigStore. `len` is the
+// body's length in bytes, and it is what bounds the parse: the body needs no
+// terminator, and no byte behind it is read even when it fills the buffer it
+// sits in whole. Pass the length the store reported for the body being parsed.
+void parseProfile(const char *json, uint32_t len, ConfigStore *cfg);
 
 // Write cfg into dst as a profile JSON body. `cap` is the size of dst in bytes,
 // terminator included. Returns the body length in bytes, terminator not

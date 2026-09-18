@@ -79,14 +79,19 @@ static uint8_t flagValue(int value, uint8_t fallback) {
   return static_cast<uint8_t>(value);
 }
 
-void parseProfile(const char *json, ConfigStore *cfg) {
+void parseProfile(const char *json, uint32_t len, ConfigStore *cfg) {
   if (!json || !cfg) {
     LOG_ERROR("parseProfile: null args");
     return;
   }
 
+  // The body's own length is the parse window. Handing it over instead of
+  // letting the parser look for a terminator is what keeps the read inside the
+  // buffer: a body of PROFILE_JSON_MAX bytes with no terminator behind it ends
+  // exactly at the last byte of the buffer, and a terminator is never looked
+  // for past it.
   Json doc;
-  doc.parse(json);
+  doc.parse(json, static_cast<int>(len));
 
   // The value a field takes when the profile carries a number its domain does
   // not hold.

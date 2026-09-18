@@ -69,8 +69,11 @@ bool ConfigManager::init() {
   }
 
   // Parse the profile body into _config, on top of the compiled-in defaults.
+  // The window is text.len, the body length readProfile reported for the bytes
+  // it put in text.data — the parse never leans on a terminator the buffer may
+  // not hold.
   if (text.len > 0) {
-    parseProfile(text.data, &_config);
+    parseProfile(text.data, text.len, &_config);
   }
 
   LOG_INFO("ConfigManager: init OK, active=%u count=%u", _activeId,
@@ -138,8 +141,10 @@ bool ConfigManager::loadProfile(uint16_t profileId) {
 
   ProfileText text;
   bool ok = store.readProfile(PROFILE_ID_ACTIVE, &text);
+  // text.len is the length of the body the read placed in text.data, so it is
+  // the parse window here too.
   if (ok && text.len > 0) {
-    parseProfile(text.data, &_config);
+    parseProfile(text.data, text.len, &_config);
   }
   LOG_INFO("ConfigManager: load id=%u %s", profileId, ok ? "OK" : "FAIL");
   return ok;
