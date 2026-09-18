@@ -77,15 +77,44 @@
 # marks them stops before the port is opened — without the marking the response
 # table claims both keys are written in every build, and a build that does not
 # compile the counters in answers them with zeros.
+#
+# Stage 5 is the config domain (config.*), and three things about it shape that
+# stage. They are stated where they are used as well; the summary is here.
+#
+# One request in flight. The frame layer holds a single TX slot while the task
+# that dispatches commands drains a whole tick's queue at once, so requests
+# written back to back leave only the last reply on the wire
+# (framelayer.cpp:197-213; the stage measures it). Every check below waits for
+# its own reply before the next request goes out, and one check states the limit
+# rather than depending on it silently.
+#
+# config.save has a precondition. Writing the configuration out is refused when
+# the active profile is the factory one — error_code 8, ERR_INVALID_STATE
+# (config_cmd_handler.cpp:394-401) — so the stage asks the board which profile
+# is active (profile.status) and holds the reply to what that answer allows: an
+# ok reply has to carry persisted true, a refusal has to be that code with the
+# reason naming the state. A check that demanded persisted true regardless would
+# be reading the board's state as the device's failure, and one that accepted
+# either would not be checking the precondition at all.
+#
+# The reply shapes. A success reply carries the response envelope in front of
+# the fields its command declares; an error reply carries the three keys
+# [error_reply] declares and neither `cmd` nor `queued`. Both are read from
+# protocol.toml — the generated manifest names the commands but not the
+# envelope (T-35) — and the error codes the negative checks expect come from
+# [error_codes]. A copy kept in this file would stay green while the protocol
+# source renamed a key, which is the shape of failure the envelope assertions
+# are here to catch.
 
 import hashlib
 import json
 import os
 import sys
 import time
+import tomllib
 from pathlib import Path
 
-from cdc_serial import open_serial, TestContext
+from cdc_serial import open_serial, readline, TestContext
 
 # The dispatcher answers a command it has no handler for with this reason
 # (dispatcher.cpp:95-102). It is the only thing that separates "this command is
@@ -453,6 +482,278 @@ TASK_COUNTER_FIELDS = ("runCount", "lateCount")
 TASK_IDS = (0, 1, 2, 3)
 
 
+# ── The config domain (Stage 5) ────────────────────────────────────────────
+
+# The six commands the domain carries, in the order the protocol declares them
+# (protocol.toml's config block). main() holds the manifest to all six before
+# the port is opened: the stage reads each command's declared response fields
+# from there, so a manifest generated from a protocol without one of them would
+# leave those checks comparing against nothing.
+CONFIG_COMMANDS = (
+    "config.set_key",
+    "config.get_key",
+    "config.list_keys",
+    "config.save",
+    "config.load",
+    "config.factory_reset",
+)
+
+# The key table this firmware carries, as `config.list_keys` reports it: the
+# name a caller sends, the range the key accepts, whether the key needs a reboot
+# and the rest of the columns key_table.cpp holds beside them — count is the
+# field's element count, and accepts_unmapped says the entry also takes the
+# unmapped sentinel beside its range (key_table.h:39-48, :52-59).
+#
+# A transcription of the table rather than a list read from the protocol: the
+# manifest carries no key names (protocol.toml declares list_keys' `keys` as one
+# `any` field), and the point of the check this feeds is that the table and the
+# list a host is told about stay in step — the list is derived from the table
+# and nothing derives it into a file this suite reads. A key added to the table
+# without reaching this tuple turns that check red instead of being compared
+# against nothing, which is what the ADR's D1 criterion asks for. The values
+# move with the table: map.socd_mode's max is SOCDMode's last enumerator, so an
+# enumerator added to that enum moves both and the red is the prompt to say so
+# here too.
+CONFIG_KEYS = (
+    # name, min, max, reboot, count, accepts_unmapped
+    ("map.socd_mode", 0, 4, False, 1, False),
+    ("map.four_way", 0, 1, False, 1, False),
+    ("map.btn_map", 0, 31, False, 32, True),
+)
+
+# The slot value standing for a physical key the board maps to no button. It
+# lies outside every range above, which is why the table carries the flag that
+# admits it: a map holding unmapped slots could not be written back otherwise
+# (T-36).
+CONFIG_BTN_UNMAPPED = 255
+
+# Slots in map.btn_map — one per physical key (config_defaults.h:47).
+CONFIG_BTN_SLOTS = 32
+
+# A btn_map holding the sentinel in some slots and button bits in others: the
+# value the sentinel half of the round trip writes. The first four slots carry
+# B1..B4's bit indexes and the slots behind them are unmapped, so one write
+# covers both halves of the accepted domain and the value is not one the table
+# holds as it stands.
+CONFIG_BTN_SENTINEL = (4, 5, 255, 255) + (255,) * 28
+
+# The btn_map a factory reset leaves in the store, on this board: the key table
+# of configs/BoringTechH743/BoardConfig.toml ([0,"B1"] .. [3,"B4"]) converted to
+# the bit indexes of GAMEPAD_MASK_B1..B4 (gamepadstate.h:60-63 — bits 4..7) with
+# every slot the board does not list left at the sentinel, which is the
+# conversion config_defaults.h:80-91 does at compile time. Board constants, in
+# the same sense as REGION_SIZES above: a board with a different key table moves
+# this tuple, and the check that reads it is what says which board the reset
+# left the table looking like.
+CONFIG_DEFAULT_BTN_MAP = (4, 5, 6, 7) + (255,) * 28
+
+# The appearances an envelope key can declare for the reply side and still be
+# carried by one ([envelope] documents the three words; a key of `always` is in
+# every reply, one of `some` is in some of them).
+REPLY_APPEARANCES = ("always", "some")
+
+
+def load_protocol_shape(path=PROTOCOL_SOURCE):
+    """The reply shapes and error codes protocol.toml declares, or a hard error.
+
+    Three things the generated field manifest does not carry and the config
+    stage's checks are stated in terms of:
+
+      * the keys a reply carries in front of a command's own fields — the
+        response envelope, declared in [envelope];
+      * the keys an error reply carries — `status`, which the envelope declares
+        as appearing in every reply, plus what [error_reply] declares;
+      * the numbers [error_codes] gives the codes the negative checks expect, so
+        those checks are stated in the codes the protocol names rather than in
+        digits copied out of it.
+
+    Reading them here rather than copying them into this file is what makes a
+    rename reach these checks: the firmware's format strings are written by hand
+    (T-40), so a key renamed in the source and not in the firmware is a
+    divergence this can catch, and a tuple kept here would pass over it (T-30).
+
+    A section this needs and cannot find stops the run with exit 2, the way a
+    missing or stale manifest does: the checks below would otherwise be scoring
+    the device against a shape nothing declares. Nothing here writes the file it
+    reads — the manifest's digests of the source are unchanged by a run, and
+    load_field_manifest() verifies them before this is called.
+    """
+    try:
+        with open(path, "rb") as fh:
+            proto = tomllib.load(fh)
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        print(f"ERROR: cannot read the protocol source {path}: {exc}",
+              file=sys.stderr)
+        sys.exit(2)
+
+    def section(name):
+        found = proto.get(name)
+        if not isinstance(found, dict) or not found:
+            print(f"ERROR: {path} declares no [{name}] section.", file=sys.stderr)
+            print("       The config stage states the shape of a reply in terms "
+                  "of it, so a run without it has nothing to compare against.",
+                  file=sys.stderr)
+            sys.exit(2)
+        return found
+
+    def reply_keys(entries, what):
+        """The wire keys of a section's entries that appear in a reply.
+
+        `json` is the key on the wire; the section's own key is the name a
+        target writes it as and validate_envelope() holds the two equal, so a
+        section missing the column is read under its own name rather than
+        refused. An entry whose `appears` column does not say for the reply side
+        is one this cannot place, and that is a failure of the input.
+        """
+        keys = []
+        for name, entry in entries.items():
+            appears = entry.get("appears") if isinstance(entry, dict) else None
+            if not isinstance(appears, dict) or "reply" not in appears:
+                print(f"ERROR: {path}: [{what}].{name} declares no 'reply' "
+                      f"cell in its 'appears' column.", file=sys.stderr)
+                sys.exit(2)
+            if appears["reply"] in REPLY_APPEARANCES:
+                keys.append(entry.get("json", name))
+        if not keys:
+            print(f"ERROR: {path}: [{what}] declares no key that appears in a "
+                  f"reply.", file=sys.stderr)
+            sys.exit(2)
+        return tuple(keys)
+
+    envelope_entries = section("envelope")
+    always_keys = tuple(
+        entry.get("json", name)
+        for name, entry in envelope_entries.items()
+        if entry.get("appears", {}).get("reply") == "always")
+    if not always_keys:
+        print(f"ERROR: {path}: [envelope] declares no key that appears in "
+              f"every reply.", file=sys.stderr)
+        print("       An error reply is stated as those keys plus "
+              "[error_reply]'s.", file=sys.stderr)
+        sys.exit(2)
+
+    codes = {}
+    for name, entry in section("error_codes").items():
+        if isinstance(entry, dict) and isinstance(entry.get("code"), int):
+            codes[name] = entry["code"]
+    for needed in ("ERR_INVALID_PARAM", "ERR_INVALID_STATE"):
+        if needed not in codes:
+            print(f"ERROR: {path} declares no [error_codes].{needed}.",
+                  file=sys.stderr)
+            print("       The config stage's negative checks are stated in that "
+                  "code.", file=sys.stderr)
+            sys.exit(2)
+
+    return {
+        "success": reply_keys(envelope_entries, "envelope"),
+        "error": always_keys + reply_keys(section("error_reply"), "error_reply"),
+        "codes": codes,
+    }
+
+
+def success_shape_ok(resp, cmd, manifest, envelope_keys):
+    """A success reply: the envelope, then the fields the command declares.
+
+    The keys beyond the envelope are read from the manifest, so this says both
+    that the reply opens with the envelope and that it carries nothing the
+    protocol does not declare for it. The envelope keys are the ones
+    load_protocol_shape() read from the source: every success reply of this
+    domain carries all of them, which is a fact about this domain's emitters —
+    config_cmd_handler.cpp's eight format strings for the six commands and the
+    two refusals — and is what this asserts on the wire.
+    """
+    if not isinstance(resp, dict):
+        return False
+    return set(resp) == set(envelope_keys) | set(response_fields(manifest, cmd))
+
+
+def error_shape_ok(resp, error_keys):
+    """An error reply: exactly the keys [error_reply] declares beside status.
+
+    A reply carrying `cmd` is not one of these — the dispatcher's answer to a
+    command this build does not have carries it (dispatcher.cpp:95-102) — so
+    this is also what separates a refused argument from a missing handler.
+    """
+    return isinstance(resp, dict) and set(resp) == set(error_keys)
+
+
+def int_value(value):
+    """A JSON number that is an integer, and not a bool.
+
+    `isinstance(True, int)` is True in Python, so field_int() above reads a bool
+    as an integer — harmless for the byte sizes and counts it was written for,
+    and not harmless here, where a `min` of false would compare equal to min 0.
+    """
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def key_value_ok(value, low, high, count, accepts_unmapped):
+    """A value read back for a key: inside the domain that key declares.
+
+    A scalar key reports one number, an array key its elements. Every number has
+    to be one the key accepts — inside low..high, or the unmapped sentinel on a
+    key whose entry carries the flag that admits it. A value the key's own write
+    path would refuse is not a value the key holds, so this is the read half of
+    the round trip's domain rather than a range check for its own sake.
+    """
+    if count == 1:
+        return int_value(value) and low <= value <= high
+    if not isinstance(value, list) or len(value) != count:
+        return False
+    for element in value:
+        if not int_value(element):
+            return False
+        if low <= element <= high:
+            continue
+        if accepts_unmapped and element == CONFIG_BTN_UNMAPPED:
+            continue
+        return False
+    return True
+
+
+def config_request(ctx, cmd, **kw):
+    """TestContext.send() for a request whose answer may be an error reply.
+
+    send() pairs a reply with its request by the `cmd` key, and the config
+    domain's refusals carry no `cmd` at all: its sendError() writes status,
+    error_code and reason and nothing else (config_cmd_handler.cpp:158-167),
+    which is the shape [error_reply] declares. send() given such a request reads
+    past its reply as a reply to something else and times out, so the negative
+    checks would score every refusal as a missing answer — the same shape of
+    mistake this suite already had to fix for test.flash_read's length guard.
+    This reads the wire itself and takes back the first reply that either names
+    the command or carries no `cmd` with a status of error.
+
+    One request in flight: the reply to this one is read before the caller can
+    send another, which is what the single TX slot requires (framelayer.cpp:197
+    -213, and the check in Stage 5 that measures it).
+    """
+    req = {"cmd": cmd, "queued": ctx.queued, **kw}
+    line = json.dumps(req, separators=(",", ":")) + "\r\n"
+    print(f">>> {line.strip()}")
+    os.write(ctx.fd, line.encode())
+    ctx.queued += 1
+    while True:
+        resp = readline(ctx.fd)
+        if resp is None:
+            print("!!! TIMEOUT")
+            return None
+        try:
+            obj = json.loads(resp)
+        except json.JSONDecodeError:
+            print(f"[garbage] {resp}")
+            continue
+        if obj.get("status") == "async":
+            print(f"[async] {resp}")
+            continue
+        if obj.get("cmd") != cmd and not (obj.get("status") == "error"
+                                          and "cmd" not in obj):
+            print(f"[unexpected reply] {resp}")
+            continue
+        print(f"<<< {resp}")
+        return obj
+
+
 def task_info_ok(info, fields):
     """Per-task invariants for one sys.get_task_info response.
 
@@ -529,6 +830,21 @@ def main():
               "keys unconditionally, and a build without the counters answers "
               "them with zeros.", file=sys.stderr)
         sys.exit(2)
+
+    # The config domain's six commands have to be in the manifest before the
+    # port is opened, for the reason the gates above are here: Stage 5 reads
+    # each command's declared response fields from it, and a manifest generated
+    # from a protocol that no longer carries one of them would leave those
+    # checks comparing against nothing. command_entry() exits 2 naming the fix.
+    for cmd in CONFIG_COMMANDS:
+        command_entry(manifest, cmd)
+
+    # The reply shapes the protocol declares, read from the protocol source:
+    # the manifest carries no envelope (T-35), and the keys and codes a reply is
+    # held to are the ones protocol.toml declares — [envelope], [error_reply]
+    # and [error_codes] — so a rename or a renumbering in the source moves these
+    # checks with it rather than passing over a copy kept in this file.
+    shape = load_protocol_shape()
 
     fd = open_serial()
     time.sleep(1)
@@ -742,6 +1058,449 @@ def main():
     # Destructive commands (chip_erase / erase_sector / compaction)
     # are intentionally NOT executed — they would wipe the SPI flash.
     # They are validated by the profile test suite instead.
+
+    # ── Stage 5: config domain ─────────────────────────────────────────
+    print("\n=== Stage 5: config domain ===")
+
+    def cfg_send(cmd, **kw):
+        """Send one config request; return the reply and the queued it carried."""
+        sent = ctx.queued
+        return config_request(ctx, cmd, **kw), sent
+
+    def config_ok(resp, cmd, sent):
+        """A success reply: the envelope, the declared fields, the queue echo.
+
+        The three are one shape and are checked as one: the reply carries the
+        envelope keys plus exactly the fields protocol.toml declares for the
+        command (read from the manifest, so a field added to the protocol
+        reaches this without an edit here), and the `queued` it echoes is the
+        request's value plus one ([envelope].queued) — the one place a host can
+        pair a reply with the request it answers.
+        """
+        return (status_of(resp) == "ok"
+                and success_shape_ok(resp, cmd, manifest, shape["success"])
+                and field_int(resp, "queued") == sent + 1)
+
+    def config_err(resp, code):
+        """A refusal by the config domain, in the code the protocol names.
+
+        The shape settles two things at once: an error reply carries the three
+        keys [error_reply] declares and no `cmd`, so a reply carrying `cmd` came
+        from somewhere else — the dispatcher's answer to a command this build
+        does not have, which answers ERR_UNKNOWN_CMD with `cmd` and `queued`
+        beside it (dispatcher.cpp:95-102). A check that only asked whether an
+        error came back would score a missing handler and a refused argument the
+        same way, which is the mistake this suite already fixed once for
+        test.flash_read's length guard.
+        """
+        reason = field(resp, "reason")
+        return (status_of(resp) == "error"
+                and field_int(resp, "error_code") == code
+                and error_shape_ok(resp, shape["error"])
+                and isinstance(reason, str) and reason != "")
+
+    # Precondition: does this build carry the config domain at all? Its handlers
+    # are registered by the test system, so a build without that system answers
+    # every config command as unknown, and the stage would read as a list of
+    # failures rather than as out of scope. config.list_keys is read-only and
+    # needs no other command to have answered first, so it is the probe.
+    list_probe, _sent = cfg_send("config.list_keys")
+    config_present = status_of(list_probe) == "ok"
+    if config_present:
+        ok("config domain present", True, detail="config.list_keys answers")
+    else:
+        ctx.skip("config domain present",
+                 "config.list_keys -> %s: this build carries no config domain "
+                 "(the test system that registers it is compiled out), so the "
+                 "whole of Stage 5 is out of scope for it" % brief(list_probe))
+
+    def check_config(name, passed, detail=""):
+        """A check of the config domain: SKIP when the domain is absent."""
+        if config_present:
+            ok(name, passed, detail=detail)
+        else:
+            ctx.skip(name, "config domain absent on this build")
+
+    # config.list_keys — the key table this firmware carries, and the four
+    # members a host reads each entry by (D1)
+    keys = field(list_probe, "keys")
+    check_config("list_keys count",
+                 field_int(list_probe, "count") == len(CONFIG_KEYS)
+                 and isinstance(keys, list) and len(keys) == len(CONFIG_KEYS),
+                 detail="count=%s, %s entries" % (
+                     field_int(list_probe, "count"),
+                     len(keys) if isinstance(keys, list) else brief(keys)))
+
+    check_config("list_keys entry members",
+                 isinstance(keys, list)
+                 and all(isinstance(entry, dict)
+                         and set(entry) == {"key", "min", "max", "reboot"}
+                         for entry in keys),
+                 detail=brief(keys))
+
+    def key_entry_ok(entry, expected):
+        """One entry of the key list against the table this build carries."""
+        if not isinstance(entry, dict):
+            return False
+        name, low, high, reboot, _count, _unmapped = expected
+        return (entry.get("key") == name
+                and int_value(entry.get("min")) and entry.get("min") == low
+                and int_value(entry.get("max")) and entry.get("max") == high
+                and isinstance(entry.get("reboot"), bool)
+                and entry.get("reboot") is reboot)
+
+    check_config("list_keys values match the key table",
+                 isinstance(keys, list) and len(keys) == len(CONFIG_KEYS)
+                 and all(key_entry_ok(entry, expected)
+                         for entry, expected in zip(keys, CONFIG_KEYS)),
+                 detail=brief(keys))
+
+    btn_max = None
+    if isinstance(keys, list):
+        for entry in keys:
+            if isinstance(entry, dict) and entry.get("key") == "map.btn_map":
+                btn_max = entry.get("max")
+
+    # config.get_key — what each key holds before this stage writes anything.
+    # The values are kept: every write below is undone by writing one of them
+    # back, and the last checks of the stage read them again to say the board
+    # was left as it was found. This suite is re-run per step (D3, D4), and a
+    # run that read what the previous one left behind would be reading its own
+    # leftovers.
+    snapshot = {}
+    for key, low, high, _reboot, count, unmapped in CONFIG_KEYS:
+        resp, sent = cfg_send("config.get_key", key=key)
+        snapshot[key] = field(resp, "value")
+        check_config(f"get_key {key}",
+                     config_ok(resp, "config.get_key", sent)
+                     and field(resp, "key") == key
+                     and key_value_ok(snapshot[key], low, high, count, unmapped),
+                     detail=brief(resp))
+
+    # The negative cases the ADR's D2 states, plus the same refusal read through
+    # the other command: a request naming a key the table does not carry is
+    # refused by both, and every refusal has to carry the code the protocol
+    # names for an invalid parameter rather than answering ok with no effect —
+    # a set_key that answers ok and changes nothing is worse than one that
+    # refuses, which is the ADR's decision 9 in the other direction.
+    err_param = shape["codes"]["ERR_INVALID_PARAM"]
+    err_state = shape["codes"]["ERR_INVALID_STATE"]
+    negatives = (
+        ("set_key unknown key",
+         ("config.set_key", {"key": "led.bri", "value": 50})),
+        ("set_key socd_mode out of range",
+         ("config.set_key", {"key": "map.socd_mode", "value": 9})),
+        ("set_key btn_map wrong element count",
+         ("config.set_key", {"key": "map.btn_map", "value": [1, 2]})),
+        ("set_key btn_map element outside the domain",
+         ("config.set_key", {"key": "map.btn_map",
+                             "value": [32] * CONFIG_BTN_SLOTS})),
+        ("get_key unknown key",
+         ("config.get_key", {"key": "no.such.key"})),
+    )
+    for name, (cmd, params) in negatives:
+        resp, _sent = cfg_send(cmd, **params)
+        check_config(f"D2 {name} rejected", config_err(resp, err_param),
+                     detail=brief(resp))
+
+    # A refusal has to leave the field it named as it was. map.btn_map is
+    # counted and checked element by element before the first byte is written
+    # (config_cmd_handler.cpp:200-222), so the two rejected writes above leave
+    # the value the stage read; a write that refused after writing would pass a
+    # check that only looked at the reply.
+    resp, sent = cfg_send("config.get_key", key="map.btn_map")
+    check_config("D2 rejected writes left btn_map alone",
+                 config_ok(resp, "config.get_key", sent)
+                 and field(resp, "value") == snapshot["map.btn_map"],
+                 detail=brief(resp))
+
+    # config.set_key and config.get_key, one key at a time, each write read back
+    # and then undone. Every request waits for its reply before the next goes
+    # out: the frame layer holds one TX slot, so a request written while another
+    # reply is in flight costs that reply (framelayer.cpp:197-213, and the last
+    # check of this stage measures it).
+    #
+    # What a round trip shows, and what it does not: both ends of a key go
+    # through the one offset the table gives it, so a value written and read
+    # back equal shows the two ends agree. It does not by itself show that the
+    # value reached the field the key names — a single offset added twice, once
+    # by the caller and once by the element accessor, is a difference this cannot
+    # see. That is why the two checks that can see it are stated apart from this
+    # one: the btn_map write below, whose offset is 0, and the table a factory
+    # reset leaves, which is compared against the table this board compiles in.
+    for key, low, high, _reboot, count, _unmapped in CONFIG_KEYS:
+        if count != 1:
+            continue
+        found = snapshot[key]
+        if not (int_value(found) and low <= found <= high):
+            # A value the key's own write path would refuse cannot be written
+            # back, so a probe written to this key would leave the byte it
+            # reaches holding something else. The read half is already checked
+            # above; the write half is skipped rather than risked.
+            ctx.skip(f"set_key/get_key round trip {key}",
+                     "the value read back (%s) is outside the range the key "
+                     "declares (%d..%d), so a probe written to the byte this "
+                     "key reaches could not be written back to what is there"
+                     % (brief(found), low, high))
+            continue
+
+        # A probe inside the range and not the value the key holds, so the read
+        # after the write cannot pass by standing still.
+        probe = low if found != low else high
+        resp, sent = cfg_send("config.set_key", key=key, value=probe)
+        write_ok = (config_ok(resp, "config.set_key", sent)
+                    and field(resp, "key") == key)
+        resp, sent = cfg_send("config.get_key", key=key)
+        read_ok = (config_ok(resp, "config.get_key", sent)
+                   and field(resp, "key") == key
+                   and field(resp, "value") == probe)
+        check_config(f"set_key/get_key round trip {key}", write_ok and read_ok,
+                     detail=brief(resp))
+
+        resp, sent = cfg_send("config.set_key", key=key, value=found)
+        write_back = config_ok(resp, "config.set_key", sent)
+        resp, sent = cfg_send("config.get_key", key=key)
+        check_config(f"set_key restores {key}",
+                     write_back and config_ok(resp, "config.get_key", sent)
+                     and field(resp, "value") == found,
+                     detail=brief(resp))
+
+    # map.btn_map — the array key, and the one key whose offset is 0, so a round
+    # trip on it is a statement about the whole field rather than about two ends
+    # agreeing. The value written carries button bit indexes in its first slots
+    # and the unmapped sentinel in the rest, which is the domain the key accepts.
+    sentinel = list(CONFIG_BTN_SENTINEL)
+    resp, sent = cfg_send("config.set_key", key="map.btn_map", value=sentinel)
+    btn_write = (config_ok(resp, "config.set_key", sent)
+                 and field(resp, "key") == "map.btn_map")
+    resp, sent = cfg_send("config.get_key", key="map.btn_map")
+    btn_read = config_ok(resp, "config.get_key", sent)
+    btn_value = field(resp, "value")
+    check_config("btn_map round trip",
+                 btn_write and btn_read and btn_value == sentinel,
+                 detail=brief(resp))
+
+    # The sentinel the key table admits beside its range (T-36): map.btn_map
+    # reports max 31, and a slot may also hold 255, the value standing for a
+    # slot the board maps to no button. A table whose max was taken for the
+    # whole writable domain would refuse the value the read path returns for
+    # such a slot — a map holding unmapped slots could not be written back.
+    check_config("btn_map accepts the unmapped sentinel 255",
+                 btn_write and btn_read
+                 and isinstance(btn_value, list)
+                 and CONFIG_BTN_UNMAPPED in btn_value
+                 and int_value(btn_max)
+                 and CONFIG_BTN_UNMAPPED > btn_max,
+                 detail="a slot of %d accepted though the key declares max %s "
+                        "(T-41): %s"
+                        % (CONFIG_BTN_UNMAPPED, btn_max, brief(resp)))
+
+    resp, sent = cfg_send("config.set_key", key="map.btn_map",
+                          value=snapshot["map.btn_map"])
+    write_back = config_ok(resp, "config.set_key", sent)
+    resp, sent = cfg_send("config.get_key", key="map.btn_map")
+    check_config("set_key restores map.btn_map",
+                 write_back and config_ok(resp, "config.get_key", sent)
+                 and field(resp, "value") == snapshot["map.btn_map"],
+                 detail=brief(resp))
+
+    def btn_vector_not(*values):
+        """A 32-slot vector that is none of the values named.
+
+        Every write below has to be a change: a check that read back what was
+        already there could not tell a round trip from a suite that never wrote.
+        """
+        for candidate in (tuple(CONFIG_BTN_SENTINEL), CONFIG_DEFAULT_BTN_MAP,
+                          tuple(range(CONFIG_BTN_SLOTS))):
+            if candidate not in values:
+                return candidate
+        return None
+
+    # config.load — reads the profile the configuration in effect belongs to
+    # back over it. The write before it is deliberately not saved, so the value
+    # the load leaves has to be the one the stage found and not the one it just
+    # wrote: a load that answered ok without reading the profile would leave the
+    # probe in place and this check would see it. The profile still holds what
+    # the board booted with — this stage undoes every write it makes and has
+    # saved nothing yet.
+    load_probe = list(btn_vector_not(tuple(snapshot["map.btn_map"])))
+    resp, sent = cfg_send("config.set_key", key="map.btn_map", value=load_probe)
+    written = config_ok(resp, "config.set_key", sent)
+    resp, sent = cfg_send("config.load")
+    loaded = config_ok(resp, "config.load", sent)
+    resp, sent = cfg_send("config.get_key", key="map.btn_map")
+    check_config("config.load discards an unsaved write",
+                 written and loaded and config_ok(resp, "config.get_key", sent)
+                 and field(resp, "value") == snapshot["map.btn_map"],
+                 detail=brief(resp))
+
+    # config.save — writes the configuration in effect to the profile it belongs
+    # to, with a precondition: the factory profile is the board's baseline and
+    # the configuration layer refuses to write it (ERR_INVALID_STATE, "the
+    # active profile is the factory one"). Which branch a run meets is the
+    # board's state, so the stage asks the board for it (profile.status, the
+    # one read-only command that reports the active id) and holds the reply to
+    # what that answer allows. A check that demanded persisted true regardless
+    # would be reading the board's state as the device's failure; one that
+    # accepted either answer would not be checking the precondition at all.
+    active_reply = ctx.send("profile.status")
+    active_id = field_int(active_reply, "active_profile_id")
+    resp, sent = cfg_send("config.save")
+    saved_ok = config_ok(resp, "config.save", sent) and field(resp, "persisted") is True
+    if active_id is None:
+        # No profile domain to ask: a board without storage keeps the
+        # configuration in RAM and says so with persisted false rather than
+        # refusing, and this is the one branch of the three the board cannot be
+        # asked to choose between.
+        check_config("config.save without storage reports persisted false",
+                     config_ok(resp, "config.save", sent)
+                     and field(resp, "persisted") is False,
+                     detail=brief(resp))
+    elif active_id == 0:
+        check_config("config.save refused while the factory profile is active",
+                     config_err(resp, err_state)
+                     and "factory" in str(field(resp, "reason")),
+                     detail="active_profile_id=0 -> %s" % brief(resp))
+    else:
+        check_config(f"config.save persists on profile {active_id}",
+                     saved_ok, detail="active_profile_id=%d -> %s"
+                                      % (active_id, brief(resp)))
+
+        # What persisted true claims is that the write reached the profile, and
+        # the only way to say so from the wire is to read it back through the
+        # profile: write a value, save it, drop the in-RAM copy with a load, and
+        # read the value again. A save that answered persisted true without
+        # writing would leave the earlier value here.
+        flush = btn_vector_not(tuple(snapshot["map.btn_map"]))
+        resp, sent = cfg_send("config.set_key", key="map.btn_map",
+                              value=list(flush))
+        wrote = config_ok(resp, "config.set_key", sent)
+        resp, sent = cfg_send("config.save")
+        saved = (config_ok(resp, "config.save", sent)
+                 and field(resp, "persisted") is True)
+        resp, sent = cfg_send("config.load")
+        reloaded = config_ok(resp, "config.load", sent)
+        resp, sent = cfg_send("config.get_key", key="map.btn_map")
+        check_config("config.save reached the profile",
+                     wrote and saved and reloaded
+                     and config_ok(resp, "config.get_key", sent)
+                     and field(resp, "value") == list(flush),
+                     detail=brief(resp))
+
+        # And the profile is put back where it was, through the same two
+        # commands, so a re-run of the suite starts from the same profile.
+        resp, sent = cfg_send("config.set_key", key="map.btn_map",
+                              value=snapshot["map.btn_map"])
+        restored = config_ok(resp, "config.set_key", sent)
+        resp, sent = cfg_send("config.save")
+        saved_back = (config_ok(resp, "config.save", sent)
+                      and field(resp, "persisted") is True)
+        resp, sent = cfg_send("config.load")
+        reloaded_back = config_ok(resp, "config.load", sent)
+        resp, sent = cfg_send("config.get_key", key="map.btn_map")
+        check_config("config.save restored the profile content",
+                     restored and saved_back and reloaded_back
+                     and config_ok(resp, "config.get_key", sent)
+                     and field(resp, "value") == snapshot["map.btn_map"],
+                     detail=brief(resp))
+
+    # config.factory_reset — replaces the configuration in effect with the
+    # compiled defaults and writes nothing out: the reply says so with persisted
+    # false, and no flash is touched, so undo is a load away. What this can hold
+    # the command to on the wire is the reply's shape and that flag, and the
+    # table it leaves: the compiled table is this board's key table converted to
+    # button bit indexes at compile time, so a reset that left the table as it
+    # found it, or wrote a table no board compiles from, reads differently. The
+    # value written first is not that table, so the check after the reset says
+    # the reset replaced it.
+    before = btn_vector_not(tuple(snapshot["map.btn_map"]),
+                            CONFIG_DEFAULT_BTN_MAP)
+    if before is None:
+        ctx.skip("factory_reset leaves the compiled default table",
+                 "every table this stage could write is the compiled default on "
+                 "this board, so the check could not tell the reset from a "
+                 "command that left the table alone")
+        ctx.skip("factory_reset: the table is not the default before the reset",
+                 "same reason")
+    else:
+        resp, sent = cfg_send("config.set_key", key="map.btn_map",
+                              value=list(before))
+        staged = config_ok(resp, "config.set_key", sent)
+        resp, sent = cfg_send("config.get_key", key="map.btn_map")
+        check_config("factory_reset: the table is not the default before it",
+                     staged and config_ok(resp, "config.get_key", sent)
+                     and field(resp, "value") == list(before),
+                     detail=brief(resp))
+
+        resp, sent = cfg_send("config.factory_reset")
+        check_config("factory_reset reply",
+                     config_ok(resp, "config.factory_reset", sent)
+                     and field(resp, "persisted") is False,
+                     detail="the reset replaces the in-effect configuration and "
+                            "does not save it: %s" % brief(resp))
+
+        resp, sent = cfg_send("config.get_key", key="map.btn_map")
+        check_config("factory_reset leaves the compiled default table",
+                     config_ok(resp, "config.get_key", sent)
+                     and field(resp, "value") == list(CONFIG_DEFAULT_BTN_MAP),
+                     detail="expected %s, read %s"
+                            % (list(CONFIG_DEFAULT_BTN_MAP), brief(resp)))
+
+        # The reset is undone through the profile, which is what the load is
+        # for: the profile holds what the board booted with, so reading it back
+        # puts every field where it was. The keys the stage reads are checked
+        # once more below, together with the rest of the left-as-found checks.
+        resp, sent = cfg_send("config.load")
+        check_config("factory_reset undone by config.load",
+                     config_ok(resp, "config.load", sent),
+                     detail=brief(resp))
+
+    # The limit the checks above work around, stated as a check of its own: the
+    # frame layer holds one TX slot (framelayer.cpp:197-213) while the task that
+    # dispatches commands drains a whole tick's queue at once, so requests
+    # written back to back leave one reply on the wire — the last one, the
+    # others overwritten before the host can read them. A stage whose requests
+    # were pipelined would read a reply belonging to another request; this goes
+    # red the day the pipeline grows a second slot, which is when that has to be
+    # revisited rather than depended on.
+    if config_present:
+        first = ctx.queued
+        burst = b"".join(
+            json.dumps({"cmd": "sys.ping", "queued": first + i},
+                       separators=(",", ":")).encode() + b"\r\n"
+            for i in range(3))
+        print(f">>> 3 x sys.ping in one write (queued {first}..{first + 2})")
+        os.write(ctx.fd, burst)
+        ctx.queued += 3
+        replies = []
+        while True:
+            line = readline(ctx.fd, timeout=1.0)
+            if line is None:
+                break
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if obj.get("status") == "async":
+                continue
+            replies.append(obj)
+        ok("one reply per request (single TX slot)",
+           len(replies) == 1
+           and field_int(replies[0], "queued") == first + 3,
+           detail="%d repl%s for 3 requests: %s"
+                  % (len(replies), "y" if len(replies) == 1 else "ies",
+                     brief(replies[0] if replies else None)))
+
+    # The stage's writes are undone one by one above; this is the check that
+    # says so, and it is what a re-run of the suite reads instead of the
+    # leftovers of the run before it.
+    for key, _low, _high, _reboot, _count, _unmapped in CONFIG_KEYS:
+        resp, sent = cfg_send("config.get_key", key=key)
+        check_config(f"config stage left {key} as found",
+                     config_ok(resp, "config.get_key", sent)
+                     and field(resp, "value") == snapshot[key],
+                     detail="found %s, now %s"
+                            % (brief(snapshot[key]), brief(resp)))
 
     # ── Summary ────────────────────────────────────────────────────────
     ok_ = ctx.summary()
