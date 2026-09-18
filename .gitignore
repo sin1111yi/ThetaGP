@@ -16,7 +16,7 @@
 
 BoardConfig.h
 board_config.cmake
-*/config/__pycache__
+__pycache__/
 
 GP2040-CE
 docs
@@ -39,7 +39,6 @@ protocol/types.ts
 protocol/proto_fields.json
 protocol/proto_resp.h
 
-*/test/__pycache__
 
 .codegraph
 
