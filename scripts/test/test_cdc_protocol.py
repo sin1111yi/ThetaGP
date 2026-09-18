@@ -661,10 +661,25 @@ def success_shape_ok(resp, cmd, manifest, envelope_keys):
     domain carries all of them, which is a fact about this domain's emitters —
     config_cmd_handler.cpp's eight format strings for the six commands and the
     two refusals — and is what this asserts on the wire.
+
+    A declared field the protocol marks `optional` may be absent from a reply,
+    so the declared list is read as both a floor and a ceiling: every field the
+    manifest does not mark optional has to be there, and nothing outside the
+    envelope plus the declared fields may be. Which replies leave such a key out
+    is the firmware's rule and not this check's — config.save writes
+    `dropped_keys` only when it dropped one — and a field with no `optional` in
+    the manifest is required, which is what every declared response field was
+    before the column existed.
     """
     if not isinstance(resp, dict):
         return False
-    return set(resp) == set(envelope_keys) | set(response_fields(manifest, cmd))
+    declared = set(response_fields(manifest, cmd))
+    optional = {f["json"] for f in command_entry(manifest, cmd)["response"]
+                if f.get("optional")}
+    carried = set(resp)
+    must_carry = (set(envelope_keys) | declared) - optional
+    may_carry = set(envelope_keys) | declared
+    return must_carry <= carried <= may_carry
 
 
 def error_shape_ok(resp, error_keys):

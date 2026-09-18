@@ -29,6 +29,27 @@
 #                   (scripts/test/test_cdc_protocol.py)
 #   task_counters — the field is written to a response only in a build that
 #                   compiles the task counters in (USE_TASK_COUNTERS)
+#
+# A *response* field may carry `optional = true`: the field is declared, and
+# every emitter still writes it (the response table, the bindings, the
+# manifest), but a reply of that command may leave the key out — so a consumer
+# reads its absence as normal and not as a reply that lost a field. An absent
+# column means the field is in every reply, which is what every declared
+# response field was held to before the column existed, so a command that
+# declares nothing leaves its replies exactly as they were. What the column does
+# not say is *when* the key is left out: that is the firmware's rule for the
+# field, and it is written where the field is, in prose, because the generator
+# has nothing to derive it from.
+#
+# The two sides carry their optionality in different columns, and neither column
+# means the same on the other side: on the request side the absent column means
+# optional (`required = false` is what says required on a request field, and the
+# bindings default an unflagged key) while on the response side the absent
+# column means required. Reusing `required` for a response field would have given
+# one column two opposite defaults depending on which side it sat on, so the
+# response side has a column of its own and validate_field_optionality() refuses
+# either column on the wrong side — a marking nothing acts on is a defect this
+# file does not let pass.
 # =============================================================================
 
 # ---------------------------------------------------------------------------
@@ -393,6 +414,7 @@ description = "Write the configuration in effect to the profile it belongs to (t
 request = []
 response = [
   { name = "persisted", type = "bool", json = "persisted", description = "Whether the configuration was written to the device's persistent storage; false on a board that has none, where the values are in effect but will not survive a power cycle" },
+  { name = "dropped_keys", type = "u32", json = "dropped_keys", optional = true, description = "How many object keys of the body this save replaced the body it wrote does not carry. Written only when that number is not zero, so a save that carried every key over answers exactly as this command always has. Raised only by a write that reached the flash, and left out when the body being replaced could not be read back, because the number is unknown then" },
 ]
 error_codes = [
   { name = "ERR_INVALID_STATE", code = 8, description = "The active profile is the factory one, or the write to it failed" },

@@ -1004,6 +1004,83 @@ def validate_field_roles(proto: dict) -> None:
         sys.exit(1)
 
 
+def validate_field_optionality(proto: dict) -> None:
+    """Abort unless every field's optionality column is one its side can carry.
+
+    A command's two sides say whether a field may be left out in two columns,
+    and the choice of a second column is the whole point here: on the request
+    side the absent column means *optional* — a request field with no `required`
+    is one the bindings default (`#[serde(default)]` / `?`), so `required =
+    false` is what a request field says to be optional — while on the response
+    side the absent column means *required*, which is how this file has always
+    read: every declared response field is in every reply. One column read with
+    two opposite defaults, depending on the side it sat on, is a trap in a file
+    whose whole job is to be read, so the response side gets a column of its own
+    (`optional = true`) and each column is refused on the wrong side.
+
+    That refusal is the other half of the check and not a formality: a `required`
+    left on a response field is a marking nothing acts on — gen_fields() would
+    copy it into the manifest and every emitter would ignore it, so a field its
+    author believed conditional travels as an unconditional one — which is the
+    failure mode validate_field_roles() refuses for an unregistered `role`.
+    Both directions are reported naming the command, the side and the field.
+
+    The value has to be a boolean, because that is what the emitters and the
+    suite read it as: `optional = "true"`, `= 1` or `= "some"` is a field whose
+    marking the manifest writes as a string or a number, and a consumer that
+    tests it for truth (`f.get("optional")`) would then mark the field optional
+    by accident while a review of the declaration reads something else.
+
+    What this cannot hold is whether a field *should* be optional. The
+    generator has nothing to derive it from — whether the firmware leaves a key
+    out is a rule of the handler that writes it — so a `optional = true` on a
+    field a reply always carries is wrong in a way only a device-side check or a
+    review can see, exactly like a field that should have a `role` and has none
+    (validate_field_roles()).
+    """
+    wrong_side: List[str] = []
+    not_a_bool: List[str] = []
+    for cmd in proto.get("commands", []):
+        command = f"{cmd['domain']}.{cmd['name']}"
+        for f in cmd.get("request", []):
+            if "optional" in f:
+                wrong_side.append(
+                    f"{command}: request field '{f['name']}' carries `optional` "
+                    f"= {f['optional']!r}; a request field's absence is "
+                    f"declared with `required = false`")
+        for f in cmd.get("response", []):
+            if "required" in f:
+                wrong_side.append(
+                    f"{command}: response field '{f['name']}' carries `required` "
+                    f"= {f['required']!r}; a response field's absence is "
+                    f"declared with `optional = true`")
+            if "optional" in f and not isinstance(f["optional"], bool):
+                not_a_bool.append(
+                    f"{command}: response field '{f['name']}' carries `optional` "
+                    f"= {f['optional']!r} ({type(f['optional']).__name__}), "
+                    f"which is not a boolean")
+    if wrong_side or not_a_bool:
+        for entry in not_a_bool:
+            print(f"ERROR: a field's optionality is not a boolean — {entry}",
+                  file=sys.stderr)
+        for entry in wrong_side:
+            print(f"ERROR: a field declares its optionality in the other "
+                  f"side's column — {entry}", file=sys.stderr)
+        print("       A request field's absence is `required` (the absent "
+              "column means optional there, so `required = false` is the "
+              "marking) and a response field's is `optional = true` (the "
+              "absent column means required there, as it always has).",
+              file=sys.stderr)
+        print("       A column on the wrong side is a marking nothing acts "
+              "on — the manifest copies it and every emitter, the response "
+              "table and the bindings ignore it, so the field travels as the "
+              "one its column does not say it is.", file=sys.stderr)
+        print("       `optional` takes `true` or `false`: it is read as a "
+              "boolean by gen_fields() and by "
+              "scripts/test/test_cdc_protocol.py.", file=sys.stderr)
+        sys.exit(1)
+
+
 def omission_reason(field: Dict[str, Any]) -> Optional[str]:
     """Why protocol.toml says a field may be left out of an emitted list, or None.
 
@@ -1838,14 +1915,25 @@ def command_fields(entries: List[dict]) -> List[Dict[str, Any]]:
     """One command's field array as a list of plain, ordered records.
 
     Keeps only what describes the wire shape (name / type / json, plus the
-    `required`, `description` and `role` the TOML happens to carry), so a
-    consumer needs no TOML parser and no knowledge of this file's other tables.
+    `required`, `optional`, `description` and `role` the TOML happens to carry),
+    so a consumer needs no TOML parser and no knowledge of this file's other
+    tables.
+
+    `optional` is written when the TOML carries it and not as a default, so a
+    field that declares nothing records nothing: a consumer reads the absent
+    column as required, which is what every declared response field was before
+    the column existed, and the manifest of a protocol that declares no
+    optionality is the one it always was. It is written as a boolean for the
+    reason validate_field_optionality() insists the TOML's value be one: a
+    consumer tests it for truth.
     """
     out_fields: List[Dict[str, Any]] = []
     for f in entries:
         record: Dict[str, Any] = {"name": f["name"], "type": f["type"], "json": f["json"]}
         if "required" in f:
             record["required"] = bool(f["required"])
+        if "optional" in f:
+            record["optional"] = bool(f["optional"])
         if "description" in f:
             record["description"] = f["description"]
         if "role" in f:
@@ -2214,6 +2302,7 @@ Examples:
     validate_error_reply(proto)
     validate_types(proto)
     validate_field_roles(proto)
+    validate_field_optionality(proto)
     validate_field_coverage(proto)
     validate_command_error_codes(proto)
 
