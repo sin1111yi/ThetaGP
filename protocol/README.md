@@ -109,8 +109,9 @@ rejected against
   holding: the CDC suite (`scripts/test/test_cdc_protocol.py`) refuses to run
   when the manifest stops marking the `accounting` fields its invariants are
   stated in, or the `task_counters` fields `sys.get_task_info` reports only in a
-  build with the counters; and `src/test/testsys.cpp` fails to compile when
-  `USE_TASK_COUNTERS` and `THETAGP_RESP_HAS_TASK_COUNTERS` disagree.
+  build with the counters; and the firmware's `sys` command handler fails to
+  compile when `USE_TASK_COUNTERS` and `THETAGP_RESP_HAS_TASK_COUNTERS`
+  disagree.
 
 ### [[commands]] — command definitions
 
@@ -183,7 +184,7 @@ python3 scripts/gen_proto.py --protocol path/to/protocol.toml
 1. Add a `[[commands]]` block to `protocol/protocol.toml`
 2. Run `python3 scripts/gen_proto.py`
 3. The generated C++ code gets a new handler stub and routing entry
-4. Implement the handler body in `testcmds.cpp`
+4. Implement the handler body in the consumer's command module
 
 ## Design principles
 
@@ -192,7 +193,7 @@ python3 scripts/gen_proto.py --protocol path/to/protocol.toml
    generated locally and ignored
 2. **No manual sync**: Generated files are never hand-edited
 3. **Readable output**: Generated C++/Rust/TS code has proper comments and formatting
-4. **Backward compatible**: Existing hand-written code (`testcmds.cpp`) can coexist
+4. **Backward compatible**: Code the consumer has already written by hand can coexist
    with generated code — migrate incrementally
 5. **Low dependency**: Generator uses only Python 3.11+ stdlib (`tomllib`)
 6. **Additive evolution**: the source grows, and what has already shipped keeps
@@ -213,3 +214,17 @@ python3 scripts/gen_proto.py --protocol path/to/protocol.toml
      what lets it catch a firmware sending more than it declared, and it is not
      a statement about what a host must tolerate from a device it did not build
      against.
+
+7. **The protocol does not know the codebase.** The dependency runs one way: the
+   codebase depends on this file and on what is generated from it, never the other way
+   round. A generator that reads the consumer's source tree, a declaration saying "this
+   type already exists over there", and a sentence naming the consumer's files and lines
+   are one defect at three weights — each one has the protocol describing the codebase
+   instead of the interface. The weak form is not a milder version of the strong one:
+   the citations rot, nothing notices, and the reader is handed a location instead of a
+   rule. When a rule needs the codebase to hold, the codebase asserts it at its own
+   compile time, beside the code that would break it (`#ifndef ... #error` at the write
+   point); that is the direction that works, because the consumer knows what it must do
+   and the protocol does not have to be told. An entry that breaks this is either
+   removed or said in terms that stand on their own: quote what happens, not where it
+   is written.

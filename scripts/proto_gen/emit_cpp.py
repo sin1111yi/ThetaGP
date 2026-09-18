@@ -44,18 +44,6 @@ def gen_cpp(proto: dict, out: Optional[Path] = None) -> str:
     w("#include <cstdint>")
     w("#include <cstring>")
 
-
-    # Add includes for codebase-owned types
-    for t in types:
-        if not t.get("codebase_owned", False):
-            continue
-        ns = t.get("namespace", "")
-        name = t["name"]
-        if ns == "ThetaGP::Gamepad" and name == "GamepadRawInput":
-            w("#include \"gamepad/gamepadstate.h\"")
-        elif ns == "ThetaGP" and name == "HIDReport":
-            w("#include \"drivers/gpdriver/hid/HIDDescriptors.h\"")
-
     w()
 
     # ── Error codes ──────────────────────────────────────────────────────────
@@ -89,8 +77,6 @@ def gen_cpp(proto: dict, out: Optional[Path] = None) -> str:
 
     # ── Struct definitions ───────────────────────────────────────────────────
     for t in types:
-        if t.get("codebase_owned", False):
-            continue  # skip struct def; type exists in codebase
         name = t["name"]
         ns = t.get("namespace", "")
         desc = sanitize_cpp_comment(t.get("description", ""))
@@ -143,8 +129,6 @@ def gen_cpp(proto: dict, out: Optional[Path] = None) -> str:
 
     # Resolve fully-qualified C++ name for a type
     def fq_type_name(name: str, ns: str) -> str:
-        if name == "HIDReport":
-            return "HIDReport"  # C-style typedef at global scope, accessible from ThetaGP::
         if ns:
             return f"::{ns}::{name}"
         return name
@@ -192,13 +176,6 @@ def gen_cpp(proto: dict, out: Optional[Path] = None) -> str:
             json_key = f["json"]
             field_name = f["name"]
             default_val = f.get("default", 0)
-            # Map mid defaults for GamepadRawInput joystick
-            if ns == "ThetaGP::Gamepad" and name == "GamepadRawInput":
-                mid_defaults = {"lx": "GAMEPAD_JOYSTICK_MID", "ly": "GAMEPAD_JOYSTICK_MID",
-                                "rx": "GAMEPAD_JOYSTICK_MID", "ry": "GAMEPAD_JOYSTICK_MID"}
-                if field_name in mid_defaults:
-                    sw(f'        v.{field_name} = doc["{json_key}"] | {mid_defaults[field_name]};')
-                    continue
             if f["type"] == "string":
                 sw(f'        v.{field_name} = doc["{json_key}"] | "";')
             elif f["type"] == "bool":

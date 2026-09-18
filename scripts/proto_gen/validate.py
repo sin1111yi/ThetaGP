@@ -13,14 +13,12 @@ so a protocol the artifacts cannot describe is not written at all.
 Moved out of scripts/gen_proto.py without a change to any check or any message:
 the suite's negative cases match these strings word for word.
 """
-from pathlib import Path
 from typing import List
 
 from proto_gen.model import (
     ENVELOPE_APPEARANCES,
     ENVELOPE_NEVER,
     ENVELOPE_SIDES,
-    FIRMWARE_SOURCE_ROOT,
     NON_COMMAND_DOMAINS,
     PRINTF_LESS_TYPES,
     PRINTF_TYPE_MAP,
@@ -31,7 +29,6 @@ from proto_gen.model import (
     fail,
     fail_uncovered_fields,
     field_coverage_errors,
-    optional_flag,
 )
 
 def validate_domains(proto: dict) -> None:
@@ -697,65 +694,6 @@ def validate_field_optionality(proto: dict) -> None:
              "       `optional` takes `true` or `false`: it is read as a "
              "boolean by gen_fields() and by "
              "scripts/test/test_cdc_protocol.py.")
-
-
-def validate_optional_flags_reached(proto: dict,
-                                    root: Path = FIRMWARE_SOURCE_ROOT) -> None:
-    """Abort unless some firmware source reaches the flag of every `optional` field.
-
-    An `optional = true` response field gets a compile-time flag from
-    gen_resp() (protocol/proto_resp.h), and naming that flag is the whole of
-    what ties the declaration to the code that has to keep it true: the write
-    site names it, so the declaration coming off the field is a compile error at
-    the site and not a silent drift. The flag nobody names is therefore the
-    binding half-gone — the field reads as optional in this file and in the
-    manifest while every consumer of the firmware sees a field that is always
-    there — which is the defect validate_field_roles() and
-    validate_field_optionality() refuse in the forms they can see (a role
-    nothing derives from, a marking on the wrong side). A write site renamed,
-    reverted or moved out from under the flag is what leaves it behind.
-
-    What this cannot hold is whether the site that names the flag writes the key
-    conditionally, which is the half of the binding no compiler reaches:
-    conditionality is not a fact of the declaration — the column says a reply
-    *may* leave the key out and not when it does — and "this write is under a
-    condition" is not something a translation unit states. So a site that keeps
-    the name and drops the condition is a review or a device-side check, not
-    this run; what is checked here is the weaker fact that the binding still
-    exists at all.
-    """
-    def reached(flag: str, files: List[Path]) -> bool:
-        for path in files:
-            try:
-                if flag in path.read_text(encoding="utf-8", errors="ignore"):
-                    return True
-            except OSError:
-                continue
-        return False
-
-    files = sorted(p for p in root.rglob("*")
-                   if p.is_file() and p.suffix in (".c", ".cc", ".cpp",
-                                                   ".h", ".hh", ".hpp"))
-    unreached: List[str] = []
-    for cmd in proto.get("commands", []):
-        for f in cmd.get("response", []):
-            if not f.get("optional"):
-                continue
-            flag = optional_flag(cmd["domain"], cmd["name"], f["name"])
-            if not reached(flag, files):
-                unreached.append(f"{cmd['domain']}.{cmd['name']}.{f['json']} "
-                                 f"({flag})")
-    if unreached:
-        fail(*[f"ERROR: a response field is declared `optional = true` and "
-               f"no firmware source reaches its flag — {entry}"
-               for entry in unreached],
-             f"       The flag is emitted from the declaration into "
-             f"protocol/proto_resp.h so that the write site can be held to it, "
-             f"and a site that stops naming it is a declaration the code does "
-             f"not answer to.",
-             "       Either write the key under the flag at the site that "
-             "writes it, or take `optional = true` off the field: a marking "
-             "nothing acts on is a defect this file does not let pass.")
 
 
 def validate_field_coverage(proto: dict) -> None:

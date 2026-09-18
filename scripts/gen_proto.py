@@ -51,7 +51,6 @@ from proto_gen.validate import (
     validate_field_coverage,
     validate_field_optionality,
     validate_field_roles,
-    validate_optional_flags_reached,
     validate_types,
 )
 
@@ -103,7 +102,6 @@ Examples:
     validate_types(proto)
     validate_field_roles(proto)
     validate_field_optionality(proto)
-    validate_optional_flags_reached(proto)
     validate_field_coverage(proto)
     validate_command_error_codes(proto)
 

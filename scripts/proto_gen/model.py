@@ -267,12 +267,6 @@ GENERATOR_SOURCES = ("scripts/gen_proto.py",
                      "scripts/proto_gen/emit_resp.py",
                      "scripts/proto_gen/emit_fields.py")
 
-# The firmware sources, and the root the check on an `optional` field's flag
-# reads (validate_optional_flags_reached()): the declaration is only held to
-# anything if a translation unit compiles against the flag it emits, and those
-# are the sources the device is built from.
-FIRMWARE_SOURCE_ROOT = REPO_ROOT / "src"
-
 
 def generator_sha256(sources: Tuple[str, ...] = GENERATOR_SOURCES,
                      root: Path = REPO_ROOT) -> str:
