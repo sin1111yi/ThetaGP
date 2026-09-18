@@ -195,3 +195,21 @@ python3 scripts/gen_proto.py --protocol path/to/protocol.toml
 4. **Backward compatible**: Existing hand-written code (`testcmds.cpp`) can coexist
    with generated code — migrate incrementally
 5. **Low dependency**: Generator uses only Python 3.11+ stdlib (`tomllib`)
+6. **Additive evolution**: the source grows, and what has already shipped keeps
+   working.
+   - A field added to a response is one an older host does not know. A host
+     ignores keys it does not know, and a field a device may not always send is
+     declared `optional = true`, so its absence reads as declared rather than as
+     missing.
+   - A command or a configuration key added later is one an older device does
+     not have. Such a device answers `ERR_UNKNOWN_CMD` (1),
+     `ERR_NOT_SUPPORTED` (6) or `ERR_INVALID_PARAM` (2) as the case fits, and the
+     commands and keys it did carry keep answering exactly as before.
+   - What has shipped keeps its meaning. An existing command, field, key or code
+     does not change what it means, because the devices already in the field
+     cannot be changed with it.
+   - `scripts/test/test_cdc_protocol.py` compares a reply against the version it
+     was built with, so it refuses a key the source does not declare. That is
+     what lets it catch a firmware sending more than it declared, and it is not
+     a statement about what a host must tolerate from a device it did not build
+     against.
