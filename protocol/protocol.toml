@@ -57,7 +57,7 @@
 # ---------------------------------------------------------------------------
 [meta]
 name = "ThetaGP CDC JSON Protocol"
-version = "1.2"
+version = "1.3"
 description = "CDC ACM JSON command protocol for ThetaGP embedded gamepad"
 
 # ---------------------------------------------------------------------------
@@ -220,7 +220,7 @@ name = "FirmwareInfo"
 namespace = "ThetaGP"
 description = "Device firmware version information"
 fields = [
-  { name = "board",      type = "string", json = "board",      description = "Board name (e.g. BoringTechH743)" },
+  { name = "board",      type = "string", json = "board",      description = "Name of the board the firmware was built for, as that build declares it" },
   { name = "version",    type = "string", json = "version",    description = "Semantic version string" },
   { name = "build_date", type = "string", json = "build_date", description = "Build date" },
   { name = "build_time", type = "string", json = "build_time", description = "Build time" },
@@ -309,18 +309,17 @@ response = [
   { name = "ram_used_bytes",         type = "u32", json = "ram_used_bytes" },
   { name = "ram_total_bytes",        type = "u32", json = "ram_total_bytes" },
   { name = "ram_reserved_bytes",     type = "u32", json = "ram_reserved_bytes" },
-  { name = "ram_dtcm_used_bytes",    type = "u32", json = "ram_dtcm_used_bytes" },
-  { name = "ram_axi_used_bytes",     type = "u32", json = "ram_axi_used_bytes" },
-  { name = "ram_d2_used_bytes",      type = "u32", json = "ram_d2_used_bytes" },
-  { name = "ram_d3_used_bytes",      type = "u32", json = "ram_d3_used_bytes" },
-  { name = "ram_itcm_used_bytes",    type = "u32", json = "ram_itcm_used_bytes" },
   { name = "ext_flash_total_sectors", type = "u32", json = "ext_flash_total_sectors" },
   { name = "ext_flash_used_sectors", type = "u32", json = "ext_flash_used_sectors" },
   { name = "ext_flash_free_sectors", type = "u32", json = "ext_flash_free_sectors" },
   { name = "ext_flash_reserved_sectors", type = "u32", json = "ext_flash_reserved_sectors" },
   { name = "profile_count",          type = "u32", json = "profile_count" },
+  { name = "region_count", type = "u32", json = "region_count", description = "Number of entries in the regions array" },
+  { name = "regions", type = "any", json = "regions", description = "Array of one object per memory region the firmware reports; each object's wire keys are `name` (the region name), `size` (its capacity in bytes), `used` (the bytes in use) and `reserved` (the part of `used` a fixed reserve already holds). Which regions those are, how many there are and the order they come in is the firmware's answer and not a list written here, so a board with fewer or differently named regions answers this command without the command naming one; the declared type is `any` because the type vocabulary carries no array-of-object type" },
 ]
-error_codes = []
+error_codes = [
+  { name = "ERR_NOT_SUPPORTED", code = 6, description = "The region list is longer than the reply buffer, so it is refused rather than sent cut short" },
+]
 
 # --- config domain ---
 

@@ -43,6 +43,26 @@ namespace ThetaGP::Util::MemInfo {
 
 enum class RegionId : uint8_t { Flash = 0, Dtcm, Axi, D2, D3, Itcm, Count };
 
+// Lower-case wire name of a region: what a report of the regions calls it. The
+// RAM regions are the ones such a report lists; Flash is the program image and
+// has no name here, so the list is the enum's items besides it.
+//
+// The switch names every item of the enum and has no default, so an item added
+// to RegionId is a case this does not cover — a compiler warning rather than an
+// entry that reaches the wire unnamed with nothing to notice.
+inline const char *regionName(RegionId id) {
+  switch (id) {
+  case RegionId::Flash: return "";
+  case RegionId::Dtcm:  return "dtcm";
+  case RegionId::Axi:   return "axi";
+  case RegionId::D2:    return "d2";
+  case RegionId::D3:    return "d3";
+  case RegionId::Itcm:  return "itcm";
+  case RegionId::Count: break;
+  }
+  return "";
+}
+
 struct RegionUsage {
   uint32_t base = 0;     // region start (= ORIGIN)
   uint32_t end = 0;      // high-water mark (end of the last section, gaps included)

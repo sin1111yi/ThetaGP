@@ -143,6 +143,12 @@ UNKNOWN_CMD_REASON = "unknown command"
 RAM_REGIONS = ("dtcm", "axi", "d2", "d3", "itcm")
 REGIONS = ("flash",) + RAM_REGIONS
 
+# The wire keys of one entry of the sys.get_usage region list. protocol.toml
+# declares that field one `any` (an array of objects), so no generated type
+# carries its shape and the shape the reply is held to is the one the source
+# names in prose: a region name and its size, used and reserved bytes.
+REGION_MEMBERS = {"name", "size", "used", "reserved"}
+
 # Region capacities = linker script LENGTH. Board constants: only a board
 # change moves them, so asserting them is build independent.
 REGION_SIZES = {
@@ -414,6 +420,55 @@ def sum_regions(resp, key_fmt):
             return None
         total += value
     return total
+
+
+def region_entries(resp):
+    """The sys.get_usage region list, as the objects the protocol declares.
+
+    protocol.toml declares that field one `any` — an array of objects, because
+    the type vocabulary carries no array-of-object type — so its shape is held
+    here rather than derived: every entry is an object carrying exactly the
+    four wire keys the source names, with a name and three counts. None when
+    the reply carries no such array.
+    """
+    entries = field(resp, "regions")
+    if not isinstance(entries, list) or not entries:
+        return None
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != REGION_MEMBERS:
+            return None
+        if not isinstance(entry["name"], str) or not entry["name"]:
+            return None
+        for member in sorted(REGION_MEMBERS - {"name"}):
+            value = entry[member]
+            if not isinstance(value, int) or isinstance(value, bool):
+                return None
+    return entries
+
+
+def regions_sum(resp, member):
+    """Σ of one member over the sys.get_usage region list, or None."""
+    entries = region_entries(resp)
+    if entries is None:
+        return None
+    return sum(entry[member] for entry in entries)
+
+
+def regions_match_mem(usage, mem):
+    """Every region of the usage list equals the raw mem_info readout of it.
+
+    The two domains are matched by the region names the usage reply reports:
+    an entry naming a region mem_info does not report has nothing to be
+    compared against and fails here instead of passing over the difference.
+    """
+    entries = region_entries(usage)
+    if entries is None or len(entries) != len(RAM_REGIONS):
+        return False
+    for entry in entries:
+        for member in ("size", "used"):
+            if field_int(mem, f"{entry['name']}_{member}") != entry[member]:
+                return False
+    return True
 
 
 def region_used_ok(resp, region):
@@ -1192,12 +1247,24 @@ def main():
     print("\n=== Stage 3: sys.get_usage (four-item scope) ===")
 
     usage = ctx.send("sys.get_usage")
+    # The declared fields, read from the manifest. `regions` is the one of them
+    # with no scalar form (the source declares it `any`), so it is required as
+    # the array the protocol describes rather than as a number: the scalar
+    # fields have to be present, the list has to hold one entry per RAM region,
+    # name them in order, and region_count has to be how many there are.
+    usage_regions = region_entries(usage)
     ok("get_usage fields",
        usage is not None and usage.get("status") == "ok"
-       and has_fields(usage, usage_fields))
+       and has_fields(usage, [f for f in usage_fields if f != "regions"])
+       and usage_regions is not None
+       and field_int(usage, "region_count") == len(usage_regions)
+       and [entry["name"] for entry in usage_regions] == list(RAM_REGIONS),
+       detail=brief(usage))
 
-    # Aggregate consistency — build independent regression checks
-    usage_ram_used = sum_regions(usage, "ram_{region}_used_bytes")
+    # Aggregate consistency — build independent regression checks. The RAM sum
+    # is the region list's own used bytes, so the aggregate is compared against
+    # the parts the same reply reports.
+    usage_ram_used = regions_sum(usage, "used")
     ok("get_usage ram sum",
        usage_ram_used is not None
        and field_int(usage, "ram_used_bytes") == usage_ram_used)
@@ -1219,8 +1286,7 @@ def main():
     # regression of a comparison the build was never able to make. With the
     # domain present they stay as strict as before.
     check_test("get_usage == mem_info regions",
-               all(eq_fields(usage, f"ram_{region}_used_bytes", mem, f"{region}_used")
-                   for region in RAM_REGIONS))
+               regions_match_mem(usage, mem))
 
     check_test("get_usage flash == mem_info flash",
                eq_fields(usage, "mcu_flash_used_bytes", mem, "flash_used")
