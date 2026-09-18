@@ -1128,6 +1128,99 @@ def validate_field_coverage(proto: dict) -> None:
     fail_uncovered_fields(problems)
 
 
+def validate_command_error_codes(proto: dict) -> None:
+    """Abort unless every code a command declares is a key of [error_codes], at that key's number.
+
+    A command's `error_codes` array is the half of the source of truth that says
+    which failures *that* command's reply can carry, against [error_codes],
+    which gives every code its one name and its one number. Two things are
+    checked of each entry, which are the two ways the array and the table can
+    drift apart: the entry's `name` has to be a key of the table, and its `code`
+    has to be the number that key carries. Both, because either drifts alone —
+    a name renamed in the table leaves a command pointing at a code that no
+    longer exists, and a number edited in one of the two places leaves one code
+    name meaning two things, depending on which reader is asked.
+
+    The failure mode this closes is silent by construction: nothing consumes
+    these arrays. The emitters write the global table — proto.h's error codes,
+    proto.rs's, types.ts's ErrorCode enum and the manifest alike read
+    `proto["error_codes"]` and only that — so an entry naming a code that does
+    not exist, or naming one with another code's number, reaches no artifact,
+    no build and no reader. It sits in the TOML reading as a permission the
+    command does not have, and every consumer of the protocol stays green,
+    because none of them ever looks at it.
+
+    What this deliberately does not do, in either direction: it does not
+    compare the arrays against a second copy of the table. Copying every
+    command's entries into [error_codes] (or the table's entries into every
+    command) would make a second place that has to be kept in step with the
+    first — which is the fault being checked for, not the check. The table
+    stays the only place a code is named and numbered, and an array only ever
+    refers to it; an entry declaring a column this check does not read is left
+    to whatever reads it, which today is nothing.
+
+    It also says nothing about *which* codes a command declares. Whether
+    sys.ping can answer ERR_NOT_SUPPORTED, or whether config.save can answer
+    the codes its handler writes, is a claim about the firmware's handlers:
+    a code the table carries is one the array can name, and no text in this
+    file says which of them a reply actually carries. So an array that omits a
+    code a handler returns, or names one it never returns, passes here — as it
+    must, since there is nothing in the TOML to hold that claim against. What
+    is compared is the array against the table, and the only two answers are
+    whether the name exists and whether the number agrees.
+    """
+    table = proto.get("error_codes", {})
+    if not isinstance(table, dict):
+        table = {}
+
+    problems: List[str] = []
+    for cmd in proto.get("commands", []):
+        owner = f"{cmd.get('domain')}.{cmd.get('name')}"
+        for entry in cmd.get("error_codes", []):
+            if not isinstance(entry, dict):
+                problems.append(f"{owner}: an error_codes entry is not a table "
+                                f"({entry!r}) — expected name / code, the shape "
+                                f"[error_codes] declares its codes in")
+                continue
+            name = entry.get("name")
+            if not name:
+                problems.append(f"{owner}: an error_codes entry declares no "
+                                f"name, so the code it refers to is unnamed and "
+                                f"cannot be held to the table")
+                continue
+            if name not in table:
+                problems.append(f"{owner}: declares error code {name!r}, which "
+                                f"[error_codes] does not carry (declared: "
+                                f"{sorted(table)}) — the array names codes, and "
+                                f"a name the table does not have refers to a code "
+                                f"no target and no reader knows")
+                continue
+            declared = table[name].get("code") if isinstance(table[name], dict) else None
+            code = entry.get("code")
+            if not isinstance(code, int) or isinstance(code, bool):
+                problems.append(f"{owner}: {name} declares no integer code "
+                                f"({code!r}), while [error_codes].{name} carries "
+                                f"{declared!r} — a copy of that number which states "
+                                f"none cannot be held to it")
+            elif code != declared:
+                problems.append(f"{owner}: {name} is declared with code {code}, "
+                                f"while [error_codes].{name} carries {declared} — "
+                                f"one code name has to mean one number, and the "
+                                f"table is where it is given")
+
+    if problems:
+        for problem in problems:
+            print(f"ERROR: command error codes — {problem}", file=sys.stderr)
+        print("       A command's `error_codes` array names the codes its reply "
+              "can carry, so every entry has to be a key of [error_codes] at the "
+              "number that key carries. Nothing emits the arrays, so an entry "
+              "that drifts — a name the table does not have, or a number the "
+              "table gives another name — reads as a permission the command does "
+              "not have and no artifact or reader would ever show it.",
+              file=sys.stderr)
+        sys.exit(1)
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # C++ Generator
 # ═════════════════════════════════════════════════════════════════════════════
@@ -2122,6 +2215,7 @@ Examples:
     validate_types(proto)
     validate_field_roles(proto)
     validate_field_coverage(proto)
+    validate_command_error_codes(proto)
 
     # Print summary
     types_list = proto.get("types", [])
