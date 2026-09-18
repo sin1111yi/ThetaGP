@@ -20,7 +20,7 @@
 #
 # Test: Json::missingKeyCount — the key walk across arrays (host, no board)
 # Target: src/utils/json/json.cpp + lib/frozen/frozen.c, host build
-# Method: compiles scripts/test/json_missing_key_cases.cpp together with
+# Method: compiles scripts/test/test_json_missing_key_cases.cpp together with
 #         the two firmware sources with g++ into a temporary directory and
 #         runs it. Each case compares a body against itself (want 0)
 #         beside controls that must be non-zero; the harness holds the
@@ -48,7 +48,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
 
 HARNESS = os.path.join(REPO_ROOT, "scripts", "test",
-                       "json_missing_key_cases.cpp")
+                       "test_json_missing_key_cases.cpp")
 SOURCES = [
     os.path.join(REPO_ROOT, "src", "utils", "json", "json.cpp"),
     os.path.join(REPO_ROOT, "lib", "frozen", "frozen.c"),
@@ -75,7 +75,7 @@ def main():
     # in a firmware build directory, and nothing here is an artifact worth
     # keeping.
     with tempfile.TemporaryDirectory(prefix="thetagp_json_keywalk_") as tmp:
-        binary = os.path.join(tmp, "json_missing_key_cases")
+        binary = os.path.join(tmp, "test_json_missing_key_cases")
         cmd = [compiler, "-std=gnu++20", "-Wall", "-Wextra", "-O1"]
         for inc in INCLUDES:
             cmd += ["-I", inc]

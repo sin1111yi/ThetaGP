@@ -50,10 +50,5 @@ REASONIX.md
 # Test tooling and fixtures. They reproduce measurements the firmware work
 # depends on, so they stay in the worktree, but they are not part of the
 # product, so they stay out of the repository.
-scripts/test/a0/
-scripts/test/rate-8k/
-scripts/test/hid_observe.py
-scripts/test/hid_observe_capture.md
-scripts/test/mock_fw_cdc.py
-scripts/test/show_refusals.py
 protocol/protocol-fields.md
+scripts/test/tmp_*
