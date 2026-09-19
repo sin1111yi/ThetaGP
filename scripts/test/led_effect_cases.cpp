@@ -74,15 +74,15 @@
 #include <cstdlib>
 #include <cstring>
 
-using ThetaGP::Led::FRAME_COUNT;
-using ThetaGP::Led::HUE_CYCLE;
-using ThetaGP::Led::hueToRgb;
-using ThetaGP::Led::LED_BUFFER_ELEMENTS;
-using ThetaGP::Led::LED_COUNT;
-using ThetaGP::Led::ledEffectAdvance;
-using ThetaGP::Led::LedEffectClock;
-using ThetaGP::Led::ledEffectRender;
-using ThetaGP::Led::Rgb;
+using ThetaGP::Drivers::Led::FRAME_COUNT;
+using ThetaGP::Drivers::Led::HUE_CYCLE;
+using ThetaGP::Drivers::Led::hueToRgb;
+using ThetaGP::Drivers::Led::LED_BUFFER_ELEMENTS;
+using ThetaGP::Drivers::Led::LED_COUNT;
+using ThetaGP::Drivers::Led::ledEffectAdvance;
+using ThetaGP::Drivers::Led::LedEffectClock;
+using ThetaGP::Drivers::Led::ledEffectRender;
+using ThetaGP::Drivers::Led::Rgb;
 
 namespace {
 
