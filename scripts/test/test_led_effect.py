@@ -19,7 +19,7 @@
 # If not, see <https://www.gnu.org/licenses/>.
 #
 # Test: Led::ledEffectRender and Led::ledEffectAdvance (host, no board)
-# Target: src/led/led_effect.cpp, host build
+# Target: src/drivers/led/led_effect.cpp, host build
 # Method: compiles scripts/test/led_effect_cases.cpp together with the
 #         firmware's own led_effect.cpp with g++ into a temporary directory and
 #         runs it. The harness holds the cases: the colour frame 0 LED 0 starts
@@ -54,7 +54,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
 
 HARNESS = os.path.join(REPO_ROOT, "scripts", "test", "led_effect_cases.cpp")
 SOURCES = [
-    os.path.join(REPO_ROOT, "src", "led", "led_effect.cpp"),
+    os.path.join(REPO_ROOT, "src", "drivers", "led", "led_effect.cpp"),
 ]
 INCLUDES = [
     os.path.join(REPO_ROOT, "src"),

@@ -24,9 +24,9 @@
 // compiler builds this translation unit as it stands, which is what lets
 // scripts/test/test_led_effect.py drive the firmware's own render on the host.
 
-#include "led/led_effect.h"
+#include "drivers/led/led_effect.h"
 
-namespace ThetaGP::Led {
+namespace ThetaGP::Drivers::Led {
 namespace {
 
 // The wheel in six sectors of 256 hue units, each a ramp on one channel: the
@@ -115,4 +115,4 @@ void ledEffectAdvance(LedEffectClock &clock, uint32_t deltaUs,
   }
 }
 
-} // namespace ThetaGP::Led
+} // namespace ThetaGP::Drivers::Led

@@ -19,7 +19,7 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Host cases for the LED effect (src/led/led_effect.cpp), run by
+// Host cases for the LED effect (src/drivers/led/led_effect.cpp), run by
 // scripts/test/test_led_effect.py. It links the firmware's own led_effect.cpp
 // unchanged and calls ledEffectRender on the host, so a case here says what the
 // firmware's render does and not what a stand-in for it does. The file carries
@@ -63,10 +63,10 @@
 // stays inside the +-1 the hue cases allow.
 //
 // Run: python3 scripts/test/test_led_effect.py
-//      (compiles this file with src/led/led_effect.cpp into a temporary
+//      (compiles this file with src/drivers/led/led_effect.cpp into a temporary
 //      directory and runs it; exit 0 = every case matched).
 
-#include "led/led_effect.h"
+#include "drivers/led/led_effect.h"
 
 #include <cstdarg>
 #include <cstdint>

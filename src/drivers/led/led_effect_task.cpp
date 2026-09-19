@@ -23,12 +23,12 @@
 // led_effect.cpp, which carries no platform headers; this file holds the state
 // that needs them, so the strip's buffer and the request flag live here.
 
-#include "led/led_effect.h"
+#include "drivers/led/led_effect.h"
 
 #include "build_info.h"
 #include "conf/ThetaGP_Config.h" // THETAGP_CFG_LED_EFFECT_PERIOD_US, the cycle the frames span
 
-namespace ThetaGP::Led {
+namespace ThetaGP::Drivers::Led {
 namespace {
 
 // ── Frame buffer ──
@@ -95,4 +95,4 @@ uint8_t ledEffectCurrentFrame() { return s_clock.frame; }
 
 Rgb *ledEffectFramebuffer() { return s_ledPixelBuf; }
 
-} // namespace ThetaGP::Led
+} // namespace ThetaGP::Drivers::Led

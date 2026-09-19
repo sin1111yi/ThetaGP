@@ -23,7 +23,7 @@
 
 #include <cstdint>
 
-namespace ThetaGP::Led {
+namespace ThetaGP::Drivers::Led {
 
 // One LED's colour, its fields in the order the strip's wire carries them:
 // green, red, blue, most significant bit first.
@@ -98,4 +98,4 @@ uint8_t ledEffectCurrentFrame();
 // The frame buffer, 2,048 elements of one colour each.
 Rgb *ledEffectFramebuffer();
 
-} // namespace ThetaGP::Led
+} // namespace ThetaGP::Drivers::Led
