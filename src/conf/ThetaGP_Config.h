@@ -45,6 +45,9 @@
 //     THETAGP_CFG_KEY_TOGGLE_EN             0     test hook, flips one key bit per read
 //   keypad scan path
 //     THETAGP_CFG_KEYPAD_SCAN_HZ            32000
+//   led effect path
+//     THETAGP_CFG_LED_TASK_PERIOD_US        10000   refresh task period
+//     THETAGP_CFG_LED_EFFECT_PERIOD_US      1000000 one animation cycle
 //   config-layer defaults (see the blocks for units and meanings)
 //     SOCD_MODE 4      FOUR_WAY_MODE 0   DPAD_MODE 0
 //     INV_X/Y/RX/RY 0  SWAP_STICKS 0
@@ -180,6 +183,20 @@
 // A zero rate would leave the scan timer with no period to run at.
 #if THETAGP_CFG_KEYPAD_SCAN_HZ == 0
 #error "THETAGP_CFG_KEYPAD_SCAN_HZ must be positive"
+#endif
+
+// ── LED effect path ──
+// The strip's animation runs off two periods. The task period is how often the
+// refresh task runs; the effect period is how long one full cycle of the
+// animation takes, which the frame interval comes out of as periodUs /
+// FRAME_COUNT. The frame interval has to cover at least one task period, or the
+// task cannot show every frame it advances through (led_effect_task.cpp asserts
+// it at compile time).
+#ifndef THETAGP_CFG_LED_TASK_PERIOD_US
+#define THETAGP_CFG_LED_TASK_PERIOD_US 10000UL         // 100 Hz
+#endif
+#ifndef THETAGP_CFG_LED_EFFECT_PERIOD_US
+#define THETAGP_CFG_LED_EFFECT_PERIOD_US 1000000UL     // 1 s per cycle, 20 ms per frame
 #endif
 
 // ── Config-layer defaults ──

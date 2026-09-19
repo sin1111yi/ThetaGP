@@ -27,6 +27,7 @@
 #include "conf/ThetaGP_Config.h" // THETAGP_CFG_USB_REPORT_RATE_HZ, the gamepad task rate this file registers
 
 #include "gamepad/gamepad.h"
+#include "led/led_effect.h"
 #include "taskmanager.h"
 
 #include "ThetaGP.h"
@@ -67,4 +68,9 @@ void ThetaGP::ThetaGamepad::registerTasks(void) {
                             TaskPriority::Realtime);
   TaskManager::registerTask("TEST", "CMD_PROC", taskCmdProc,
                             TASK_PERIOD_HZ(20), TaskPriority::Medium);
+  // The strip is cosmetic: its render is long enough to matter against the
+  // report tick, so it runs below every task that carries input.
+  TaskManager::registerTask("LED", "EFFECT", Led::ledEffectTask,
+                            TASK_PERIOD_US(THETAGP_CFG_LED_TASK_PERIOD_US),
+                            TaskPriority::Low);
 }
