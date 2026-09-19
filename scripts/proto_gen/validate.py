@@ -696,6 +696,92 @@ def validate_field_optionality(proto: dict) -> None:
              "scripts/test/test_cdc_protocol.py.")
 
 
+def validate_field_hand_written(proto: dict) -> None:
+    """Abort unless a `hand_written` marking is one a reply can carry.
+
+    A response field of a type no printf conversion writes (PRINTF_LESS_TYPES —
+    `any`) is a field no response table can carry, so gen_resp() writes no table
+    for the command that has one and the reply is assembled by hand
+    (emit_resp.py). `hand_written` is how the source declares which replies those
+    are, and the generator emits a flag of the command's name for it
+    (hand_written_flag(), model.py), which the site that assembles the reply
+    asserts.
+
+    Everything here is about the marking being one a consumer can act on, which
+    is what leaves the *absence* of a marking to the compilation the flag is
+    for: the one thing this cannot hold is whether a reply that is assembled by
+    hand is declared as one, because the generator has nothing to derive that
+    from — no column says which replies the firmware writes by hand, and the
+    firmware reads the generated flag and not the other way round. What it does
+    hold:
+
+      * a marking on a field a response table *can* carry declares a reply
+        assembled by hand that a table writes, so the flag emitted for that
+        command would assert nothing about the code under it — the marking would
+        read as a binding while holding nothing;
+      * a `hand_written` on a request field, refused for the reason
+        validate_field_optionality() refuses either column on the wrong side:
+        the flag names a reply (hand_written_flag(), model.py) and gen_resp()
+        reads the response side and no other, so a marking on a request field is
+        one nothing acts on — the fault validate_field_roles() refuses for an
+        unregistered role;
+      * a value that is not the boolean `true`. The emitters and the header read
+        the column for truth, so `hand_written = "true"`, `= 1` or `= "yes"` is
+        a field whose marking is a string or a number, and a consumer testing it
+        (`f.get("hand_written")`) writes a flag for a reply the declaration then
+        reads as marked.
+
+    Both directions of the compile-time binding are outside the generator: the
+    marking is what stops the write site from compiling when it comes off the
+    field, and the write site is what says the reply is still written by hand.
+    """
+    carryable: List[str] = []
+    wrong_side: List[str] = []
+    not_true: List[str] = []
+    for cmd in proto.get("commands", []):
+        command = f"{cmd['domain']}.{cmd['name']}"
+        for f in cmd.get("request", []):
+            if "hand_written" in f:
+                wrong_side.append(
+                    f"{command}: request field '{f['name']}' carries "
+                    f"`hand_written` = {f['hand_written']!r}; the flag the "
+                    f"column emits names a reply, and a request field is not "
+                    f"what a response table is read from")
+        for f in cmd.get("response", []):
+            printf_less = f["type"] in PRINTF_LESS_TYPES
+            marked = f.get("hand_written")
+            if marked is not None and marked is not True:
+                not_true.append(
+                    f"{command}: response field '{f['name']}' carries "
+                    f"`hand_written` = {marked!r} "
+                    f"({type(marked).__name__}), which is not the boolean true")
+            elif marked and not printf_less:
+                carryable.append(
+                    f"{command}: response field '{f['name']}' carries "
+                    f"`hand_written` = true but is of type '{f['type']}', which "
+                    f"a response table carries; such a field is written through "
+                    f"the table and not by hand")
+    if carryable or wrong_side or not_true:
+        fail(*[f"ERROR: `hand_written` is not the boolean true — {entry}"
+               for entry in not_true],
+             *[f"ERROR: `hand_written` on the other side of the message — {entry}"
+               for entry in wrong_side],
+             *[f"ERROR: a response field a table can carry is declared "
+               f"hand-written — {entry}" for entry in carryable],
+             "       A response field of a type no printf conversion writes "
+             "(PRINTF_LESS_TYPES: 'any') costs the command its whole response "
+             "table, so its reply is assembled by hand — and the declaration "
+             "that says so is `hand_written = true` on that field, which "
+             "gen_resp() turns into THETAGP_RESP_HANDWRITTEN_<DOMAIN>_<NAME> "
+             "for the command. The site that assembles the reply asserts that "
+             "flag, so the two say the same thing or the firmware does not "
+             "compile.",
+             "       The column is the declaration of a reply and it belongs to "
+             "the response side of the command: a field a table can carry is "
+             "written through one, so marking it hand-written would leave the "
+             "flag asserting nothing about the code under it.")
+
+
 def validate_field_coverage(proto: dict) -> None:
     """Abort unless the manifest emitter emits every field of both sides it declares.
 

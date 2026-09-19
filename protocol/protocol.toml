@@ -50,6 +50,22 @@
 # response side has a column of its own and validate_field_optionality() refuses
 # either column on the wrong side — a marking nothing acts on is a defect this
 # file does not let pass.
+#
+# A *response* field of a type no printf conversion writes — `any`, the one
+# entry of that set — carries `hand_written = true`: a response field table
+# holds the fields a conversion writes, and a command with a field none writes
+# gets no table at all, so its reply is assembled by hand. The marking
+# declares which replies those are, and the code that assembles one names the
+# flag the generator emits for the command (scripts/proto_gen/emit_resp.py),
+# so a marking that comes off the field is a compile error at that code. That
+# is deliberate and it is the half no generator can check: which replies the
+# firmware writes by hand is in the firmware, and the file it reads — this
+# one's artifact — is where the declaration travels. What a generator can
+# check, validate_field_hand_written() does: the column belongs to the
+# response side, and the field under it is one no table carries — a marking on
+# a field a table writes would be a flag asserting nothing about the code
+# under it. The marking is not a licence to leave the field out of anything,
+# and no emitter may take it as one.
 # =============================================================================
 
 # ---------------------------------------------------------------------------
@@ -315,7 +331,7 @@ response = [
   { name = "ext_flash_reserved_sectors", type = "u32", json = "ext_flash_reserved_sectors" },
   { name = "profile_count",          type = "u32", json = "profile_count" },
   { name = "region_count", type = "u32", json = "region_count", description = "Number of entries in the regions array" },
-  { name = "regions", type = "any", json = "regions", description = "Array of one object per memory region the firmware reports; each object's wire keys are `name` (the region name), `size` (its capacity in bytes), `used` (the bytes in use) and `reserved` (the part of `used` a fixed reserve already holds). Which regions those are, how many there are and the order they come in is the firmware's answer and not a list written here, so a board with fewer or differently named regions answers this command without the command naming one; the declared type is `any` because the type vocabulary carries no array-of-object type" },
+  { name = "regions", type = "any", json = "regions", description = "Array of one object per memory region the firmware reports; each object's wire keys are `name` (the region name), `size` (its capacity in bytes), `used` (the bytes in use) and `reserved` (the part of `used` a fixed reserve already holds). Which regions those are, how many there are and the order they come in is the firmware's answer and not a list written here, so a board with fewer or differently named regions answers this command without the command naming one; the declared type is `any` because the type vocabulary carries no array-of-object type, and the field is `hand_written` because no printf conversion writes a value of that type: this reply is assembled by hand and the site that assembles it asserts the flag the marking emits", hand_written = true },
 ]
 error_codes = [
   { name = "ERR_NOT_SUPPORTED", code = 6, description = "The region list is longer than the reply buffer, so it is refused rather than sent cut short" },
@@ -347,7 +363,7 @@ request = [
 ]
 response = [
   { name = "key",   type = "string", json = "key" },
-  { name = "value", type = "any",    json = "value" },
+  { name = "value", type = "any",    json = "value", description = "The value the key holds: one number for a scalar key and an array of numbers for an array key, in element order. A key's JSON type is not known here, and no printf conversion writes a value of unknown type, so the field is `hand_written`: this reply is assembled by hand and the site that assembles it asserts the flag the marking emits", hand_written = true },
 ]
 error_codes = [
   { name = "ERR_NOT_SUPPORTED", code = 6, description = "The rendered value does not fit the reply buffer, so it is refused rather than sent cut short" },
@@ -361,7 +377,7 @@ description = "List the configuration keys this firmware supports, with each key
 request = []
 response = [
   { name = "count", type = "u32", json = "count", description = "Number of entries in the keys array" },
-  { name = "keys",  type = "any", json = "keys",  description = "Array of one object per supported key; each object's wire keys are `key` (the key name), `min` and `max` (its accepted range) and `reboot` (whether the key needs a reboot to take effect). The entries come from the firmware's key table, not from a list written here, and the declared type is `any` because the type vocabulary carries no array-of-object type" },
+  { name = "keys",  type = "any", json = "keys",  description = "Array of one object per supported key; each object's wire keys are `key` (the key name), `min` and `max` (its accepted range) and `reboot` (whether the key needs a reboot to take effect). The entries come from the firmware's key table, not from a list written here, and the declared type is `any` because the type vocabulary carries no array-of-object type, and the field is `hand_written` because no printf conversion writes a value of that type: this reply is assembled by hand and the site that assembles it asserts the flag the marking emits", hand_written = true },
 ]
 error_codes = [
   { name = "ERR_NOT_SUPPORTED", code = 6, description = "The key list is longer than the reply buffer" },

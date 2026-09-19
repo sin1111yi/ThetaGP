@@ -229,6 +229,13 @@ static void handleSysEnterDfu([[maybe_unused]] const char *cmd,
 // header names this command beside config.list_keys for that reason. That
 // command's reply is written here the same way — its scalar field and its
 // array in one format string.
+//
+// What holds the declaration to this function is the flag the header carries
+// beside that naming: protocol.toml marks the field `hand_written`, gen_resp()
+// emits THETAGP_RESP_HANDWRITTEN_SYS_GET_USAGE for the command, and the check
+// above the format string below is this file's half of the binding — the
+// marking coming off the field takes the flag with it, and nothing here
+// compiles.
 
 // One entry of the region list reply:
 //   {"name":"<region>","size":<bytes>,"used":<bytes>,"reserved":<bytes>}
@@ -319,6 +326,9 @@ static void handleSysGetUsage([[maybe_unused]] const char *cmd,
     // count and the region list it counts last. The count is the number of
     // entries built above, so the number and the list are one answer read twice
     // rather than two kept in step.
+#ifndef THETAGP_RESP_HANDWRITTEN_SYS_GET_USAGE
+#error "sys.get_usage's reply is assembled by hand, and protocol.toml no longer marks a field of it hand_written — the region list has no printf form, so restore the marking or take this write with the declaration"
+#endif
     resp.printf("{status:%Q,cmd:%Q,queued:%d,"
                 "cpu_load_percent:%u,task_count:%u,"
                 "mcu_flash_used_bytes:%u,mcu_flash_total_bytes:%u,"

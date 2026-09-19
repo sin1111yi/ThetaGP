@@ -1261,6 +1261,23 @@ def main():
        and [entry["name"] for entry in usage_regions] == list(RAM_REGIONS),
        detail=brief(usage))
 
+    # The entry shape of the region list, held on its own. The compile-time flag
+    # the source's `hand_written` marking emits ties the declaration to the code
+    # that writes the reply (THETAGP_RESP_HANDWRITTEN_SYS_GET_USAGE, asserted in
+    # testsys.cpp); what no flag carries is the shape inside the field, which
+    # protocol.toml states in prose and the device writes entry by entry. So it
+    # is held here: one object per region, exactly the four wire keys the source
+    # names, a region name that is a non-empty string and three counts.
+    region_list = field(usage, "regions")
+    ok("get_usage regions entry shape",
+       isinstance(region_list, list) and len(region_list) > 0
+       and all(isinstance(entry, dict) and set(entry) == REGION_MEMBERS
+               and isinstance(entry["name"], str) and entry["name"]
+               and all(int_value(entry[member]) and entry[member] >= 0
+                       for member in ("size", "used", "reserved"))
+               for entry in region_list),
+       detail=brief(field(usage, "regions")))
+
     # Aggregate consistency — build independent regression checks. The RAM sum
     # is the region list's own used bytes, so the aggregate is compared against
     # the parts the same reply reports.
@@ -1412,6 +1429,23 @@ def main():
                          for entry in keys),
                  detail=brief(keys))
 
+    # The entry shape of the key list, held on its own: the marking binds the
+    # declaration to the code that writes the reply
+    # (THETAGP_RESP_HANDWRITTEN_CONFIG_LIST_KEYS, asserted in
+    # config_cmd_handler.cpp), and the members inside each entry are prose in
+    # protocol.toml that no flag reads. Every entry is an object carrying the
+    # key's name and the range it accepts, told in that order.
+    check_config("list_keys keys entry shape",
+                 isinstance(keys, list) and len(keys) > 0
+                 and all(isinstance(entry, dict)
+                         and isinstance(entry.get("key"), str)
+                         and entry["key"]
+                         and int_value(entry.get("min"))
+                         and int_value(entry.get("max"))
+                         and entry["min"] <= entry["max"]
+                         for entry in keys),
+                 detail=brief(keys))
+
     def key_entry_ok(entry, expected):
         """One entry of the key list against the table this build carries."""
         if not isinstance(entry, dict):
@@ -1450,6 +1484,27 @@ def main():
                      and field(resp, "key") == key
                      and key_value_ok(snapshot[key], low, high, count, unmapped),
                      detail=brief(resp))
+
+    # The value field itself, held on its own: the marking binds the declaration
+    # to the code that writes the reply
+    # (THETAGP_RESP_HANDWRITTEN_CONFIG_GET_KEY, asserted in
+    # config_cmd_handler.cpp), while what the field carries — the key read back
+    # as one number or as an array of numbers — is prose in protocol.toml that
+    # no flag reads. Both spellings are read here, because a reply that dropped
+    # the key entirely would otherwise be scored only by the checks above, whose
+    # subject is the value each key holds.
+    scalar_resp, _sent = cfg_send("config.get_key", key="map.socd_mode")
+    array_resp, _sent = cfg_send("config.get_key", key="map.btn_map")
+    array_value = field(array_resp, "value")
+    check_config("get_key value present",
+                 status_of(scalar_resp) == "ok"
+                 and int_value(field(scalar_resp, "value"))
+                 and field(scalar_resp, "key") == "map.socd_mode"
+                 and status_of(array_resp) == "ok"
+                 and isinstance(array_value, list) and array_value
+                 and all(int_value(element) for element in array_value),
+                 detail="scalar -> %s ; array -> %s"
+                        % (brief(scalar_resp), brief(array_resp)))
 
     # The negative cases the ADR's D2 states, plus the same refusal read through
     # the other command: a request naming a key the table does not carry is

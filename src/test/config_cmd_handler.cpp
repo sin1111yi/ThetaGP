@@ -32,9 +32,10 @@
 
 #include "utils/log/log.h"
 
-// The generated response field tables, for the flag an `optional` response
-// field carries (THETAGP_RESP_OPTIONAL_*): the declaration of what a reply may
-// leave out, which the write site below is held to.
+// The generated response field tables, for the flags the declarations on a
+// response field carry (THETAGP_RESP_OPTIONAL_* and THETAGP_RESP_HANDWRITTEN_*):
+// what a reply may leave out, and which replies are assembled by hand. The
+// write sites below are held to both.
 #include "protocol/proto_resp.h"
 
 #include <climits>
@@ -284,6 +285,16 @@ static void handleConfigGetKey(const char *cmd, const Json &json) {
   Json resp;
   resp.beginWrite(s_cfgRespBuf, sizeof(s_cfgRespBuf));
 
+  // The reply is assembled here: the value's JSON type is not known until the
+  // key is read — one number for a scalar key, an array of numbers for an array
+  // key — and no printf conversion writes a value of unknown type, so
+  // protocol.toml declares the field `hand_written` and this command gets no
+  // response table. The check below is this site's half of that declaration,
+  // and the flag it names is the generator's: a header that no longer carries
+  // it is a protocol that no longer says this reply is written by hand.
+#ifndef THETAGP_RESP_HANDWRITTEN_CONFIG_GET_KEY
+#error "config.get_key's reply is assembled by hand, and protocol.toml no longer marks a field of it hand_written — the value's JSON type is not known until the key is read, so restore the marking or take this write with the declaration"
+#endif
   if (entry->type == KeyType::U8Array) {
     // The run of elements is rendered as text and handed over whole: the write
     // side has no specifier that walks a run of integers. An element of an
@@ -376,6 +387,15 @@ static void handleConfigListKeys(const char *cmd, const Json &json) {
 
   Json resp;
   resp.beginWrite(s_cfgRespBuf, sizeof(s_cfgRespBuf));
+  // The reply is assembled here: the key list is an array of objects, and no
+  // printf conversion writes one, so protocol.toml declares the field
+  // `hand_written` and this command gets no response table. The check below is
+  // this site's half of that declaration, and the flag it names is the
+  // generator's: a header that no longer carries it is a protocol that no
+  // longer says this reply is written by hand.
+#ifndef THETAGP_RESP_HANDWRITTEN_CONFIG_LIST_KEYS
+#error "config.list_keys' reply is assembled by hand, and protocol.toml no longer marks a field of it hand_written — the key list is an array of objects, which no printf conversion writes, so restore the marking or take this write with the declaration"
+#endif
   resp.printf("{cmd:%Q,queued:%d,status:%Q,count:%u,keys:[%s]}", cmd, q + 1,
               "ok", static_cast<unsigned>(keyTableCount()), entries);
   uint16_t len = resp.end();

@@ -15,6 +15,7 @@ from typing import List, Optional
 from proto_gen.model import (
     PRINTF_TYPE_MAP,
     ROLE_PRESENCE,
+    hand_written_flag,
     optional_flag,
     sanitize_cpp_comment,
 )
@@ -48,7 +49,9 @@ def gen_resp(proto: dict, out: Optional[Path] = None) -> str:
 
     A field whose type has no printf form is a field no table can carry, and its
     response would come out short of it; commands with such a field get no table
-    and are named in the header instead.
+    and are named in the header instead — beside the flag the field's
+    `hand_written` declaration emits for the command, which the code that
+    assembles that reply by hand asserts.
     """
     commands = proto.get("commands", [])
     lines: List[str] = []
@@ -78,6 +81,13 @@ def gen_resp(proto: dict, out: Optional[Path] = None) -> str:
     w("// build that writes it; what the flag carries is that the command's")
     w("// replies may leave the key out, and the write site names it, so a")
     w("// declaration that comes off the field stops that site from compiling.")
+    w("//")
+    w("// A third flag, THETAGP_RESP_HANDWRITTEN_<command>, says that the")
+    w("// command gets no table at all: a response field of it is declared")
+    w("// `hand_written` (protocol.toml), because its type has no printf form")
+    w("// and a table would come out short of it. The reply is assembled by")
+    w("// hand, and the code that assembles it names the flag, so a field whose")
+    w("// marking comes off stops that reply from compiling.")
     w()
 
     # Presence flags, once per role a response field carries.
@@ -118,6 +128,25 @@ def gen_resp(proto: dict, out: Optional[Path] = None) -> str:
     if optional_fields:
         w()
 
+    # Flags, once per command a response field declares `hand_written`: no
+    # table can carry that field, so the command gets none and its reply is
+    # assembled by hand at a site that names the flag. One flag per command and
+    # not per field, because the reply is one piece of code: the marking says
+    # which replies are written by hand, and the fields under it are the reason.
+    hand_written = []
+    for cmd in commands:
+        marked = [f for f in cmd.get("response", []) if f.get("hand_written")]
+        if marked:
+            hand_written.append((cmd, marked))
+    for cmd, marked in hand_written:
+        w(f"// {cmd['domain']}.{cmd['name']} declares "
+          f"{', '.join(f['json'] for f in marked)} `hand_written` (protocol.toml):")
+        w("// no table carries a field of that type, so this command's reply is")
+        w("// assembled by hand and the site that writes it names this flag.")
+        w(f"#define {hand_written_flag(cmd['domain'], cmd['name'])} 1")
+    if hand_written:
+        w()
+
     unformattable: List[str] = []
     for cmd in commands:
         resp = cmd.get("response", [])
@@ -126,7 +155,10 @@ def gen_resp(proto: dict, out: Optional[Path] = None) -> str:
         full_name = f"{cmd['domain']}.{cmd['name']}"
         missing = [f["name"] for f in resp if f["type"] not in PRINTF_TYPE_MAP]
         if missing:
-            unformattable.append(f"{full_name} ({', '.join(missing)})")
+            marked = any(f.get("hand_written") for f in resp
+                         if f["type"] not in PRINTF_TYPE_MAP)
+            flag = f" — written by hand, {hand_written_flag(cmd['domain'], cmd['name'])}" if marked else ""
+            unformattable.append(f"{full_name} ({', '.join(missing)}){flag}")
             continue
         w(f"// {full_name} — {sanitize_cpp_comment(cmd.get('description', ''))}")
         w(f"#define {resp_macro(cmd['domain'], cmd['name'])}(X) \\")
@@ -139,7 +171,9 @@ def gen_resp(proto: dict, out: Optional[Path] = None) -> str:
 
     if unformattable:
         w("// No table, because a response field of no printf form would be missing")
-        w("// from every response written through one:")
+        w("// from every response written through one. One whose such a field is")
+        w("// declared `hand_written` names the flag the code that assembles that")
+        w("// reply asserts (THETAGP_RESP_HANDWRITTEN_*, above):")
         for entry in unformattable:
             w(f"//   {entry}")
         w()

@@ -113,6 +113,16 @@ rejected against
   compile when `USE_TASK_COUNTERS` and `THETAGP_RESP_HAS_TASK_COUNTERS`
   disagree.
 
+- `hand_written` — for a *response* field of a type no printf conversion writes
+  (the `any` entry of that set): a response field table holds the fields a
+  conversion writes, so a command with such a field gets no table and its reply
+  is assembled by hand. The marking says which replies those are, and the
+  generator emits `THETAGP_RESP_HANDWRITTEN_<DOMAIN>_<NAME>` for the command —
+  the flag the code that assembles the reply asserts, so a marking that comes
+  off the field is a compile error at that code. `validate_field_hand_written()`
+  refuses the marking on a request field, on a field a table can carry, or with
+  a value other than `true`.
+
 ### [[commands]] — command definitions
 
 ```toml

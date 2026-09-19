@@ -6,7 +6,7 @@ generator reads them through — the three type maps plus PRINTF_TYPE_MAP, the
 role registry and the presence it derives, the [envelope] and [error_reply]
 readers, and the helpers the emitters and the validators both use
 (fail, omission_reason, field_coverage_errors, fail_uncovered_fields,
-command_fields, optional_flag).
+command_fields, optional_flag, hand_written_flag).
 
 Moved out of scripts/gen_proto.py without a change to any of it: the module
 split is mechanical, and nothing here behaves differently for having a file of
@@ -546,3 +546,21 @@ def optional_flag(domain: str, name: str, field: str) -> str:
     """
     return (f"THETAGP_RESP_OPTIONAL_{domain.upper()}_"
             f"{name.replace('-', '_').upper()}_{field.upper()}")
+
+
+def hand_written_flag(domain: str, name: str) -> str:
+    """The name of the compile-time flag a command declared `hand_written` carries.
+
+    One flag per command, because what the declaration is about is the reply:
+    a response field of a type no printf conversion writes costs the whole
+    response table, so the reply of that command is assembled by hand and every
+    field the marking reaches is written by the same code. The name is derived
+    here so the site that assembles the reply can name it: the flag is what
+    holds the declaration to that code, and a `hand_written` that comes off the
+    field takes the flag with it and stops that site from compiling.
+
+    The name is the command's — THETAGP_RESP_HANDWRITTEN_<DOMAIN>_<NAME> — as
+    the table's own macro is (resp_macro(), emit_resp.py), so the flag reads
+    beside the table a command with such a field does not get.
+    """
+    return f"THETAGP_RESP_HANDWRITTEN_{domain.upper()}_{name.replace('-', '_').upper()}"
