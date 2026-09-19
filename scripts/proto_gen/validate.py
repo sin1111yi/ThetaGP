@@ -821,3 +821,35 @@ def validate_command_error_codes(proto: dict) -> None:
              "that drifts — a name the table does not have, or a number the "
              "table gives another name — reads as a permission the command does "
              "not have and no artifact or reader would ever show it.")
+
+def validate_command_uniqueness(proto: dict) -> None:
+    """Abort unless every command declares a domain and name no other command repeats.
+
+    A command is identified by the pair, and the file is read as a list, so two
+    entries sharing one produce no syntax error and no merge: both arrive, both
+    are emitted, and the generated dispatch ends up holding whichever the
+    emitters reached last. The declaration that lost is still in the file and
+    still reads like the one in effect. That is the failure this refuses -- the
+    same shape validate_field_roles() refuses for an unregistered `role`, reached
+    from the other side: there a marking nothing acts on, here a declaration
+    nothing can reach.
+
+    The report names the pair once and then the opening words of each
+    declaration, so a reader can tell which two they are without counting
+    declarations in the file.
+    """
+    seen = {}
+    for cmd in proto.get("commands", []):
+        key = (cmd.get("domain", ""), cmd.get("name", ""))
+        seen.setdefault(key, []).append(cmd)
+    repeated = {k: v for k, v in seen.items() if len(v) > 1}
+    if not repeated:
+        return
+    details = []
+    for (domain, name), cmds in sorted(repeated.items()):
+        details.append(f"       {domain}.{name} -- declared {len(cmds)} times")
+        for cmd in cmds:
+            opening = (cmd.get("description") or "").strip().split("\n")[0][:70]
+            details.append(f'           "{opening}"')
+    fail(f"ERROR: command identity -- a command is identified by its domain and its "
+         f"name, and {len(repeated)} of them are declared more than once", *details)

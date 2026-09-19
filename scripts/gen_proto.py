@@ -45,6 +45,7 @@ from proto_gen.emit_ts import gen_ts
 from proto_gen.model import fail, load_protocol
 from proto_gen.validate import (
     validate_command_error_codes,
+    validate_command_uniqueness,
     validate_domains,
     validate_envelope,
     validate_error_reply,
@@ -96,6 +97,7 @@ Examples:
         fail(f"ERROR: Protocol file not found: {proto_path}")
 
     proto = load_protocol(str(proto_path))
+    validate_command_uniqueness(proto)
     validate_domains(proto)
     validate_envelope(proto)
     validate_error_reply(proto)
