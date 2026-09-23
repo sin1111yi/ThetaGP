@@ -223,39 +223,19 @@ static void handleSysEnterDfu([[maybe_unused]] const char *cmd,
 // (aggregate + reserve + the region list), external SPI flash. Bytes on the
 // MCU side, sectors on the external flash, no percentages.
 //
-// The reply is written here instead of through a THETAGP_RESP_SYS_GET_USAGE
-// table: the region list has no printf form (protocol.toml declares it `any`,
-// an array of objects), a table cannot carry a field it cannot print, and the
-// header names this command beside config.list_keys for that reason. That
-// command's reply is written here the same way — its scalar field and its
-// array in one format string.
-//
-// What holds the declaration to this function is the flag the header carries
-// beside that naming: protocol.toml marks the field `hand_written`, gen_resp()
-// emits THETAGP_RESP_HANDWRITTEN_SYS_GET_USAGE for the command, and the check
-// above the format string below is this file's half of the binding — the
-// marking coming off the field takes the flag with it, and nothing here
-// compiles.
+// The reply is written through the function the generator emits for this
+// command, ThetaGP::Resp::sysGetUsage (protocol/proto_resp.h): the region
+// list is declared an array of the record type MemoryRegion, an array of
+// objects is not a value any printf conversion writes, so the command gets a
+// writer function instead of a response table. This function fills the values;
+// the writer carries the keys, the order, the punctuation and the conversions,
+// and answers false when the reply did not fit the buffer.
 
-// One entry of the region list reply:
-//   {"name":"<region>","size":<bytes>,"used":<bytes>,"reserved":<bytes>}
-// with a comma in front of every entry but the first. Its fixed text is the
-// literal below, a region name is at most kRegionNameMaxLen bytes, and each of
-// the three byte counts is an unsigned 32-bit decimal, so at most 10 bytes.
-constexpr size_t kRegionNameMaxLen = 15;
-constexpr size_t kRegionEntryMaxBytes =
-    sizeof("{\"name\":\"\",\"size\":,\"used\":,\"reserved\":},") - 1 +
-    kRegionNameMaxLen + 10 + 10 + 10;
-
-// The buffer the entries are built in: every region the enum carries besides
-// Flash is listed whole, since the count comes from the enum and an entry is
-// bounded above by kRegionEntryMaxBytes.
-constexpr size_t kRegionsBufSize =
-    static_cast<size_t>(ThetaGP::Util::MemInfo::RegionId::Count) *
-        kRegionEntryMaxBytes + 1;
-
-static_assert(sizeof(s_sysRespBuf) > kRegionsBufSize + 256,
-              "sys reply buffer: too small for the region list reply");
+// The regions one reply can carry: every entry of the enum, so the count is the
+// enum's answer and not a number written here. The writer walks the entries it
+// is given, so the array is sized by what the enum carries.
+constexpr size_t kMaxRegions =
+    static_cast<size_t>(ThetaGP::Util::MemInfo::RegionId::Count);
 
 static void handleSysGetUsage([[maybe_unused]] const char *cmd,
                               [[maybe_unused]] const Json &json) {
@@ -275,44 +255,38 @@ static void handleSysGetUsage([[maybe_unused]] const char *cmd,
     // than a list written here. A region's base and end stay out: they are
     // addresses, and what a report of a region carries is its capacity and the
     // part of it in use.
-    char regions[kRegionsBufSize];
-    size_t regionsUsed = 0;
+    Resp::MemoryRegionValues regions[kMaxRegions];
     uint32_t regionCount = 0;
-    bool truncated = false;
     for (uint8_t i = 0; i < static_cast<uint8_t>(RegionId::Count); ++i) {
         const RegionId id = static_cast<RegionId>(i);
         if (id == RegionId::Flash) {
             continue;
         }
         const RegionUsage regionUsage = region(id);
-        const int n = snprintf(
-            regions + regionsUsed, sizeof(regions) - regionsUsed,
-            "%s{\"name\":\"%s\",\"size\":%u,\"used\":%u,\"reserved\":%u}",
-            (regionCount == 0) ? "" : ",", regionName(id),
-            static_cast<unsigned>(regionUsage.size),
-            static_cast<unsigned>(regionUsage.used),
-            static_cast<unsigned>(regionUsage.reserved));
-        if (n < 0) {
-            break;
-        }
-        regionsUsed += static_cast<size_t>(n);
+        regions[regionCount].name = regionName(id);
+        regions[regionCount].size = regionUsage.size;
+        regions[regionCount].used = regionUsage.used;
+        regions[regionCount].reserved = regionUsage.reserved;
         ++regionCount;
-        if (regionsUsed >= sizeof(regions) - 1) {
-            truncated = true;
-            regionsUsed = sizeof(regions) - 1;
-            break;
-        }
     }
-    regions[regionsUsed] = '\0';
 
     Json resp;
     resp.beginWrite(s_sysRespBuf, sizeof(s_sysRespBuf));
+    const bool fits = Resp::sysGetUsage(
+        resp, static_cast<uint32_t>(queued + 1),
+        static_cast<uint32_t>(Gamepad::TaskManager::getAverageSystemLoadPercent()),
+        static_cast<uint32_t>(Gamepad::TaskManager::getTaskCount()),
+        mcuFlashUsedBytes(), mcuFlashTotalBytes(), ramUsedBytes(), ramTotalBytes(),
+        ramReservedBytes(), pstat.totalSectors, pstat.usedSectors,
+        pstat.freeSectors, pstat.reservedSectors,
+        static_cast<uint32_t>(pstat.profileCount), regionCount, regions,
+        regionCount);
 
-    if (truncated) {
+    if (!fits) {
         // A reply cut short is not a JSON document, so it is refused instead of
         // being sent as one.
-        LOG_ERROR("SysHandler: region list does not fit %u bytes",
-                  static_cast<unsigned>(sizeof(regions)));
+        LOG_ERROR("SysHandler: region list does not fit the reply buffer");
+        resp.beginWrite(s_sysRespBuf, sizeof(s_sysRespBuf));
         resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,reason:%Q}",
                     "error", "sys.get_usage", queued + 1,
                     static_cast<int>(Proto::ErrorCode::ERR_NOT_SUPPORTED),
@@ -322,33 +296,10 @@ static void handleSysGetUsage([[maybe_unused]] const char *cmd,
         return;
     }
 
-    // The declared fields in the order protocol.toml declares them, the region
-    // count and the region list it counts last. The count is the number of
-    // entries built above, so the number and the list are one answer read twice
-    // rather than two kept in step.
-#ifndef THETAGP_RESP_HANDWRITTEN_SYS_GET_USAGE
-#error "sys.get_usage's reply is assembled by hand, and protocol.toml no longer marks a field of it hand_written — the region list has no printf form, so restore the marking or take this write with the declaration"
-#endif
-    resp.printf("{status:%Q,cmd:%Q,queued:%d,"
-                "cpu_load_percent:%u,task_count:%u,"
-                "mcu_flash_used_bytes:%u,mcu_flash_total_bytes:%u,"
-                "ram_used_bytes:%u,ram_total_bytes:%u,ram_reserved_bytes:%u,"
-                "ext_flash_total_sectors:%u,ext_flash_used_sectors:%u,"
-                "ext_flash_free_sectors:%u,ext_flash_reserved_sectors:%u,"
-                "profile_count:%u,region_count:%u,regions:[%s]}",
-                "ok", "sys.get_usage", queued + 1,
-                (uint32_t)Gamepad::TaskManager::getAverageSystemLoadPercent(),
-                (uint32_t)Gamepad::TaskManager::getTaskCount(),
-                (uint32_t)mcuFlashUsedBytes(),
-                (uint32_t)mcuFlashTotalBytes(),
-                (uint32_t)ramUsedBytes(), (uint32_t)ramTotalBytes(),
-                (uint32_t)ramReservedBytes(),
-                (uint32_t)pstat.totalSectors, (uint32_t)pstat.usedSectors,
-                (uint32_t)pstat.freeSectors, (uint32_t)pstat.reservedSectors,
-                (uint32_t)pstat.profileCount, (uint32_t)regionCount, regions);
     uint16_t len = resp.end();
     FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
+
 
 // ---------------------------------------------------------------------------
 // registerHandlers — self-register with the Dispatcher and Proto

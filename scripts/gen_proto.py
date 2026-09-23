@@ -50,9 +50,9 @@ from proto_gen.validate import (
     validate_envelope,
     validate_error_reply,
     validate_field_coverage,
-    validate_field_hand_written,
     validate_field_optionality,
     validate_field_roles,
+    validate_record_types,
     validate_types,
 )
 
@@ -102,10 +102,10 @@ Examples:
     validate_domains(proto)
     validate_envelope(proto)
     validate_error_reply(proto)
+    validate_record_types(proto)
     validate_types(proto)
     validate_field_roles(proto)
     validate_field_optionality(proto)
-    validate_field_hand_written(proto)
     validate_field_coverage(proto)
     validate_command_error_codes(proto)
 

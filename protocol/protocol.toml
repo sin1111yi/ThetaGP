@@ -52,20 +52,26 @@
 # file does not let pass.
 #
 # A *response* field of a type no printf conversion writes — `any`, the one
-# entry of that set — carries `hand_written = true`: a response field table
+# entry of that set — is a field no response field table can carry: a table
 # holds the fields a conversion writes, and a command with a field none writes
-# gets no table at all, so its reply is assembled by hand. The marking
-# declares which replies those are, and the code that assembles one names the
-# flag the generator emits for the command (scripts/proto_gen/emit_resp.py),
-# so a marking that comes off the field is a compile error at that code. That
-# is deliberate and it is the half no generator can check: which replies the
-# firmware writes by hand is in the firmware, and the file it reads — this
-# one's artifact — is where the declaration travels. What a generator can
-# check, validate_field_hand_written() does: the column belongs to the
-# response side, and the field under it is one no table carries — a marking on
-# a field a table writes would be a flag asserting nothing about the code
-# under it. The marking is not a licence to leave the field out of anything,
-# and no emitter may take it as one.
+# gets no table at all, so its reply is assembled by hand. That is derived from
+# the field's type and declared nowhere: the generator emits
+# THETAGP_RESP_NO_TABLE_<DOMAIN>_<NAME> for exactly the commands whose response
+# carries such a field, and the code that assembles that reply names the flag —
+# a field whose type becomes one a table carries takes the flag with it and
+# stops that code from compiling. What the generator cannot check is whether the
+# reply is in fact assembled there: which code writes a reply is in the
+# firmware, and the flag is what the two agree on.
+#
+# A field whose type is an *array of records* is written the same way and for
+# the same reason: an array of objects is not a value any conversion writes, so
+# the command gets no table either. Its reply is written through a function the
+# generator emits (protocol/proto_resp.h), which carries the keys, the
+# punctuation, the brackets and the conversions, and takes one value per element
+# beside the command's scalar fields. A record type is a [[types]] entry, and a
+# field names an array of one by suffixing its name with `[]`
+# (`type = "MemoryRegion[]"`); a record's own fields are scalars a conversion
+# writes, because the writer is emitted one level deep.
 # =============================================================================
 
 # ---------------------------------------------------------------------------
@@ -242,6 +248,28 @@ fields = [
   { name = "build_time", type = "string", json = "build_time", description = "Build time" },
 ]
 
+[[types]]
+name = "MemoryRegion"
+namespace = "ThetaGP"
+description = "One memory region the firmware reports in sys.get_usage"
+fields = [
+  { name = "name",     type = "string", json = "name",     description = "The region's name, as the firmware's region list spells it" },
+  { name = "size",     type = "u32",    json = "size",     description = "The region's capacity in bytes" },
+  { name = "used",     type = "u32",    json = "used",     description = "The bytes of the region in use" },
+  { name = "reserved", type = "u32",    json = "reserved", description = "The part of `used` a fixed reserve already holds" },
+]
+
+[[types]]
+name = "ConfigKeyEntry"
+namespace = "ThetaGP"
+description = "One configuration key the firmware supports, as config.list_keys reports it"
+fields = [
+  { name = "key",    type = "string", json = "key",    description = "The key's name, as a request names it" },
+  { name = "min",    type = "i32",    json = "min",    description = "Lowest value the key accepts" },
+  { name = "max",    type = "i32",    json = "max",    description = "Highest value the key accepts" },
+  { name = "reboot", type = "bool",   json = "reboot", description = "Whether a value written to the key reaches the configuration in effect at the next boot instead of at once" },
+]
+
 # ===========================================================================
 # Commands
 # ===========================================================================
@@ -331,7 +359,7 @@ response = [
   { name = "ext_flash_reserved_sectors", type = "u32", json = "ext_flash_reserved_sectors" },
   { name = "profile_count",          type = "u32", json = "profile_count" },
   { name = "region_count", type = "u32", json = "region_count", description = "Number of entries in the regions array" },
-  { name = "regions", type = "any", json = "regions", description = "Array of one object per memory region the firmware reports; each object's wire keys are `name` (the region name), `size` (its capacity in bytes), `used` (the bytes in use) and `reserved` (the part of `used` a fixed reserve already holds). Which regions those are, how many there are and the order they come in is the firmware's answer and not a list written here, so a board with fewer or differently named regions answers this command without the command naming one; the declared type is `any` because the type vocabulary carries no array-of-object type, and the field is `hand_written` because no printf conversion writes a value of that type: this reply is assembled by hand and the site that assembles it asserts the flag the marking emits", hand_written = true },
+  { name = "regions", type = "MemoryRegion[]", json = "regions", description = "Array of one object per memory region the firmware reports, each object carrying the fields the record type `MemoryRegion` declares: its name, its capacity in bytes, the bytes in use and the part of them a fixed reserve already holds. Which regions those are, how many there are and the order they come in is the firmware's answer and not a list written here, so a board with fewer or differently named regions answers this command without the command naming one. No printf conversion writes an array of objects, so this command gets no response table: the reply is written through the function the generator emits for a field of this type, which takes one value per element and carries the keys, the punctuation and the conversions (protocol/proto_resp.h)" },
 ]
 error_codes = [
   { name = "ERR_NOT_SUPPORTED", code = 6, description = "The region list is longer than the reply buffer, so it is refused rather than sent cut short" },
@@ -363,7 +391,7 @@ request = [
 ]
 response = [
   { name = "key",   type = "string", json = "key" },
-  { name = "value", type = "any",    json = "value", description = "The value the key holds: one number for a scalar key and an array of numbers for an array key, in element order. A key's JSON type is not known here, and no printf conversion writes a value of unknown type, so the field is `hand_written`: this reply is assembled by hand and the site that assembles it asserts the flag the marking emits", hand_written = true },
+  { name = "value", type = "any",    json = "value", description = "The value the key holds: one number for a scalar key and an array of numbers for an array key, in element order. A key's JSON type is not known here, and no printf conversion writes a value of unknown type, so no response table carries this command and its reply is assembled by hand. The site that assembles it names the flag the generator emits for a command with no table (THETAGP_RESP_NO_TABLE_CONFIG_GET_KEY), so a `value` that becomes a type a table carries stops that site from compiling." },
 ]
 error_codes = [
   { name = "ERR_NOT_SUPPORTED", code = 6, description = "The rendered value does not fit the reply buffer, so it is refused rather than sent cut short" },
@@ -377,7 +405,7 @@ description = "List the configuration keys this firmware supports, with each key
 request = []
 response = [
   { name = "count", type = "u32", json = "count", description = "Number of entries in the keys array" },
-  { name = "keys",  type = "any", json = "keys",  description = "Array of one object per supported key; each object's wire keys are `key` (the key name), `min` and `max` (its accepted range) and `reboot` (whether the key needs a reboot to take effect). The entries come from the firmware's key table, not from a list written here, and the declared type is `any` because the type vocabulary carries no array-of-object type, and the field is `hand_written` because no printf conversion writes a value of that type: this reply is assembled by hand and the site that assembles it asserts the flag the marking emits", hand_written = true },
+  { name = "keys",  type = "ConfigKeyEntry[]", json = "keys",  description = "Array of one object per supported key, each object carrying the fields the record type `ConfigKeyEntry` declares: the key's name, the lowest and highest value it accepts, and whether a value written to it reaches the configuration in effect at the next boot. The entries come from the firmware's key table, not from a list written here. No printf conversion writes an array of objects, so this command gets no response table: the reply is written through the function the generator emits for a field of this type, which takes one value per element and carries the keys, the punctuation and the conversions (protocol/proto_resp.h)" },
 ]
 error_codes = [
   { name = "ERR_NOT_SUPPORTED", code = 6, description = "The key list is longer than the reply buffer" },

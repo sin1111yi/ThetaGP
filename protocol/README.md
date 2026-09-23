@@ -75,6 +75,29 @@ fields = [
 `scripts/gen_proto.py` maps for every target, and the set an unregistered type is
 rejected against
 
+**Record types and arrays** — a `[[types]]` entry is also what a command field
+names to carry a list of objects: spelling the entry's name with a `[]` suffix
+(`type = "MemoryRegion[]"`) makes the field an array whose elements have that
+record's fields, and the generator then emits
+
+- a value struct per record type on the C++ side (`struct MemoryRegionValues`,
+  holding the record's declared fields and nothing else) and a writer function
+  per command whose response carries such a field, which takes one value per
+  element and writes the whole reply — keys, punctuation, brackets and
+  conversions (see the bullet on fields a table cannot carry, below: these
+  commands get no response table);
+- `pub regions: Option<Vec<MemoryRegion>>` / `regions?: MemoryRegion[]` in the
+  Rust and TypeScript bindings;
+- the record's ordered fields in `protocol/proto_fields.json` under `types`, and
+  a table per record type in `protocol/protocol-fields.md`.
+
+A record's own fields are scalars a printf conversion writes: a record nested in
+a record, or an array as a field of a record, stops generation
+(`validate_record_types()`). A field naming a record type *without* the suffix
+is refused there too, so an embedded single record cannot reach a target as an
+untyped value by accident. `MemoryRegion` (sys.get_usage) and `ConfigKeyEntry`
+(config.list_keys) are the declared records today.
+
 **Optional field flags**:
 - `required` — for command request params (default: false)
 - `default` — default value for request params
@@ -113,15 +136,22 @@ rejected against
   compile when `USE_TASK_COUNTERS` and `THETAGP_RESP_HAS_TASK_COUNTERS`
   disagree.
 
-- `hand_written` — for a *response* field of a type no printf conversion writes
-  (the `any` entry of that set): a response field table holds the fields a
-  conversion writes, so a command with such a field gets no table and its reply
-  is assembled by hand. The marking says which replies those are, and the
-  generator emits `THETAGP_RESP_HANDWRITTEN_<DOMAIN>_<NAME>` for the command —
-  the flag the code that assembles the reply asserts, so a marking that comes
-  off the field is a compile error at that code. `validate_field_hand_written()`
-  refuses the marking on a request field, on a field a table can carry, or with
-  a value other than `true`.
+- **A response field a table cannot carry** — the `hand_written` column a reply
+  of that kind used to be declared with is gone, and both cases it covered are
+  now derived from the field's own type:
+
+  * a field of a type no printf conversion writes (the `any` entry of that set)
+    gives its command no table, and the generator emits
+    `THETAGP_RESP_NO_TABLE_<DOMAIN>_<NAME>` for it. The flag is derived, not
+    declared: the code that assembles that reply by hand asserts it, so the
+    field's type becoming one a table carries is a compile error at that code.
+    `config.get_key.value` is the one field in that position today.
+  * a field declared as an array of records (`type = "MemoryRegion[]"`) also
+    gives its command no table — a table holds values a conversion writes, and
+    an array of objects is not one — and its reply is written by the writer
+    function the generator emits for the command instead of by hand.
+    `sys.get_usage.regions` and `config.list_keys.keys` are the two fields in
+    that position today, and no firmware source writes their JSON text.
 
 ### [[commands]] — command definitions
 

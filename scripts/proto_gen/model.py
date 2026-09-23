@@ -6,13 +6,12 @@ generator reads them through — the three type maps plus PRINTF_TYPE_MAP, the
 role registry and the presence it derives, the [envelope] and [error_reply]
 readers, and the helpers the emitters and the validators both use
 (fail, omission_reason, field_coverage_errors, fail_uncovered_fields,
-command_fields, optional_flag, hand_written_flag).
+command_fields, optional_flag, no_table_flag, split_array_type).
 
-Moved out of scripts/gen_proto.py without a change to any of it: the module
-split is mechanical, and nothing here behaves differently for having a file of
-its own. The one thing added since is fail(): the exit every error site in the
-generation run goes through, so no validator and no emitter writes a print and
-an exit of its own.
+Moved out of scripts/gen_proto.py: the module split is mechanical, and the
+functions named above behave as they did in the entry point. fail() is the exit
+every error site in the generation run goes through, so no validator and no
+emitter writes a print and an exit of its own.
 """
 import hashlib
 import re
@@ -141,6 +140,59 @@ PRINTF_TYPE_MAP = {
 # Names, not a blanket "unmappable" exemption: a type nobody has decided about
 # is still a type PRINTF_TYPE_MAP has to map or the run stops.
 PRINTF_LESS_TYPES = ("any",)
+
+
+# ── Record types ────────────────────────────────────────────────────────────
+# A field's `type` names either a scalar the three tables above map or a record
+# type a [[types]] entry declares. A record type is written as the record's
+# name, and a field carrying an array of records is written with ARRAY_SUFFIX:
+# "MemoryRegion[]" is an array of the record type MemoryRegion. Every emitter
+# resolves a field's type through the helpers below, so the two spellings mean
+# the same thing to all of them — the suffix decides whether the field is an
+# array, the name without it is looked up among the declared records, and a name
+# that is neither a mapped scalar nor a declared record is a fault the
+# validators report rather than a value an emitter degrades to its untyped
+# escape hatch.
+ARRAY_SUFFIX = "[]"
+
+
+def split_array_type(type_name: str) -> Tuple[str, bool]:
+    """A field's declared `type` → (the name without the array suffix, is_array)."""
+    if type_name.endswith(ARRAY_SUFFIX):
+        return type_name[: -len(ARRAY_SUFFIX)], True
+    return type_name, False
+
+
+def record_types(proto: dict) -> Dict[str, dict]:
+    """The declared [[types]] entries, by name, in declaration order."""
+    return {t["name"]: t for t in proto.get("types", [])
+            if isinstance(t, dict) and t.get("name")}
+
+
+def record_element_of(type_name: str, records: Dict[str, dict]) -> Optional[str]:
+    """The record type an array field's `type` names, or None if it names none."""
+    base, is_array = split_array_type(type_name)
+    return base if is_array and base in records else None
+
+
+def record_array_element_types(proto: dict) -> Set[str]:
+    """The record types a command field declares as an array of.
+
+    The set decides which types get a value struct and a writer function on the
+    C++ side (emit_resp.py) and no binding struct (emit_cpp.py), and which are
+    resolved to the record's own name by the Rust and TypeScript emitters.
+    """
+    records = record_types(proto)
+    elements = (record_element_of(f["type"], records)
+                for cmd in proto.get("commands", [])
+                for f in cmd.get("request", []) + cmd.get("response", []))
+    return {name for name in elements if name}
+
+
+def values_struct_name(record_name: str) -> str:
+    """The C++ value struct a record type is projected as (emit_resp.py)."""
+    return f"{record_name}Values"
+
 
 # A field's `role` is a property that outlives its type and its position: who
 # else has to know about that field.
@@ -548,19 +600,18 @@ def optional_flag(domain: str, name: str, field: str) -> str:
             f"{name.replace('-', '_').upper()}_{field.upper()}")
 
 
-def hand_written_flag(domain: str, name: str) -> str:
-    """The name of the compile-time flag a command declared `hand_written` carries.
+def no_table_flag(domain: str, name: str) -> str:
+    """The name of the compile-time flag a command with no response table carries.
 
-    One flag per command, because what the declaration is about is the reply:
-    a response field of a type no printf conversion writes costs the whole
-    response table, so the reply of that command is assembled by hand and every
-    field the marking reaches is written by the same code. The name is derived
-    here so the site that assembles the reply can name it: the flag is what
-    holds the declaration to that code, and a `hand_written` that comes off the
-    field takes the flag with it and stops that site from compiling.
+    One flag per command, because what it is about is the reply: a response field
+    whose type no printf conversion writes costs the whole response table
+    (gen_resp(), emit_resp.py), so the command's reply is assembled by hand and
+    every field of it is written by the same code. The flag is derived from that
+    fact and not declared: it exists exactly for the commands whose response
+    carries such a field, so a field whose type changes to one a table carries
+    takes the flag with it and stops the hand-written write site from compiling.
 
-    The name is the command's — THETAGP_RESP_HANDWRITTEN_<DOMAIN>_<NAME> — as
-    the table's own macro is (resp_macro(), emit_resp.py), so the flag reads
-    beside the table a command with such a field does not get.
+    The name is the command's — THETAGP_RESP_NO_TABLE_<DOMAIN>_<NAME> — and it is
+    emitted beside the list of commands the header reports no table for.
     """
-    return f"THETAGP_RESP_HANDWRITTEN_{domain.upper()}_{name.replace('-', '_').upper()}"
+    return f"THETAGP_RESP_NO_TABLE_{domain.upper()}_{name.replace('-', '_').upper()}"

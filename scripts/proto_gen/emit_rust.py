@@ -1,7 +1,6 @@
 """
 gen_rust — protocol/proto.rs, the Tauri backend's serde types.
 
-Moved out of scripts/gen_proto.py without a change to what it emits.
 """
 import sys
 from pathlib import Path
@@ -12,8 +11,10 @@ from proto_gen.model import (
     envelope_on_side,
     fail_uncovered_fields,
     field_coverage_errors,
+    record_types,
     rust_ident,
     sanitize_cpp_comment,
+    split_array_type,
     to_pascal,
     to_snake,
 )
@@ -32,6 +33,16 @@ def gen_rust(proto: dict, out: Optional[Path] = None) -> str:
     # writes a request struct's and a response struct's first fields from the
     # source of truth — envelope_on_side() per side, called where each is
     # written.
+    # The declared record types, by name: a field whose type is one of these
+    # (with or without the array suffix) is written as that type, and a field
+    # whose type is an array of one as a Vec of it.
+    records = record_types(proto)
+
+    def rust_field_type(declared: str) -> str:
+        """A field's declared `type` → the Rust type it is written as."""
+        element, is_array = split_array_type(declared)
+        rust_type = element if element in records else RUST_TYPE_MAP.get(element, "Value")
+        return f"Vec<{rust_type}>" if is_array else rust_type
 
     def w(line: str = "") -> None:
         lines.append(line)
@@ -102,10 +113,7 @@ def gen_rust(proto: dict, out: Optional[Path] = None) -> str:
             f"type {name}", "struct", t["fields"],
             [f["name"] for f in struct_fields]))
         for f in struct_fields:
-            if f.get("omit_in_serialize"):
-                rust_type = RUST_TYPE_MAP.get(f["type"], "Value")
-            else:
-                rust_type = RUST_TYPE_MAP.get(f["type"], "Value")
+            rust_type = rust_field_type(f["type"])
             desc = sanitize_cpp_comment(f.get("description", ""))
             serde_attr = f'#[serde(rename = "{f["json"]}")]'
             w(f"    /// {desc}")
@@ -150,7 +158,7 @@ def gen_rust(proto: dict, out: Optional[Path] = None) -> str:
             f"{cmd_info['domain']}.{cmd_info['name']}", "request", req,
             [f["name"] for f in request_fields]))
         for f in request_fields:
-            t = RUST_TYPE_MAP.get(f["type"], "Value")
+            t = rust_field_type(f["type"])
             serde_attr = f'#[serde(rename = "{f["json"]}")]'
             w(f"    {serde_attr}")
             if f.get("required", False):
@@ -191,7 +199,7 @@ def gen_rust(proto: dict, out: Optional[Path] = None) -> str:
             f"{domain}.{name}", "response", resp,
             [f["name"] for f in response_fields]))
         for f in response_fields:
-            t = RUST_TYPE_MAP.get(f["type"], "Value")
+            t = rust_field_type(f["type"])
             serde_attr = f'#[serde(rename = "{f["json"]}")]'
             w(f"    {serde_attr}")
             w(f"    pub {rust_ident(f['name'])}: Option<{t}>,")

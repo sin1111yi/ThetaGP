@@ -32,10 +32,10 @@
 
 #include "utils/log/log.h"
 
-// The generated response field tables, for the flags the declarations on a
-// response field carry (THETAGP_RESP_OPTIONAL_* and THETAGP_RESP_HANDWRITTEN_*):
-// what a reply may leave out, and which replies are assembled by hand. The
-// write sites below are held to both.
+// The generated response field tables, for the flags a response field's
+// declaration carries (THETAGP_RESP_OPTIONAL_*) and for the one a command with
+// no table carries (THETAGP_RESP_NO_TABLE_*): what a reply may leave out, and
+// which replies are assembled by hand. The write sites below are held to both.
 #include "protocol/proto_resp.h"
 
 #include <climits>
@@ -61,25 +61,12 @@ constexpr int kErrInvalidParam = 2;
 constexpr int kErrNotSupported = 6;
 constexpr int kErrInvalidState = 8;
 
-// One entry of the key list reply:
-//   {"key":"<name>","min":<min>,"max":<max>,"reboot":<bool>}
-// with a comma in front of every entry but the first. Its fixed text is the
-// literal below, a key name is at most kKeyTableMaxNameLen bytes, and each of
-// the two range values is a signed 32-bit decimal, so at most 11 bytes.
-constexpr size_t kListKeyEntryMaxBytes =
-    sizeof("{\"key\":\"\",\"min\":,\"max\":,\"reboot\":false},") - 1 +
-    kKeyTableMaxNameLen + 11 + 11;
-
-// The buffer the entries are built in: a table at the entry limit of the key
-// table is listed whole, and a table past it is a build error (the key table
-// holds its own count to that limit).
-constexpr size_t kListKeysBufSize =
-    static_cast<size_t>(kKeyTableMaxEntries) * kListKeyEntryMaxBytes + 1;
-
-// The reply a whole list makes is the entries plus the envelope, the count and
-// the brackets around them.
-static_assert(sizeof(s_cfgRespBuf) > kListKeysBufSize + 64,
-              "config reply buffer: too small for the key list reply");
+// One value per key of the table is filled from the table itself, and the text
+// of the list is written by the function the generator emits for the command
+// (protocol/proto_resp.h, ThetaGP::Resp::ConfigKeyEntryValues). The
+// value array is sized by the entry limit of the key table, which the table
+// holds its own count to; a list that still does not fit the reply buffer is
+// refused by that function's answer rather than sent cut short.
 
 // The value standing for a destination that was assigned none. It is the one
 // value outside minVal..maxVal that a key carrying kKeyFlagAcceptsUnmapped
@@ -287,13 +274,14 @@ static void handleConfigGetKey(const char *cmd, const Json &json) {
 
   // The reply is assembled here: the value's JSON type is not known until the
   // key is read — one number for a scalar key, an array of numbers for an array
-  // key — and no printf conversion writes a value of unknown type, so
-  // protocol.toml declares the field `hand_written` and this command gets no
-  // response table. The check below is this site's half of that declaration,
-  // and the flag it names is the generator's: a header that no longer carries
-  // it is a protocol that no longer says this reply is written by hand.
-#ifndef THETAGP_RESP_HANDWRITTEN_CONFIG_GET_KEY
-#error "config.get_key's reply is assembled by hand, and protocol.toml no longer marks a field of it hand_written — the value's JSON type is not known until the key is read, so restore the marking or take this write with the declaration"
+  // key — and no printf conversion writes a value of unknown type, so the
+  // command gets no response table and no writer function. The flag below is
+  // the generator's, derived from the type of the field and not declared
+  // anywhere: it is emitted exactly for the commands in that position, so a
+  // `value` whose type becomes one a table carries takes the flag with it and
+  // stops this write from compiling.
+#ifndef THETAGP_RESP_NO_TABLE_CONFIG_GET_KEY
+#error "config.get_key's reply is assembled by hand, and the value's declared type is no longer one without a printf form — the command now gets a generated writer (protocol/proto_resp.h), so take this write with the declaration"
 #endif
   if (entry->type == KeyType::U8Array) {
     // The run of elements is rendered as text and handed over whole: the write
@@ -345,62 +333,51 @@ static void handleConfigGetKey(const char *cmd, const Json &json) {
 // ── config.list_keys ──
 // One object per key of the table, so the answer to "which keys does this
 // firmware carry" is the table itself and not a list written out here.
+//
+// The reply is written through the function the generator emits for this
+// command, ThetaGP::Resp::configListKeys (protocol/proto_resp.h): the
+// key list is declared an array of the record type ConfigKeyEntry, an array of
+// objects is not a value any printf conversion writes, so the command gets a
+// writer function instead of a response table. This function fills the values;
+// the writer carries the keys, the order, the punctuation and the conversions,
+// and answers false when the reply did not fit the buffer.
 
-static void handleConfigListKeys(const char *cmd, const Json &json) {
+static void handleConfigListKeys([[maybe_unused]] const char *cmd,
+                                const Json &json) {
   const int q = json.getInt("queued");
 
-  // Sized for a table at the entry limit of the key table, so the list of a
-  // table within that limit is always whole (the limit is held in
-  // key_table.cpp).
-  char entries[kListKeysBufSize];
-  size_t used = 0;
-  bool truncated = false;
   const KeyEntry *table = keyTable();
-  for (uint8_t i = 0; i < keyTableCount(); ++i) {
-    const KeyEntry &entry = table[i];
-    const int n = snprintf(
-        entries + used, sizeof(entries) - used,
-        "%s{\"key\":\"%s\",\"min\":%ld,\"max\":%ld,\"reboot\":%s}",
-        (i == 0) ? "" : ",", entry.key, static_cast<long>(entry.minVal),
-        static_cast<long>(entry.maxVal),
-        (entry.flags & kKeyFlagRequiresReboot) ? "true" : "false");
-    if (n < 0) {
-      break;
-    }
-    used += static_cast<size_t>(n);
-    if (used >= sizeof(entries) - 1) {
-      truncated = true;
-      used = sizeof(entries) - 1;
-      break;
-    }
-  }
-  entries[used] = '\0';
+  const uint8_t count = keyTableCount();
 
-  if (truncated) {
-    // A reply cut short is not a JSON document, so it is refused instead of
-    // being sent as one.
-    LOG_ERROR("ConfigCmdHandler: key list does not fit %u bytes",
-              static_cast<unsigned>(sizeof(entries)));
-    sendError(kErrNotSupported, "key list does not fit the reply buffer");
-    return;
+  // One value per key of the table, in the table's order, so the list a host is
+  // told about is the table and not a second copy of it.
+  Resp::ConfigKeyEntryValues keys[kKeyTableMaxEntries];
+  for (uint8_t i = 0; i < count; ++i) {
+    const KeyEntry &entry = table[i];
+    keys[i].key = entry.key;
+    keys[i].min = entry.minVal;
+    keys[i].max = entry.maxVal;
+    keys[i].reboot = (entry.flags & kKeyFlagRequiresReboot) != 0;
   }
 
   Json resp;
   resp.beginWrite(s_cfgRespBuf, sizeof(s_cfgRespBuf));
-  // The reply is assembled here: the key list is an array of objects, and no
-  // printf conversion writes one, so protocol.toml declares the field
-  // `hand_written` and this command gets no response table. The check below is
-  // this site's half of that declaration, and the flag it names is the
-  // generator's: a header that no longer carries it is a protocol that no
-  // longer says this reply is written by hand.
-#ifndef THETAGP_RESP_HANDWRITTEN_CONFIG_LIST_KEYS
-#error "config.list_keys' reply is assembled by hand, and protocol.toml no longer marks a field of it hand_written — the key list is an array of objects, which no printf conversion writes, so restore the marking or take this write with the declaration"
-#endif
-  resp.printf("{cmd:%Q,queued:%d,status:%Q,count:%u,keys:[%s]}", cmd, q + 1,
-              "ok", static_cast<unsigned>(keyTableCount()), entries);
+  const bool fits = Resp::configListKeys(
+      resp, static_cast<uint32_t>(q + 1), static_cast<uint32_t>(count), keys,
+      static_cast<uint32_t>(count));
+
+  if (!fits) {
+    // A reply cut short is not a JSON document, so it is refused instead of
+    // being sent as one.
+    LOG_ERROR("ConfigCmdHandler: key list does not fit the reply buffer");
+    sendError(kErrNotSupported, "key list does not fit the reply buffer");
+    return;
+  }
+
   uint16_t len = resp.end();
   FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
+
 
 // ── config.save ──
 // Writes the configuration in effect to the profile it belongs to. A board

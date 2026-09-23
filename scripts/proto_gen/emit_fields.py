@@ -6,7 +6,6 @@ other consumers read instead of hand-copying the protocol shape;
 protocol-fields.md is the same response fields as the Markdown tables the docs
 point at. Both are derived from the TOML in declaration order.
 
-Moved out of scripts/gen_proto.py without a change to what they emit.
 """
 import json
 import sys
@@ -21,6 +20,7 @@ from proto_gen.model import (
     field_coverage_errors,
     file_sha256,
     generator_sha256,
+    record_types,
 )
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -83,6 +83,11 @@ def gen_fields(proto: dict, out: Optional[Path] = None,
             "response": sides["response"],
         }
 
+    # The declared record types, by name, each with its ordered fields — the
+    # shape a field written as `<Name>[]` carries one object per element of. A
+    # consumer reading a response field of that type finds the element's keys,
+    # types and order here rather than in the description prose, and the
+    # [[types]] order is the TOML's.
     manifest = {
         "generated_by": "scripts/gen_proto.py — DO NOT EDIT MANUALLY",
         # What it was read from, and the digest of exactly those bytes.
@@ -98,6 +103,23 @@ def gen_fields(proto: dict, out: Optional[Path] = None,
         # Keyed "<domain>.<name>", the same full command name the wire uses.
         # Insertion order = the TOML's [[commands]] order.
         "commands": entries,
+        # Keyed "<Name>", the name a field's `type` spells before the array
+        # suffix. Insertion order = the TOML's [[types]] order.
+        "types": {
+            name: {
+                "namespace": t.get("namespace", ""),
+                "description": t.get("description", ""),
+                "fields": [
+                    {k: v for k, v in (("name", f.get("name")),
+                                       ("type", f.get("type")),
+                                       ("json", f.get("json")),
+                                       ("description", f.get("description")))
+                     if v}
+                    for f in t.get("fields", [])
+                ],
+            }
+            for name, t in record_types(proto).items()
+        },
     }
 
     result = json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
@@ -170,9 +192,11 @@ def gen_fields_md(proto: dict, out: Optional[Path] = None,
     w("The output of `python3 scripts/gen_proto.py --target fields-md`: one table per\n"
       "command that carries a response payload. Field names (the JSON keys), types and\n"
       "order are taken verbatim from the `response` arrays in `protocol.toml` — a type\n"
-      "is spelled as the TOML declares it (`u32` / `string` / …) rather than translated,\n"
-      "so the two can be compared word for word; the order is the order the fields are\n"
-      "written in.")
+      "is spelled as the TOML declares it (`u32` / `string` / `MemoryRegion[]`) rather\n"
+      "than translated, so the two can be compared word for word; the order is the\n"
+      "order the fields are written in. A type ending in `[]` is an array: the field\n"
+      "carries one object per element, under the keys of the record type the name\n"
+      "declares, and those are the tables at the end of this file.")
     w()
     w("**This file is a derivative; editing it does nothing.** Change `protocol.toml`\n"
       "and run the generator again.")
@@ -212,6 +236,31 @@ def gen_fields_md(proto: dict, out: Optional[Path] = None,
         for row in rows:
             w(f"| `{row['json']}` | {row['type']} | {row['note']} |")
         w()
+
+    # The element shapes of the array fields above, as tables of their own: a
+    # reader of a `MemoryRegion[]` row needs the record's keys, types and order,
+    # and they are declared once here rather than repeated in each row's note.
+    records = record_types(proto)
+    if records:
+        w("## Declared record types")
+        w()
+        w("One table per `[[types]]` entry of `protocol.toml`, in declaration order.\n"
+          "A field whose type is `<Name>[]` carries a list of these, one object per\n"
+          "element, under the record's own key names.")
+        w()
+        for name, record in records.items():
+            w(f"### `{name}`")
+            w()
+            desc = md_cell(record.get("description", ""))
+            if desc:
+                w(desc)
+                w()
+            w("| Field | Type | Source or note |")
+            w("|------|------|--------------|")
+            for f in record.get("fields", []):
+                note = md_cell(f.get("description", "")) or "—"
+                w(f"| `{md_cell(f['json'])}` | {md_cell(f['type'])} | {note} |")
+            w()
 
     empty = [f"{c['domain']}.{c['name']}" for c in commands if not c.get("response")]
     if empty:

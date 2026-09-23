@@ -10,12 +10,13 @@ found through model.fail() — the lines it collected, then exit non-zero, in on
 place for the whole run; main() calls them all before the first emitter runs,
 so a protocol the artifacts cannot describe is not written at all.
 
-Moved out of scripts/gen_proto.py without a change to any check or any message:
-the suite's negative cases match these strings word for word.
+Moved out of scripts/gen_proto.py: the suite's negative cases match these strings
+word for word, so a report that changes is a case that has to change with it.
 """
 from typing import List
 
 from proto_gen.model import (
+    ARRAY_SUFFIX,
     ENVELOPE_APPEARANCES,
     ENVELOPE_NEVER,
     ENVELOPE_SIDES,
@@ -29,6 +30,9 @@ from proto_gen.model import (
     fail,
     fail_uncovered_fields,
     field_coverage_errors,
+    record_element_of,
+    record_types,
+    split_array_type,
 )
 
 def validate_domains(proto: dict) -> None:
@@ -483,19 +487,37 @@ def validate_types(proto: dict) -> None:
     response field names, because an entry no response field draws on is a
     decision about a type that is no longer written, left standing exactly
     where a reader of the response side looks for what has no printf form.
+
+    A record array (`MemoryRegion[]`) is not a name any of the four tables maps
+    and is not meant to be: the field is typed by the [[types]] entry it names,
+    so a name whose element is a declared record type is mapped by that
+    declaration and is passed over here. Whether the element names a declared
+    record at all is validate_record_types()' check; this one holds the names
+    that have to come out of a table.
     """
+    records = record_types(proto)
+
+    def mapped_by_a_table(declared: str) -> bool:
+        """False for a record array, whose type comes from a [[types]] entry."""
+        element, is_array = split_array_type(declared)
+        return not (is_array and element in records)
+
     request = {f["type"] for cmd in proto.get("commands", [])
                for f in cmd.get("request", [])}
     response = {f["type"] for cmd in proto.get("commands", [])
                 for f in cmd.get("response", [])}
     nested = {f["type"] for t in proto.get("types", []) for f in t.get("fields", [])}
     used = sorted(nested | request | response)
-    unmapped = [(name, [t for t in used if t not in table])
+    unmapped = [(name, [t for t in used if t not in table
+                        and mapped_by_a_table(t)])
                 for name, table in TYPE_MAPS]
     # Only the response side: a request field is not written by a printf, and
-    # requiring a conversion for it would report types nothing is missing.
+    # requiring a conversion for it would report types nothing is missing. The
+    # conversions are for values; an array of records is written by the function
+    # the generator emits for it, so it needs no conversion either.
     no_printf = [t for t in sorted(response)
-                 if t not in PRINTF_TYPE_MAP and t not in PRINTF_LESS_TYPES]
+                 if t not in PRINTF_TYPE_MAP and t not in PRINTF_LESS_TYPES
+                 and mapped_by_a_table(t)]
     # The reverse of the line above, and the one direction the TOML cannot
     # state: a type in PRINTF_LESS_TYPES is one the response side has decided no
     # conversion writes, and one in PRINTF_TYPE_MAP is one it has a (printf
@@ -696,90 +718,164 @@ def validate_field_optionality(proto: dict) -> None:
              "scripts/test/test_cdc_protocol.py.")
 
 
-def validate_field_hand_written(proto: dict) -> None:
-    """Abort unless a `hand_written` marking is one a reply can carry.
+def validate_record_types(proto: dict) -> None:
+    """Abort unless every record type is one the writers and the emitters can carry.
 
-    A response field of a type no printf conversion writes (PRINTF_LESS_TYPES —
-    `any`) is a field no response table can carry, so gen_resp() writes no table
-    for the command that has one and the reply is assembled by hand
-    (emit_resp.py). `hand_written` is how the source declares which replies those
-    are, and the generator emits a flag of the command's name for it
-    (hand_written_flag(), model.py), which the site that assembles the reply
-    asserts.
+    A record type is a [[types]] entry a command field names as an array
+    (`type = "MemoryRegion[]"`), and it is what lets a field carry a list of
+    objects without falling back to the untyped `any` — which no printf
+    conversion writes, and which therefore costs a command its whole response
+    table. Six things are checked here, each a way the declaration would read as
+    a shaped list while no artifact could carry it:
 
-    Everything here is about the marking being one a consumer can act on, which
-    is what leaves the *absence* of a marking to the compilation the flag is
-    for: the one thing this cannot hold is whether a reply that is assembled by
-    hand is declared as one, because the generator has nothing to derive that
-    from — no column says which replies the firmware writes by hand, and the
-    firmware reads the generated flag and not the other way round. What it does
-    hold:
-
-      * a marking on a field a response table *can* carry declares a reply
-        assembled by hand that a table writes, so the flag emitted for that
-        command would assert nothing about the code under it — the marking would
-        read as a binding while holding nothing;
-      * a `hand_written` on a request field, refused for the reason
-        validate_field_optionality() refuses either column on the wrong side:
-        the flag names a reply (hand_written_flag(), model.py) and gen_resp()
-        reads the response side and no other, so a marking on a request field is
-        one nothing acts on — the fault validate_field_roles() refuses for an
-        unregistered role;
-      * a value that is not the boolean `true`. The emitters and the header read
-        the column for truth, so `hand_written = "true"`, `= 1` or `= "yes"` is
-        a field whose marking is a string or a number, and a consumer testing it
-        (`f.get("hand_written")`) writes a flag for a reply the declaration then
-        reads as marked.
-
-    Both directions of the compile-time binding are outside the generator: the
-    marking is what stops the write site from compiling when it comes off the
-    field, and the write site is what says the reply is still written by hand.
+    1. Every [[types]] entry has a name, and no two entries share one. A record
+       type is identified by its name — the field spells it, the emitters look
+       it up by it — so a repeated name leaves the lookup holding whichever the
+       emitters reached last.
+    2. A record type declares at least one field, and every field carries the
+       name / type / json the emitters read. An entry with no field is a record
+       whose objects have no members, which no writer can be emitted for.
+    3. A record's own fields are scalars a printf conversion writes — the
+       PRINTF_TYPE_MAP vocabulary. A record nested in a record is refused here
+       rather than degraded to `any`: the writer is emitted one level deep, so a
+       nested record would reach the wire as an untyped value while the
+       declaration reads as a shape.
+    4. Every array field's element name is a declared record type. A name no
+       [[types]] entry carries is a misspelling or a type nobody has declared,
+       and the emitters would otherwise fall back to their untyped escape hatch
+       for it — the silent loss of typing the array support exists to remove.
+    5. A field that names a record type without the array suffix is refused: the
+       writers carry an array of values, and an embedded single record has no
+       form the emitters are held to yet. Refused rather than degraded, so the
+       declaration has to say which of the two it means.
+    6. A command's response carries either a record array or a field no printf
+       conversion writes — not both. The response writer is emitted for the
+       record array and writes every declared scalar of that command; a field of
+       an unmappable type beside it would be missing from the reply the writer
+       produces, and the write site that handles such a field is a different
+       one. The same command may not declare a response field `optional`: the
+       writer has no presence argument, and writing an optional key
+       unconditionally would contradict the declaration.
     """
-    carryable: List[str] = []
-    wrong_side: List[str] = []
-    not_true: List[str] = []
+    types = proto.get("types", [])
+    records = record_types(proto)
+
+    problems: List[str] = []
+    named = [t.get("name") for t in types if isinstance(t, dict) and t.get("name")]
+    duplicates = sorted({name for name in named if named.count(name) > 1})
+    if duplicates:
+        problems.append(f"two [[types]] entries share a name: {duplicates} — a "
+                        f"record type is looked up by its name, so the field "
+                        f"spelling it reaches whichever declaration the "
+                        f"lookup keeps")
+    for t in types:
+        if not isinstance(t, dict):
+            problems.append(f"a [[types]] entry is not a table ({t!r}), so it "
+                            f"declares no record type")
+            continue
+        name = t.get("name")
+        if not name:
+            problems.append("a [[types]] entry declares no name, so no field "
+                            "can name it as an array element")
+            continue
+        fields = t.get("fields", [])
+        if not fields:
+            problems.append(f"[types].{name} declares no field, so an object of "
+                            f"it has no members and no writer can be emitted "
+                            f"for a field of it")
+        for f in fields:
+            if not isinstance(f, dict):
+                problems.append(f"[types].{name}: a field is not a table "
+                                f"({f!r}) — expected name / type / json")
+                continue
+            for column in ("name", "type", "json"):
+                if not f.get(column):
+                    problems.append(f"[types].{name}: a field declares no "
+                                    f"{column!r}")
+            declared = f.get("type")
+            if not declared:
+                continue
+            element, is_array = split_array_type(declared)
+            if is_array:
+                problems.append(f"[types].{name}.{f.get('name')} declares type "
+                                f"{declared!r}: a record's own field may not be "
+                                f"an array — the writers are emitted one level "
+                                f"deep, and a nested list would reach the wire "
+                                f"untyped")
+            elif element in records:
+                problems.append(f"[types].{name}.{f.get('name')} declares type "
+                                f"{declared!r}, which is the record type "
+                                f"'{element}': a record nested in a record has "
+                                f"no form the emitters are held to — declare a "
+                                f"scalar type "
+                                f"({sorted(PRINTF_TYPE_MAP)})")
+            elif declared not in PRINTF_TYPE_MAP:
+                problems.append(f"[types].{name}.{f.get('name')} declares type "
+                                f"{declared!r}, which no printf conversion "
+                                f"writes: a record's fields are written through "
+                                f"a conversion, so a field of such a type is "
+                                f"one no reply can carry "
+                                f"(types a conversion writes: "
+                                f"{sorted(PRINTF_TYPE_MAP)})")
+
     for cmd in proto.get("commands", []):
         command = f"{cmd['domain']}.{cmd['name']}"
-        for f in cmd.get("request", []):
-            if "hand_written" in f:
-                wrong_side.append(
-                    f"{command}: request field '{f['name']}' carries "
-                    f"`hand_written` = {f['hand_written']!r}; the flag the "
-                    f"column emits names a reply, and a request field is not "
-                    f"what a response table is read from")
-        for f in cmd.get("response", []):
-            printf_less = f["type"] in PRINTF_LESS_TYPES
-            marked = f.get("hand_written")
-            if marked is not None and marked is not True:
-                not_true.append(
-                    f"{command}: response field '{f['name']}' carries "
-                    f"`hand_written` = {marked!r} "
-                    f"({type(marked).__name__}), which is not the boolean true")
-            elif marked and not printf_less:
-                carryable.append(
-                    f"{command}: response field '{f['name']}' carries "
-                    f"`hand_written` = true but is of type '{f['type']}', which "
-                    f"a response table carries; such a field is written through "
-                    f"the table and not by hand")
-    if carryable or wrong_side or not_true:
-        fail(*[f"ERROR: `hand_written` is not the boolean true — {entry}"
-               for entry in not_true],
-             *[f"ERROR: `hand_written` on the other side of the message — {entry}"
-               for entry in wrong_side],
-             *[f"ERROR: a response field a table can carry is declared "
-               f"hand-written — {entry}" for entry in carryable],
-             "       A response field of a type no printf conversion writes "
-             "(PRINTF_LESS_TYPES: 'any') costs the command its whole response "
-             "table, so its reply is assembled by hand — and the declaration "
-             "that says so is `hand_written = true` on that field, which "
-             "gen_resp() turns into THETAGP_RESP_HANDWRITTEN_<DOMAIN>_<NAME> "
-             "for the command. The site that assembles the reply asserts that "
-             "flag, so the two say the same thing or the firmware does not "
-             "compile.",
-             "       The column is the declaration of a reply and it belongs to "
-             "the response side of the command: a field a table can carry is "
-             "written through one, so marking it hand-written would leave the "
-             "flag asserting nothing about the code under it.")
+        response = cmd.get("response", [])
+        record_arrays = [f for f in response
+                         if record_element_of(f.get("type", ""), records)]
+        for f in cmd.get("request", []) + response:
+            declared = f.get("type", "")
+            element, is_array = split_array_type(declared)
+            if not is_array:
+                if element in records:
+                    problems.append(f"{command}: field '{f.get('name')}' "
+                                    f"declares type {declared!r}, the record "
+                                    f"type '{element}', without the array "
+                                    f"suffix — a single embedded record is not "
+                                    f"carried; declare "
+                                    f"{declared}{ARRAY_SUFFIX} for a list of "
+                                    f"them or a scalar type")
+                continue
+            if element not in records:
+                problems.append(f"{command}: field '{f.get('name')}' declares "
+                                f"type {declared!r}, and no [[types]] entry "
+                                f"declares the record type '{element}' "
+                                f"(declared: {sorted(records)}) — an array "
+                                f"field names a declared record type, and a "
+                                f"name that is not one reaches every target as "
+                                f"its untyped value")
+        if record_arrays:
+            unmappable = [f["name"] for f in response
+                          if f["type"] in PRINTF_LESS_TYPES]
+            if unmappable:
+                problems.append(f"{command}: its response carries the record "
+                                f"array(s) "
+                                f"{[f['name'] for f in record_arrays]} beside "
+                                f"the field(s) {unmappable} of a type no printf "
+                                f"conversion writes — the writer emitted for "
+                                f"the array writes every declared scalar field "
+                                f"of the command, so such a field would be "
+                                f"missing from a reply written through it")
+            optional = [f["name"] for f in response if f.get("optional")]
+            if optional:
+                problems.append(f"{command}: its response carries a record "
+                                f"array and declares the field(s) {optional} "
+                                f"`optional` — the emitted writer has no "
+                                f"presence argument, so it would write an "
+                                f"optional key in every reply")
+
+    if problems:
+        fail(*[f"ERROR: record types — {problem}" for problem in problems],
+             "       A record type is a [[types]] entry a field names as an "
+             "array (`type = \"MemoryRegion[]\"`): the field then carries one "
+             "object per element under the record's own key names, in the "
+             "declaration order of its fields. On the device a command with "
+             "such a field gets a generated writer function instead of a "
+             "response table (protocol/proto_resp.h), so the firmware fills the "
+             "values and the JSON text stays in the generator.",
+             f"       [[types]] declares: {sorted(records)}",
+             f"       A record's fields take the printf vocabulary: "
+             f"{sorted(PRINTF_TYPE_MAP)}")
 
 
 def validate_field_coverage(proto: dict) -> None:

@@ -144,9 +144,9 @@ RAM_REGIONS = ("dtcm", "axi", "d2", "d3", "itcm")
 REGIONS = ("flash",) + RAM_REGIONS
 
 # The wire keys of one entry of the sys.get_usage region list. protocol.toml
-# declares that field one `any` (an array of objects), so no generated type
-# carries its shape and the shape the reply is held to is the one the source
-# names in prose: a region name and its size, used and reserved bytes.
+# declares that field an array of the record type MemoryRegion, whose four
+# fields the manifest carries under `types`; the shape the reply is held to is
+# the same four keys: a region name and its size, used and reserved bytes.
 REGION_MEMBERS = {"name", "size", "used", "reserved"}
 
 # Region capacities = linker script LENGTH. Board constants: only a board
@@ -575,8 +575,9 @@ CONFIG_COMMANDS = (
 # unmapped sentinel beside its range (key_table.h:39-48, :52-59).
 #
 # A transcription of the table rather than a list read from the protocol: the
-# manifest carries no key names (protocol.toml declares list_keys' `keys` as one
-# `any` field), and the point of the check this feeds is that the table and the
+# manifest carries the element's fields (protocol.toml declares list_keys' `keys`
+# as an array of the record type ConfigKeyEntry) but not the table's values, and
+# the point of the check this feeds is that the table and the
 # list a host is told about stay in step — the list is derived from the table
 # and nothing derives it into a file this suite reads. A key added to the table
 # without reaching this tuple turns that check red instead of being compared
@@ -1261,13 +1262,13 @@ def main():
        and [entry["name"] for entry in usage_regions] == list(RAM_REGIONS),
        detail=brief(usage))
 
-    # The entry shape of the region list, held on its own. The compile-time flag
-    # the source's `hand_written` marking emits ties the declaration to the code
-    # that writes the reply (THETAGP_RESP_HANDWRITTEN_SYS_GET_USAGE, asserted in
-    # testsys.cpp); what no flag carries is the shape inside the field, which
-    # protocol.toml states in prose and the device writes entry by entry. So it
-    # is held here: one object per region, exactly the four wire keys the source
-    # names, a region name that is a non-empty string and three counts.
+    # The entry shape of the region list, held on its own. The reply is written
+    # through the writer function the generator emits for this command
+    # (ThetaGP::Resp::sysGetUsage, protocol/proto_resp.h), which takes one value
+    # per element; what that function does not carry is the meaning of an entry,
+    # which protocol.toml states in prose and the device fills in. So it is held
+    # here: one object per region, exactly the four wire keys the record type
+    # declares, a region name that is a non-empty string and three counts.
     region_list = field(usage, "regions")
     ok("get_usage regions entry shape",
        isinstance(region_list, list) and len(region_list) > 0
@@ -1429,12 +1430,12 @@ def main():
                          for entry in keys),
                  detail=brief(keys))
 
-    # The entry shape of the key list, held on its own: the marking binds the
-    # declaration to the code that writes the reply
-    # (THETAGP_RESP_HANDWRITTEN_CONFIG_LIST_KEYS, asserted in
-    # config_cmd_handler.cpp), and the members inside each entry are prose in
-    # protocol.toml that no flag reads. Every entry is an object carrying the
-    # key's name and the range it accepts, told in that order.
+    # The entry shape of the key list, held on its own: the reply is written
+    # through the writer function the generator emits for this command
+    # (ThetaGP::Resp::configListKeys, protocol/proto_resp.h), which takes one
+    # value per element, and the meaning of an entry is what the record type
+    # ConfigKeyEntry declares. Every entry is an object carrying the key's name
+    # and the range it accepts, told in that order.
     check_config("list_keys keys entry shape",
                  isinstance(keys, list) and len(keys) > 0
                  and all(isinstance(entry, dict)
@@ -1485,9 +1486,9 @@ def main():
                      and key_value_ok(snapshot[key], low, high, count, unmapped),
                      detail=brief(resp))
 
-    # The value field itself, held on its own: the marking binds the declaration
-    # to the code that writes the reply
-    # (THETAGP_RESP_HANDWRITTEN_CONFIG_GET_KEY, asserted in
+    # The value field itself, held on its own: the declaration is bound to the
+    # code that writes the reply by the flag the generator derives for a command
+    # with no table (THETAGP_RESP_NO_TABLE_CONFIG_GET_KEY, asserted in
     # config_cmd_handler.cpp), while what the field carries — the key read back
     # as one number or as an array of numbers — is prose in protocol.toml that
     # no flag reads. Both spellings are read here, because a reply that dropped

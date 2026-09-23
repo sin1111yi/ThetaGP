@@ -1,7 +1,6 @@
 """
 gen_ts — protocol/types.ts, the frontend's interfaces.
 
-Moved out of scripts/gen_proto.py without a change to what it emits.
 """
 import sys
 from pathlib import Path
@@ -13,7 +12,9 @@ from proto_gen.model import (
     envelope_on_side,
     fail_uncovered_fields,
     field_coverage_errors,
+    record_types,
     sanitize_cpp_comment,
+    split_array_type,
     to_pascal,
 )
 
@@ -38,6 +39,16 @@ def gen_ts(proto: dict, out: Optional[Path] = None) -> str:
     # The reply's leading keys as gen_ts compares a declared field against them:
     # a field whose key the envelope already writes is left to the envelope.
     envelope_keys = envelope_json_keys(proto)
+    # The declared record types, by name: a field whose type is one of these
+    # (with or without the array suffix) is written as that interface, and a
+    # field whose type is an array of one as an array of it.
+    records = record_types(proto)
+
+    def ts_field_type(declared: str) -> str:
+        """A field's declared `type` → the TypeScript type it is written as."""
+        element, is_array = split_array_type(declared)
+        ts_type = element if element in records else TS_TYPE_MAP.get(element, "any")
+        return f"{ts_type}[]" if is_array else ts_type
 
     def w(line: str = "") -> None:
         lines.append(line)
@@ -87,7 +98,7 @@ def gen_ts(proto: dict, out: Optional[Path] = None) -> str:
             f"type {name}", "interface", t["fields"],
             [f["name"] for f in interface_fields]))
         for f in interface_fields:
-            ts_type = TS_TYPE_MAP.get(f["type"], "any")
+            ts_type = ts_field_type(f["type"])
             desc = sanitize_cpp_comment(f.get("description", ""))
             w(f"  // {desc}")
             w(f"  {f['json']}: {ts_type};")
@@ -122,7 +133,7 @@ def gen_ts(proto: dict, out: Optional[Path] = None) -> str:
                 full_name, "request", req,
                 [f["name"] for f in request_fields]))
             for f in request_fields:
-                ts_type = TS_TYPE_MAP.get(f["type"], "any")
+                ts_type = ts_field_type(f["type"])
                 optional = "" if f.get("required", False) else "?"
                 w(f"  {f['json']}{optional}: {ts_type};")
             w("}")
@@ -160,7 +171,7 @@ def gen_ts(proto: dict, out: Optional[Path] = None) -> str:
                 [f["name"] for f in resp if f["json"] in envelope_keys]
                 + [f["name"] for f in fields]))
             for f in fields:
-                ts_type = TS_TYPE_MAP.get(f["type"], "any")
+                ts_type = ts_field_type(f["type"])
                 w(f"  {f['json']}?: {ts_type};")
             w("}")
         else:

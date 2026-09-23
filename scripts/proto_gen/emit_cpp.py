@@ -1,7 +1,6 @@
 """
 gen_cpp — protocol/proto.h, the device's header-only C++ binding.
 
-Moved out of scripts/gen_proto.py without a change to what it emits.
 """
 import sys
 from pathlib import Path
@@ -11,8 +10,10 @@ from proto_gen.model import (
     CPP_TYPE_MAP,
     fail_uncovered_fields,
     field_coverage_errors,
+    record_array_element_types,
     sanitize_cpp_comment,
     to_pascal,
+    values_struct_name,
 )
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -29,6 +30,12 @@ def gen_cpp(proto: dict, out: Optional[Path] = None) -> str:
     # Build type name → fields lookup for nested serialization
     type_fields: Dict[str, list] = {t["name"]: t["fields"] for t in types}
     type_namespaces: Dict[str, str] = {t["name"]: t.get("namespace", "") for t in types}
+    # The record types a command field declares as an array of. They are not
+    # binding types here: a reply carrying one is written by the function the
+    # generator emits (protocol/proto_resp.h), which takes the record's declared
+    # fields as a value struct of its own, so a struct with serialization
+    # helpers beside it would be a second C++ projection of one declaration.
+    record_arrays = record_array_element_types(proto)
 
     def w(line: str = "") -> None:
         lines.append(line)
@@ -79,6 +86,18 @@ def gen_cpp(proto: dict, out: Optional[Path] = None) -> str:
         name = t["name"]
         ns = t.get("namespace", "")
         desc = sanitize_cpp_comment(t.get("description", ""))
+        if name in record_arrays:
+            # No binding struct: the record is carried as a value struct of the
+            # writer that writes a reply holding an array of it.
+            w(f"// {name} — {desc}")
+            w(f"// No struct here: {name} is a record type a command field")
+            w(f"// declares as an array, so the reply carrying it is written by the")
+            w(f"// function the generator emits. That function takes")
+            w(f"// ThetaGP::Resp::{values_struct_name(name)}")
+            w(f"// (protocol/proto_resp.h), which holds these declared fields and")
+            w(f"// nothing else.")
+            w()
+            continue
         w(f"// ---------------------------------------------------------------------------")
         w(f"// {desc}")
         w(f"// ---------------------------------------------------------------------------")
@@ -143,6 +162,10 @@ def gen_cpp(proto: dict, out: Optional[Path] = None) -> str:
         ns = t.get("namespace", "")
         fq = fq_type_name(name, ns)
         desc = sanitize_cpp_comment(t.get("description", ""))
+        if name in record_arrays:
+            # No serialization helpers: the record type has no binding struct
+            # above, and its own writer carries the keys (protocol/proto_resp.h).
+            continue
         sw(f"    // Serialize {name} into a JsonObject")
         sw(f"    inline static void serialize{name}(JsonObject obj, const {fq} &v) {{")
         # A field is written unless protocol.toml says it is not part of the
