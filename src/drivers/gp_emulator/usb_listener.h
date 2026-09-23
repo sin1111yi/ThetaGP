@@ -19,12 +19,12 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef _USBLISTENER_H_
-#define _USBLISTENER_H_
+#ifndef _USB_LISTENER_H_
+#define _USB_LISTENER_H_
 
 #include <cstdint>
 
-namespace ThetaGP::Drivers::GPDriver {
+namespace ThetaGP::Drivers::GPEmulator {
 
 class USBListener {
 public:
@@ -46,6 +46,6 @@ public:
                                    uint16_t len) = 0;
 };
 
-} // namespace ThetaGP::Drivers::GPDriver
+} // namespace ThetaGP::Drivers::GPEmulator
 
 #endif

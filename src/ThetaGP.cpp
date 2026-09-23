@@ -36,7 +36,7 @@
 #include "drivers/device/keypad.h"
 #include "drivers/device/run_led.h"
 #include "drivers/device/systimer.h"
-#include "drivers/gpdriver/gpdrivermgr.h"
+#include "drivers/gp_emulator/gp_emulator_manager.h"
 
 #include "drivers/peripherals/systick.h"
 
@@ -75,8 +75,8 @@ void ThetaGamepad::setup() {
   Drivers::Device::RunLed::getInstance().setEffect(
       Drivers::Device::RunLed::Effect::DoubleFlash);
   // setup GP drivers
-  Drivers::GPDriver::GPDriverManager::getInstance().setup(
-      Drivers::GPDriver::InputMode::HID);
+  Drivers::GPEmulator::GPEmulatorManager::getInstance().setup(
+      Drivers::GPEmulator::InputMode::HID);
 
   // setup gamepad
   Gamepad::Gamepad::getInstance().setup();

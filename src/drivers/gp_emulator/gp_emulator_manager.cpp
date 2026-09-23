@@ -19,25 +19,25 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "drivers/gpdriver/gpdrivermgr.h"
-#include "drivers/gpdriver/hid/HIDDriver.h"
-#include "drivers/gpdriver/usbdriver.h"
+#include "drivers/gp_emulator/gp_emulator_manager.h"
+#include "drivers/gp_emulator/hid/hid_driver.h"
+#include "drivers/gp_emulator/usb_driver.h"
 
 #include "tusb.h"
 
-namespace ThetaGP::Drivers::GPDriver {
+namespace ThetaGP::Drivers::GPEmulator {
 
-void GPDriverManager::setup(InputMode mode) {
+void GPEmulatorManager::setup(InputMode mode) {
   switch (mode) {
   case InputMode::HID:
-    usbdevice = new HIDDriver();
+    emulator = new HIDDriver();
     break;
   default:
     return;
   }
 
-  if (usbdevice != nullptr) {
-    usbdevice->initialize();
+  if (emulator != nullptr) {
+    emulator->initialize();
   }
   inputMode = mode;
 
@@ -60,4 +60,4 @@ void GPDriverManager::setup(InputMode mode) {
   tusb_init(THETAGP_USB_RHPORT, &dev_init);
 }
 
-} // namespace ThetaGP::Drivers::GPDriver
+} // namespace ThetaGP::Drivers::GPEmulator

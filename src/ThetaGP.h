@@ -22,7 +22,7 @@
 #pragma once
 
 #include "drivers/device/devicemgr.h"
-#include "drivers/gpdriver/gpdrivermgr.h"
+#include "drivers/gp_emulator/gp_emulator_manager.h"
 #include "drivers/peripherals/peripheralsmgr.h"
 
 #include "gamepad/gamepad.h"

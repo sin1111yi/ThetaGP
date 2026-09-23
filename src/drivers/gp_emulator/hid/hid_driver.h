@@ -21,15 +21,15 @@
 
 #pragma once
 
-#include "drivers/gpdriver/gpdriver.h"
-#include "drivers/gpdriver/hid/HIDDescriptors.h"
+#include "drivers/gp_emulator/gp_emulator.h"
+#include "drivers/gp_emulator/hid/hid_descriptors.h"
 
 #include "class/hid/hid.h"
 #include "device/usbd_pvt.h"
 
-namespace ThetaGP::Drivers::GPDriver {
+namespace ThetaGP::Drivers::GPEmulator {
 
-class HIDDriver : public GPDriver {
+class HIDDriver : public GPEmulator {
 public:
   HIDDriver();
   void initialize() override;
@@ -57,4 +57,4 @@ private:
   HIDReport hidReport;
 };
 
-} // namespace ThetaGP::Drivers::GPDriver
+} // namespace ThetaGP::Drivers::GPEmulator

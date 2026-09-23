@@ -28,7 +28,7 @@
 #include "test/testcmds.h"
 #include "test/testsys.h"
 
-#include "drivers/gpdriver/usbdriver.h"
+#include "drivers/gp_emulator/usb_driver.h"
 #include "utils/log/log.h"
 
 namespace ThetaGP::Test {

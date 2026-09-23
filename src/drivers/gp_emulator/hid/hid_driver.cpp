@@ -19,18 +19,18 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "drivers/gpdriver/hid/HIDDriver.h"
+#include "drivers/gp_emulator/hid/hid_driver.h"
 #include "build_info.h"
-#include "drivers/gpdriver/gpdriver.h"
-#include "drivers/gpdriver/hid/HIDDescriptors.h"
-#include "drivers/gpdriver/shared/driverhelper.h"
+#include "drivers/gp_emulator/gp_emulator.h"
+#include "drivers/gp_emulator/hid/hid_descriptors.h"
+#include "drivers/gp_emulator/shared/driver_helper.h"
 
 #include "gamepad/gamepad.h"
 
 #include "tusb.h"
 #include <cstddef>
 
-namespace ThetaGP::Drivers::GPDriver {
+namespace ThetaGP::Drivers::GPEmulator {
 
 HIDDriver::HIDDriver() {}
 
@@ -52,7 +52,7 @@ void HIDDriver::initialize() {
 
   // Derive USB product ID from board name (hash → lower 16 bits)
   uint16_t pid = static_cast<uint16_t>(
-      GPDriver::get_string_hash_u32(BOARD_NAME) & 0xFFFF);
+      GPEmulator::get_string_hash_u32(BOARD_NAME) & 0xFFFF);
   hid_device_descriptor[10] = pid & 0xFF;
   hid_device_descriptor[11] = (pid >> 8) & 0xFF;
 
@@ -213,4 +213,4 @@ const uint8_t *HIDDriver::get_descriptor_device_qualifier_cb() {
 
 uint16_t HIDDriver::GetJoystickMidValue() { return HID_JOYSTICK_MID << 8; }
 
-} // namespace ThetaGP::Drivers::GPDriver
+} // namespace ThetaGP::Drivers::GPEmulator

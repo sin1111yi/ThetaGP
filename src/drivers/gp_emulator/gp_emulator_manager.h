@@ -21,31 +21,31 @@
 
 #pragma once
 
-#include "drivers/gpdriver/gpdriver.h"
+#include "drivers/gp_emulator/gp_emulator.h"
 
-namespace ThetaGP::Drivers::GPDriver {
+namespace ThetaGP::Drivers::GPEmulator {
 
 enum class InputMode : uint8_t { None = 0, Config, HID, Count };
 
-class GPDriverManager {
+class GPEmulatorManager {
 public:
-  GPDriverManager(GPDriverManager const &) = delete;
-  void operator=(GPDriverManager const &) = delete;
+  GPEmulatorManager(GPEmulatorManager const &) = delete;
+  void operator=(GPEmulatorManager const &) = delete;
 
-  static GPDriverManager &getInstance() {
-    static GPDriverManager instance;
+  static GPEmulatorManager &getInstance() {
+    static GPEmulatorManager instance;
     return instance;
   }
 
-  [[nodiscard]] GPDriver *getgpdriverDevice() { return usbdevice; }
+  [[nodiscard]] GPEmulator *getEmulator() { return emulator; }
   void setup(InputMode mode);
   [[nodiscard]] InputMode getInputMode() { return inputMode; }
   [[nodiscard]] bool isConfigMode() { return (inputMode == InputMode::Config); }
 
 private:
-  GPDriverManager() = default;
-  GPDriver *usbdevice = nullptr;
+  GPEmulatorManager() = default;
+  GPEmulator *emulator = nullptr;
   InputMode inputMode = InputMode::None;
 };
 
-} // namespace ThetaGP::Drivers::GPDriver
+} // namespace ThetaGP::Drivers::GPEmulator

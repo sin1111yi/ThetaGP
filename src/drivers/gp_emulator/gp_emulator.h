@@ -19,10 +19,10 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef _GPDRIVER_H_
-#define _GPDRIVER_H_
+#ifndef _GP_EMULATOR_H_
+#define _GP_EMULATOR_H_
 
-#include "drivers/gpdriver/usblistener.h"
+#include "drivers/gp_emulator/usb_listener.h"
 
 #include "class/hid/hid.h"
 #include "device/usbd_pvt.h"
@@ -30,9 +30,9 @@
 
 #include <cstdint>
 
-namespace ThetaGP::Drivers::GPDriver {
+namespace ThetaGP::Drivers::GPEmulator {
 
-class GPDriver {
+class GPEmulator {
 public:
   virtual void initialize() = 0;
   virtual void initializeAux() = 0;
@@ -69,6 +69,6 @@ protected:
   usbd_class_driver_t class_driver;
 };
 
-} // namespace ThetaGP::Drivers::GPDriver
+} // namespace ThetaGP::Drivers::GPEmulator
 
 #endif

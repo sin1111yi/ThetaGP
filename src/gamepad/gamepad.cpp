@@ -27,7 +27,7 @@
 #include "utils/log/log.h"
 
 #include "drivers/device/keypad.h"
-#include "drivers/gpdriver/gpdrivermgr.h"
+#include "drivers/gp_emulator/gp_emulator_manager.h"
 #include <cstdint>
 #include <cstring>
 
@@ -45,7 +45,7 @@ void Gamepad::setup() {
 
   _cfg = &Config::ConfigManager::getInstance().config();
   _processor = &Input::InputProcessor::getInstance();
-  _gpDriverMgr = &Drivers::GPDriver::GPDriverManager::getInstance();
+  _emulatorMgr = &Drivers::GPEmulator::GPEmulatorManager::getInstance();
 }
 
 void Gamepad::reinit() {
@@ -102,7 +102,7 @@ void Gamepad::process() {
   if (!_initialized || !_ready) {
     return;
   }
-  Drivers::GPDriver::GPDriver *driver = _gpDriverMgr->getgpdriverDevice();
+  Drivers::GPEmulator::GPEmulator *driver = _emulatorMgr->getEmulator();
   if (driver == nullptr) {
     return;
   }

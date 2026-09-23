@@ -19,10 +19,10 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "drivers/gpdriver/usbdriver.h"
+#include "drivers/gp_emulator/usb_driver.h"
 #include "build_info.h"
-#include "drivers/gpdriver/gpdrivermgr.h"
-#include "drivers/gpdriver/hid/HIDDescriptors.h"
+#include "drivers/gp_emulator/gp_emulator_manager.h"
+#include "drivers/gp_emulator/hid/hid_descriptors.h"
 
 #include "class/cdc/cdc_device.h"
 #include "tusb.h"
@@ -30,7 +30,7 @@
 #include <cstring>
 
 using namespace ThetaGP::USB;
-using namespace ThetaGP::Drivers::GPDriver;
+using namespace ThetaGP::Drivers::GPEmulator;
 
 COMMON_ZERO_INIT static uint8_t s_config_descriptor[1024];
 COMMON_ZERO_INIT static uint16_t s_config_size;
@@ -88,7 +88,7 @@ void USBDriver::init() {
   p[4] = 3;  p[5] = 1;  p[6] = 0;  p[7] = 0x80;  p[8] = 50;
   p += 9;
 
-  auto *driver = GPDriverManager::getInstance().getgpdriverDevice();
+  auto *driver = GPEmulatorManager::getInstance().getEmulator();
   uint16_t mode_size = driver->get_interface_descriptor_size();
   std::memcpy(p, driver->get_interface_descriptor(), mode_size);
   p += mode_size;
@@ -150,7 +150,7 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id,
                                hid_report_type_t report_type, uint8_t *buffer,
                                uint16_t reqlen) {
   UNUSED(itf);
-  return GPDriverManager::getInstance().getgpdriverDevice()->get_report(
+  return GPEmulatorManager::getInstance().getEmulator()->get_report(
       report_id, report_type, buffer, reqlen);
 }
 
@@ -158,7 +158,7 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id,
                            hid_report_type_t report_type, uint8_t const *buffer,
                            uint16_t bufsize) {
   UNUSED(itf);
-  GPDriverManager::getInstance().getgpdriverDevice()->set_report(
+  GPEmulatorManager::getInstance().getEmulator()->set_report(
       report_id, report_type, buffer, bufsize);
 }
 
@@ -181,26 +181,26 @@ void tud_resume_cb(void) { usb_suspended = false; }
 
 bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage,
                                 tusb_control_request_t const *request) {
-  return GPDriverManager::getInstance()
-      .getgpdriverDevice()
+  return GPEmulatorManager::getInstance()
+      .getEmulator()
       ->vendor_control_xfer_cb(rhport, stage, request);
 }
 
 uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
-  return GPDriverManager::getInstance()
-      .getgpdriverDevice()
+  return GPEmulatorManager::getInstance()
+      .getEmulator()
       ->get_descriptor_string_cb(index, langid);
 }
 
 uint8_t const *tud_descriptor_device_cb() {
-  return GPDriverManager::getInstance()
-      .getgpdriverDevice()
+  return GPEmulatorManager::getInstance()
+      .getEmulator()
       ->get_descriptor_device_cb();
 }
 
 uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf) {
-  return GPDriverManager::getInstance()
-      .getgpdriverDevice()
+  return GPEmulatorManager::getInstance()
+      .getEmulator()
       ->get_hid_descriptor_report_cb(itf);
 }
 
@@ -209,8 +209,8 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
 }
 
 uint8_t const *tud_descriptor_device_qualifier_cb() {
-  return GPDriverManager::getInstance()
-      .getgpdriverDevice()
+  return GPEmulatorManager::getInstance()
+      .getEmulator()
       ->get_descriptor_device_qualifier_cb();
 }
 
