@@ -31,6 +31,7 @@
 #include "drivers/gp_emulator/gp_emulator_manager.h"
 
 #include "gamepad/config/config_store.h"
+#include "gamepad/gamepad_processing.h"
 #include "gamepad/gamepad_state.h"
 
 namespace ThetaGP::Gamepad {
@@ -45,9 +46,9 @@ using GPEmulatorManager = ThetaGP::Drivers::GPEmulator::GPEmulatorManager;
  */
 class Gamepad {
 private:
-  GamepadRawInput _state;
-  // Cross-tick memory of the configured transforms, cleared on reinit().
-  DpadState _dpad{};
+  // This tick's raw input plus the memory the configured transforms keep
+  // between ticks; reinit() clears the latter.
+  ProcessingState _processing{};
   // Taken in setup() and used on every tick. Points into a singleton that
   // lives as long as the firmware does, so it cannot be null while a tick
   // runs.
@@ -62,12 +63,12 @@ private:
   // Helper methods (GP2040-CE style)
   [[nodiscard]] inline bool __attribute__((always_inline))
   pressedButton(const uint32_t mask) const {
-    return (_state.buttons & mask) == mask;
+    return (_processing.raw.buttons & mask) == mask;
   }
 
   [[nodiscard]] inline bool __attribute__((always_inline))
   pressedDpad(const uint8_t mask) const {
-    return (_state.dpad & mask) == mask;
+    return (_processing.raw.dpad & mask) == mask;
   }
 
 public:
@@ -124,8 +125,8 @@ public:
   /* clang-format on */
 
   // Get state
-  [[nodiscard]] const GamepadRawInput &getState() const { return _state; }
-  [[nodiscard]] GamepadRawInput &getState() { return _state; }
+  [[nodiscard]] const GamepadRawInput &getState() const { return _processing.raw; }
+  [[nodiscard]] GamepadRawInput &getState() { return _processing.raw; }
 
   // Check if ready
   [[nodiscard]] bool isReady() const { return _ready && _initialized; }

@@ -23,9 +23,8 @@
 
 namespace ThetaGP::Gamepad {
 
-void processState(GamepadRawInput &state, DpadState &dpadState,
-                  const Config::ConfigStore &cfg) {
-  state.dpad = processDpad(state.dpad, dpadState, cfg);
+void processState(ProcessingState &state, const Config::ConfigStore &cfg) {
+  state.raw.dpad = processDpad(state.raw.dpad, state.memory.dpad, cfg);
 }
 
 uint8_t processDpad(uint8_t dpad, DpadState &dpadState,

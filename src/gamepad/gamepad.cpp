@@ -38,7 +38,7 @@ using Keypad = ThetaGP::Drivers::Device::Keypad;
 Gamepad::Gamepad() { setup(); }
 
 void Gamepad::setup() {
-  _state = GamepadRawInput{};
+  _processing.raw = GamepadRawInput{};
   _inputDevice = nullptr;
   _initialized = true;
   _ready = false;
@@ -48,7 +48,7 @@ void Gamepad::setup() {
 }
 
 void Gamepad::reinit() {
-  _dpad = DpadState{};
+  _processing.memory = ProcessingMemory{};
   setup();
 }
 
@@ -73,8 +73,8 @@ void Gamepad::read() {
 
   Keypad &keypad = static_cast<Keypad &>(*_inputDevice);
 
-  _state.buttons = 0;
-  _state.dpad = 0;
+  _processing.raw.buttons = 0;
+  _processing.raw.dpad = 0;
 
   uint32_t keypadMask = keypad.getPressed();
 
@@ -83,11 +83,11 @@ void Gamepad::read() {
     if (keypadMask & (1U << i)) {
       uint8_t buttonIndex = _cfg->btn_map[i];
       if (buttonIndex != 0xFF) {
-        _state.buttons |= (1U << buttonIndex);
+        _processing.raw.buttons |= (1U << buttonIndex);
 
         // Handle D-pad (buttons 0-3) - set dpad bits directly
         if (buttonIndex < 4) {
-          _state.dpad |= (1U << buttonIndex);
+          _processing.raw.dpad |= (1U << buttonIndex);
         }
       }
     }
@@ -106,7 +106,7 @@ void Gamepad::process() {
     return;
   }
   read();
-  processState(_state, _dpad, *_cfg);
+  processState(_processing, *_cfg);
 
   driver->process(this);
 }

@@ -26,13 +26,25 @@
 
 namespace ThetaGP::Gamepad {
 
-// Entry point: hands each slice of the raw state to the transform that owns
-// it, in a fixed order.
-void processState(GamepadRawInput &state, DpadState &dpadState,
-                  const Config::ConfigStore &cfg);
+// Memory the transforms keep between ticks, one entry per transform. Clearing
+// it forgets everything held before and leaves this tick's input alone.
+struct ProcessingMemory {
+  DpadState dpad;
+};
 
-// Direction bits: SOCD cleaning and the four-way filter. `dpadState` carries
-// the memory the transforms keep between ticks, `cfg` selects which run.
+// Working area of the processing step: the input the keys produced this tick,
+// plus the memory above. A transform rewrites the input in place.
+struct ProcessingState {
+  GamepadRawInput raw;
+  ProcessingMemory memory;
+};
+
+// Entry point: hands each slice of the raw input to the transform that owns it,
+// in a fixed order.
+void processState(ProcessingState &state, const Config::ConfigStore &cfg);
+
+// Direction bits: SOCD cleaning and the four-way filter. `cfg` selects which
+// transforms run.
 uint8_t processDpad(uint8_t dpad, DpadState &dpadState,
                     const Config::ConfigStore &cfg);
 
