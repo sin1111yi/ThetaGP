@@ -152,7 +152,21 @@ uint16_t dpadToAnalogY(uint8_t dpad);
 
 uint8_t getMaskFromDirection(Enums::DpadDirection direction);
 
-uint8_t updateDpad(uint8_t dpad, Enums::DpadDirection direction);
+/**
+ * @brief State the D-pad filters carry from one call to the next.
+ *
+ * `order` holds the cardinal directions currently pressed, oldest first, and
+ * `count` how many of its slots are in use. `lastUD` and `lastLR` hold the
+ * direction each axis saw last.
+ */
+struct DpadState {
+  Enums::DpadDirection order[4]{}; // press order, oldest first
+  uint8_t count{0};
+  Enums::DpadDirection lastUD{Enums::DpadDirection::None};
+  Enums::DpadDirection lastLR{Enums::DpadDirection::None};
+};
+
+uint8_t updateDpad(DpadState &s, uint8_t dpad, Enums::DpadDirection direction);
 
 /**
  * @brief Filter diagonals out of the dpad, making the device work as a 4-way
@@ -160,19 +174,21 @@ uint8_t updateDpad(uint8_t dpad, Enums::DpadDirection direction);
  *
  * The most recent cardinal direction wins.
  *
+ * @param s The state carried between calls.
  * @param dpad The GameState.dpad value.
  * @return uint8_t The new dpad value.
  */
-uint8_t filterToFourWayMode(uint8_t dpad);
+uint8_t filterToFourWayMode(DpadState &s, uint8_t dpad);
 
 /**
  * @brief Run SOCD cleaning against a D-pad value.
  *
+ * @param s The state carried between calls.
  * @param mode The SOCD cleaning mode.
  * @param dpad The GamepadRawInput.dpad value.
  * @return uint8_t The clean D-pad value.
  */
-uint8_t runSOCDCleaner(Enums::SOCDMode mode, uint8_t dpad);
+uint8_t runSOCDCleaner(DpadState &s, Enums::SOCDMode mode, uint8_t dpad);
 
 } // namespace Gamepad
 } // namespace ThetaGP

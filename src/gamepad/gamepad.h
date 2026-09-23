@@ -30,9 +30,8 @@
 #include "drivers/gpdriver/gpdriver.h"
 #include "drivers/gpdriver/gpdrivermgr.h"
 
+#include "gamepad/config/config_store.h"
 #include "gamepad/gamepadstate.h"
-
-#include <array>
 
 namespace ThetaGP::Gamepad {
 
@@ -47,8 +46,10 @@ using GPDriverManager = ThetaGP::Drivers::GPDriver::GPDriverManager;
 class Gamepad {
 private:
   GamepadRawInput _state;
-  std::array<uint8_t, 32>
-      _mappings; // Physical key → Gamepad button (0xFF = unmapped)
+  // The active configuration, read once per tick. Points into the
+  // configuration manager's own store, whose address holds for the lifetime of
+  // the firmware.
+  const Config::ConfigStore *_cfg = nullptr;
   Device *_inputDevice = nullptr;
   bool _initialized = false;
   bool _ready = false;
@@ -84,15 +85,6 @@ public:
    * @param device Reference to Device (must be Keypad)
    */
   void registerKeypadDevice(Device *device);
-
-  /**
-   * @brief Set button mapping
-   * @param physicalKeyId Keypad physical key index (0-31)
-   * @param gamepadButtonIndex Gamepad button index (0-31)
-   */
-  void setMapping(uint8_t physicalKeyId, uint8_t gamepadButtonIndex);
-
-  void setButtonMappings();
 
   /* clang-format off */
   // GP2040-CE style button query methods (forced inline for performance)

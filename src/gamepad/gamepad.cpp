@@ -22,6 +22,8 @@
 #include "gamepad/gamepad.h"
 
 #include "build_info.h"
+#include "gamepad/config/configmgr.h"
+#include "gamepad/input/input_processor.h"
 #include "utils/log/log.h"
 
 #include "drivers/device/keypad.h"
@@ -41,10 +43,14 @@ void Gamepad::setup() {
   _initialized = true;
   _ready = false;
 
+  _cfg = &Config::ConfigManager::getInstance().config();
   _gpDriverMgr = &Drivers::GPDriver::GPDriverManager::getInstance();
 }
 
-void Gamepad::reinit() { setup(); }
+void Gamepad::reinit() {
+  Input::InputProcessor::getInstance().reset();
+  setup();
+}
 
 /**
  * @brief Register a keypad device
@@ -55,36 +61,6 @@ void Gamepad::registerKeypadDevice(Device *device) {
     _inputDevice = device;
     _ready = true;
   }
-}
-
-/**
- * @brief Set button mapping
- * @param physicalKeyId Keypad physical key index (0-31)
- * @param gamepadButtonIndex Gamepad button index (0-31)
- */
-void Gamepad::setMapping(uint8_t physicalKeyId, uint8_t gamepadButtonIndex) {
-  if (physicalKeyId < 32) {
-    _mappings[physicalKeyId] = gamepadButtonIndex;
-  }
-}
-
-void Gamepad::setButtonMappings() {
-  // Clear all mappings (0xFF = unmapped)
-  _mappings.fill(0xFF);
-
-#ifdef BDCFG_KEYPAD_BUTTON_MAP
-  constexpr struct {
-    uint8_t key;
-    uint32_t mask;
-  } map[] = {BDCFG_KEYPAD_BUTTON_MAP};
-  for (auto &entry : map) {
-    if (entry.mask != 0) {
-      setMapping(entry.key, __builtin_ctz(entry.mask));
-    }
-  }
-#else
-#error "[keypad] button_map is required — see configs/CONFIGURATION.md"
-#endif
 }
 
 /**
@@ -105,7 +81,7 @@ void Gamepad::read() {
   // Process all 32 physical keys
   for (uint8_t i = 0; i < 32; i++) {
     if (keypadMask & (1U << i)) {
-      uint8_t buttonIndex = _mappings[i];
+      uint8_t buttonIndex = _cfg->btn_map[i];
       if (buttonIndex != 0xFF) {
         _state.buttons |= (1U << buttonIndex);
 
@@ -126,6 +102,7 @@ void Gamepad::process() {
     return;
   }
   read();
+  Input::InputProcessor::getInstance().process(*_cfg, _state);
 
   _gpDriverMgr->getgpdriverDevice()->process(this);
 }

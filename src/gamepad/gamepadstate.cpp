@@ -57,22 +57,10 @@ uint8_t getMaskFromDirection(DpadDirection direction) {
   return dpadMasks[static_cast<size_t>(direction) - 1];
 }
 
-namespace {
-// Four-way mode: press-order LIFO tracking (max 4 directions)
-struct {
-  Enums::DpadDirection order[4] = {};
-  uint8_t count = 0;
-} s_fourWayState;
-
-// SOCD axis-last state
-Enums::DpadDirection lastUD = Enums::DpadDirection::None;
-Enums::DpadDirection lastLR = Enums::DpadDirection::None;
-} // anonymous namespace
-
-uint8_t updateDpad(uint8_t dpad, DpadDirection direction) {
+uint8_t updateDpad(DpadState &s, uint8_t dpad, DpadDirection direction) {
   const auto mask = getMaskFromDirection(direction);
-  auto &order = s_fourWayState.order;
-  auto &count = s_fourWayState.count;
+  auto &order = s.order;
+  auto &count = s.count;
 
   if (dpad & mask) {
     // Pressed — append to order if not already present
@@ -102,18 +90,17 @@ uint8_t updateDpad(uint8_t dpad, DpadDirection direction) {
   return (count > 0) ? getMaskFromDirection(order[count - 1]) : 0;
 }
 
-uint8_t filterToFourWayMode(uint8_t dpad) {
-  updateDpad(dpad, DpadDirection::Up);
-  updateDpad(dpad, DpadDirection::Down);
-  updateDpad(dpad, DpadDirection::Left);
-  return updateDpad(dpad, DpadDirection::Right);
+uint8_t filterToFourWayMode(DpadState &s, uint8_t dpad) {
+  updateDpad(s, dpad, DpadDirection::Up);
+  updateDpad(s, dpad, DpadDirection::Down);
+  updateDpad(s, dpad, DpadDirection::Left);
+  return updateDpad(s, dpad, DpadDirection::Right);
 }
 
-uint8_t runSOCDCleaner(SOCDMode mode, uint8_t dpad) {
+uint8_t runSOCDCleaner(DpadState &s, SOCDMode mode, uint8_t dpad) {
   if (mode == SOCDMode::Bypass) {
     return dpad;
   }
-
 
   uint8_t newDpad = 0;
 
@@ -121,63 +108,64 @@ uint8_t runSOCDCleaner(SOCDMode mode, uint8_t dpad) {
   case (GAMEPAD_MASK_UP | GAMEPAD_MASK_DOWN):
     if (mode == SOCDMode::UpPriority) {
       newDpad |= GAMEPAD_MASK_UP;
-      lastUD = DpadDirection::Up;
+      s.lastUD = DpadDirection::Up;
     } else if (mode == SOCDMode::SecondInputPriority &&
-               lastUD != DpadDirection::None)
+               s.lastUD != DpadDirection::None)
       newDpad |=
-          (lastUD == DpadDirection::Up) ? GAMEPAD_MASK_DOWN : GAMEPAD_MASK_UP;
+          (s.lastUD == DpadDirection::Up) ? GAMEPAD_MASK_DOWN : GAMEPAD_MASK_UP;
     else if (mode == SOCDMode::FirstInputPriority &&
-             lastUD != DpadDirection::None)
+             s.lastUD != DpadDirection::None)
       newDpad |=
-          (lastUD == DpadDirection::Up) ? GAMEPAD_MASK_UP : GAMEPAD_MASK_DOWN;
+          (s.lastUD == DpadDirection::Up) ? GAMEPAD_MASK_UP : GAMEPAD_MASK_DOWN;
     else
-      lastUD = DpadDirection::None;
+      s.lastUD = DpadDirection::None;
     break;
 
   case GAMEPAD_MASK_UP:
     newDpad |= GAMEPAD_MASK_UP;
-    lastUD = DpadDirection::Up;
+    s.lastUD = DpadDirection::Up;
     break;
 
   case GAMEPAD_MASK_DOWN:
     newDpad |= GAMEPAD_MASK_DOWN;
-    lastUD = DpadDirection::Down;
+    s.lastUD = DpadDirection::Down;
     break;
 
   default:
-    lastUD = DpadDirection::None;
+    s.lastUD = DpadDirection::None;
     break;
   }
 
   switch (dpad & (GAMEPAD_MASK_LEFT | GAMEPAD_MASK_RIGHT)) {
   case (GAMEPAD_MASK_LEFT | GAMEPAD_MASK_RIGHT):
-    if (mode == SOCDMode::SecondInputPriority && lastLR != DpadDirection::None)
-      newDpad |= (lastLR == DpadDirection::Left) ? GAMEPAD_MASK_RIGHT
-                                                 : GAMEPAD_MASK_LEFT;
+    if (mode == SOCDMode::SecondInputPriority &&
+        s.lastLR != DpadDirection::None)
+      newDpad |= (s.lastLR == DpadDirection::Left) ? GAMEPAD_MASK_RIGHT
+                                                   : GAMEPAD_MASK_LEFT;
     else if (mode == SOCDMode::FirstInputPriority &&
-             lastLR != DpadDirection::None)
-      newDpad |= (lastLR == DpadDirection::Left) ? GAMEPAD_MASK_LEFT
-                                                 : GAMEPAD_MASK_RIGHT;
+             s.lastLR != DpadDirection::None)
+      newDpad |= (s.lastLR == DpadDirection::Left) ? GAMEPAD_MASK_LEFT
+                                                   : GAMEPAD_MASK_RIGHT;
     else
-      lastLR = DpadDirection::None;
+      s.lastLR = DpadDirection::None;
     break;
 
   case GAMEPAD_MASK_LEFT:
     newDpad |= GAMEPAD_MASK_LEFT;
-    lastLR = DpadDirection::Left;
+    s.lastLR = DpadDirection::Left;
     break;
 
   case GAMEPAD_MASK_RIGHT:
     newDpad |= GAMEPAD_MASK_RIGHT;
-    lastLR = DpadDirection::Right;
+    s.lastLR = DpadDirection::Right;
     break;
 
   default:
-    lastLR = DpadDirection::None;
+    s.lastLR = DpadDirection::None;
     break;
   }
 
   return newDpad;
 }
 
-}  // namespace ThetaGP::Gamepad
+} // namespace ThetaGP::Gamepad
