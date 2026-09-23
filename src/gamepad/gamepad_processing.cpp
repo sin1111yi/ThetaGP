@@ -29,9 +29,9 @@ void processState(ProcessingState &state, const Config::ConfigStore &cfg) {
 
 uint8_t processDpad(uint8_t dpad, DpadState &dpadState,
                     const Config::ConfigStore &cfg) {
-  uint8_t processed = runSOCDCleaner(
-      dpadState, static_cast<Enums::SOCDMode>(cfg.socd_mode), dpad);
-  if (cfg.four_way_mode != 0) {
+  uint8_t processed =
+      runSOCDCleaner(dpadState, static_cast<Enums::SOCDMode>(cfg.socd), dpad);
+  if (cfg.four_way != 0) {
     processed = filterToFourWayMode(dpadState, processed);
   }
 

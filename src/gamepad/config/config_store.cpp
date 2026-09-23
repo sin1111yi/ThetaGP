@@ -20,6 +20,7 @@
  */
 
 #include "gamepad/config/config_store.h"
+#include "configs/config_keys.gen.h"
 #include "gamepad/config/key_table.h"
 #include "utils/log/log.h"
 
@@ -98,42 +99,39 @@ void parseProfile(const char *json, uint32_t len, ConfigStore *cfg) {
   // not hold.
   const ConfigStore &def = kConfigDefaults;
 
-  // The name a key travels under in a body comes from the key table, so the key
-  // the protocol names one way is read under the name a body carries for it.
-  const KeyEntry &socdModeKey = keyTable()[kSocdModeKey];
-  const KeyEntry &fourWayKey = keyTable()[kFourWayKey];
-  const KeyEntry &btnMapKey = keyTable()[kBtnMapKey];
+  // A key carries one name: the one it is read under below and the one the
+  // protocol addresses it by are the same string.
+  const KeyEntry &socdKey = keyEntry(ConfigKey::Socd);
+  const KeyEntry &fourWayKey = keyEntry(ConfigKey::FourWay);
+  const KeyEntry &btnMapKey = keyEntry(ConfigKey::BtnMap);
 
   // ── map ──
-  // socd_mode names a SOCDMode enumerator, so that enum bounds it. The fields
-  // after it mean on or off, so a bool's two values bound them. dpad_mode has
+  // socd names a SOCDMode enumerator, so that enum bounds it. The fields
+  // after it mean on or off, so a bool's two values bound them. dpad has
   // no domain narrower than its byte: the firmware names no D-pad output modes
   // for it to be checked against.
-  cfg->socd_mode =
-      enumValue(doc.getInt(socdModeKey.jsonKey, cfg->socd_mode), def.socd_mode,
-                static_cast<int>(Enums::SOCDMode::Count));
-  cfg->four_way_mode = flagValue(
-      doc.getInt(fourWayKey.jsonKey, cfg->four_way_mode), def.four_way_mode);
-  cfg->dpad_mode =
-      fieldValue(doc.getInt("map.dpad", cfg->dpad_mode), def.dpad_mode);
+  cfg->socd = enumValue(doc.getInt(socdKey.key, cfg->socd), def.socd,
+                        static_cast<int>(Enums::SOCDMode::Count));
+  cfg->four_way =
+      flagValue(doc.getInt(fourWayKey.key, cfg->four_way), def.four_way);
+  cfg->dpad = fieldValue(doc.getInt("map.dpad", cfg->dpad), def.dpad);
   cfg->inv_x = flagValue(doc.getInt("map.inv_x", cfg->inv_x), def.inv_x);
   cfg->inv_y = flagValue(doc.getInt("map.inv_y", cfg->inv_y), def.inv_y);
   cfg->inv_rx = flagValue(doc.getInt("map.inv_rx", cfg->inv_rx), def.inv_rx);
   cfg->inv_ry = flagValue(doc.getInt("map.inv_ry", cfg->inv_ry), def.inv_ry);
-  cfg->swap_sticks =
-      flagValue(doc.getInt("map.swap", cfg->swap_sticks), def.swap_sticks);
+  cfg->swap = flagValue(doc.getInt("map.swap", cfg->swap), def.swap);
 
   // btn_map array. A profile that carries no array leaves the table in place;
   // one that carries an array fills all 32 slots, and the slots it does not
   // reach take the sentinel.
-  const int arrLen = doc.getArrLen(btnMapKey.jsonKey);
+  const int arrLen = doc.getArrLen(btnMapKey.key);
   if (arrLen > 0) {
     uint8_t idx = 0;
     for (int i = 0; i < arrLen && idx < 32; i++) {
       // An element is a button bit index or the unmapped sentinel. Any other
       // number would name a different button once narrowed to a byte; a
       // negative one, or one past the last bit, names no button at all.
-      const int value = doc.getArrInt(btnMapKey.jsonKey, i, -1);
+      const int value = doc.getArrInt(btnMapKey.key, i, -1);
       cfg->btn_map[idx++] = (value >= 0 && value < detail::kBtnMaskBits)
                                 ? static_cast<uint8_t>(value)
                                 : detail::kBtnMapUnmapped;
@@ -164,21 +162,17 @@ void parseProfile(const char *json, uint32_t len, ConfigStore *cfg) {
   cfg->rt_dz = fieldValue(doc.getInt("trig.rt_dz", cfg->rt_dz), def.rt_dz);
 
   // ── led ──
-  cfg->led_brightness = fieldValue(doc.getInt("led.bri", cfg->led_brightness),
-                                   def.led_brightness);
-  cfg->led_mode =
-      fieldValue(doc.getInt("led.mode", cfg->led_mode), def.led_mode);
-  cfg->led_hue = fieldValue(doc.getInt("led.hue", cfg->led_hue), def.led_hue);
-  cfg->led_saturation = fieldValue(doc.getInt("led.sat", cfg->led_saturation),
-                                   def.led_saturation);
-  cfg->led_speed =
-      fieldValue(doc.getInt("led.spd", cfg->led_speed), def.led_speed);
+  cfg->bri = fieldValue(doc.getInt("led.bri", cfg->bri), def.bri);
+  cfg->mode = fieldValue(doc.getInt("led.mode", cfg->mode), def.mode);
+  cfg->hue = fieldValue(doc.getInt("led.hue", cfg->hue), def.hue);
+  cfg->sat = fieldValue(doc.getInt("led.sat", cfg->sat), def.sat);
+  cfg->spd = fieldValue(doc.getInt("led.spd", cfg->spd), def.spd);
 
   // ── cal ──
-  cfg->cal_lx = fieldValue(doc.getInt("cal.lx_c", cfg->cal_lx), def.cal_lx);
-  cfg->cal_ly = fieldValue(doc.getInt("cal.ly_c", cfg->cal_ly), def.cal_ly);
-  cfg->cal_rx = fieldValue(doc.getInt("cal.rx_c", cfg->cal_rx), def.cal_rx);
-  cfg->cal_ry = fieldValue(doc.getInt("cal.ry_c", cfg->cal_ry), def.cal_ry);
+  cfg->lx_c = fieldValue(doc.getInt("cal.lx_c", cfg->lx_c), def.lx_c);
+  cfg->ly_c = fieldValue(doc.getInt("cal.ly_c", cfg->ly_c), def.ly_c);
+  cfg->rx_c = fieldValue(doc.getInt("cal.rx_c", cfg->rx_c), def.rx_c);
+  cfg->ry_c = fieldValue(doc.getInt("cal.ry_c", cfg->ry_c), def.ry_c);
 
   LOG_DEBUG("parseProfile: done");
 }
@@ -191,19 +185,19 @@ uint16_t serializeProfile(const ConfigStore &cfg, char *dst, uint16_t cap) {
   Json doc;
   doc.beginWrite(dst, cap);
 
-  // The names the keys travel under in a body come from the key table, so a
-  // body carries the name the table maps a protocol key name to.
-  const KeyEntry &socdModeKey = keyTable()[kSocdModeKey];
-  const KeyEntry &fourWayKey = keyTable()[kFourWayKey];
-  const KeyEntry &btnMapKey = keyTable()[kBtnMapKey];
+  // A key carries one name, and a body carries it too: the key's name is what
+  // the writer below spells, and the leaf inside its object is that name's
+  // tail.
+  const KeyEntry &socdKey = keyEntry(ConfigKey::Socd);
+  const KeyEntry &fourWayKey = keyEntry(ConfigKey::FourWay);
+  const KeyEntry &btnMapKey = keyEntry(ConfigKey::BtnMap);
 
   // ── map ──
   doc.printf("{ver:2,map:{%Q:%d,%Q:%d,dpad:%d,"
              "inv_x:%d,inv_y:%d,inv_rx:%d,inv_ry:%d,swap:%d,%Q:[",
-             profileLeafName(socdModeKey), cfg.socd_mode,
-             profileLeafName(fourWayKey), cfg.four_way_mode, cfg.dpad_mode,
-             cfg.inv_x, cfg.inv_y, cfg.inv_rx, cfg.inv_ry, cfg.swap_sticks,
-             profileLeafName(btnMapKey));
+             profileLeafName(socdKey), cfg.socd, profileLeafName(fourWayKey),
+             cfg.four_way, cfg.dpad, cfg.inv_x, cfg.inv_y, cfg.inv_rx,
+             cfg.inv_ry, cfg.swap, profileLeafName(btnMapKey));
   for (uint8_t i = 0; i < 32; i++) {
     if (i > 0)
       doc.printf(",");
@@ -221,12 +215,12 @@ uint16_t serializeProfile(const ConfigStore &cfg, char *dst, uint16_t cap) {
   doc.printf(",trig:{lt_dz:%d,rt_dz:%d}", cfg.lt_dz, cfg.rt_dz);
 
   // ── led ──
-  doc.printf(",led:{bri:%d,mode:%d,hue:%d,sat:%d,spd:%d}", cfg.led_brightness,
-             cfg.led_mode, cfg.led_hue, cfg.led_saturation, cfg.led_speed);
+  doc.printf(",led:{bri:%d,mode:%d,hue:%d,sat:%d,spd:%d}", cfg.bri, cfg.mode,
+             cfg.hue, cfg.sat, cfg.spd);
 
   // ── cal ──
-  doc.printf(",cal:{lx_c:%d,ly_c:%d,rx_c:%d,ry_c:%d}", cfg.cal_lx, cfg.cal_ly,
-             cfg.cal_rx, cfg.cal_ry);
+  doc.printf(",cal:{lx_c:%d,ly_c:%d,rx_c:%d,ry_c:%d}", cfg.lx_c, cfg.ly_c,
+             cfg.rx_c, cfg.ry_c);
 
   doc.printf("}"); // close root
 

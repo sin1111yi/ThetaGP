@@ -33,14 +33,14 @@ namespace ThetaGP::Gamepad::Config {
 // and it is what holds the widths below to the same length as this enum.
 enum class KeyType : uint8_t { U8, U16, I16, U8Array, Count };
 
-// One settable key: the name the protocol carries, the name a profile body
-// carries for the same field, the field of ConfigStore it stands for, and the
-// values that field accepts. count is the field's element count — 1 for a
-// scalar, the number of elements for an array.
+// One settable key: the field's name, the field of ConfigStore it stands for,
+// and the values that field accepts. The name is the whole identity of the
+// field — what a caller sends and the path a profile body carries are this same
+// string — and the C++ side of the field is its last segment. count is the
+// field's element count: 1 for a scalar, the number of elements for an array.
 struct KeyEntry {
-  const char *key;     // protocol key name
-  const char *jsonKey; // profile JSON path
-  uint16_t offset;     // offsetof(ConfigStore, field)
+  const char *key; // the field's name
+  uint16_t offset; // offsetof(ConfigStore, field)
   KeyType type;
   uint8_t count; // element count for array keys, 1 otherwise
   int32_t minVal;
@@ -91,22 +91,12 @@ uint8_t keyTableCount();
 // The entry named `key`, or nullptr when the table carries no such key.
 const KeyEntry *findKeyEntry(const char *key);
 
-// Where a key sits in the table. Code that reads a row by what it stands for
-// takes it by one of these instead of looking a name up, and the checks beside
-// the table hold each position to the name its row carries.
-enum KeyTableKey : uint8_t {
-  kSocdModeKey,
-  kFourWayKey,
-  kBtnMapKey,
-  kKeyTableKeys
-};
-
 // The name a profile body carries for a key inside its parent object: the tail
-// of jsonKey past its last dot, so a body writes the path `map.socd` as `socd`
-// inside its `map` object.
+// of the key's name past its last dot, so a body writes the name `map.socd` as
+// `socd` inside its `map` object.
 constexpr const char *profileLeafName(const KeyEntry &entry) {
-  const char *leaf = entry.jsonKey;
-  for (const char *p = entry.jsonKey; *p != '\0'; ++p) {
+  const char *leaf = entry.key;
+  for (const char *p = entry.key; *p != '\0'; ++p) {
     if (*p == '.') {
       leaf = p + 1;
     }

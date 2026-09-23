@@ -21,6 +21,9 @@
 
 #include "gamepad/config/key_table.h"
 
+// The keys themselves: the declaration in configs/config_keys.toml expanded.
+#include "configs/config_keys.gen.h"
+
 // The mask a button bit index is drawn from.
 #include "gamepad/config/config_defaults.h"
 #include "gamepad/gamepad_enums.h"
@@ -30,27 +33,6 @@
 
 namespace ThetaGP::Gamepad::Config {
 namespace {
-
-// A key stands for one field of the store under two names: `key` is the name a
-// caller sends, `jsonKey` is the path a profile body carries for that same
-// field. The table carries the keys the running code reads — a key whose field
-// nothing reads takes a value that changes nothing.
-constexpr KeyEntry kKeyTable[] = {
-    {"map.socd_mode", "map.socd", offsetof(ConfigStore, socd_mode), KeyType::U8,
-     1, 0, static_cast<int32_t>(Enums::SOCDMode::Count) - 1, 0},
-    {"map.four_way", "map.four_way", offsetof(ConfigStore, four_way_mode),
-     KeyType::U8, 1, 0, 1, 0},
-    // A slot of the button map holds either a button bit index or 255, the
-    // value standing for a slot the board maps to no button. 255 lies outside
-    // 0..kBtnMaskBits-1, so the entry carries the flag that admits it; without
-    // that flag a map holding unmapped slots could not be written back.
-    {"map.btn_map", "map.btn_map", offsetof(ConfigStore, btn_map),
-     KeyType::U8Array, static_cast<uint8_t>(sizeof(ConfigStore::btn_map)), 0,
-     detail::kBtnMaskBits - 1, kKeyFlagAcceptsUnmapped},
-};
-
-constexpr uint8_t kKeyTableCount =
-    static_cast<uint8_t>(sizeof(kKeyTable) / sizeof(kKeyTable[0]));
 
 // Every entry names bytes of the store, and a value read or written through it
 // has to stay inside the store. The last field of the store is the strictest
@@ -107,28 +89,12 @@ constexpr bool entriesWithinListLimits() {
 static_assert(entriesWithinListLimits(),
               "key table: the key list reply is not sized for this table");
 
-// The table carries the keys the code reads, and the three map keys are those.
-static_assert(kKeyTableCount == 3, "key table: the connected keys are three");
-
-// Whether two texts are the same one.
-constexpr bool sameText(const char *a, const char *b) {
-  while (*a != '\0' && *a == *b) {
-    ++a;
-    ++b;
-  }
-  return *a == *b;
-}
-
-// A row taken by position is the key code that takes it by position means to
-// read, so the positions and the rows stay in step.
-static_assert(kKeyTableCount == kKeyTableKeys,
-              "key table: a position names no row");
-static_assert(sameText(kKeyTable[kSocdModeKey].key, "map.socd_mode"),
-              "key table: the position for the SOCD mode key is not that key");
-static_assert(sameText(kKeyTable[kFourWayKey].key, "map.four_way"),
-              "key table: the position for the four way key is not that key");
-static_assert(sameText(kKeyTable[kBtnMapKey].key, "map.btn_map"),
-              "key table: the position for the button map key is not that key");
+// The SOCD mode holds a SOCDMode enumerator, so that enum bounds the key's
+// range. The two are held together here, so an enumerator added to the enum
+// either widens the declared range or fails this build.
+static_assert(keyEntry(ConfigKey::Socd).maxVal ==
+                  static_cast<int32_t>(Enums::SOCDMode::Count) - 1,
+              "key table: the SOCD mode key does not cover the SOCD modes");
 
 // A profile body carries a key's profile name through the JSON writer, which
 // formats a name of up to kJsonWriterNameBufLen bytes on its stack: a longer

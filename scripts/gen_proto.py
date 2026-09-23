@@ -27,6 +27,7 @@ Usage:
   python3 scripts/gen_proto.py --target fields         # field manifest only
   python3 scripts/gen_proto.py --target resp           # response tables only
   python3 scripts/gen_proto.py --target fields-md      # Markdown tables only
+    python3 scripts/gen_proto.py --target config-keys    # config key table only
   python3 scripts/gen_proto.py --dry-run               # print to stdout
   python3 scripts/gen_proto.py --protocol custom.toml  # custom path
 
@@ -37,6 +38,9 @@ import argparse
 import sys
 from pathlib import Path
 
+from proto_gen.emit_config_keys import (CONFIG_KEYS_OUT, CONFIG_KEYS_PATH,
+                                        gen_config_keys, load_config_keys,
+                                        validate_config_keys)
 from proto_gen.emit_cpp import gen_cpp
 from proto_gen.emit_fields import gen_fields, gen_fields_md
 from proto_gen.emit_resp import gen_resp
@@ -71,10 +75,13 @@ Examples:
   python3 scripts/gen_proto.py --target rust,ts
         """,
     )
+    parser.add_argument("--config-keys", default=CONFIG_KEYS_PATH,
+                        help=f"Path to the config key declaration (default: {CONFIG_KEYS_PATH})")
     parser.add_argument("--protocol", default="protocol/protocol.toml",
                         help="Path to protocol.toml (default: protocol/protocol.toml)")
-    parser.add_argument("--target", default="cpp,rust,ts,fields,resp,fields-md",
-                        help="Comma-separated targets: cpp,rust,ts,fields,resp,fields-md (default: all)")
+    parser.add_argument("--target", default="cpp,rust,ts,fields,resp,fields-md,config-keys",
+                        help="Comma-separated targets: cpp,rust,ts,fields,resp,fields-md,"
+                             "config-keys (default: all)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print generated code to stdout instead of writing files")
     parser.add_argument("--outdir-cpp", default="protocol",
@@ -152,6 +159,21 @@ Examples:
             gen_resp(proto, out_file)
             if args.dry_run:
                 print(gen_resp(proto))
+        elif tgt == "config-keys":
+            # The config domain's own table, generated from the config domain's
+            # own declaration: it is not part of the protocol, so it is not read
+            # from protocol.toml and it does not land among the protocol's
+            # generated files.
+            keys_path = Path(args.config_keys)
+            if not keys_path.exists():
+                fail(f"ERROR: Config key declaration not found: {keys_path}")
+            keys = load_config_keys(str(keys_path))
+            validate_config_keys(keys)
+            out_file = (None if args.dry_run
+                        else Path(CONFIG_KEYS_OUT))
+            gen_config_keys(keys, out_file, str(keys_path))
+            if args.dry_run:
+                print(gen_config_keys(keys, source_path=str(keys_path)))
         elif tgt == "fields-md":
             # The Markdown tables are read, not compiled, so they sit beside the
             # TOML they are derived from and in the repository, not with the
@@ -164,7 +186,8 @@ Examples:
             if args.dry_run:
                 print(gen_fields_md(proto, source_path=proto_path))
         else:
-            print(f"WARNING: Unknown target '{tgt}' (supported: cpp, rust, ts, fields, resp, fields-md)",
+            print(f"WARNING: Unknown target '{tgt}' (supported: cpp, rust, ts, fields, resp, "
+                  f"fields-md, config-keys)",
                   file=sys.stderr)
 
     print("Done.", file=sys.stderr)

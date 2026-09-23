@@ -129,14 +129,14 @@ constexpr ConfigStore makeDefaults() {
   for (uint8_t slot = 0; slot < kBtnMapSlots; ++slot) {
     cfg.btn_map[slot] = kBtnMap[slot];
   }
-  cfg.socd_mode     = THETAGP_CFG_DEFAULT_SOCD_MODE;
-  cfg.four_way_mode = THETAGP_CFG_DEFAULT_FOUR_WAY_MODE;
-  cfg.dpad_mode     = THETAGP_CFG_DEFAULT_DPAD_MODE;
-  cfg.inv_x         = THETAGP_CFG_DEFAULT_INV_X;
-  cfg.inv_y         = THETAGP_CFG_DEFAULT_INV_Y;
-  cfg.inv_rx        = THETAGP_CFG_DEFAULT_INV_RX;
-  cfg.inv_ry        = THETAGP_CFG_DEFAULT_INV_RY;
-  cfg.swap_sticks   = THETAGP_CFG_DEFAULT_SWAP_STICKS;
+  cfg.socd     = THETAGP_CFG_DEFAULT_SOCD_MODE;
+  cfg.four_way = THETAGP_CFG_DEFAULT_FOUR_WAY_MODE;
+  cfg.dpad     = THETAGP_CFG_DEFAULT_DPAD_MODE;
+  cfg.inv_x    = THETAGP_CFG_DEFAULT_INV_X;
+  cfg.inv_y    = THETAGP_CFG_DEFAULT_INV_Y;
+  cfg.inv_rx   = THETAGP_CFG_DEFAULT_INV_RX;
+  cfg.inv_ry   = THETAGP_CFG_DEFAULT_INV_RY;
+  cfg.swap     = THETAGP_CFG_DEFAULT_SWAP_STICKS;
 
   // ── Stick settings ──
   cfg.lx_dz   = THETAGP_CFG_DEFAULT_LX_DZ;
@@ -155,17 +155,17 @@ constexpr ConfigStore makeDefaults() {
   cfg.rt_dz = THETAGP_CFG_DEFAULT_RT_DZ;
 
   // ── LED settings ──
-  cfg.led_brightness = THETAGP_CFG_DEFAULT_LED_BRIGHTNESS;
-  cfg.led_mode       = THETAGP_CFG_DEFAULT_LED_MODE;
-  cfg.led_hue        = THETAGP_CFG_DEFAULT_LED_HUE;
-  cfg.led_saturation = THETAGP_CFG_DEFAULT_LED_SATURATION;
-  cfg.led_speed      = THETAGP_CFG_DEFAULT_LED_SPEED;
+  cfg.bri  = THETAGP_CFG_DEFAULT_LED_BRIGHTNESS;
+  cfg.mode = THETAGP_CFG_DEFAULT_LED_MODE;
+  cfg.hue  = THETAGP_CFG_DEFAULT_LED_HUE;
+  cfg.sat  = THETAGP_CFG_DEFAULT_LED_SATURATION;
+  cfg.spd  = THETAGP_CFG_DEFAULT_LED_SPEED;
 
   // ── Calibration ──
-  cfg.cal_lx = THETAGP_CFG_DEFAULT_CAL_LX;
-  cfg.cal_ly = THETAGP_CFG_DEFAULT_CAL_LY;
-  cfg.cal_rx = THETAGP_CFG_DEFAULT_CAL_RX;
-  cfg.cal_ry = THETAGP_CFG_DEFAULT_CAL_RY;
+  cfg.lx_c = THETAGP_CFG_DEFAULT_CAL_LX;
+  cfg.ly_c = THETAGP_CFG_DEFAULT_CAL_LY;
+  cfg.rx_c = THETAGP_CFG_DEFAULT_CAL_RX;
+  cfg.ry_c = THETAGP_CFG_DEFAULT_CAL_RY;
 
   return cfg;
 }

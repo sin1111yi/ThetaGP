@@ -1,0 +1,354 @@
+# Config key schema — the one name of every field the config system carries.
+#
+# One field, one name. The name is the whole identity: the protocol key
+# (config.get_key / config.set_key / config.list_keys) and the path a profile
+# body carries for that field are this same string, and the C++ side of the
+# field is its last segment. Nothing else spells a field name.
+#
+# The protocol spec does not carry these rows: a row names the consumer's field
+# and the spec may not know the consumer (protocol/README.md, design
+# principles). This is the config domain's own source; the header the firmware
+# compiles is generated from it.
+#
+# The order of the rows is the order config.list_keys reports them in.
+#
+# name      <domain>.<leaf>, leaf = the field's C++ name
+# type      u8 | u16 | i16 | bool | u8_array
+# count     element count, arrays only
+# min/max   accepted range, both inclusive
+# default   the value a factory profile starts from, or "board" for a field the
+#           board's own configuration supplies. The firmware's copies of these
+#           numbers (conf/ThetaGP_Config.h) are where they live today and are
+#           moving here; until they do, the two are held equal by hand.
+# exposed   true when config.* accepts this key
+# flags     reboot (reaches the field only at the next boot)
+#           accepts_unmapped (255 is an element a caller may set back)
+
+[[field]]
+name = "map.socd"
+type = "u8"
+min = 0
+max = 4
+default = 4
+exposed = true
+doc = "SOCD cleaning mode (0 UpPriority, 1 Neutral, 2 SecondInput, 3 FirstInput, 4 Bypass)"
+
+[[field]]
+name = "map.four_way"
+type = "bool"
+min = 0
+max = 1
+default = 0
+exposed = true
+doc = "Four-way mode: of two opposing directions only the most recent one is kept"
+
+[[field]]
+name = "map.btn_map"
+type = "u8_array"
+count = 32
+min = 0
+max = 31
+default = "board"
+exposed = true
+flags = ["accepts_unmapped"]
+doc = "Physical key to button bit index (255 = a key with no button)"
+
+[[field]]
+name = "map.dpad"
+type = "u8"
+min = 0
+max = 2
+default = 0
+exposed = false
+doc = "D-pad routing (0 native d-pad, 1 left analog, 2 right analog)"
+
+[[field]]
+name = "map.inv_x"
+type = "bool"
+min = 0
+max = 1
+default = 0
+exposed = false
+doc = "Left analog X polarity"
+
+[[field]]
+name = "map.inv_y"
+type = "bool"
+min = 0
+max = 1
+default = 0
+exposed = false
+doc = "Left analog Y polarity"
+
+[[field]]
+name = "map.inv_rx"
+type = "bool"
+min = 0
+max = 1
+default = 0
+exposed = false
+doc = "Right analog X polarity"
+
+[[field]]
+name = "map.inv_ry"
+type = "bool"
+min = 0
+max = 1
+default = 0
+exposed = false
+doc = "Right analog Y polarity"
+
+[[field]]
+name = "map.swap"
+type = "bool"
+min = 0
+max = 1
+default = 0
+exposed = false
+doc = "Swap the left and right analog sticks"
+
+[[field]]
+name = "stick.lx_dz"
+type = "u16"
+min = 0
+max = 32767
+default = 512
+exposed = false
+doc = "Circular deadzone on LX, in internal axis units"
+
+[[field]]
+name = "stick.ly_dz"
+type = "u16"
+min = 0
+max = 32767
+default = 512
+exposed = false
+doc = "Circular deadzone on LY, in internal axis units"
+
+[[field]]
+name = "stick.rx_dz"
+type = "u16"
+min = 0
+max = 32767
+default = 512
+exposed = false
+doc = "Circular deadzone on RX, in internal axis units"
+
+[[field]]
+name = "stick.ry_dz"
+type = "u16"
+min = 0
+max = 32767
+default = 512
+exposed = false
+doc = "Circular deadzone on RY, in internal axis units"
+
+[[field]]
+name = "stick.lx_sens"
+type = "u8"
+min = 0
+max = 255
+default = 128
+exposed = false
+doc = "LX multiplier, 128 = unity gain"
+
+[[field]]
+name = "stick.ly_sens"
+type = "u8"
+min = 0
+max = 255
+default = 128
+exposed = false
+doc = "LY multiplier, 128 = unity gain"
+
+[[field]]
+name = "stick.rx_sens"
+type = "u8"
+min = 0
+max = 255
+default = 128
+exposed = false
+doc = "RX multiplier, 128 = unity gain"
+
+[[field]]
+name = "stick.ry_sens"
+type = "u8"
+min = 0
+max = 255
+default = 128
+exposed = false
+doc = "RY multiplier, 128 = unity gain"
+
+[[field]]
+name = "stick.curve"
+type = "u8"
+min = 0
+max = 2
+default = 0
+exposed = false
+doc = "Response curve (0 linear)"
+
+[[field]]
+name = "stick.ema"
+type = "u8"
+min = 0
+max = 255
+default = 0
+exposed = false
+doc = "EMA smoothing factor (0 = off)"
+
+[[field]]
+name = "trig.lt_dz"
+type = "u8"
+min = 0
+max = 127
+default = 8
+exposed = false
+doc = "LT deadzone, in raw trigger units"
+
+[[field]]
+name = "trig.rt_dz"
+type = "u8"
+min = 0
+max = 127
+default = 8
+exposed = false
+doc = "RT deadzone, in raw trigger units"
+
+[[field]]
+name = "led.bri"
+type = "u8"
+min = 0
+max = 255
+default = 128
+exposed = false
+doc = "LED brightness"
+
+[[field]]
+name = "led.mode"
+type = "u8"
+min = 0
+max = 4
+default = 0
+exposed = false
+doc = "LED effect (0 off)"
+
+[[field]]
+name = "led.hue"
+type = "u16"
+min = 0
+max = 360
+default = 180
+exposed = false
+doc = "LED hue in degrees"
+
+[[field]]
+name = "led.sat"
+type = "u8"
+min = 0
+max = 255
+default = 255
+exposed = false
+doc = "LED saturation"
+
+[[field]]
+name = "led.spd"
+type = "u8"
+min = 0
+max = 255
+default = 128
+exposed = false
+doc = "LED effect speed"
+
+[[field]]
+name = "cal.lx_c"
+type = "i16"
+min = -1024
+max = 1024
+default = 0
+exposed = false
+doc = "LX center offset"
+
+[[field]]
+name = "cal.ly_c"
+type = "i16"
+min = -1024
+max = 1024
+default = 0
+exposed = false
+doc = "LY center offset"
+
+[[field]]
+name = "cal.rx_c"
+type = "i16"
+min = -1024
+max = 1024
+default = 0
+exposed = false
+doc = "RX center offset"
+
+[[field]]
+name = "cal.ry_c"
+type = "i16"
+min = -1024
+max = 1024
+default = 0
+exposed = false
+doc = "RY center offset"
+
+[[field]]
+name = "usb.poll_rate"
+type = "u8"
+min = 0
+max = 3
+default = 2
+exposed = false
+flags = ["reboot"]
+doc = "USB poll rate (2 = 500 Hz)"
+
+[[field]]
+name = "usb.vid"
+type = "u16"
+min = 0
+max = 65535
+default = 65535
+exposed = false
+flags = ["reboot"]
+doc = "USB vendor id"
+
+[[field]]
+name = "usb.pid"
+type = "u16"
+min = 0
+max = 65535
+default = 65535
+exposed = false
+flags = ["reboot"]
+doc = "USB product id"
+
+[[field]]
+name = "sys.log_level"
+type = "u8"
+min = 0
+max = 3
+default = 1
+exposed = false
+doc = "Log level (1 = info)"
+
+[[field]]
+name = "sys.debounce_samples"
+type = "u8"
+min = 4
+max = 64
+default = 16
+exposed = false
+doc = "Keypad debounce window, in samples"
+
+[[field]]
+name = "sys.debounce_threshold"
+type = "u8"
+min = 1
+max = 64
+default = 12
+exposed = false
+doc = "Keypad debounce threshold"

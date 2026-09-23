@@ -582,12 +582,12 @@ CONFIG_COMMANDS = (
 # and nothing derives it into a file this suite reads. A key added to the table
 # without reaching this tuple turns that check red instead of being compared
 # against nothing, which is what the ADR's D1 criterion asks for. The values
-# move with the table: map.socd_mode's max is SOCDMode's last enumerator, so an
+# move with the table: map.socd's max is SOCDMode's last enumerator, so an
 # enumerator added to that enum moves both and the red is the prompt to say so
 # here too.
 CONFIG_KEYS = (
     # name, min, max, reboot, count, accepts_unmapped
-    ("map.socd_mode", 0, 4, False, 1, False),
+    ("map.socd", 0, 4, False, 1, False),
     ("map.four_way", 0, 1, False, 1, False),
     ("map.btn_map", 0, 31, False, 32, True),
 )
@@ -1494,13 +1494,13 @@ def main():
     # no flag reads. Both spellings are read here, because a reply that dropped
     # the key entirely would otherwise be scored only by the checks above, whose
     # subject is the value each key holds.
-    scalar_resp, _sent = cfg_send("config.get_key", key="map.socd_mode")
+    scalar_resp, _sent = cfg_send("config.get_key", key="map.socd")
     array_resp, _sent = cfg_send("config.get_key", key="map.btn_map")
     array_value = field(array_resp, "value")
     check_config("get_key value present",
                  status_of(scalar_resp) == "ok"
                  and int_value(field(scalar_resp, "value"))
-                 and field(scalar_resp, "key") == "map.socd_mode"
+                 and field(scalar_resp, "key") == "map.socd"
                  and status_of(array_resp) == "ok"
                  and isinstance(array_value, list) and array_value
                  and all(int_value(element) for element in array_value),
@@ -1518,8 +1518,8 @@ def main():
     negatives = (
         ("set_key unknown key",
          ("config.set_key", {"key": "led.bri", "value": 50})),
-        ("set_key socd_mode out of range",
-         ("config.set_key", {"key": "map.socd_mode", "value": 9})),
+        ("set_key socd out of range",
+         ("config.set_key", {"key": "map.socd", "value": 9})),
         ("set_key btn_map wrong element count",
          ("config.set_key", {"key": "map.btn_map", "value": [1, 2]})),
         ("set_key btn_map element outside the domain",

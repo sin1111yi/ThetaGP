@@ -33,14 +33,14 @@ namespace ThetaGP::Gamepad::Config {
 struct ConfigStore {
   // ── Map settings ──
   uint8_t btn_map[32]; // Physical key → button bit index (0xFF = unmapped)
-  uint8_t socd_mode;
-  uint8_t four_way_mode;
-  uint8_t dpad_mode;
+  uint8_t socd;
+  uint8_t four_way;
+  uint8_t dpad;
   uint8_t inv_x;
   uint8_t inv_y;
   uint8_t inv_rx;
   uint8_t inv_ry;
-  uint8_t swap_sticks;
+  uint8_t swap;
 
   // ── Stick settings ──
   uint16_t lx_dz;
@@ -59,17 +59,17 @@ struct ConfigStore {
   uint8_t rt_dz;
 
   // ── LED settings ──
-  uint8_t led_brightness;
-  uint8_t led_mode;
-  uint16_t led_hue;
-  uint8_t led_saturation;
-  uint8_t led_speed;
+  uint8_t bri;
+  uint8_t mode;
+  uint16_t hue;
+  uint8_t sat;
+  uint8_t spd;
 
   // ── Calibration ──
-  int16_t cal_lx;
-  int16_t cal_ly;
-  int16_t cal_rx;
-  int16_t cal_ry;
+  int16_t lx_c;
+  int16_t ly_c;
+  int16_t rx_c;
+  int16_t ry_c;
 };
 
 // Parse the JSON profile body `json[0 .. len)` into ConfigStore. `len` is the

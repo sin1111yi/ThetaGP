@@ -36,6 +36,7 @@
 import os
 import shutil
 import subprocess
+import subprocess
 import sys
 import tempfile
 
@@ -51,6 +52,9 @@ SOURCES = [
     os.path.join(REPO_ROOT, "lib", "frozen", "frozen.c"),
 ]
 INCLUDES = [
+    # The repository root is on the include path the same way the firmware has
+    # it, so a generated header is reached as "<dir>/<name>.gen.h".
+    REPO_ROOT,
     os.path.join(REPO_ROOT, "src"),
     os.path.join(REPO_ROOT, "lib", "frozen"),
     # build_info.h carries the target's platform header and its board config;
@@ -60,7 +64,29 @@ INCLUDES = [
 ]
 
 
+def ensure_generated():
+    """Regenerate the config key header, so the build below reads its source.
+
+    The table the firmware compiles is generated from configs/config_keys.toml,
+    and the harness compiles the same translation units: it regenerates the
+    header rather than trusting a copy that may be left over from an earlier
+    edit to the declaration. Regenerating is deterministic and the file is
+    ignored by git.
+    """
+    gen = os.path.join(REPO_ROOT, "scripts", "gen_proto.py")
+    result = subprocess.run([sys.executable, gen, "--target", "config-keys"],
+                            cwd=REPO_ROOT, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.PIPE, text=True)
+    if result.returncode != 0:
+        print(f"ERROR: the config key generator failed:\n{result.stderr}",
+              file=sys.stderr)
+        return False
+    return True
+
+
 def main():
+    if not ensure_generated():
+        return 1
     compiler = shutil.which("g++") or shutil.which("c++")
     if compiler is None:
         print("ERROR: no C++ compiler found (looked for g++, c++)",

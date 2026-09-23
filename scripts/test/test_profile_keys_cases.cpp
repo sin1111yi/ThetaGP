@@ -29,6 +29,7 @@
 // The names the stored format has always carried are pinned by text, because a
 // profile written by an older firmware has to keep being read.
 
+#include "configs/config_keys.gen.h"
 #include "gamepad/config/config_defaults.h"
 #include "gamepad/config/config_store.h"
 #include "gamepad/config/key_table.h"
@@ -42,15 +43,13 @@
 
 namespace {
 
+using ThetaGP::Gamepad::Config::ConfigKey;
 using ThetaGP::Gamepad::Config::ConfigStore;
-using ThetaGP::Gamepad::Config::kBtnMapKey;
 using ThetaGP::Gamepad::Config::kConfigDefaults;
+using ThetaGP::Gamepad::Config::keyEntry;
 using ThetaGP::Gamepad::Config::KeyEntry;
 using ThetaGP::Gamepad::Config::keyTable;
-using ThetaGP::Gamepad::Config::KeyTableKey;
 using ThetaGP::Gamepad::Config::KeyType;
-using ThetaGP::Gamepad::Config::kFourWayKey;
-using ThetaGP::Gamepad::Config::kSocdModeKey;
 using ThetaGP::Gamepad::Config::parseProfile;
 using ThetaGP::Gamepad::Config::profileLeafName;
 using ThetaGP::Gamepad::Config::serializeProfile;
@@ -106,8 +105,8 @@ int main() {
           "the four way key keeps the name the stored format carries");
     check(std::strstr(body, "\"btn_map\":[") != nullptr,
           "the button map keeps the name the stored format carries");
-    check(std::strstr(body, "socd_mode:") == nullptr &&
-              std::strstr(body, "four_way_mode:") == nullptr,
+    check(std::strstr(body, "socd:") == nullptr &&
+              std::strstr(body, "four_way:") == nullptr,
           "no protocol key name reaches the body");
   }
 
@@ -118,22 +117,21 @@ int main() {
     Json doc;
     doc.parse(body, static_cast<int>(len));
 
-    const KeyEntry &socd = keyTable()[kSocdModeKey];
-    const KeyEntry &fourWay = keyTable()[kFourWayKey];
-    const KeyEntry &btnMap = keyTable()[kBtnMapKey];
+    const KeyEntry &socd = keyEntry(ConfigKey::Socd);
+    const KeyEntry &fourWay = keyEntry(ConfigKey::FourWay);
+    const KeyEntry &btnMap = keyEntry(ConfigKey::BtnMap);
 
-    check(doc.getInt(socd.jsonKey, kNoValue) == kConfigDefaults.socd_mode,
+    check(doc.getInt(socd.key, kNoValue) == kConfigDefaults.socd,
           "the SOCD mode key's path reads the value the field holds");
-    check(doc.getInt(fourWay.jsonKey, kNoValue) ==
-              kConfigDefaults.four_way_mode,
+    check(doc.getInt(fourWay.key, kNoValue) == kConfigDefaults.four_way,
           "the four way key's path reads the value the field holds");
 
-    const int arrLen = doc.getArrLen(btnMap.jsonKey);
+    const int arrLen = doc.getArrLen(btnMap.key);
     check(arrLen == 32, "the button map key's path names the array");
     bool same = arrLen == 32;
     for (int i = 0; same && i < 32; i++) {
-      same = doc.getArrInt(btnMap.jsonKey, i, kNoValue) ==
-             kConfigDefaults.btn_map[i];
+      same =
+          doc.getArrInt(btnMap.key, i, kNoValue) == kConfigDefaults.btn_map[i];
     }
     check(same, "every element the path names holds what the field holds");
   }
@@ -146,15 +144,15 @@ int main() {
     const int socdWanted = 2;
     const int fourWayWanted = 1;
     std::snprintf(body, sizeof(body), "{ver:2,map:{%s:%d,%s:%d,%s:[0,0]}}",
-                  profileLeafName(keyTable()[kSocdModeKey]), socdWanted,
-                  profileLeafName(keyTable()[kFourWayKey]), fourWayWanted,
-                  profileLeafName(keyTable()[kBtnMapKey]));
+                  profileLeafName(keyEntry(ConfigKey::Socd)), socdWanted,
+                  profileLeafName(keyEntry(ConfigKey::FourWay)), fourWayWanted,
+                  profileLeafName(keyEntry(ConfigKey::BtnMap)));
     // The array's slots beyond the two the body carries take the sentinel.
     ConfigStore cfg = kConfigDefaults;
     parseProfile(body, static_cast<uint32_t>(std::strlen(body)), &cfg);
-    check(cfg.socd_mode == socdWanted,
+    check(cfg.socd == socdWanted,
           "the SOCD mode field takes the value the body carries");
-    check(cfg.four_way_mode == fourWayWanted,
+    check(cfg.four_way == fourWayWanted,
           "the four way field takes the value the body carries");
     check(cfg.btn_map[0] == 0 && cfg.btn_map[1] == 0,
           "the array's elements take the values the body carries");
@@ -163,15 +161,15 @@ int main() {
   }
 
   std::printf(
-      "-- 4. control: a protocol key name in a body fills nothing --\n");
+      "-- 4. control: a whole name where a leaf belongs fills nothing --\n");
   {
     char body[kBodyCap] = {};
-    std::snprintf(body, sizeof(body), "{ver:2,map:{map.socd_mode:%d}}",
-                  (kConfigDefaults.socd_mode + 1) % 2);
+    std::snprintf(body, sizeof(body), "{ver:2,map:{map.socd:%d}}",
+                  (kConfigDefaults.socd + 1) % 2);
     ConfigStore cfg = kConfigDefaults;
     parseProfile(body, static_cast<uint32_t>(std::strlen(body)), &cfg);
-    check(cfg.socd_mode == kConfigDefaults.socd_mode,
-          "a body naming the protocol key leaves the field at its default");
+    check(cfg.socd == kConfigDefaults.socd,
+          "a body naming the whole name leaves the field at its default");
   }
 
   std::printf("%d checks, %d failed\n", g_ran, g_failed);
