@@ -53,11 +53,7 @@ extern "C" {
 
 #if !defined(UNUSED)
 #define UNUSED(x) ((void)(x))
-#endif /* UNUSE */
-
-#if !defined(MAYBE_UNUSE)
-#define MAYBE_UNUSE(x) UNUSED(x)
-#endif /* MAYBE_UNUSED */
+#endif /* UNUSED */
 
 #if !defined(WEAKFN)
 #define WEAKFN __attribute__((weak))
