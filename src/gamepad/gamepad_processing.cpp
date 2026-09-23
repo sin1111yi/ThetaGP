@@ -23,6 +23,11 @@
 
 namespace ThetaGP::Gamepad {
 
+void processState(GamepadRawInput &state, DpadState &dpadState,
+                  const Config::ConfigStore &cfg) {
+  state.dpad = processDpad(state.dpad, dpadState, cfg);
+}
+
 uint8_t processDpad(uint8_t dpad, DpadState &dpadState,
                     const Config::ConfigStore &cfg) {
   uint8_t processed = runSOCDCleaner(
