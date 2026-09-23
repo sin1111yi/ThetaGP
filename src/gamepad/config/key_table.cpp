@@ -110,6 +110,46 @@ static_assert(entriesWithinListLimits(),
 // The table carries the keys the code reads, and the three map keys are those.
 static_assert(kKeyTableCount == 3, "key table: the connected keys are three");
 
+// Whether two texts are the same one.
+constexpr bool sameText(const char *a, const char *b) {
+  while (*a != '\0' && *a == *b) {
+    ++a;
+    ++b;
+  }
+  return *a == *b;
+}
+
+// A row taken by position is the key code that takes it by position means to
+// read, so the positions and the rows stay in step.
+static_assert(kKeyTableCount == kKeyTableKeys,
+              "key table: a position names no row");
+static_assert(sameText(kKeyTable[kSocdModeKey].key, "map.socd_mode"),
+              "key table: the position for the SOCD mode key is not that key");
+static_assert(sameText(kKeyTable[kFourWayKey].key, "map.four_way"),
+              "key table: the position for the four way key is not that key");
+static_assert(sameText(kKeyTable[kBtnMapKey].key, "map.btn_map"),
+              "key table: the position for the button map key is not that key");
+
+// A profile body carries a key's profile name through the JSON writer, which
+// formats a name of up to kJsonWriterNameBufLen bytes on its stack: a longer
+// one makes it allocate a buffer it then frees.
+constexpr int kJsonWriterNameBufLen = 20;
+constexpr bool leavesWithinWriterBuffer() {
+  for (const KeyEntry &entry : kKeyTable) {
+    int len = 0;
+    for (const char *p = profileLeafName(entry); *p != '\0'; ++p) {
+      ++len;
+    }
+    if (len >= kJsonWriterNameBufLen) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static_assert(leavesWithinWriterBuffer(),
+              "key table: a profile key name takes a heap buffer to write");
+
 } // namespace
 
 const KeyEntry *keyTable() { return kKeyTable; }
