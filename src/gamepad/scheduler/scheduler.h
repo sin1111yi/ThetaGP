@@ -23,7 +23,7 @@
 
 #include "conf/ThetaGP_Config.h"
 
-#include "drivers/device/systimer.h"
+#include "drivers/device/system_timer.h"
 
 #include <cstddef>
 #include <cstdint>

@@ -16,11 +16,11 @@
  *
  * If not, see <https://www.gnu.org/licenses/>.
  *
- * @file dmamgr.cpp
+ * @file dma_manager.cpp
  * @brief DmaManager allocation implementation
  */
 
-#include "drivers/peripherals/dmamgr.h"
+#include "drivers/peripherals/dma_manager.h"
 
 using namespace ThetaGP::Drivers::Peripheral::DMA;
 

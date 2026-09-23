@@ -19,7 +19,7 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "drivers/device/systimer.h"
+#include "drivers/device/system_timer.h"
 #include "drivers/peripherals/systick.h"
 
 namespace ThetaGP::Drivers::Device {

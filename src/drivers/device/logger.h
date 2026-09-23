@@ -23,7 +23,7 @@
 
 #include "build_info.h"
 #include "drivers/device/device.h"
-#include "drivers/peripherals/peripheralsmgr.h"
+#include "drivers/peripherals/peripherals_manager.h"
 
 #include <cstdint>
 

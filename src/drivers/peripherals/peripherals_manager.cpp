@@ -19,9 +19,9 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "drivers/peripherals/peripheralsmgr.h"
+#include "drivers/peripherals/peripherals_manager.h"
 #include "drivers/peripherals/bus/bus.h"
-#include "drivers/peripherals/bus/bus_spi.h"
+#include "drivers/peripherals/bus/spi_bus.h"
 #include "drivers/peripherals/systick.h"
 #include "drivers/peripherals/timer.h"
 #include "drivers/peripherals/usbhw.h"

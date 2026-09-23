@@ -22,8 +22,8 @@
 #pragma once
 
 #include "BoardConfig.h"
-#include "drivers/peripherals/bus/bus_spi.h"
-#include "drivers/peripherals/bus/bus_uart.h"
+#include "drivers/peripherals/bus/spi_bus.h"
+#include "drivers/peripherals/bus/uart_bus.h"
 #include "drivers/peripherals/timer.h"
 
 namespace ThetaGP::Drivers::Peripheral {

@@ -21,9 +21,9 @@
 
 #pragma once
 
-#include "drivers/device/devicemgr.h"
+#include "drivers/device/device_manager.h"
 #include "drivers/gp_emulator/gp_emulator_manager.h"
-#include "drivers/peripherals/peripheralsmgr.h"
+#include "drivers/peripherals/peripherals_manager.h"
 
 #include "gamepad/gamepad.h"
 #include "taskmanager.h"

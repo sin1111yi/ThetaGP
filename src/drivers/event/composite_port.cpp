@@ -19,7 +19,7 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "drivers/event/CompositePort.h"
+#include "drivers/event/composite_port.h"
 
 namespace ThetaGP::Drivers::Event {
 

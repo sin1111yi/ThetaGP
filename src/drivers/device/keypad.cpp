@@ -24,10 +24,10 @@
 
 #include "drivers/device/keypad.h"
 
-#include "drivers/device/systimer.h"
+#include "drivers/device/system_timer.h"
 #include "drivers/peripherals/gpio.h"
 #include "drivers/peripherals/nvic.h"
-#include "drivers/peripherals/peripheralsmgr.h"
+#include "drivers/peripherals/peripherals_manager.h"
 #include "drivers/peripherals/systick.h"
 
 #include "utils/atomic.h"

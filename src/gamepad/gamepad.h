@@ -26,7 +26,7 @@
 #include "utils/time.h"
 #include "utils/types.h"
 
-#include "drivers/device/devicemgr.h"
+#include "drivers/device/device_manager.h"
 #include "drivers/gp_emulator/gp_emulator.h"
 #include "drivers/gp_emulator/gp_emulator_manager.h"
 

@@ -25,7 +25,7 @@
 #include "utils/utils.h"
 
 #include "drivers/device/flash/flash_base.h"
-#include "drivers/peripherals/bus/bus_spi.h"
+#include "drivers/peripherals/bus/spi_bus.h"
 
 namespace ThetaGP::Drivers::Device {
 

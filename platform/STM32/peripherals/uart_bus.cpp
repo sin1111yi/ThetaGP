@@ -21,9 +21,9 @@
 
 #include "utils/types.h"
 
-#include "drivers/peripherals/bus/bus_uart.h"
+#include "drivers/peripherals/bus/uart_bus.h"
 #include "drivers/peripherals/dma.h"
-#include "drivers/peripherals/dmamgr.h"
+#include "drivers/peripherals/dma_manager.h"
 #include "drivers/peripherals/gpio.h"
 #include "drivers/peripherals/nvic.h"
 #include "drivers/peripherals/nvic_exti.h"

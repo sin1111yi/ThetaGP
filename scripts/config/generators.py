@@ -44,7 +44,7 @@ def lookup_value(mapping: dict[str, str], label: str, value,
     """Map a declared config value onto the constant the firmware defines.
 
     The maps above carry one entry per value the platform layer defines
-    (`UartInstance` in bus_uart.h, `SpiInstance` in bus_spi.h, the USB
+    (`UartInstance` in uart_bus.h, `SpiInstance` in spi_bus.h, the USB
     peripheral macros, the MCU headers), so a value outside a map has nothing
     behind it in the firmware: there is no default to fall back on, and a
     made-up entry would put a constant for undeclared hardware into the

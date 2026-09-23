@@ -52,7 +52,7 @@ USB_REPORT_RATE_CEILING_HZ = USB_SPEED_CEILING_HZ  # the generator's table, not 
 # generator answers with the switch alone.
 VALID_FLASH_CHIPS = {"none"} | set(FLASH_CHIP_MAP)
 
-# The firmware's instance enums (bus_uart.h, bus_spi.h) carry exactly the
+# The firmware's instance enums (uart_bus.h, spi_bus.h) carry exactly the
 # entries in those maps: UART1–UART8 have no LPUART, SPI1–SPI6 have no SPI7.
 VALID_UART_PERIPHERALS = set(UART_PERIPHERAL_ENUM_MAP)
 VALID_SPI_PERIPHERALS = set(SPI_PERIPHERAL_ENUM_MAP)

@@ -23,7 +23,7 @@
 #include "conf/ThetaGP_Config.h" // THETAGP_CFG_HAS_FLASH, the flash switch this file branches on
 
 #include "drivers/device/logger.h"
-#include "drivers/peripherals/peripheralsmgr.h"
+#include "drivers/peripherals/peripherals_manager.h"
 #include "gamepad/scheduler/scheduler.h"
 #include "utils/log/log.h"
 
@@ -31,11 +31,11 @@
 #include "gamepad/gamepad.h"
 #include "taskmanager.h"
 
-#include "drivers/device/devicemgr.h"
+#include "drivers/device/device_manager.h"
 #include "drivers/device/flash/flash_base.h"
 #include "drivers/device/keypad.h"
 #include "drivers/device/run_led.h"
-#include "drivers/device/systimer.h"
+#include "drivers/device/system_timer.h"
 #include "drivers/gp_emulator/gp_emulator_manager.h"
 
 #include "drivers/peripherals/systick.h"

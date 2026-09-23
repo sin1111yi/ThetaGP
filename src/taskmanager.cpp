@@ -27,7 +27,7 @@
 #include "ThetaGP.h"
 
 #include "drivers/device/run_led.h"
-#include "drivers/device/systimer.h"
+#include "drivers/device/system_timer.h"
 
 #include "tusb.h"
 

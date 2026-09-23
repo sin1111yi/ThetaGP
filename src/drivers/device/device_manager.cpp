@@ -19,7 +19,7 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "drivers/device/devicemgr.h"
+#include "drivers/device/device_manager.h"
 
 #include <cstring>
 

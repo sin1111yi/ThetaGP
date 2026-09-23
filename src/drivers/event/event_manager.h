@@ -21,7 +21,7 @@
 
 #pragma once
 
-#include "drivers/event/IEventPort.h"
+#include "drivers/event/i_event_port.h"
 
 #include <cstdint>
 

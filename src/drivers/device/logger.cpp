@@ -20,7 +20,7 @@
  */
 
 #include "drivers/device/logger.h"
-#include "drivers/peripherals/bus/bus_uart.h"
+#include "drivers/peripherals/bus/uart_bus.h"
 #include "drivers/peripherals/systick.h"
 #include "utils/log/log.h"
 
