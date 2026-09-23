@@ -38,6 +38,7 @@ protocol/proto.rs
 protocol/types.ts
 protocol/proto_fields.json
 protocol/proto_resp.h
+configs/config_keys.gen.h
 
 
 .codegraph
