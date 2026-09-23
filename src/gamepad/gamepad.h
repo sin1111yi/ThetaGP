@@ -32,7 +32,6 @@
 
 #include "gamepad/config/config_store.h"
 #include "gamepad/gamepad_state.h"
-#include "gamepad/input/input_processor.h"
 
 namespace ThetaGP::Gamepad {
 
@@ -47,11 +46,12 @@ using GPEmulatorManager = ThetaGP::Drivers::GPEmulator::GPEmulatorManager;
 class Gamepad {
 private:
   GamepadRawInput _state;
-  // Taken in setup() and used on every tick. Both point into singletons that
-  // live as long as the firmware does, so neither can be null while a tick
+  // Cross-tick memory of the configured transforms, cleared on reinit().
+  DpadState _dpad{};
+  // Taken in setup() and used on every tick. Points into a singleton that
+  // lives as long as the firmware does, so it cannot be null while a tick
   // runs.
   const Config::ConfigStore *_cfg = nullptr;
-  Input::InputProcessor *_processor = nullptr;
   Device *_inputDevice = nullptr;
   bool _initialized = false;
   bool _ready = false;

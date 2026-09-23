@@ -19,31 +19,23 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "gamepad/input/input_processor.h"
+#include "gamepad/gamepad_processing.h"
 
-namespace ThetaGP::Gamepad::Input {
+namespace ThetaGP::Gamepad {
 
-using namespace Enums;
-
-InputProcessor &InputProcessor::getInstance() {
-  static InputProcessor instance;
-  return instance;
-}
-
-void InputProcessor::process(const Config::ConfigStore &cfg,
-                             GamepadRawInput &state) {
-  // The value the keys produced, before either filter below touches it.
+void processState(GamepadRawInput &state, DpadState &dpadState,
+                  const Config::ConfigStore &cfg) {
+  // The value the keys produced, before the transforms below touch it.
   state.dpadOriginal = state.dpad;
 
-  uint8_t dpad =
-      runSOCDCleaner(_dpad, static_cast<SOCDMode>(cfg.socd_mode), state.dpad);
+  uint8_t dpad = runSOCDCleaner(dpadState,
+                                static_cast<Enums::SOCDMode>(cfg.socd_mode),
+                                state.dpad);
   if (cfg.four_way_mode != 0) {
-    dpad = filterToFourWayMode(_dpad, dpad);
+    dpad = filterToFourWayMode(dpadState, dpad);
   }
 
   state.dpad = dpad;
 }
 
-void InputProcessor::reset() { _dpad = DpadState{}; }
-
-} // namespace ThetaGP::Gamepad::Input
+} // namespace ThetaGP::Gamepad
