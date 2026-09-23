@@ -106,7 +106,9 @@ void Gamepad::process() {
     return;
   }
   read();
-  processState(_state, _dpad, *_cfg);
+  const uint8_t dpad = _state.dpad;
+  _state.dpadOriginal = dpad;
+  _state.dpad = processDpad(dpad, _dpad, *_cfg);
 
   driver->process(this);
 }

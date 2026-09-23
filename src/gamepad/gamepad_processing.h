@@ -26,10 +26,10 @@
 
 namespace ThetaGP::Gamepad {
 
-// Turns the state the keys produced into the state the output drivers report.
+// Applies the configured direction transforms to the bits the keys produced.
 // `dpadState` carries the memory the transforms keep between ticks, `cfg`
 // selects which transforms run.
-void processState(GamepadRawInput &state, DpadState &dpadState,
-                  const Config::ConfigStore &cfg);
+uint8_t processDpad(uint8_t dpad, DpadState &dpadState,
+                    const Config::ConfigStore &cfg);
 
 } // namespace ThetaGP::Gamepad

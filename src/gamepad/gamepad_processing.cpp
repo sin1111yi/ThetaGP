@@ -23,19 +23,15 @@
 
 namespace ThetaGP::Gamepad {
 
-void processState(GamepadRawInput &state, DpadState &dpadState,
-                  const Config::ConfigStore &cfg) {
-  // The value the keys produced, before the transforms below touch it.
-  state.dpadOriginal = state.dpad;
-
-  uint8_t dpad = runSOCDCleaner(dpadState,
-                                static_cast<Enums::SOCDMode>(cfg.socd_mode),
-                                state.dpad);
+uint8_t processDpad(uint8_t dpad, DpadState &dpadState,
+                    const Config::ConfigStore &cfg) {
+  uint8_t processed = runSOCDCleaner(
+      dpadState, static_cast<Enums::SOCDMode>(cfg.socd_mode), dpad);
   if (cfg.four_way_mode != 0) {
-    dpad = filterToFourWayMode(dpadState, dpad);
+    processed = filterToFourWayMode(dpadState, processed);
   }
 
-  state.dpad = dpad;
+  return processed;
 }
 
 } // namespace ThetaGP::Gamepad
