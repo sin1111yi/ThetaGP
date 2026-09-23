@@ -23,7 +23,7 @@
 
 #include "test/config_cmd_handler.h"
 #include "test/dispatcher.h"
-#include "test/framelayer.h"
+#include "test/frame_layer.h"
 
 #include "gamepad/config/config_defaults.h"
 #include "gamepad/config/config_store.h"

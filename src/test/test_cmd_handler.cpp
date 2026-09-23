@@ -19,10 +19,10 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "test/testcmds.h"
+#include "test/test_cmd_handler.h"
 #include "conf/ThetaGP_Config.h" // THETAGP_CFG_HAS_FLASH and THETAGP_CFG_BUILD_TEST_API, the firmware-layer switches this file reads
 #include "test/dispatcher.h"
-#include "test/framelayer.h"
+#include "test/frame_layer.h"
 
 #include "drivers/device/flash/flash_w25qxx.h"
 #include "drivers/device/keypad.h"
@@ -378,7 +378,7 @@ void TestCmdHandler::handle(const char *cmd, const Json &json) {
 
 #else
 
-// All methods are inlined in testcmds.h for production mode
+// All methods are inlined in test_cmd_handler.h for production mode
 // (empty class stub with no-op implementations)
 
 #endif // THETAGP_CFG_BUILD_TEST_API

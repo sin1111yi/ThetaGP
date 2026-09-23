@@ -23,7 +23,7 @@
 
 #include "test/profile_cmd_handler.h"
 #include "test/dispatcher.h"
-#include "test/framelayer.h"
+#include "test/frame_layer.h"
 
 #include "drivers/device/flash/flash_w25qxx.h"
 #include "gamepad/config/config_manager.h"

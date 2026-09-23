@@ -19,12 +19,12 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "test/testsys.h"
+#include "test/sys_handler.h"
 #include "conf/ThetaGP_Config.h" // THETAGP_CFG_HAS_FLASH, the flash switch this file branches on
 #include "test/dispatcher.h"
-#include "test/framelayer.h"
+#include "test/frame_layer.h"
 
-#include "taskmanager.h"
+#include "task_manager.h"
 
 #include "gamepad/profile/profile_store.h"
 

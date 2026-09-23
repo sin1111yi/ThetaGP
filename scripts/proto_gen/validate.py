@@ -114,8 +114,8 @@ def validate_envelope(proto: dict) -> None:
 
     What is not checked, because nothing in the source states it: whether these
     are the keys the firmware's format strings write. Those copies are still
-    written by hand — 46 format strings across src/test/testsys.cpp,
-    testcmds.cpp, profile_cmd_handler.cpp, config_cmd_handler.cpp and
+    written by hand — 46 format strings across src/test/sys_handler.cpp,
+    test_cmd_handler.cpp, profile_cmd_handler.cpp, config_cmd_handler.cpp and
     dispatcher.cpp — and comparing them is a review and a device-side check, not
     something this file can read.
     """

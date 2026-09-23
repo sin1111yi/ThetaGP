@@ -29,7 +29,7 @@
 #
 # Board-aware: not every board is fitted with the external SPI flash chip, and
 # test.flash_info / test.flash_read / test.spi_mode sit inside
-# #ifdef THETAGP_CFG_HAS_FLASH (testcmds.cpp:265-272), so on a board without it
+# #ifdef THETAGP_CFG_HAS_FLASH (test_cmd_handler.cpp:265-272), so on a board without it
 # they are not in the build and answer as unknown commands. The suite asks the
 # board (sys.get_usage.ext_flash_total_sectors) instead of assuming an answer:
 # with no chip those checks are SKIP with the reason, and with the chip they are
@@ -84,7 +84,7 @@
 # One request in flight. The frame layer holds a single TX slot while the task
 # that dispatches commands drains a whole tick's queue at once, so requests
 # written back to back leave only the last reply on the wire
-# (framelayer.cpp:197-213; the stage measures it). Every check below waits for
+# (frame_layer.cpp:197-213; the stage measures it). Every check below waits for
 # its own reply before the next request goes out, and one check states the limit
 # rather than depending on it silently.
 #
@@ -135,7 +135,7 @@ from cdc_serial import open_serial, readline, read_bytes, TestContext
 # (dispatcher.cpp:95-102). It is the only thing that separates "this command is
 # not in this build" from "the command is there and rejected its arguments":
 # both carry error_code 1, because the length guard of test.flash_read answers
-# with error_code 1 too (testcmds.cpp:221-228). A check that only asks "did an
+# with error_code 1 too (test_cmd_handler.cpp:221-228). A check that only asks "did an
 # error come back" therefore scores those two opposite results the same way.
 UNKNOWN_CMD_REASON = "unknown command"
 
@@ -375,7 +375,7 @@ def cmd_routed(resp):
     with the reason "unknown command" and error_code 1 (dispatcher.cpp:95-102).
     Every other answer — including the error of a handler that rejected its
     arguments — came from a handler, so the command exists. test.flash_info and
-    test.flash_read sit inside #ifdef THETAGP_CFG_HAS_FLASH (testcmds.cpp:265),
+    test.flash_read sit inside #ifdef THETAGP_CFG_HAS_FLASH (test_cmd_handler.cpp:265),
     so on a board without the SPI flash chip they are exactly this case.
     """
     return isinstance(resp, dict) and resp.get("reason") != UNKNOWN_CMD_REASON
@@ -969,7 +969,7 @@ def config_request(ctx, cmd, **kw):
     the command or carries no `cmd` with a status of error.
 
     One request in flight: the reply to this one is read before the caller can
-    send another, which is what the single TX slot requires (framelayer.cpp:197
+    send another, which is what the single TX slot requires (frame_layer.cpp:197
     -213, and the check in Stage 5 that measures it).
     """
     req = {"cmd": cmd, "queued": ctx.queued, **kw}
@@ -1151,7 +1151,7 @@ def main():
     # board is fitted with the external SPI flash chip. When it is absent the
     # firmware reports ext_flash_total_sectors = 0 and compiles test.flash_info,
     # test.flash_read and test.spi_mode out of the build entirely
-    # (#ifdef THETAGP_CFG_HAS_FLASH, testcmds.cpp:265-272), so they answer as
+    # (#ifdef THETAGP_CFG_HAS_FLASH, test_cmd_handler.cpp:265-272), so they answer as
     # unknown commands. Those checks are then "this board does not have the
     # thing under test" — SKIP, with the reason — and stay exactly as strict as
     # before on a board that does have the chip.
@@ -1228,7 +1228,7 @@ def main():
     # test.flash_read — an over-long length has to be rejected. This is the
     # check that used to pass for the wrong reason: "length rejected" and
     # "command does not exist" are opposite results and both arrive as
-    # {status:error,error_code:1} (testcmds.cpp:221-228 vs
+    # {status:error,error_code:1} (test_cmd_handler.cpp:221-228 vs
     # dispatcher.cpp:95-102), so the domain assertion above is what makes this
     # one mean what it says — if the command is missing, the length guard has
     # not been demonstrated and this reports FAIL instead of a free PASS.
@@ -1547,7 +1547,7 @@ def main():
     # config.set_key and config.get_key, one key at a time, each write read back
     # and then undone. Every request waits for its reply before the next goes
     # out: the frame layer holds one TX slot, so a request written while another
-    # reply is in flight costs that reply (framelayer.cpp:197-213, and the last
+    # reply is in flight costs that reply (frame_layer.cpp:197-213, and the last
     # check of this stage measures it).
     #
     # What a round trip shows, and what it does not: both ends of a key go
@@ -1832,7 +1832,7 @@ def main():
                      detail=brief(resp))
 
     # The limit the checks above work around, stated as a check of its own: the
-    # frame layer holds one TX slot (framelayer.cpp:197-213) while the task that
+    # frame layer holds one TX slot (frame_layer.cpp:197-213) while the task that
     # dispatches commands drains a whole tick's queue at once, so requests
     # written back to back leave one reply on the wire — the last one, the
     # others overwritten before the host can read them. A stage whose requests

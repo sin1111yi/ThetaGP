@@ -23,10 +23,10 @@
 #include "conf/ThetaGP_Config.h" // THETAGP_CFG_HAS_FLASH, the flash switch this file branches on
 #include "test/config_cmd_handler.h"
 #include "test/dispatcher.h"
-#include "test/framelayer.h"
+#include "test/frame_layer.h"
 #include "test/profile_cmd_handler.h"
-#include "test/testcmds.h"
-#include "test/testsys.h"
+#include "test/test_cmd_handler.h"
+#include "test/sys_handler.h"
 
 #include "drivers/gp_emulator/usb_driver.h"
 #include "utils/log/log.h"

@@ -20,7 +20,7 @@
  */
 
 #include "test/dispatcher.h"
-#include "test/framelayer.h"
+#include "test/frame_layer.h"
 
 #include "build_info.h"
 #include "utils/log/log.h"

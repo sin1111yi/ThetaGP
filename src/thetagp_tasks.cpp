@@ -28,11 +28,11 @@
 
 #include "gamepad/gamepad.h"
 #include "drivers/led/led_effect.h"
-#include "taskmanager.h"
+#include "task_manager.h"
 
 #include "ThetaGP.h"
 
-#include "test/framelayer.h"
+#include "test/frame_layer.h"
 
 using namespace ThetaGP;
 using namespace ThetaGP::Gamepad;

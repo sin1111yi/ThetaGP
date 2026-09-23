@@ -26,7 +26,7 @@
 #include "drivers/peripherals/peripherals_manager.h"
 
 #include "gamepad/gamepad.h"
-#include "taskmanager.h"
+#include "task_manager.h"
 
 namespace ThetaGP {
 
