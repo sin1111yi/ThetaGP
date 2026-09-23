@@ -44,6 +44,7 @@ void Gamepad::setup() {
   _ready = false;
 
   _cfg = &Config::ConfigManager::getInstance().config();
+  _processor = &Input::InputProcessor::getInstance();
   _gpDriverMgr = &Drivers::GPDriver::GPDriverManager::getInstance();
 }
 
@@ -67,7 +68,7 @@ void Gamepad::registerKeypadDevice(Device *device) {
  * @brief Read input from registered keypad device
  */
 void Gamepad::read() {
-  if (!_inputDevice || !_inputDevice->isInitialized()) {
+  if (!_inputDevice || !_inputDevice->isInitialized() || _cfg == nullptr) {
     return;
   }
 
@@ -101,8 +102,11 @@ void Gamepad::process() {
   if (!_initialized || !_ready) {
     return;
   }
+  if (_cfg == nullptr || _processor == nullptr) {
+    return;
+  }
   read();
-  Input::InputProcessor::getInstance().process(*_cfg, _state);
+  _processor->process(*_cfg, _state);
 
   _gpDriverMgr->getgpdriverDevice()->process(this);
 }

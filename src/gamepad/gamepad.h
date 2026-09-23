@@ -32,6 +32,7 @@
 
 #include "gamepad/config/config_store.h"
 #include "gamepad/gamepadstate.h"
+#include "gamepad/input/input_processor.h"
 
 namespace ThetaGP::Gamepad {
 
@@ -50,6 +51,7 @@ private:
   // configuration manager's own store, whose address holds for the lifetime of
   // the firmware.
   const Config::ConfigStore *_cfg = nullptr;
+  Input::InputProcessor *_processor = nullptr;
   Device *_inputDevice = nullptr;
   bool _initialized = false;
   bool _ready = false;

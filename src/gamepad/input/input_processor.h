@@ -52,7 +52,7 @@ public:
 private:
   InputProcessor() = default;
 
-  DpadState _dpad;
+  DpadState _dpad{};
 };
 
 } // namespace ThetaGP::Gamepad::Input
