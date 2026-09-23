@@ -125,7 +125,9 @@ public:
   /* clang-format on */
 
   // Get state
-  [[nodiscard]] const GamepadRawInput &getState() const { return _processing.raw; }
+  [[nodiscard]] const GamepadRawInput &getState() const {
+    return _processing.raw;
+  }
   [[nodiscard]] GamepadRawInput &getState() { return _processing.raw; }
 
   // Check if ready
