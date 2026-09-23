@@ -82,12 +82,14 @@ constexpr int kNoIntValue = INT_MIN;
 
 // ── Value access ──
 
-// Reads element `index` of the entry's field out of `store` and returns it as
-// a signed integer. The element width comes from the entry's type, and the
-// bytes are copied rather than read through a wider or narrower type.
-static int32_t loadElement(const uint8_t *store, const KeyEntry &entry,
+// Reads element `index` of the entry's field out of `cfg` and returns it as a
+// signed integer. The element width comes from the entry's type, and the bytes
+// are copied rather than read through a wider or narrower type. The field's
+// offset is added here and nowhere else, so the entry addresses the byte the
+// running code reads.
+static int32_t loadElement(const ConfigStore &cfg, const KeyEntry &entry,
                            uint16_t index) {
-  const uint8_t *src = store + entry.offset +
+  const uint8_t *src = reinterpret_cast<const uint8_t *>(&cfg) + entry.offset +
                        static_cast<size_t>(index) * keyTypeWidth(entry.type);
   switch (entry.type) {
   case KeyType::U8:
@@ -110,11 +112,13 @@ static int32_t loadElement(const uint8_t *store, const KeyEntry &entry,
   return 0;
 }
 
-// Writes `value` as element `index` of the entry's field in `store`. The
-// caller has already checked the value against what the entry accepts.
-static void storeElement(uint8_t *store, const KeyEntry &entry, uint16_t index,
-                         int32_t value) {
-  uint8_t *dst = store + entry.offset +
+// Writes `value` as element `index` of the entry's field in `cfg`. The caller
+// has already checked the value against what the entry accepts. The field's
+// offset is added here and nowhere else, so the entry addresses the byte the
+// running code reads.
+static void storeElement(ConfigStore &cfg, const KeyEntry &entry,
+                         uint16_t index, int32_t value) {
+  uint8_t *dst = reinterpret_cast<uint8_t *>(&cfg) + entry.offset +
                  static_cast<size_t>(index) * keyTypeWidth(entry.type);
   switch (entry.type) {
   case KeyType::U8:
@@ -159,12 +163,6 @@ static void sendError(int errorCode, const char *reason) {
   FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
 
-// The field of the configuration in effect that the entry stands for.
-static uint8_t *fieldOf(const KeyEntry &entry) {
-  return reinterpret_cast<uint8_t *>(&ConfigMgr::getInstance().configMut()) +
-         entry.offset;
-}
-
 // The entry the request's `key` field names, null-terminated into `name` so
 // the reply can echo it. A field longer than `name` is cut to fit the buffer
 // rather than refused, and what is left is not the name the caller wrote, so
@@ -189,7 +187,7 @@ static void handleConfigSetKey(const char *cmd, const Json &json) {
     return;
   }
 
-  uint8_t *field = fieldOf(*entry);
+  ConfigStore &cfg = ConfigMgr::getInstance().configMut();
   if (entry->type == KeyType::U8Array) {
     // An array value is counted and checked element by element before the
     // first byte is written, so a value with one bad element leaves the field
@@ -216,7 +214,7 @@ static void handleConfigSetKey(const char *cmd, const Json &json) {
 
     for (uint16_t i = 0; i < entry->count; ++i) {
       storeElement(
-          field, *entry, i,
+          cfg, *entry, i,
           static_cast<int32_t>(json.getArrInt("value", i, kNoIntValue)));
     }
   } else {
@@ -240,7 +238,7 @@ static void handleConfigSetKey(const char *cmd, const Json &json) {
       sendError(kErrInvalidParam, reason);
       return;
     }
-    storeElement(field, *entry, 0, value);
+    storeElement(cfg, *entry, 0, value);
   }
 
   LOG_INFO("ConfigCmdHandler: set %s", entry->key);
@@ -265,9 +263,7 @@ static void handleConfigGetKey(const char *cmd, const Json &json) {
     return;
   }
 
-  const uint8_t *field =
-      reinterpret_cast<const uint8_t *>(&ConfigMgr::getInstance().config()) +
-      entry->offset;
+  const ConfigStore &cfg = ConfigMgr::getInstance().config();
 
   Json resp;
   resp.beginWrite(s_cfgRespBuf, sizeof(s_cfgRespBuf));
@@ -296,7 +292,7 @@ static void handleConfigGetKey(const char *cmd, const Json &json) {
     for (uint16_t i = 0; i < entry->count; ++i) {
       const int n = snprintf(elems + used, sizeof(elems) - used,
                              (i == 0) ? "%ld" : ",%ld",
-                             static_cast<long>(loadElement(field, *entry, i)));
+                             static_cast<long>(loadElement(cfg, *entry, i)));
       if (n < 0) {
         break;
       }
@@ -323,7 +319,7 @@ static void handleConfigGetKey(const char *cmd, const Json &json) {
   } else {
     resp.printf("{cmd:%Q,queued:%d,status:%Q,key:%Q,value:%ld}", cmd, q + 1,
                 "ok", entry->key,
-                static_cast<long>(loadElement(field, *entry, 0)));
+                static_cast<long>(loadElement(cfg, *entry, 0)));
   }
 
   uint16_t len = resp.end();
