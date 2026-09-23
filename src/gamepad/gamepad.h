@@ -124,11 +124,11 @@ public:
   #undef PRESS_FUNC_ATTR
   /* clang-format on */
 
-  // Get state
+  // Get state. The report block is read-only outside this class, so the driver
+  // layer reads it through a const reference and cannot write what it reads.
   [[nodiscard]] const GamepadRawInput &getState() const {
     return _processing.raw;
   }
-  [[nodiscard]] GamepadRawInput &getState() { return _processing.raw; }
 
   // Check if ready
   [[nodiscard]] bool isReady() const { return _ready && _initialized; }
