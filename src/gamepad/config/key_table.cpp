@@ -23,7 +23,7 @@
 
 // The mask a button bit index is drawn from.
 #include "gamepad/config/config_defaults.h"
-#include "gamepad/gamepadenums.h"
+#include "gamepad/gamepad_enums.h"
 
 #include <cstddef>
 #include <cstring>

@@ -27,7 +27,7 @@
 
 #include "gamepad/config/config_defaults.h"
 #include "gamepad/config/config_store.h"
-#include "gamepad/config/configmgr.h"
+#include "gamepad/config/config_manager.h"
 #include "gamepad/config/key_table.h"
 
 #include "utils/log/log.h"

@@ -610,7 +610,7 @@ CONFIG_BTN_SENTINEL = (4, 5, 255, 255) + (255,) * 28
 
 # The btn_map a factory reset leaves in the store, on this board: the key table
 # of configs/BoringTechH743/BoardConfig.toml ([0,"B1"] .. [3,"B4"]) converted to
-# the bit indexes of GAMEPAD_MASK_B1..B4 (gamepadstate.h:60-63 — bits 4..7) with
+# the bit indexes of GAMEPAD_MASK_B1..B4 (gamepad_state.h:60-63 — bits 4..7) with
 # every slot the board does not list left at the sentinel, which is the
 # conversion config_defaults.h:80-91 does at compile time. Board constants, in
 # the same sense as REGION_SIZES above: a board with a different key table moves
@@ -1738,7 +1738,7 @@ def main():
         # save had in hand rather than to the reply's own word: the body it
         # replaces (profile.get on the active id, the same body its own read
         # returns) and the body it writes in its place. The count is a statement
-        # about that pair and nothing else (configmgr.h), so this is the one
+        # about that pair and nothing else (config_manager.h), so this is the one
         # judgement about it that does not rest on the device's arithmetic: the
         # expected number is derived here, from the bytes on the wire, and the
         # reply has to agree with it — absent when the two bodies carry the same

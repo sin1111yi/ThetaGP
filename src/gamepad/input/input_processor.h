@@ -22,7 +22,7 @@
 #pragma once
 
 #include "gamepad/config/config_store.h"
-#include "gamepad/gamepadstate.h"
+#include "gamepad/gamepad_state.h"
 
 namespace ThetaGP::Gamepad::Input {
 

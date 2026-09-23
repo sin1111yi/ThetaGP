@@ -31,7 +31,7 @@
 #include "drivers/gp_emulator/gp_emulator_manager.h"
 
 #include "gamepad/config/config_store.h"
-#include "gamepad/gamepadstate.h"
+#include "gamepad/gamepad_state.h"
 #include "gamepad/input/input_processor.h"
 
 namespace ThetaGP::Gamepad {

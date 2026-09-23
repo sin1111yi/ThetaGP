@@ -22,7 +22,7 @@
 #include "gamepad/gamepad.h"
 
 #include "build_info.h"
-#include "gamepad/config/configmgr.h"
+#include "gamepad/config/config_manager.h"
 #include "gamepad/input/input_processor.h"
 #include "utils/log/log.h"
 

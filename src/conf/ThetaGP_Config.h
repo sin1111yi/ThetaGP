@@ -238,7 +238,7 @@
 #endif
 
 // Stick dead zones, in internal axis units: a 16-bit axis, 0..65535 with 32767
-// as the centre (GAMEPAD_JOYSTICK_MIN / _MID / _MAX in gamepadstate.h).
+// as the centre (GAMEPAD_JOYSTICK_MIN / _MID / _MAX in gamepad_state.h).
 #ifndef THETAGP_CFG_DEFAULT_LX_DZ
 #define THETAGP_CFG_DEFAULT_LX_DZ 512                  // left X dead zone, in internal axis units
 #endif

@@ -21,7 +21,7 @@
 
 #include <cstddef>
 
-#include "gamepad/gamepadstate.h"
+#include "gamepad/gamepad_state.h"
 
 namespace ThetaGP::Gamepad {
 

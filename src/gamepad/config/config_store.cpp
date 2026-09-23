@@ -31,7 +31,7 @@
 // static_asserts: the defaults header holds the compile-time checks on the
 // board key table, and a header no translation unit includes is never checked.
 #include "gamepad/config/config_defaults.h"
-#include "gamepad/gamepadenums.h"
+#include "gamepad/gamepad_enums.h"
 #include "utils/json/json.h"
 
 #include <limits>

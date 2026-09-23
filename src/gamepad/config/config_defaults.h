@@ -25,7 +25,7 @@
 #include "gamepad/config/config_store.h"
 
 // GAMEPAD_MASK_*, which BDCFG_KEYPAD_BUTTON_MAP is written in terms of.
-#include "gamepad/gamepadstate.h"
+#include "gamepad/gamepad_state.h"
 
 #include <array>
 #include <cstdint>

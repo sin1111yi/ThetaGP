@@ -27,11 +27,11 @@
 #include "drivers/device/flash/flash_w25qxx.h"
 #include "drivers/device/keypad.h"
 #include "drivers/device/systimer.h"
-#include "gamepad/config/configmgr.h"
+#include "gamepad/config/config_manager.h"
 #include "gamepad/profile/profile_store.h"
 
 #include "utils/log/log.h"
-#include "utils/meminfo.h"
+#include "utils/mem_info.h"
 
 #include "protocol/proto.h"
 

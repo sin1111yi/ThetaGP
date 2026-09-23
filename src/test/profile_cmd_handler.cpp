@@ -26,7 +26,7 @@
 #include "test/framelayer.h"
 
 #include "drivers/device/flash/flash_w25qxx.h"
-#include "gamepad/config/configmgr.h"
+#include "gamepad/config/config_manager.h"
 #include "gamepad/profile/profile_store.h"
 
 #include "utils/log/log.h"

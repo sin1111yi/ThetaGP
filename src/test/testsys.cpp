@@ -29,7 +29,7 @@
 #include "gamepad/profile/profile_store.h"
 
 #include "utils/log/log.h"
-#include "utils/meminfo.h"
+#include "utils/mem_info.h"
 
 #include "protocol/proto.h"
 #include "protocol/proto_resp.h"
