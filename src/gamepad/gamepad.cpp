@@ -49,7 +49,7 @@ void Gamepad::setup() {
 }
 
 void Gamepad::reinit() {
-  Input::InputProcessor::getInstance().reset();
+  _processor->reset();
   setup();
 }
 
@@ -68,7 +68,7 @@ void Gamepad::registerKeypadDevice(Device *device) {
  * @brief Read input from registered keypad device
  */
 void Gamepad::read() {
-  if (!_inputDevice || !_inputDevice->isInitialized() || _cfg == nullptr) {
+  if (!_inputDevice || !_inputDevice->isInitialized()) {
     return;
   }
 
@@ -102,13 +102,14 @@ void Gamepad::process() {
   if (!_initialized || !_ready) {
     return;
   }
-  if (_cfg == nullptr || _processor == nullptr) {
+  Drivers::GPDriver::GPDriver *driver = _gpDriverMgr->getgpdriverDevice();
+  if (driver == nullptr) {
     return;
   }
   read();
   _processor->process(*_cfg, _state);
 
-  _gpDriverMgr->getgpdriverDevice()->process(this);
+  driver->process(this);
 }
 
 } // namespace ThetaGP::Gamepad

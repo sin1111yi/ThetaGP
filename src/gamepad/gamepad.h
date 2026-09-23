@@ -47,9 +47,9 @@ using GPDriverManager = ThetaGP::Drivers::GPDriver::GPDriverManager;
 class Gamepad {
 private:
   GamepadRawInput _state;
-  // The active configuration, read once per tick. Points into the
-  // configuration manager's own store, whose address holds for the lifetime of
-  // the firmware.
+  // Taken in setup() and used on every tick. Both point into singletons that
+  // live as long as the firmware does, so neither can be null while a tick
+  // runs.
   const Config::ConfigStore *_cfg = nullptr;
   Input::InputProcessor *_processor = nullptr;
   Device *_inputDevice = nullptr;
