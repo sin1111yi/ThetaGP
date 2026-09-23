@@ -108,7 +108,11 @@ static int32_t loadElement(const ConfigStore &cfg, const KeyEntry &entry,
     memcpy(&v, src, sizeof(v));
     return v;
   }
+  case KeyType::Count:
+    break;
   }
+  static_assert(static_cast<uint8_t>(KeyType::Count) == 4,
+                "key table: a key type added to the enum needs a branch here");
   return 0;
 }
 
@@ -137,7 +141,11 @@ static void storeElement(ConfigStore &cfg, const KeyEntry &entry,
     memcpy(dst, &v, sizeof(v));
     break;
   }
+  case KeyType::Count:
+    break;
   }
+  static_assert(static_cast<uint8_t>(KeyType::Count) == 4,
+                "key table: a key type added to the enum needs a branch here");
 }
 
 // True when `value` is one the entry accepts as a single element: inside the

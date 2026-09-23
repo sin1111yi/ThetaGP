@@ -29,8 +29,9 @@
 namespace ThetaGP::Gamepad::Config {
 
 // How a value of a key travels on the wire. U8Array is a run of count bytes,
-// each one an element of its own.
-enum class KeyType : uint8_t { U8, U16, I16, U8Array };
+// each one an element of its own. Count closes the list: it stands for no type,
+// and it is what holds the widths below to the same length as this enum.
+enum class KeyType : uint8_t { U8, U16, I16, U8Array, Count };
 
 // One settable key: the name the protocol carries, the name a profile body
 // carries for the same field, the field of ConfigStore it stands for, and the
@@ -58,18 +59,19 @@ inline constexpr uint8_t kKeyFlagRequiresReboot = 0x01;
 // carries the sentinel, and a caller has to be able to set it back.
 inline constexpr uint8_t kKeyFlagAcceptsUnmapped = 0x02;
 
+// Bytes one element of a value of this type takes, in the order the enum lists
+// the types. The two lengths are held together, so a type added to the enum
+// without a width here does not build.
+constexpr uint8_t kKeyTypeWidths[] = {1, 2, 2, 1};
+
+static_assert(sizeof(kKeyTypeWidths) == static_cast<size_t>(KeyType::Count),
+              "key table: a key type carries no width");
+
 // Bytes one element of a value of this type takes. A type outside the enum
 // takes none.
 constexpr uint8_t keyTypeWidth(KeyType type) {
-  switch (type) {
-  case KeyType::U8:
-  case KeyType::U8Array:
-    return 1;
-  case KeyType::U16:
-  case KeyType::I16:
-    return 2;
-  }
-  return 0;
+  const size_t index = static_cast<size_t>(type);
+  return index < sizeof(kKeyTypeWidths) ? kKeyTypeWidths[index] : 0;
 }
 
 // Most entries the table may carry, and the longest a key name may be. The key
