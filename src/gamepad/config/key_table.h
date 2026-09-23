@@ -91,4 +91,27 @@ uint8_t keyTableCount();
 // The entry named `key`, or nullptr when the table carries no such key.
 const KeyEntry *findKeyEntry(const char *key);
 
+// Where a key sits in the table. Code that reads a row by what it stands for
+// takes it by one of these instead of looking a name up, and the checks beside
+// the table hold each position to the name its row carries.
+enum KeyTableKey : uint8_t {
+  kSocdModeKey,
+  kFourWayKey,
+  kBtnMapKey,
+  kKeyTableKeys
+};
+
+// The name a profile body carries for a key inside its parent object: the tail
+// of jsonKey past its last dot, so a body writes the path `map.socd` as `socd`
+// inside its `map` object.
+constexpr const char *profileLeafName(const KeyEntry &entry) {
+  const char *leaf = entry.jsonKey;
+  for (const char *p = entry.jsonKey; *p != '\0'; ++p) {
+    if (*p == '.') {
+      leaf = p + 1;
+    }
+  }
+  return leaf;
+}
+
 } // namespace ThetaGP::Gamepad::Config

@@ -20,6 +20,7 @@
  */
 
 #include "gamepad/config/config_store.h"
+#include "gamepad/config/key_table.h"
 #include "utils/log/log.h"
 
 // PROFILE_JSON_MAX: the body length the flash layer accepts. The serializer has
@@ -97,16 +98,22 @@ void parseProfile(const char *json, uint32_t len, ConfigStore *cfg) {
   // not hold.
   const ConfigStore &def = kConfigDefaults;
 
+  // The name a key travels under in a body comes from the key table, so the key
+  // the protocol names one way is read under the name a body carries for it.
+  const KeyEntry &socdModeKey = keyTable()[kSocdModeKey];
+  const KeyEntry &fourWayKey = keyTable()[kFourWayKey];
+  const KeyEntry &btnMapKey = keyTable()[kBtnMapKey];
+
   // ── map ──
   // socd_mode names a SOCDMode enumerator, so that enum bounds it. The fields
   // after it mean on or off, so a bool's two values bound them. dpad_mode has
   // no domain narrower than its byte: the firmware names no D-pad output modes
   // for it to be checked against.
   cfg->socd_mode =
-      enumValue(doc.getInt("map.socd", cfg->socd_mode), def.socd_mode,
+      enumValue(doc.getInt(socdModeKey.jsonKey, cfg->socd_mode), def.socd_mode,
                 static_cast<int>(Enums::SOCDMode::Count));
-  cfg->four_way_mode = flagValue(doc.getInt("map.four_way", cfg->four_way_mode),
-                                 def.four_way_mode);
+  cfg->four_way_mode = flagValue(
+      doc.getInt(fourWayKey.jsonKey, cfg->four_way_mode), def.four_way_mode);
   cfg->dpad_mode =
       fieldValue(doc.getInt("map.dpad", cfg->dpad_mode), def.dpad_mode);
   cfg->inv_x = flagValue(doc.getInt("map.inv_x", cfg->inv_x), def.inv_x);
@@ -119,14 +126,14 @@ void parseProfile(const char *json, uint32_t len, ConfigStore *cfg) {
   // btn_map array. A profile that carries no array leaves the table in place;
   // one that carries an array fills all 32 slots, and the slots it does not
   // reach take the sentinel.
-  const int arrLen = doc.getArrLen("map.btn_map");
+  const int arrLen = doc.getArrLen(btnMapKey.jsonKey);
   if (arrLen > 0) {
     uint8_t idx = 0;
     for (int i = 0; i < arrLen && idx < 32; i++) {
       // An element is a button bit index or the unmapped sentinel. Any other
       // number would name a different button once narrowed to a byte; a
       // negative one, or one past the last bit, names no button at all.
-      const int value = doc.getArrInt("map.btn_map", i, -1);
+      const int value = doc.getArrInt(btnMapKey.jsonKey, i, -1);
       cfg->btn_map[idx++] = (value >= 0 && value < detail::kBtnMaskBits)
                                 ? static_cast<uint8_t>(value)
                                 : detail::kBtnMapUnmapped;
@@ -184,11 +191,19 @@ uint16_t serializeProfile(const ConfigStore &cfg, char *dst, uint16_t cap) {
   Json doc;
   doc.beginWrite(dst, cap);
 
+  // The names the keys travel under in a body come from the key table, so a
+  // body carries the name the table maps a protocol key name to.
+  const KeyEntry &socdModeKey = keyTable()[kSocdModeKey];
+  const KeyEntry &fourWayKey = keyTable()[kFourWayKey];
+  const KeyEntry &btnMapKey = keyTable()[kBtnMapKey];
+
   // ── map ──
-  doc.printf("{ver:2,map:{socd:%d,four_way:%d,dpad:%d,"
-             "inv_x:%d,inv_y:%d,inv_rx:%d,inv_ry:%d,swap:%d,btn_map:[",
-             cfg.socd_mode, cfg.four_way_mode, cfg.dpad_mode, cfg.inv_x,
-             cfg.inv_y, cfg.inv_rx, cfg.inv_ry, cfg.swap_sticks);
+  doc.printf("{ver:2,map:{%Q:%d,%Q:%d,dpad:%d,"
+             "inv_x:%d,inv_y:%d,inv_rx:%d,inv_ry:%d,swap:%d,%Q:[",
+             profileLeafName(socdModeKey), cfg.socd_mode,
+             profileLeafName(fourWayKey), cfg.four_way_mode, cfg.dpad_mode,
+             cfg.inv_x, cfg.inv_y, cfg.inv_rx, cfg.inv_ry, cfg.swap_sticks,
+             profileLeafName(btnMapKey));
   for (uint8_t i = 0; i < 32; i++) {
     if (i > 0)
       doc.printf(",");
