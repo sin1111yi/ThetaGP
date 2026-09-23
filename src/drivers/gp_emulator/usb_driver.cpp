@@ -85,7 +85,8 @@ void USBDriver::init() {
   uint8_t *p = s_config_descriptor;
 
   p[0] = 9;  p[1] = 2;  p[2] = 0;  p[3] = 0;
-  p[4] = 3;  p[5] = 1;  p[6] = 0;  p[7] = 0x80;  p[8] = 50;
+  // p[7] bmAttributes: bus powered. p[8] bMaxPower: 250 * 2 mA = 500 mA.
+  p[4] = 3;  p[5] = 1;  p[6] = 0;  p[7] = 0x80;  p[8] = 250;
   p += 9;
 
   auto *driver = GPEmulatorManager::getInstance().getEmulator();
