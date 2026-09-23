@@ -23,7 +23,7 @@
 
 #include "build_info.h"
 #include "gamepad/config/config_manager.h"
-#include "gamepad/input/input_processor.h"
+#include "gamepad/gamepad_processing.h"
 #include "utils/log/log.h"
 
 #include "drivers/device/keypad.h"
@@ -44,12 +44,11 @@ void Gamepad::setup() {
   _ready = false;
 
   _cfg = &Config::ConfigManager::getInstance().config();
-  _processor = &Input::InputProcessor::getInstance();
   _emulatorMgr = &Drivers::GPEmulator::GPEmulatorManager::getInstance();
 }
 
 void Gamepad::reinit() {
-  _processor->reset();
+  _dpad = DpadState{};
   setup();
 }
 
@@ -107,7 +106,7 @@ void Gamepad::process() {
     return;
   }
   read();
-  _processor->process(*_cfg, _state);
+  processState(_state, _dpad, *_cfg);
 
   driver->process(this);
 }
