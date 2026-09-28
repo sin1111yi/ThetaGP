@@ -144,7 +144,7 @@ extern "C" {
 
 // CDC FIFO size of TX and RX
 #define CFG_TUD_CDC_RX_BUFSIZE (THETAGP_USB_HIGH_SPEED ? 512 : 64)
-#define CFG_TUD_CDC_TX_BUFSIZE (THETAGP_USB_HIGH_SPEED ? 512 : 64)
+#define CFG_TUD_CDC_TX_BUFSIZE 1024
 
 // CDC Endpoint transfer buffer size, default to max bulk packet size (HS 512,
 // FS 64). Larger is faster. Larger RX_EPSIZE requires CFG_TUD_CDC_RX_NEED_ZLP =
