@@ -7,15 +7,10 @@
 #include <cstdint>
 
 #include "comm/frame_codec.h"
+#include "comm/reply_error.h"
 #include "protocol/ThetaGP.pb.h"
 
 namespace ThetaGP::Comm {
-
-// The failure answer: the code names the class of refusal, the reason the fact
-// in the request that refused it. One function builds it, so a refusal carries
-// the same shape whichever arm answers it.
-void writeFailure(ThetaGP_Reply &reply, ThetaGP_ErrorCode code,
-                  ThetaGP_Reason reason);
 
 // Reads one request payload and writes the payload of its answer. The reply
 // carries the number of the request plus one, so a host pairs an answer with

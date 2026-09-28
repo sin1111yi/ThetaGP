@@ -6,7 +6,7 @@
 
 #include <cstdio>
 
-#include "comm/request_handler.h"
+#include "comm/reply_error.h"
 #include "conf/ThetaGP_Config.h"
 #include "gamepad/profile/profile_store.h"
 #include "task_manager.h"
@@ -27,6 +27,23 @@ constexpr const char *kFirmwareVersion = "0.1.1";
 
 constexpr size_t kMaxRegions =
     static_cast<size_t>(Util::MemInfo::RegionId::Count);
+
+// The capacity of the reply's regions array, as the generated message declares
+// it. The number is not restated here: the schema's field options declare a
+// max_count for that field, nanopb writes it as the array's own length, and
+// this reads that declaration back.
+constexpr size_t kUsageRegionsCapacity =
+    sizeof(ThetaGP_SysGetUsageOk::regions) /
+    sizeof(ThetaGP_SysGetUsageOk::regions[0]);
+
+// The usage arm writes one entry per memory region into that array, so it must
+// have room for the enum's items less the flash — the one region it leaves
+// out. A region added to the enum with no room left in the array would write
+// past its end, and this is where the two counts are held against each other:
+// the array's capacity must cover every region the arm reports.
+static_assert(kMaxRegions - 1 <= kUsageRegionsCapacity,
+              "the reply's regions array must have room for every memory "
+              "region the usage arm reports");
 
 } // namespace
 
