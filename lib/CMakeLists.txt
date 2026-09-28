@@ -86,6 +86,15 @@ thetagp_fetch_dep(frozen
     "master"
     "${CMAKE_SOURCE_DIR}/lib/frozen"
 )
+# Follows upstream master rather than a tag. The commit the generated codec
+# under protocol/ was produced with is recorded beside it (protocol/README.md),
+# and a newer checkout shows up as a difference in those generated files rather
+# than as a silent change of the runtime.
+thetagp_fetch_dep(nanopb
+    https://github.com/nanopb/nanopb.git
+    "master"
+    "${CMAKE_SOURCE_DIR}/lib/nanopb"
+)
 
 # frozen: lightweight JSON parser/generator (C)
 add_library(frozen STATIC
@@ -98,4 +107,21 @@ target_include_directories(frozen
 target_compile_definitions(frozen
     PRIVATE
     JSON_MINIMAL=1
+)
+
+# nanopb: protobuf encoder/decoder for the protocol messages (C).
+# PB_NO_ERRMSG drops the runtime's error strings: the host decoder reports what
+# a malformed message was, so the firmware only needs the decode to fail.
+add_library(nanopb STATIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/nanopb/pb_common.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/nanopb/pb_encode.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/nanopb/pb_decode.c
+)
+target_include_directories(nanopb
+    PUBLIC
+    ${CMAKE_SOURCE_DIR}/lib/nanopb
+)
+target_compile_definitions(nanopb
+    PRIVATE
+    PB_NO_ERRMSG
 )

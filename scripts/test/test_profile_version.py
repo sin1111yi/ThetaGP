@@ -69,8 +69,8 @@ def ensure_generated():
     edit to the declaration. Regenerating is deterministic and the file is
     ignored by git.
     """
-    gen = os.path.join(REPO_ROOT, "scripts", "gen_proto.py")
-    result = subprocess.run([sys.executable, gen, "--target", "config-keys"],
+    gen = os.path.join(REPO_ROOT, "scripts", "config", "gen_config_keys.py")
+    result = subprocess.run([sys.executable, gen],
                             cwd=REPO_ROOT, stdout=subprocess.DEVNULL,
                             stderr=subprocess.PIPE, text=True)
     if result.returncode != 0:

@@ -98,3 +98,39 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_subdirectory(lib)
 add_subdirectory(platform)
 add_subdirectory(src)
+
+# =============================================================================
+# Generated artifacts
+# =============================================================================
+
+# The configure step writes into the source tree in three places: the board
+# configuration generator, the protocol generator, and the protobuf pair
+# generator together with the configuration key table. Everything but the board
+# configuration is ignored (see .gitignore), and none of it is removed by the
+# build system's own clean target, which only knows about build/. This target
+# removes the ignored ones so the next configure writes them again.
+set(THETAGP_GENERATED_ARTIFACTS
+    "${CMAKE_SOURCE_DIR}/protocol/proto.h"
+    "${CMAKE_SOURCE_DIR}/protocol/proto_resp.h"
+    "${CMAKE_SOURCE_DIR}/protocol/proto_fields.json"
+    "${CMAKE_SOURCE_DIR}/protocol/proto.rs"
+    "${CMAKE_SOURCE_DIR}/protocol/types.ts"
+    "${CMAKE_SOURCE_DIR}/protocol/protocol-fields.md"
+    "${CMAKE_SOURCE_DIR}/configs/config_keys.gen.h"
+    "${CMAKE_BINARY_DIR}/proto_py"
+)
+
+# One pair per schema, so a schema added to the list in src/CMakeLists.txt is
+# covered here as soon as the tree is configured again.
+file(GLOB THETAGP_GENERATED_PROTO_PAIRS CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/protocol/*.pb.c"
+    "${CMAKE_SOURCE_DIR}/protocol/*.pb.h")
+
+list(APPEND THETAGP_GENERATED_ARTIFACTS ${THETAGP_GENERATED_PROTO_PAIRS})
+
+add_custom_target(clean-generated
+    COMMAND ${CMAKE_COMMAND} -E rm -rf ${THETAGP_GENERATED_ARTIFACTS}
+    COMMAND ${CMAKE_COMMAND} -E echo
+            "Removed the generated protocol artifacts, the configuration key table and the host bindings"
+    COMMENT "Cleaning the generated artifacts under protocol/ and configs/"
+    VERBATIM)

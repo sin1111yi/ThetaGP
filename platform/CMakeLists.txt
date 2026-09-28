@@ -115,7 +115,7 @@ file(GLOB TARGET_SOURCES "${TARGET_PATH}/*${PLATFORM_MCU_PREFIX}*")
 list(APPEND SYSTEM_SOURCES ${TARGET_SOURCES})
 
 # Platform peripheral implementations
-file(GLOB_RECURSE PLATFORM_PERIPHERAL_SOURCES "${PLATFORM_PATH}/peripherals/*.cpp" "${PLATFORM_PATH}/peripherals/*.c")
+file(GLOB_RECURSE PLATFORM_PERIPHERAL_SOURCES CONFIGURE_DEPENDS "${PLATFORM_PATH}/peripherals/*.cpp" "${PLATFORM_PATH}/peripherals/*.c")
 
 # =============================================================================
 # Include Directories

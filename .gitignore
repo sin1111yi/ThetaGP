@@ -26,6 +26,7 @@ lib/tinyusb
 lib/ArduinoJson
 lib/frozen
 lib/lvgl
+lib/nanopb
 
 /agent/
 *.jsonl
@@ -38,6 +39,11 @@ protocol/proto.rs
 protocol/types.ts
 protocol/proto_fields.json
 protocol/proto_resp.h
+# Patterns and not one line per generated name: every schema under protocol/
+# generates a pair of that shape beside it, so adding a schema does not add a
+# line here.
+protocol/*.pb.c
+protocol/*.pb.h
 configs/config_keys.gen.h
 
 
