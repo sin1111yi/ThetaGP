@@ -76,7 +76,13 @@ struct ConfigStore {
 // body's length in bytes, and it is what bounds the parse: the body needs no
 // terminator, and no byte behind it is read even when it fills the buffer it
 // sits in whole. Pass the length the store reported for the body being parsed.
-void parseProfile(const char *json, uint32_t len, ConfigStore *cfg);
+//
+// Answers whether the body was read. False means the body's version is not one
+// this firmware reads, and nothing of that body was applied: a version it cannot
+// place is refused whole rather than read at paths that hold nothing. What the
+// store holds after a refusal is the caller's business — both callers hand in
+// the compiled defaults.
+bool parseProfile(const char *json, uint32_t len, ConfigStore *cfg);
 
 // Write cfg into dst as a profile JSON body. `cap` is the size of dst in bytes,
 // terminator included. Returns the body length in bytes, terminator not

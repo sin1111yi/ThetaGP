@@ -36,7 +36,8 @@
 #include "gamepad/gamepad_enums.h"
 #include "utils/json/json.h"
 
-#include <limits>
+#include <cstdio>
+#include <cstring>
 
 namespace ThetaGP::Gamepad::Config {
 
@@ -46,45 +47,68 @@ namespace ThetaGP::Gamepad::Config {
 static_assert(detail::kBtnMapUnmapped == 0xFF,
               "kBtnMapUnmapped: the unmapped btn_map slot is 0xFF on the wire");
 
-// ── Field domains ──
-// A scalar a profile carries is stored only when the number lies inside the
-// field's domain; a number outside it leaves the field at its compiled default
-// from kConfigDefaults, the one place the defaults live. Narrowing the number
-// instead would store a value no profile carried: 300 into a uint8_t field
-// stores 44, a legal-looking number with a different meaning. A key the profile
-// does not carry at all leaves the field as it stands, which is the default
-// getInt() is handed.
+// ── Profile versions ──
+// The version this firmware writes and the oldest one it still reads.
+//
+// Version 1 kept every domain object inside its one `map` object, so a field of
+// another domain sat at "map.<domain>.<leaf>" while the map fields, already
+// inside map, sat at "map.<leaf>". From version 2 on a field sits inside the
+// object its name starts with, which is the path the key table spells.
+//
+// A body of any other version is not read at all: its fields would be fetched
+// at paths that hold nothing, and every one of them would fall back to its
+// default in silence — the state this check exists to keep out.
+inline constexpr int kProfileVersion = 2;
+inline constexpr int kOldestReadableVersion = 1;
 
-// The values the field's type holds.
-template <typename T> static T fieldValue(int value, T fallback) {
-  if (value < static_cast<int>(std::numeric_limits<T>::min()) ||
-      value > static_cast<int>(std::numeric_limits<T>::max())) {
-    return fallback;
-  }
-  return static_cast<T>(value);
+// The value a field reads as when the body carries no such field. No row of the
+// key table accepts it as a value, which that table holds at compile time.
+constexpr int32_t kNoProfileValue = INT32_MIN;
+
+// ── Paths ──
+
+// True when the entry names a field of the map domain, the one object a body of
+// version 1 already kept its own fields in.
+static bool inMapDomain(const KeyEntry &entry) {
+  return std::strncmp(entry.key, "map.", 4) == 0;
 }
 
-// A field whose meaning is a set of named values: the enumerators 0 up to, but
-// not including, count.
-static uint8_t enumValue(int value, uint8_t fallback, int count) {
-  if (value < 0 || value >= count) {
-    return fallback;
+// The path a body of `version` carries the entry's field under. The field's
+// name is the path from version 2 on; a body of version 1 wrapped every other
+// domain inside map, so those fields take the "map." prefix.
+static void profilePath(const KeyEntry &entry, int version, char *dst,
+                        size_t cap) {
+  if (version > kOldestReadableVersion || inMapDomain(entry)) {
+    std::snprintf(dst, cap, "%s", entry.key);
+    return;
   }
-  return static_cast<uint8_t>(value);
+  std::snprintf(dst, cap, "map.%s", entry.key);
 }
 
-// A field that is on or off: the two values a bool holds, and no others.
-static uint8_t flagValue(int value, uint8_t fallback) {
-  if (value != static_cast<int>(false) && value != static_cast<int>(true)) {
-    return fallback;
-  }
-  return static_cast<uint8_t>(value);
+// The object a field is carried in: the head of its name, up to the last dot.
+// Every name in the key table has the shape "<domain>.<leaf>", so the object is
+// what sits before the dot.
+static void profileDomain(const KeyEntry &entry, char *dst, size_t cap) {
+  const char *leaf = profileLeafName(entry);
+  const size_t len =
+      leaf > entry.key ? static_cast<size_t>(leaf - entry.key) - 1 : 0;
+  const size_t copy = len < cap - 1 ? len : cap - 1;
+  std::memcpy(dst, entry.key, copy);
+  dst[copy] = '\0';
 }
 
-void parseProfile(const char *json, uint32_t len, ConfigStore *cfg) {
+// ── parseProfile() ──
+// Reads a profile body into the store, and answers whether it was read. A body
+// of a version this firmware does not read is refused as a whole: nothing of it
+// is applied, so no field of it can land somewhere and the rest fall back to a
+// default in silence. What a store that was not written holds is the caller's
+// business — both callers hand in the compiled defaults, so a refusal leaves the
+// configuration at those defaults.
+
+bool parseProfile(const char *json, uint32_t len, ConfigStore *cfg) {
   if (!json || !cfg) {
     LOG_ERROR("parseProfile: null args");
-    return;
+    return false;
   }
 
   // The body's own length is the parse window. Handing it over instead of
@@ -95,87 +119,73 @@ void parseProfile(const char *json, uint32_t len, ConfigStore *cfg) {
   Json doc;
   doc.parse(json, static_cast<int>(len));
 
-  // The value a field takes when the profile carries a number its domain does
-  // not hold.
-  const ConfigStore &def = kConfigDefaults;
-
-  // A key carries one name: the one it is read under below and the one the
-  // protocol addresses it by are the same string.
-  const KeyEntry &socdKey = keyEntry(ConfigKey::Socd);
-  const KeyEntry &fourWayKey = keyEntry(ConfigKey::FourWay);
-  const KeyEntry &btnMapKey = keyEntry(ConfigKey::BtnMap);
-
-  // ── map ──
-  // socd names a SOCDMode enumerator, so that enum bounds it. The fields
-  // after it mean on or off, so a bool's two values bound them. dpad has
-  // no domain narrower than its byte: the firmware names no D-pad output modes
-  // for it to be checked against.
-  cfg->socd = enumValue(doc.getInt(socdKey.key, cfg->socd), def.socd,
-                        static_cast<int>(Enums::SOCDMode::Count));
-  cfg->four_way =
-      flagValue(doc.getInt(fourWayKey.key, cfg->four_way), def.four_way);
-  cfg->dpad = fieldValue(doc.getInt("map.dpad", cfg->dpad), def.dpad);
-  cfg->inv_x = flagValue(doc.getInt("map.inv_x", cfg->inv_x), def.inv_x);
-  cfg->inv_y = flagValue(doc.getInt("map.inv_y", cfg->inv_y), def.inv_y);
-  cfg->inv_rx = flagValue(doc.getInt("map.inv_rx", cfg->inv_rx), def.inv_rx);
-  cfg->inv_ry = flagValue(doc.getInt("map.inv_ry", cfg->inv_ry), def.inv_ry);
-  cfg->swap = flagValue(doc.getInt("map.swap", cfg->swap), def.swap);
-
-  // btn_map array. A profile that carries no array leaves the table in place;
-  // one that carries an array fills all 32 slots, and the slots it does not
-  // reach take the sentinel.
-  const int arrLen = doc.getArrLen(btnMapKey.key);
-  if (arrLen > 0) {
-    uint8_t idx = 0;
-    for (int i = 0; i < arrLen && idx < 32; i++) {
-      // An element is a button bit index or the unmapped sentinel. Any other
-      // number would name a different button once narrowed to a byte; a
-      // negative one, or one past the last bit, names no button at all.
-      const int value = doc.getArrInt(btnMapKey.key, i, -1);
-      cfg->btn_map[idx++] = (value >= 0 && value < detail::kBtnMaskBits)
-                                ? static_cast<uint8_t>(value)
-                                : detail::kBtnMapUnmapped;
-    }
-    while (idx < 32) {
-      cfg->btn_map[idx++] = detail::kBtnMapUnmapped;
-    }
+  // The version decides how every field's path is spelled, so it is read before
+  // the first field is. A body that carries no version predates the field and is
+  // the oldest version this firmware reads.
+  const int version = doc.getInt("ver", kOldestReadableVersion);
+  if (version < kOldestReadableVersion || version > kProfileVersion) {
+    LOG_ERROR("parseProfile: body version %d is not one this firmware reads "
+              "(%d..%d) — the configuration is left as it stands",
+              version, kOldestReadableVersion, kProfileVersion);
+    return false;
   }
 
-  // ── stick ──
-  cfg->lx_dz = fieldValue(doc.getInt("stick.lx_dz", cfg->lx_dz), def.lx_dz);
-  cfg->ly_dz = fieldValue(doc.getInt("stick.ly_dz", cfg->ly_dz), def.ly_dz);
-  cfg->rx_dz = fieldValue(doc.getInt("stick.rx_dz", cfg->rx_dz), def.rx_dz);
-  cfg->ry_dz = fieldValue(doc.getInt("stick.ry_dz", cfg->ry_dz), def.ry_dz);
-  cfg->lx_sens =
-      fieldValue(doc.getInt("stick.lx_sens", cfg->lx_sens), def.lx_sens);
-  cfg->ly_sens =
-      fieldValue(doc.getInt("stick.ly_sens", cfg->ly_sens), def.ly_sens);
-  cfg->rx_sens =
-      fieldValue(doc.getInt("stick.rx_sens", cfg->rx_sens), def.rx_sens);
-  cfg->ry_sens =
-      fieldValue(doc.getInt("stick.ry_sens", cfg->ry_sens), def.ry_sens);
-  cfg->curve = fieldValue(doc.getInt("stick.curve", cfg->curve), def.curve);
-  cfg->ema = fieldValue(doc.getInt("stick.ema", cfg->ema), def.ema);
+  const KeyEntry *const table = keyTable();
+  const uint8_t count = keyTableCount();
 
-  // ── trig ──
-  cfg->lt_dz = fieldValue(doc.getInt("trig.lt_dz", cfg->lt_dz), def.lt_dz);
-  cfg->rt_dz = fieldValue(doc.getInt("trig.rt_dz", cfg->rt_dz), def.rt_dz);
+  // Every field of the store is read through its row: the row carries the name
+  // the body writes the field under and the bytes the field occupies, so a
+  // field cannot be read at one place and written at another.
+  //
+  // A scalar is stored only when the number lies inside the range its row
+  // declares. A number outside that range leaves the field at its compiled
+  // default, the same value a body with no such field leaves behind: narrowing
+  // the number instead would store one no body carried — 300 into a byte field
+  // stores 44, a legal-looking value with a different meaning.
+  for (uint8_t i = 0; i < count; ++i) {
+    const KeyEntry &entry = table[i];
+    char path[48];
+    profilePath(entry, version, path, sizeof(path));
 
-  // ── led ──
-  cfg->bri = fieldValue(doc.getInt("led.bri", cfg->bri), def.bri);
-  cfg->mode = fieldValue(doc.getInt("led.mode", cfg->mode), def.mode);
-  cfg->hue = fieldValue(doc.getInt("led.hue", cfg->hue), def.hue);
-  cfg->sat = fieldValue(doc.getInt("led.sat", cfg->sat), def.sat);
-  cfg->spd = fieldValue(doc.getInt("led.spd", cfg->spd), def.spd);
+    if (entry.type == KeyType::U8Array) {
+      // A body that carries the array fills every element of the field: the
+      // elements it does not reach take the unmapped sentinel, so a short array
+      // cannot leave a stale tail behind. A body with no array leaves the field
+      // as it stands.
+      const int elems = doc.getArrLen(path);
+      if (elems <= 0) {
+        continue;
+      }
+      for (uint8_t index = 0; index < entry.count; ++index) {
+        const int32_t value = index < elems ? doc.getArrInt(path, index, -1) : -1;
+        storeKeyElement(*cfg, entry, index,
+                        keyElementAccepted(entry, value)
+                            ? value
+                            : static_cast<int32_t>(detail::kBtnMapUnmapped));
+      }
+      continue;
+    }
 
-  // ── cal ──
-  cfg->lx_c = fieldValue(doc.getInt("cal.lx_c", cfg->lx_c), def.lx_c);
-  cfg->ly_c = fieldValue(doc.getInt("cal.ly_c", cfg->ly_c), def.ly_c);
-  cfg->rx_c = fieldValue(doc.getInt("cal.rx_c", cfg->rx_c), def.rx_c);
-  cfg->ry_c = fieldValue(doc.getInt("cal.ry_c", cfg->ry_c), def.ry_c);
+    const int32_t value = doc.getInt(path, static_cast<int>(kNoProfileValue));
+    if (value == kNoProfileValue) {
+      continue; // the body carries no such field
+    }
+    storeKeyElement(*cfg, entry, 0,
+                    keyElementAccepted(entry, value)
+                        ? value
+                        : loadKeyElement(kConfigDefaults, entry, 0));
+  }
 
-  LOG_DEBUG("parseProfile: done");
+  LOG_DEBUG("parseProfile: done, version %d", version);
+  return true;
 }
+
+// ── serializeProfile() ──
+// Writes the store as a body of the current version. The body walks the key
+// table, so the fields it carries, the object each field sits in and their
+// order are the declaration's: an object opens at the first row that names it
+// and closes when a row of another object arrives, which is why the rows of one
+// object are held adjacent in that table.
 
 uint16_t serializeProfile(const ConfigStore &cfg, char *dst, uint16_t cap) {
   if (!dst || cap == 0) {
@@ -184,44 +194,53 @@ uint16_t serializeProfile(const ConfigStore &cfg, char *dst, uint16_t cap) {
 
   Json doc;
   doc.beginWrite(dst, cap);
+  doc.printf("{%Q:%d", "ver", kProfileVersion);
 
-  // A key carries one name, and a body carries it too: the key's name is what
-  // the writer below spells, and the leaf inside its object is that name's
-  // tail.
-  const KeyEntry &socdKey = keyEntry(ConfigKey::Socd);
-  const KeyEntry &fourWayKey = keyEntry(ConfigKey::FourWay);
-  const KeyEntry &btnMapKey = keyEntry(ConfigKey::BtnMap);
+  const KeyEntry *const table = keyTable();
+  const uint8_t count = keyTableCount();
 
-  // ── map ──
-  doc.printf("{ver:2,map:{%Q:%d,%Q:%d,dpad:%d,"
-             "inv_x:%d,inv_y:%d,inv_rx:%d,inv_ry:%d,swap:%d,%Q:[",
-             profileLeafName(socdKey), cfg.socd, profileLeafName(fourWayKey),
-             cfg.four_way, cfg.dpad, cfg.inv_x, cfg.inv_y, cfg.inv_rx,
-             cfg.inv_ry, cfg.swap, profileLeafName(btnMapKey));
-  for (uint8_t i = 0; i < 32; i++) {
-    if (i > 0)
+  // The object being written, empty until the first field opens one.
+  char open[16] = "";
+  bool firstInObject = true;
+
+  for (uint8_t i = 0; i < count; ++i) {
+    const KeyEntry &entry = table[i];
+    char domain[16];
+    profileDomain(entry, domain, sizeof(domain));
+
+    if (std::strcmp(domain, open) != 0) {
+      if (open[0] != '\0') {
+        doc.printf("}");
+      }
+      doc.printf(",%Q:{", domain);
+      std::snprintf(open, sizeof(open), "%s", domain);
+      firstInObject = true;
+    }
+
+    if (!firstInObject) {
       doc.printf(",");
-    doc.printf("%d", cfg.btn_map[i]);
+    }
+    firstInObject = false;
+
+    const char *leaf = profileLeafName(entry);
+    if (entry.type == KeyType::U8Array) {
+      doc.printf("%Q:[", leaf);
+      for (uint8_t index = 0; index < entry.count; ++index) {
+        if (index > 0) {
+          doc.printf(",");
+        }
+        doc.printf("%ld", static_cast<long>(loadKeyElement(cfg, entry, index)));
+      }
+      doc.printf("]");
+    } else {
+      doc.printf("%Q:%ld", leaf,
+                 static_cast<long>(loadKeyElement(cfg, entry, 0)));
+    }
   }
-  doc.printf("]}");
 
-  // ── stick ──
-  doc.printf(",stick:{lx_dz:%d,ly_dz:%d,rx_dz:%d,ry_dz:%d,"
-             "lx_sens:%d,ly_sens:%d,rx_sens:%d,ry_sens:%d,curve:%d,ema:%d}",
-             cfg.lx_dz, cfg.ly_dz, cfg.rx_dz, cfg.ry_dz, cfg.lx_sens,
-             cfg.ly_sens, cfg.rx_sens, cfg.ry_sens, cfg.curve, cfg.ema);
-
-  // ── trig ──
-  doc.printf(",trig:{lt_dz:%d,rt_dz:%d}", cfg.lt_dz, cfg.rt_dz);
-
-  // ── led ──
-  doc.printf(",led:{bri:%d,mode:%d,hue:%d,sat:%d,spd:%d}", cfg.bri, cfg.mode,
-             cfg.hue, cfg.sat, cfg.spd);
-
-  // ── cal ──
-  doc.printf(",cal:{lx_c:%d,ly_c:%d,rx_c:%d,ry_c:%d}", cfg.lx_c, cfg.ly_c,
-             cfg.rx_c, cfg.ry_c);
-
+  if (open[0] != '\0') {
+    doc.printf("}");
+  }
   doc.printf("}"); // close root
 
   const uint16_t len = static_cast<uint16_t>(doc.end());

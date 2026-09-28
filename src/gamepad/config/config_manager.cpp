@@ -74,9 +74,11 @@ bool ConfigManager::init() {
   // Parse the profile body into _config, on top of the compiled-in defaults.
   // The window is text.len, the body length readProfile reported for the bytes
   // it put in text.data — the parse never leans on a terminator the buffer may
-  // not hold.
-  if (text.len > 0) {
-    parseProfile(text.data, text.len, &_config);
+  // not hold. A body of a version this firmware does not read is refused, and
+  // the configuration stays at the defaults set above.
+  if (text.len > 0 && !parseProfile(text.data, text.len, &_config)) {
+    LOG_WARN("ConfigManager: the profile body was refused, the configuration "
+             "stays at the compiled defaults");
   }
 
   LOG_INFO("ConfigManager: init OK, active=%u count=%u", _activeId,
@@ -145,9 +147,14 @@ bool ConfigManager::loadProfile(uint16_t profileId) {
   ProfileText text;
   bool ok = store.readProfile(PROFILE_ID_ACTIVE, &text);
   // text.len is the length of the body the read placed in text.data, so it is
-  // the parse window here too.
-  if (ok && text.len > 0) {
-    parseProfile(text.data, text.len, &_config);
+  // the parse window here too. A body of a version this firmware does not read
+  // is refused, and the load is answered as failed: the configuration then
+  // stands at the compiled defaults the reset above applied, which is what the
+  // caller is told.
+  if (ok && text.len > 0 && !parseProfile(text.data, text.len, &_config)) {
+    LOG_WARN("ConfigManager: id=%u carries a body this firmware does not read",
+             profileId);
+    ok = false;
   }
   LOG_INFO("ConfigManager: load id=%u %s", profileId, ok ? "OK" : "FAIL");
   return ok;

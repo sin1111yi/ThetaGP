@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+# This file is a part of ThetaGP.
+#
+# ThetaGP is free software: you can redistribute it
+# and/or modify it under the terms of the GNU General
+# Public License as published by the Free Software
+# Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# ThetaGP is distributed in the hope that it will be
+# useful, but WITHOUT ANY WARRANTY; without even the
+# implied warranty of MERCHANTABILITY or FITNESS FOR A
+# PARTICULAR PURPOSE. See the GNU General Public License
+# for more details.
+#
+# You should have received a copy of the GNU General Public
+# License along with this program.
+#
+# If not, see <https://www.gnu.org/licenses/>.
+#
+# Test: a profile body is read at the paths its version carries
+# Target: src/gamepad/config/config_store.cpp + key_table.cpp
+#         + src/utils/json/json.cpp + lib/frozen/frozen.c, host build
+# Method: compiles scripts/test/test_profile_version_cases.cpp together with
+#         those firmware sources with g++ into a temporary directory and runs
+#         it. The bodies the cases read are the ones a board carried in Profile
+#         0 (version 1) and Profile 3 (version 2), captured over the control
+#         protocol, so the old shape is pinned by a body that really existed.
+# Expect: "N checks, 0 failed" and exit 0.
+# Error:  exit 1 = a check did not hold (the case names it); exit 2 = the
+#         harness or a source did not compile, or no C++ compiler was found.
+
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))
+
+HARNESS = os.path.join(REPO_ROOT, "scripts", "test",
+                       "test_profile_version_cases.cpp")
+SOURCES = [
+    os.path.join(REPO_ROOT, "src", "gamepad", "config", "config_store.cpp"),
+    os.path.join(REPO_ROOT, "src", "gamepad", "config", "key_table.cpp"),
+    os.path.join(REPO_ROOT, "src", "utils", "json", "json.cpp"),
+    os.path.join(REPO_ROOT, "lib", "frozen", "frozen.c"),
+]
+INCLUDES = [
+    # The repository root is on the include path the same way the firmware has
+    # it, so a generated header is reached as "<dir>/<name>.gen.h".
+    REPO_ROOT,
+    os.path.join(REPO_ROOT, "src"),
+    os.path.join(REPO_ROOT, "lib", "frozen"),
+    # build_info.h carries the target's platform header and its board config;
+    # the board headers are checked in with the board's own sources.
+    os.path.join(REPO_ROOT, "platform", "STM32", "system"),
+    os.path.join(REPO_ROOT, "configs", "BoringTechH743"),
+]
+
+
+def ensure_generated():
+    """Regenerate the config key header, so the build below reads its source.
+
+    The table the firmware compiles is generated from configs/config_keys.toml,
+    and the harness compiles the same translation units: it regenerates the
+    header rather than trusting a copy that may be left over from an earlier
+    edit to the declaration. Regenerating is deterministic and the file is
+    ignored by git.
+    """
+    gen = os.path.join(REPO_ROOT, "scripts", "gen_proto.py")
+    result = subprocess.run([sys.executable, gen, "--target", "config-keys"],
+                            cwd=REPO_ROOT, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.PIPE, text=True)
+    if result.returncode != 0:
+        print(f"ERROR: the config key generator failed:\n{result.stderr}",
+              file=sys.stderr)
+        return False
+    return True
+
+
+def main():
+    if not ensure_generated():
+        return 1
+    compiler = shutil.which("g++") or shutil.which("c++")
+    if compiler is None:
+        print("ERROR: no C++ compiler found (looked for g++, c++)",
+              file=sys.stderr)
+        return 2
+
+    for path in [HARNESS] + SOURCES:
+        if not os.path.isfile(path):
+            print(f"ERROR: {path} is not there", file=sys.stderr)
+            return 2
+
+    # The binary goes to a temporary directory: a host test does not belong in
+    # a firmware build directory, and nothing here is an artifact worth keeping.
+    with tempfile.TemporaryDirectory(prefix="thetagp_profile_version_") as tmp:
+        binary = os.path.join(tmp, "test_profile_version_cases")
+
+        # The board's config header includes the CMSIS device header, which the
+        # firmware build takes from the toolchain rather than this repository.
+        # The test reads no device register, so an empty stand-in for that one
+        # header keeps the compile on the host: the target macro that would pull
+        # the device's own headers is not defined here, and a source that did
+        # need them would not compile rather than be tested against nothing.
+        with open(os.path.join(tmp, "stm32h7xx.h"), "w") as stub:
+            stub.write("/* Stand-in for the CMSIS device header (host test). */\n")
+
+        # A section attribute the target's own build defines and a host build
+        # does not. The buffer it marks is declared, never touched here.
+        cmd = [compiler, "-std=gnu++20", "-Wall", "-Wextra", "-O1",
+               "-DCOMMON_ZERO_INIT=", "-I", tmp]
+        for inc in INCLUDES:
+            cmd += ["-I", inc]
+        cmd += [HARNESS] + SOURCES + ["-o", binary]
+
+        print("$ " + " ".join(cmd))
+        build = subprocess.run(cmd, capture_output=True, text=True)
+        if build.stdout:
+            print(build.stdout, end="")
+        if build.stderr:
+            print(build.stderr, end="", file=sys.stderr)
+        if build.returncode != 0:
+            print("ERROR: the harness did not compile "
+                  f"(exit {build.returncode})", file=sys.stderr)
+            return 2
+
+        run = subprocess.run([binary], capture_output=True, text=True)
+        if run.stdout:
+            print(run.stdout, end="")
+        if run.stderr:
+            print(run.stderr, end="", file=sys.stderr)
+        if run.returncode != 0:
+            print("FAIL: a profile body is not read at the version it carries",
+                  file=sys.stderr)
+            return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
