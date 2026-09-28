@@ -87,8 +87,6 @@ thetagp_fetch_dep(frozen
     "${CMAKE_SOURCE_DIR}/lib/frozen"
 )
 
-add_subdirectory(CRC32)
-
 # frozen: lightweight JSON parser/generator (C)
 add_library(frozen STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/frozen/frozen.c

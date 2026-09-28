@@ -168,7 +168,6 @@ target_include_directories(${CMAKE_PROJECT_NAME}
 target_link_libraries(${CMAKE_PROJECT_NAME}
     PRIVATE
     HalDriver
-    CRC32
     frozen
 )
 
