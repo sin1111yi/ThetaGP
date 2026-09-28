@@ -15,9 +15,11 @@ Reads protocol/protocol.toml and generates type-safe serialization code:
           sits beside protocol.toml and is tracked, because it is the one
           artifact read by a person rather than compiled by a build
   - C++   header (protocol/proto_resp.h) — response payload field tables in
-          declaration order, as X-macros, for the firmware that writes a
-          response: the order, the JSON keys and the printf conversions come
-          from here instead of from a format string written by hand
+          declaration order, as X-macros, and the writer functions the firmware
+          writes a reply through: one per response a table cannot carry and one
+          per shape a reply that failed is written in, so the order, the JSON
+          keys and the printf conversions come from here instead of from a
+          format string written by hand
 
 Usage:
   python3 scripts/gen_proto.py                       # all targets

@@ -195,7 +195,7 @@ outputs:
 | `protocol/proto.rs` | Rust | Tauri backend (serde) |
 | `protocol/types.ts` | TypeScript | Frontend (Vue/Svelte) |
 | `protocol/proto_fields.json` | JSON | Consumers that read the protocol shape: the CDC test suite |
-| `protocol/proto_resp.h` | C++ | Device firmware: the response field order, keys and printf conversions |
+| `protocol/proto_resp.h` | C++ | Device firmware: the response field order, keys and printf conversions, plus the writers for a response holding an array of records and for a reply that failed |
 | `protocol/protocol-fields.md` | Markdown | The docs: the response field tables `docs/cdc-json-protocol.md` points at. Not tracked, like the five above: every output here is a derivative of `protocol.toml`, and the repository carries the source and this file only |
 
 ### Usage

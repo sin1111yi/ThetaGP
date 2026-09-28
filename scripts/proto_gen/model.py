@@ -378,9 +378,11 @@ ENVELOPE_SIDES = ("request", "reply")
 # What `some` does not say is which of the side's messages carry the key, or
 # that two keys of `some` are missing from the same ones: it is per key and per
 # side, not per message shape. The reply shapes that omit a key are firmware
-# evidence (src/test/dispatcher.cpp:55, :75 and src/test/profile_cmd_handler.cpp:246
-# for the two spellings of `cmd`/`queued`'s absence) and stay in the comments of
-# the section rather than becoming a second thing this column has to express.
+# evidence — the `profile.end` trailer writes `cmd` and `status` with no
+# `queued` (src/test/profile_cmd_handler.cpp:255), and the error reply writer
+# generates one for a request it could not read, which carries no `cmd` and no
+# `queued` — and stay in the comments of the section rather than becoming a
+# second thing this column has to express.
 ENVELOPE_ALWAYS, ENVELOPE_SOME, ENVELOPE_NEVER = "always", "some", "never"
 ENVELOPE_APPEARANCES = (ENVELOPE_ALWAYS, ENVELOPE_SOME, ENVELOPE_NEVER)
 
@@ -429,12 +431,13 @@ def envelope_json_keys(proto: dict) -> Tuple[str, ...]:
 # what went wrong and the sentence saying it. Declared in protocol.toml's
 # [error_reply] section, one entry per key, with the columns [envelope] gives
 # its keys, so the shape of a reply that failed is stated in the source of truth
-# and not only in the firmware's format strings. No emitter in this file writes
-# the keys from either section: this one is the contract those hand-written
-# copies are read against. validate_error_reply() holds the declaration to what
-# a reader of it needs, and reserves its keys against a command that declares
-# one — they belong to the error reply builders, so a command field under one
-# would be a second answer to where the key on the wire comes from.
+# and not only in the firmware's format strings. emit_resp reads the two
+# sections into the writers a refusal is written through, so the declaration and
+# the replies that carry it are one answer. validate_error_reply() holds the
+# declaration to what a reader of it needs, and reserves its keys against a
+# command that declares one — they belong to the error reply builders, so a
+# command field under one would be a second answer to where the key on the wire
+# comes from.
 
 
 def error_reply_fields(proto: dict) -> List[Dict[str, Any]]:

@@ -1,7 +1,7 @@
 """
 gen_resp — protocol/proto_resp.h, the response writers as generated code.
 
-Two forms, one rule: the JSON a reply carries is written by code derived from
+Three forms, one rule: the JSON a reply carries is written by code derived from
 protocol.toml and not by a format string written in the firmware.
 
   * an X-macro table per command whose response fields are all values a printf
@@ -10,22 +10,28 @@ protocol.toml and not by a format string written in the firmware.
   * a writer function per command whose response carries an array of records
     (`type = "MemoryRegion[]"`): the caller fills a value struct per element and
     passes a pointer and a length, and the keys, the punctuation, the brackets
-    and the conversions are here.
+    and the conversions are here;
+  * a writer function per error reply shape ([envelope] plus [error_reply]):
+    the keys, their order, the conversions and the status word are those two
+    sections, and the code arrives as one of the error codes the generated
+    protocol class names rather than as a digit at the call site.
 
 An array has no printf conversion, so it has no table form: the writer is what a
-response carrying one is written through.
+response carrying one is written through. An error reply is written in more than
+one shape, so the three shapes are three functions instead of one with a flag.
 
 """
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from proto_gen.model import (
     CPP_TYPE_MAP,
     PRINTF_TYPE_MAP,
     ROLE_PRESENCE,
     envelope_on_side,
+    error_reply_on_side,
     fail,
     no_table_flag,
     optional_flag,
@@ -75,6 +81,111 @@ def _envelope_head(proto: dict, cmd: dict) -> Tuple[str, List[Tuple[str, str, st
     return "{" + ",".join(parts), args
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# Error reply writers (C++)
+# ═════════════════════════════════════════════════════════════════════════════
+
+# The C++ type the code of an error reply arrives as: the generated protocol
+# class names every code [error_codes] declares, and a writer takes one of them
+# rather than an integer, so a code reaches the wire by name.
+ERROR_CODE_TYPE = "Proto::ErrorCode"
+
+# The status word an error reply carries, and the one the envelope's description
+# names beside `ok` ([envelope].status). Known at generation time, the way the
+# successful reply's `ok` is in _envelope_head().
+ERROR_STATUS = "error"
+
+
+def error_reply_keys(proto: dict) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """[error_reply]'s code key and sentence key, as the section declares them.
+
+    Which declared key carries which is read from its type and not from its name:
+    a value of the code key is the `code` of one of [error_codes], so that key is
+    of an integer type, while the sentence is the key of type string. A section
+    declaring neither, or more than one of either, is not a shape a writer can be
+    generated from, so the run stops here rather than writing one of the two
+    under the other's conversion.
+    """
+    keys = error_reply_on_side(proto, "reply")
+    if not keys:
+        fail("ERROR: error reply — [error_reply] declares no key that appears in "
+             "a reply, and the generated error reply writer is the whole shape "
+             "of a reply that failed.")
+    unwritable = sorted({k["type"] for k in keys if k["type"] not in PRINTF_TYPE_MAP})
+    if unwritable:
+        fail(f"ERROR: error reply — [error_reply] declares type(s) "
+             f"{unwritable}, which no printf conversion writes, so no error "
+             f"reply writer can carry them (types a conversion writes: "
+             f"{sorted(PRINTF_TYPE_MAP)}).")
+
+    codes = [k for k in keys if PRINTF_TYPE_MAP[k["type"]][1] != "%Q"]
+    reasons = [k for k in keys if PRINTF_TYPE_MAP[k["type"]][1] == "%Q"]
+    if len(codes) != 1 or len(reasons) != 1:
+        fail("ERROR: error reply — the writers are generated from a section "
+             "declaring exactly one key of an integer type (the code) and "
+             "exactly one of type string (the sentence): [error_reply] declares "
+             f"{[k['json'] for k in codes]} and {[k['json'] for k in reasons]}.")
+    return codes[0], reasons[0]
+
+
+def _error_reply_keys(proto: dict, echo_request: bool,
+                      with_code: bool) -> List[Dict[str, Any]]:
+    """The keys one error reply shape carries, in the order it writes them.
+
+    The envelope's keys come first, in [envelope]'s declaration order, and the
+    error reply's after them, in [error_reply]'s: a reply that answered a request
+    it could read echoes it, so it carries the envelope's `some` keys (`cmd`,
+    `queued`) beside the key every reply carries (`status`), while one that could
+    not read the request carries the `always` keys alone. `with_code` drops the
+    code for the shape a failed write is reported in, which carries the sentence
+    and no code ([error_reply] documents that shape).
+    """
+    code_key, reason_key = error_reply_keys(proto)
+    envelope = envelope_on_side(proto, "reply")
+    if echo_request:
+        head = list(envelope)
+    else:
+        head = [f for f in envelope if f.get("required")]
+    tail = [code_key, reason_key] if with_code else [reason_key]
+    return head + tail
+
+
+def _write_error_writer(w, proto: dict, name: str,
+                        keys: List[Dict[str, Any]], code_key: Optional[dict]) -> None:
+    """One error reply writer: its comment, its signature, its writes.
+
+    The parameters are the reply's keys in the order it writes them — a value for
+    each, taken as the type its declaration gives it, and the code as one of
+    [error_codes] — so the signature and the format text are read from the same
+    list and cannot disagree with it or with each other.
+    """
+    parts: List[str] = []
+    params: List[str] = ["Json &out"]
+    args: List[str] = []
+    for key in keys:
+        ctype, spec = PRINTF_TYPE_MAP[key["type"]]
+        parts.append(f'{key["json"]}:{spec}')
+        if key["json"] == "status":
+            args.append(f'"{ERROR_STATUS}"')
+        elif code_key is not None and key["json"] == code_key["json"]:
+            args.append(f"static_cast<{ctype}>(code)")
+            params.append(f"{ERROR_CODE_TYPE} code")
+        else:
+            args.append(key["json"])
+            params.append(f"{ctype} {key['json']}")
+
+    w("// Writes the reply of a request that failed — the keys")
+    w(f"// {', '.join(key['json'] for key in keys)}, in that order.")
+    w(f"inline void {name}(")
+    for i, param in enumerate(params):
+        comma = "," if i + 1 < len(params) else ") {"
+        w(f"    {param}{comma}")
+    w('    out.printf("{' + ",".join(parts) + '}",')
+    w("               " + ", ".join(args) + ");")
+    w("}")
+    w()
+
+
 def gen_resp(proto: dict, out: Optional[Path] = None) -> str:
     """Response payload writers, one per command that carries one, as C++.
 
@@ -99,6 +210,16 @@ def gen_resp(proto: dict, out: Optional[Path] = None) -> str:
     that is not an array of records (`any`) gets neither: its reply stays
     assembled by hand, and the command is named in the header beside the flag
     emitted for it, which the site that assembles that reply asserts.
+
+    An error reply is written by a function of this header as well, and there is
+    one per shape the firmware writes rather than one per command: every command
+    that fails writes the same keys behind `status`, so the shape is derived once
+    from [envelope] and [error_reply] — the keys, their order in the reply, the
+    conversions and the status word — and the entry points differ in whether they
+    echo the request they answer and whether the reply carries a code. The code
+    is a value of the generated protocol's error codes, so a caller names the
+    code it answers with and the number it travels as is the [error_codes]
+    entry's.
     """
     commands = proto.get("commands", [])
     records = record_types(proto)
@@ -106,6 +227,21 @@ def gen_resp(proto: dict, out: Optional[Path] = None) -> str:
 
     def w(line: str = "") -> None:
         lines.append(line)
+
+    # The three error reply shapes, as the two sections declare them: the keys
+    # are the whole of what the writers need, so they are read once here and each
+    # shape carries its own list. The code key is the one [error_reply] declares
+    # of an integer type — a writer takes it as an error code — and the
+    # `errorReplyNoCode` shape is the one that section documents without a code.
+    err_code_key, _ = error_reply_keys(proto)
+    error_shapes: List[Tuple[str, List[Dict[str, Any]], Optional[dict]]] = [
+        ("errorReply",
+         _error_reply_keys(proto, echo_request=False, with_code=True), err_code_key),
+        ("errorReply",
+         _error_reply_keys(proto, echo_request=True, with_code=True), err_code_key),
+        ("errorReplyNoCode",
+         _error_reply_keys(proto, echo_request=True, with_code=False), None),
+    ]
 
     # The three partitions of the commands that carry a response, decided here so
     # the body below writes one section per form and not one condition per
@@ -134,9 +270,11 @@ def gen_resp(proto: dict, out: Optional[Path] = None) -> str:
     w("// =============================================================================")
     w("#pragma once")
     w("#include <cstdint>")
-    if writable:
-        # The writer functions take the buffer the reply is written into.
-        w('#include "utils/json/json.h"')
+    # Every writer takes the buffer the reply is written into, and an error reply
+    # writer takes the code as one of the error codes the generated protocol
+    # class names, so the header carries both.
+    w('#include "protocol/proto.h"')
+    w('#include "utils/json/json.h"')
     w()
     w("// Response payload fields of a command, in the order the response writes")
     w("// them, one table per command. A table is expanded with a macro of the")
@@ -165,6 +303,19 @@ def gen_resp(proto: dict, out: Optional[Path] = None) -> str:
     w("// assembled by hand, and the site that assembles it names the flag — a")
     w("// field whose type becomes one a table carries takes the flag with it and")
     w("// stops that site from compiling.")
+    w("//")
+    w("// An error reply is written by the functions below too, derived from")
+    w("// [envelope] and [error_reply] rather than from a format string written")
+    w("// by hand: those two sections carry the keys, the order they are written")
+    w("// in, the conversions and the status word, and the code is passed as one")
+    w("// of the error codes the generated protocol class names — so a reply")
+    w("// names the code it answers with instead of spelling its number. The")
+    w("// three entry points are the three shapes the firmware writes: a request")
+    w("// the dispatcher could not read (the envelope's `always` keys, then the")
+    w("// code and the sentence), the same reply to a request it did read (the")
+    w("// envelope's keys, then the code and the sentence), and the one a failed")
+    w("// write is reported in ([error_reply] documents it, and it carries the")
+    w("// sentence and no code).")
     w()
 
     # Presence flags, once per role a response field carries.
@@ -233,6 +384,8 @@ def gen_resp(proto: dict, out: Optional[Path] = None) -> str:
         w()
 
     # ── Writers ─────────────────────────────────────────────────────────────
+    # Both kinds of writer live in one namespace, so the header describes them
+    # here and opens the namespace once.
     if writable:
         w("// ── Response writers ──")
         w("// One function per command whose response carries an array of records,")
@@ -252,9 +405,18 @@ def gen_resp(proto: dict, out: Optional[Path] = None) -> str:
         w("// generated class of protocol/proto.h, and a namespace cannot be")
         w("// declared inside a class.")
         w()
-        w("namespace ThetaGP::Resp {")
-        w()
 
+    w("// ── Error reply writers ──")
+    w("// One function per shape an error reply is written in, taking the keys,")
+    w("// the order and the conversions of the two sections that declare the")
+    w("// shape. The code is a value of the generated protocol class's error")
+    w("// codes, so a call site names the code it answers with and the number it")
+    w("// travels as is that [error_codes] entry's.")
+    w()
+    w("namespace ThetaGP::Resp {")
+    w()
+
+    if writable:
         emitted: List[str] = []
         for cmd in writable:
             for f in cmd.get("response", []):
@@ -266,8 +428,11 @@ def gen_resp(proto: dict, out: Optional[Path] = None) -> str:
         for cmd in writable:
             _write_writer(w, proto, cmd, records)
 
-        w("} // namespace ThetaGP::Resp")
-        w()
+    for name, keys, code_key in error_shapes:
+        _write_error_writer(w, proto, name, keys, code_key)
+
+    w("} // namespace ThetaGP::Resp")
+    w()
 
     # ── What no table carries ───────────────────────────────────────────────
     writer_names = [f"{c['domain']}.{c['name']}" for c in writable]
@@ -277,6 +442,11 @@ def gen_resp(proto: dict, out: Optional[Path] = None) -> str:
         for name in writer_names:
             w(f"//   {name} — {resp_writer(name.split('.')[0], name.split('.')[1])}")
         w()
+    w("// The error replies are written by the functions above as well: errorReply")
+    w("// for the shapes that carry the code and errorReplyNoCode for the one that")
+    w("// carries the sentence alone. They belong to no command, so no table lists")
+    w("// them.")
+    w()
     if unwritable:
         w("// No table and no writer, because a response field of no printf form")
         w("// would be missing from every response written through one. Each of")

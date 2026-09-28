@@ -122,15 +122,17 @@ ERR_INVALID_STATE   = { code = 8,  description = "Command refused by the state t
 #     writes that same shape, and the `profile.end` trailer carries `cmd` and
 #     `status` with no `queued`. A request carries `cmd` and `queued` and no
 #     `status`, and the device refuses one missing either of the two.
-#   * There is no one order. `status,cmd,queued` leads 20 of the firmware's 46
-#     format strings, `cmd,queued,status` leads 22, the trailer above orders
-#     `cmd,status`, and the three replies that carry none of `cmd`/`queued` --
-#     the dispatcher's two and the configuration domain's error shape -- lead
-#     with `status,error_code,reason`. Each emitter writes the order declared
-#     here, so a consumer keys off the names and not the positions.
+#   * There is no one order among the replies the firmware writes itself: the
+#     system and test domains lead with `status,cmd,queued`, the profile and
+#     configuration domains with `cmd,queued,status`, and the `profile.end`
+#     trailer orders `cmd,status`. A reply that failed is not one of those: the
+#     writer generated for its shape orders the keys as this section and
+#     [error_reply] declare them, so a consumer keys off the names and not the
+#     positions.
 #   * `error_code` and `reason` are not declared here: they are the error
-#     reply's, which [error_reply] below declares, and no emitter in this file
-#     writes them from either section. A binding generated from this one does
+#     reply's, which [error_reply] below declares, and a reply that failed
+#     carries them through the writer the generator emits for that section and
+#     this one (protocol/proto_resp.h). A binding generated from this one does
 #     not carry them.
 #
 # One entry per key: the TOML key is the field name a target writes it as, `json`
@@ -141,12 +143,13 @@ ERR_INVALID_STATE   = { code = 8,  description = "Command refused by the state t
 # a reply needs to know about it. gen_rust writes a response struct's leading
 # fields and gen_ts a response interface's leading lines from this section, and
 # now a request type's leading fields and lines too, so the shape of both
-# messages starts in one place instead of in a literal per target. The
-# firmware's format strings are still written by hand -- 46 of them across the
-# five files that build a reply: the system, test, profile and configuration
-# domains at 8, 12, 15 and 8, and the dispatcher at 3.
-# Deriving them needs the generated response field tables extended to the
-# envelope, which is a change of its own.
+# messages starts in one place instead of in a literal per target. A reply that
+# succeeded is still led by a format string the firmware writes itself, and
+# deriving those from this section needs the generated response field tables
+# extended to the envelope, which is a change of its own. A reply that failed is
+# not among them: the generator emits one writer per error reply shape from this
+# section and [error_reply] (protocol/proto_resp.h), and the firmware's refusals
+# are written through it.
 #
 # `appears` is one column with one cell per side, and both cells take the same
 # three words, because the question is the same on each side -- is the key in
@@ -199,15 +202,17 @@ queued = { type = "u32",    json = "queued", appears = { request = "always", rep
 #     profile.start refusals report a failed write as a sentence with no code.
 #     Both keys are of `some` on the reply side for the plainer reason as well,
 #     that a reply of any other status carries neither.
-#   * No emitter in this file writes either key or emits a field for one: the
-#     firmware writes them by hand in 13 and 15 of its 46 format strings
-#     respectively -- the system and test domains at 3 and 4 each, the profile
-#     domain at 2 and 4, the configuration domain at 1 each, and the dispatcher
-#     at 3 each. Deriving those format strings needs the generated response
-#     field tables extended to these keys, which is a change of its own; what
-#     this section states meanwhile is the contract, so a host reads the keys,
-#     their types and where they appear from here rather than out of those
-#     format strings.
+#   * A reply that failed is written by the writer the generator emits for that
+#     shape, derived from this section and [envelope] (protocol/proto_resp.h):
+#     the keys, the order they are written in and the conversions are the two
+#     declarations, and the code is passed as the name of an [error_codes] entry
+#     rather than as a number written where the reply is, so the key and the
+#     number it travels as are one declaration and cannot disagree. Three shapes
+#     are written: the reply that could not read the request at all, the same
+#     reply answering a request it did read, and the one a failed write is
+#     reported in, which carries the sentence and no code. What stays with the
+#     firmware is the sentence's text, and the one reply that carries a declared
+#     response field of its own beside these keys.
 #
 # One entry per key, with the columns [envelope] gives its keys: the TOML key is
 # the name a target would write such a field as, `json` is the key it travels
@@ -220,14 +225,15 @@ queued = { type = "u32",    json = "queued", appears = { request = "always", rep
 # request carries no code and no sentence, so no request type writes a line for
 # one.
 #
-# What the section does not state is whether these are the keys and the shape
-# the firmware's format strings write. Those copies are still written by hand,
-# so comparing them is a review and a device-side check, not something this file
-# can read.
+# What the section does not state is anything about the sentence but its key and
+# its type: the text of `reason` is the firmware's, and so is the reply that
+# carries a declared response field of its own beside these keys. The keys, the
+# order and the conversions of a reply that failed are this section's and the
+# envelope's, and the writer the generator emits is the whole of that shape.
 
 [error_reply]
 error_code = { type = "i32",    json = "error_code", appears = { request = "never", reply = "some" }, description = "Numeric code for what went wrong: the `code` of one of the [error_codes] entries above, written as a number rather than as a name (2 for ERR_INVALID_PARAM, 1 for ERR_UNKNOWN_CMD, and so on). It is not a status of its own: a reply that succeeded says so in `status` and carries neither this key nor `reason`, so the key appears only where the status is error, and always with `reason` beside it. Which of the numbers a command's reply can carry is the `error_codes` array that command declares; this is the key they arrive in" }
-reason     = { type = "string", json = "reason",     appears = { request = "never", reply = "some" }, description = "What was wrong with the request, in words: the sentence the firmware logs beside the code, and the only key that separates two failures sharing one code (test.flash_read's invalid length and the dispatcher's unknown command are both error_code 1). Written in 15 of the firmware's format strings: with `error_code` in each of the 13 that carry one, and alone in the two staged profile.start refusals that report a failed write with no code. Its text is the firmware's, not a value declared here: a host switches on `error_code` and shows this to a reader, so the two are not to be read as one key in two spellings" }
+reason     = { type = "string", json = "reason",     appears = { request = "never", reply = "some" }, description = "What was wrong with the request, in words: the sentence the firmware logs beside the code, and the only key that separates two failures sharing one code (test.flash_read's invalid length and the dispatcher's unknown command are both error_code 1). Written with `error_code` in every refusal that carries one, and alone in the two staged profile.start refusals that report a failed write with no code. Its text is the firmware's, not a value declared here: a host switches on `error_code` and shows this to a reader, so the two are not to be read as one key in two spellings" }
 
 # ---------------------------------------------------------------------------
 # Enumerations

@@ -113,11 +113,13 @@ def validate_envelope(proto: dict) -> None:
        catches and the field a target writes would be two different names.
 
     What is not checked, because nothing in the source states it: whether these
-    are the keys the firmware's format strings write. Those copies are still
-    written by hand — 46 format strings across src/test/sys_handler.cpp,
-    test_cmd_handler.cpp, profile_cmd_handler.cpp, config_cmd_handler.cpp and
-    dispatcher.cpp — and comparing them is a review and a device-side check, not
-    something this file can read.
+    are the keys a reply that succeeded is led by. Those replies are still led by
+    a format string written in the firmware — 30 of them across
+    src/test/sys_handler.cpp, test_cmd_handler.cpp, profile_cmd_handler.cpp and
+    config_cmd_handler.cpp, the profile domain's trailer among them — and
+    comparing them is a review and a device-side check, not something this file
+    can read. A reply that failed is not one of those: the error reply writers
+    this generator emits carry its keys from this section and [error_reply].
     """
     section = proto.get("envelope", {})
     if not isinstance(section, dict):
@@ -319,11 +321,13 @@ def validate_error_reply(proto: dict) -> None:
     shadows nothing, so a column that says a key appears on no request leaves
     the request types free of it.
 
-    What is not checked, for the reason the envelope's validator gives: whether
-    these are the keys the firmware's format strings write. Those copies are
-    still written by hand — 13 format strings write `error_code` and 15 write
-    `reason` — so comparing them is a review and a device-side check, not
-    something this file can read.
+    What is not checked, for the reason the envelope's validator gives: what a
+    reply that fails says in `reason`. The keys, their order and their
+    conversions are read from here by the emitter that generates the error reply
+    writers, so the firmware's refusals are held to this section by construction.
+    The sentences themselves are the firmware's, and so is the one reply that
+    carries a declared response field of its own beside these keys: those copies
+    are a review and a device-side check, not something this file can read.
     """
     section = proto.get("error_reply", {})
     if not isinstance(section, dict):
