@@ -37,6 +37,7 @@
 #include "drivers/device/run_led.h"
 #include "drivers/device/system_timer.h"
 #include "drivers/gp_emulator/gp_emulator_manager.h"
+#include "drivers/gp_emulator/usb_driver.h"
 
 #include "drivers/peripherals/systick.h"
 
@@ -44,9 +45,21 @@
 
 #include "ThetaGP.h"
 
-#include "test/init.h"
+#include "comm/frame_codec.h"
 
 using namespace ThetaGP;
+
+namespace {
+
+// The USB interrupt hands over the bytes the host sent; the assembler holds
+// them until the command task takes a whole frame out of it.
+void onCdcRx(void *buffer, uint16_t length) {
+  Comm::FrameCodec::getInstance().feed(
+      static_cast<const uint8_t *>(buffer), length,
+      Drivers::Device::SystemTimer::getInstance().getMillis());
+}
+
+} // namespace
 
 ThetaGamepad::ThetaGamepad() {}
 
@@ -86,7 +99,9 @@ void ThetaGamepad::setup() {
   // initialize configuration system (ProfileStore + ConfigManager)
   Gamepad::Config::ConfigManager::getInstance().init();
 
-  ThetaGP::Test::initTestSystem();
+  // The CDC command channel: the bytes the host sends reach the frame assembler
+  // and the command task answers them.
+  USB::USBDriver::getInstance().setCDCRxCallback(onCdcRx);
 }
 
 void ThetaGamepad::bootup() {

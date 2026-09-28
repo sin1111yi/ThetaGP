@@ -27,15 +27,33 @@
 #include "conf/ThetaGP_Config.h" // THETAGP_CFG_USB_REPORT_RATE_HZ, the gamepad task rate this file registers
 
 #include "gamepad/gamepad.h"
+#include "drivers/device/system_timer.h"
 #include "drivers/led/led_effect.h"
 #include "task_manager.h"
 
+#include "tusb.h"
+
 #include "ThetaGP.h"
 
-#include "test/frame_layer.h"
+#include "comm/frame_codec.h"
+#include "comm/request_handler.h"
 
 using namespace ThetaGP;
 using namespace ThetaGP::Gamepad;
+
+namespace {
+
+// The reply payload and the frame built around it, held across the command
+// task's calls: one request is answered at a time. Both are allocated once and
+// written off the hot path, so they sit in the system RAM, not in fast RAM.
+COMMON_ZERO_INIT static uint8_t s_reply[Comm::FrameCodec::PAYLOAD_MAX]{};
+COMMON_ZERO_INIT static uint8_t s_frame[Comm::FrameCodec::FRAME_MAX]{};
+
+// The refusals the frame layer has counted, so the task answers a frame it had
+// to refuse once and only once.
+uint32_t s_refused = 0;
+
+} // namespace
 
 FAST_CODE static void taskGamepadCore(uint32_t currentTimeUs) {
   UNUSED(currentTimeUs);
@@ -46,27 +64,57 @@ FAST_CODE static void taskGamepadCore(uint32_t currentTimeUs) {
   // a report submitted while the endpoint is still busy is discarded).
   tud_task();
   Gamepad::Gamepad::getInstance().process();
-  // Drains the response bytes sendResponse() laid down: those reach the
-  // stack's TX FIFO here, on the report tick.
-  ThetaGP::Test::FrameLayer::getInstance().flushTx();
 }
 
 FAST_CODE static void taskCmdProc(uint32_t currentTimeUs) {
   UNUSED(currentTimeUs);
 
-  // The 20 Hz command tick: decode the frames the host sent and dispatch the
-  // queued ones synchronously. Responses built through sendResponse() are
-  // queued for the gamepad tick's flushTx(); a command that writes the CDC
-  // FIFO itself (profile.get: header and raw payload) gets its bytes out
-  // during this dispatch, while its trailer goes through sendResponse().
-  ThetaGP::Test::FrameLayer::getInstance().processCommandQueue();
+  // The 20 Hz command tick: drop a half frame whose bytes stopped arriving,
+  // then answer every whole frame the USB interrupt assembled. A reply is
+  // framed and written to the CDC FIFO here; tud_task() on the report tick is
+  // what moves those bytes out.
+  Comm::FrameCodec &codec = Comm::FrameCodec::getInstance();
+  codec.tick(Drivers::Device::SystemTimer::getInstance().getMillis());
+
+  // A frame the layer refused is answered with a transport error: the host
+  // resends the command it could not get through.
+  const uint32_t refused = codec.droppedFrames();
+  if (refused != s_refused) {
+    s_refused = refused;
+    const uint16_t answered = Comm::RequestHandler::frameRefused(
+        codec.lastDrop(), s_reply, sizeof s_reply);
+    if (answered != 0) {
+      const uint16_t framed =
+          Comm::FrameCodec::encode(s_reply, answered, s_frame, sizeof s_frame);
+      if (framed != 0) {
+        tud_cdc_write(s_frame, framed);
+        tud_cdc_write_flush();
+      }
+    }
+  }
+
+  Comm::FrameCodec::Payload payload{};
+  while (codec.take(payload)) {
+    const uint16_t answered = Comm::RequestHandler::answer(
+        payload.bytes, payload.length, s_reply, sizeof s_reply);
+    if (answered == 0) {
+      continue;
+    }
+    const uint16_t framed =
+        Comm::FrameCodec::encode(s_reply, answered, s_frame, sizeof s_frame);
+    if (framed == 0) {
+      continue;
+    }
+    tud_cdc_write(s_frame, framed);
+    tud_cdc_write_flush();
+  }
 }
 
 void ThetaGP::ThetaGamepad::registerTasks(void) {
   TaskManager::registerTask("GAMEPAD", "CORE", taskGamepadCore,
                             TASK_PERIOD_HZ(THETAGP_CFG_USB_REPORT_RATE_HZ),
                             TaskPriority::Realtime);
-  TaskManager::registerTask("TEST", "CMD_PROC", taskCmdProc,
+  TaskManager::registerTask("COMM", "CMD_PROC", taskCmdProc,
                             TASK_PERIOD_HZ(20), TaskPriority::Medium);
   // The strip is cosmetic: its render is long enough to matter against the
   // report tick, so it runs below every task that carries input.

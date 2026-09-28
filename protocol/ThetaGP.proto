@@ -55,9 +55,13 @@ enum Reason {
   REASON_FLASH_ERASE_FAILED        = 25;
   REASON_FLASH_READ_FAILED         = 26;
   REASON_INVALID_ADDRESS_RANGE     = 27;
-  // The frame's checksum did not hold, so the request could not be read at
-  // all. It is the one reason a TransportError carries and no Error does.
-  REASON_FRAME_CHECKSUM            = 28;
+  // The reasons a TransportError carries: the frame layer refused the frame, so
+  // no command can be named. No Error carries them.
+  REASON_FRAME_CHECKSUM            = 28; // The payload's sum did not hold
+  REASON_FRAME_PREFIX              = 29; // The length prefix, or the length it declared, is not legal
+  REASON_FRAME_INCOMPLETE          = 30; // A declared length whose bytes stopped arriving
+  REASON_PAYLOAD_UNREADABLE        = 31; // The sum held, and the payload is not a message
+  REASON_FRAME_NO_ROOM             = 32; // The receive side had no slot left for it
 }
 
 // A command failure: the request was read, and what it asked for was refused
@@ -564,6 +568,11 @@ message ProfilePutEnd {}
 // command and its arguments are the arm's own message, so the field number of
 
 message Request {
+  // The frame's number in the host's stream: the host writes its next number on every
+  // frame, so a reply carries that number plus one and a host sees which frame was never
+  // answered. The device answers a frame it cannot read without a number instead.
+  optional uint32 queued = 32;
+
   oneof kind {
     // -- The system domain (1..6) --
     SysPing         sys_ping           = 1;

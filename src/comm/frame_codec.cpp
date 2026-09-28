@@ -19,23 +19,17 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "wire/frame_codec.h"
+#include "comm/frame_codec.h"
 
 #include <cstring>
 
-namespace ThetaGP::Test {
+namespace ThetaGP::Comm {
 
 // A payload byte is added to the running sum as it arrives and the frame is
 // held against its checksum at the checksum's last byte, so a whole frame
 // reaches the layer above in one pass and the assembler is free for the frame
-// after it. What the feed never does is read a message, write a reply or take
-// a decision about a command: a payload leaves this class as bytes.
-//
-// The sum could equally be scanned over the payload once the frame is whole
-// (addition is associative, so the two agree byte for byte). Adding it here
-// costs one addition per byte, which is the arithmetic section 3.3 gives for
-// the scan, and is what keeps a verified frame from having to wait for the
-// main loop before the assembler can take the next one.
+// after it. What the feed never does is read a message, write a reply or take a
+// decision about a command: a payload leaves this class as bytes.
 
 FrameCodec &FrameCodec::getInstance() {
     static FrameCodec instance;
@@ -108,9 +102,9 @@ void FrameCodec::feedByte(uint8_t byte, uint32_t nowMs) {
 
     switch (_state) {
     case State::Prefix: {
-        // A third prefix byte declares a length of at least 128 * 128, which is
-        // above PAYLOAD_MAX whatever the byte's own bits say, so it is refused
-        // where it arrives rather than decoded and then refused (section 3.1).
+        // A third prefix byte would declare a length above PAYLOAD_MAX whatever
+        // the byte's own bits say, so it is refused where it arrives rather
+        // than decoded and then refused.
         if (_prefixLen == PREFIX_MAX_BYTES) {
             drop(Drop::Prefix);
             return;
@@ -156,9 +150,8 @@ void FrameCodec::feedByte(uint8_t byte, uint32_t nowMs) {
             return;
         }
         if (checksumOfChecksumBytes() != _sum) {
-            // The payload is never read and never travels: the frame is refused
-            // whole and the byte after it is read as a new length prefix
-            // (section 3.4 rules 1 and 3).
+            // The payload never travels: the frame is refused whole and the
+            // byte after it is read as a new length prefix.
             drop(Drop::Checksum);
             return;
         }
@@ -174,8 +167,7 @@ uint16_t FrameCodec::checksumOfChecksumBytes() const {
 
 bool FrameCodec::tick(uint32_t nowMs) {
     // Only a length that was declared can be half a frame: a prefix that
-    // promised another prefix byte declares nothing yet and is left where it is
-    // (section 3.4 rule 5).
+    // promised another prefix byte declares nothing yet and is left where it is.
     if (!halfFrame()) {
         return false;
     }
@@ -226,9 +218,9 @@ uint16_t FrameCodec::declaredLength() const {
 
 void FrameCodec::publish() {
     if (_slotCount == SLOTS) {
-        // A frame that is whole and whose checksum held, with every slot taken:
-        // the frame is refused and counted, and the stream goes on at the byte
-        // after it rather than at the byte after its payload.
+        // A whole frame whose checksum held, with every slot taken: the frame
+        // is refused and counted, and the stream goes on at the byte after it
+        // rather than at the byte after its payload.
         drop(Drop::NoRoom);
         return;
     }
@@ -261,4 +253,4 @@ void FrameCodec::reset() {
     _checksumLen = 0;
 }
 
-} // namespace ThetaGP::Test
+} // namespace ThetaGP::Comm

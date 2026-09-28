@@ -587,6 +587,25 @@ def set_field(message, path, raw, bindings):
              "path, as in array.elements=1,2" % leaf, EXIT_USAGE)
     setattr(message, leaf, coerce(field, raw, bindings))
 
+class Sequence:
+    """The frame numbers the host writes. Every frame the host puts on the wire
+    takes the next number, a reply carries the number of its request plus one,
+    and the host's next frame carries that reply's number plus one."""
+
+    def __init__(self):
+        self.next = 0
+
+    def take(self):
+        number = self.next
+        self.next = number + 1
+        return number
+
+    def after_reply(self, number):
+        self.next = number + 1
+
+
+_sequence = Sequence()
+
 def build_request(command, assignments, bindings, arms):
     arm_number, arm_message, arm_name = arms.arm_for_command(command)
     envelope = bindings.request.Request()
@@ -597,17 +616,21 @@ def build_request(command, assignments, bindings, arms):
             fail("%r is not field=value" % assignment, EXIT_USAGE)
         path, _, raw = assignment.partition("=")
         set_field(arm, path, raw, bindings)
+    envelope.queued = _sequence.take()
     getattr(envelope, arm_name).CopyFrom(arm)
     payload = envelope.SerializeToString()
     if not payload:
         fail("the request encodes to no bytes at all, which is not a frame",
              EXIT_USAGE)
-    return payload, arm_name, arm_number, arm_message
+    return payload, arm_name, arm_number, arm_message, envelope.queued
 
-def report_frame(payload, arm_name, arm_number, arm_message, command=None):
+def report_frame(payload, arm_name, arm_number, arm_message, command=None,
+                 number=None):
     print("arm     %d (%s, %s)" % (arm_number, arm_name, arm_message))
     if command:
         print("command %s" % command)
+    if number is not None:
+        print("queued  %d (the reply carries %d)" % (number, number + 1))
     print("payload %d B: %s" % (len(payload), hex_bytes(payload)))
     frame = encode_frame(payload)
     print("frame   %d B: %s" % (len(frame), hex_bytes(frame)))
@@ -616,10 +639,10 @@ def report_frame(payload, arm_name, arm_number, arm_message, command=None):
 def cmd_send(args):
     bindings = require_bindings(args.bindings)
     arms = Arms(bindings.request)
-    payload, arm_name, arm_number, arm_message = build_request(
+    payload, arm_name, arm_number, arm_message, number = build_request(
         args.command, args.fields, bindings, arms)
     frame = report_frame(payload, arm_name, arm_number, arm_message,
-                         arms.command_of_arm(arm_name) or args.command)
+                         arms.command_of_arm(arm_name) or args.command, number)
     if args.dry_run:
         print("dry run: nothing was written to a port")
         return EXIT_OK
@@ -638,13 +661,13 @@ def cmd_send(args):
 def cmd_ping(args):
     bindings = require_bindings(args.bindings)
     arms = Arms(bindings.request)
-    payload, arm_name, arm_number, arm_message = build_request(
-        "sys.ping", [], bindings, arms)
-    frame = report_frame(payload, arm_name, arm_number, arm_message, "sys.ping")
-
     port = open_port(args)
     try:
         for attempt in range(1, PING_ATTEMPTS + 1):
+            payload, arm_name, arm_number, arm_message, number = build_request(
+                "sys.ping", [], bindings, arms)
+            frame = report_frame(payload, arm_name, arm_number, arm_message,
+                                 "sys.ping", number)
             port.reset_input_buffer()
             port.write(frame)
             port.flush()
@@ -667,6 +690,11 @@ def cmd_ping(args):
                     answered.append(message)
                     if message.WhichOneof("kind") == "transport_error":
                         transport_error = True
+                    elif message.queued != number + 1:
+                        eprint("thetagp: the reply is numbered %d, and the "
+                               "frame was %d" % (message.queued, number))
+                    else:
+                        _sequence.after_reply(message.queued)
             if answered and not transport_error:
                 return EXIT_OK
             if transport_error:

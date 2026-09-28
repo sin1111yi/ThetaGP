@@ -91,7 +91,7 @@ CONFIG_KEYS_PATH = "configs/config_keys.toml"
 # Where the generated header is written, relative to the repository root. It
 # sits beside the declaration it comes from, and the build reaches it as
 # "configs/config_keys.gen.h" — the repository root is on the include path, the
-# same way "protocol/proto_resp.h" is reached.
+# same way "protocol/ThetaGP.pb.h" is reached.
 CONFIG_KEYS_OUT = "configs/config_keys.gen.h"
 
 # A declared type and the KeyType of the table. `bool` travels as a byte, which

@@ -2,7 +2,7 @@
  * This file is a part of ThetaGP.
  */
 
-#include "wire/request_handler.h"
+#include "comm/request_handler.h"
 
 #include <cstdio>
 #include <cstring>
@@ -15,7 +15,7 @@
 #include "task_manager.h"
 #include "utils/mem_info.h"
 
-namespace ThetaGP::Test {
+namespace ThetaGP::Comm {
 namespace {
 
 // A fixed-size text field: what fits goes in, and it is always terminated.
@@ -32,6 +32,33 @@ void writeFailure(ThetaGP_Reply &reply, ThetaGP_ErrorCode code,
     reply.kind.error.has_code = true;
     reply.kind.error.code = code;
     reply.kind.error.reason = reason;
+}
+
+// The number a reply carries: the request's own number plus one. A host that
+// writes no number gets the device's count instead, so the reply is numbered
+// either way and a host still sees which frames went unanswered.
+uint32_t nextNumber(const ThetaGP_Request &request) {
+    static uint32_t last = 0;
+    last = request.has_queued ? (request.queued + 1U) : (last + 1U);
+    return last;
+}
+
+// What a refusal by the frame layer means on the wire.
+ThetaGP_Reason reasonOf(Comm::FrameCodec::Drop drop) {
+    switch (drop) {
+    case Comm::FrameCodec::Drop::Checksum:
+        return ThetaGP_Reason_REASON_FRAME_CHECKSUM;
+    case Comm::FrameCodec::Drop::Prefix:
+    case Comm::FrameCodec::Drop::Length:
+        return ThetaGP_Reason_REASON_FRAME_PREFIX;
+    case Comm::FrameCodec::Drop::Idle:
+        return ThetaGP_Reason_REASON_FRAME_INCOMPLETE;
+    case Comm::FrameCodec::Drop::NoRoom:
+        return ThetaGP_Reason_REASON_FRAME_NO_ROOM;
+    case Comm::FrameCodec::Drop::None:
+    default:
+        return ThetaGP_Reason_REASON_NONE;
+    }
 }
 
 // ── sys.get_fw_version (command 2) ──
@@ -85,7 +112,7 @@ void writeTaskInfo(const ThetaGP_Request &request, ThetaGP_Reply &reply) {
     ok.avg_exec_us = info->averageExecutionTime10thUs / 10U;
     ok.total_exec_us = info->totalExecutionTimeUs;
     ok.avg_delta_us = info->averageDeltaTime10thUs / 10U;
-#ifdef USE_TASK_COUNTERS
+#if THETAGP_CFG_TASK_COUNTERS
     ok.has_run_count = true;
     ok.run_count = info->runCount;
     ok.has_late_count = true;
@@ -156,8 +183,7 @@ uint16_t encodeReply(const ThetaGP_Reply &reply, uint8_t *out,
 } // namespace
 
 uint16_t RequestHandler::answer(const uint8_t *payload, uint16_t length,
-                                uint32_t queued, uint8_t *out,
-                                uint16_t capacity) {
+                                uint8_t *out, uint16_t capacity) {
     if (out == nullptr || capacity == 0) {
         return 0;
     }
@@ -169,13 +195,17 @@ uint16_t RequestHandler::answer(const uint8_t *payload, uint16_t length,
 
     ThetaGP_Reply reply;
     std::memset(&reply, 0, sizeof reply);
-    reply.has_queued = true;
-    reply.queued = queued;
 
     if (!read) {
-        writeFailure(reply, ThetaGP_ErrorCode_ERR_UNKNOWN_CMD,
-                     ThetaGP_Reason_REASON_UNKNOWN_COMMAND);
+        // The bytes are not a message at all: the same shape the frame layer
+        // answers a frame it had to refuse with, and no number, because there
+        // is nothing to pair it with.
+        reply.which_kind = ThetaGP_Reply_transport_error_tag;
+        reply.kind.transport_error.reason =
+            ThetaGP_Reason_REASON_PAYLOAD_UNREADABLE;
     } else {
+        reply.has_queued = true;
+        reply.queued = nextNumber(request);
         switch (request.which_kind) {
         case ThetaGP_Request_sys_ping_tag:
             reply.which_kind = ThetaGP_Reply_sys_ping_tag;
@@ -220,4 +250,16 @@ uint16_t RequestHandler::answer(const uint8_t *payload, uint16_t length,
     return 0;
 }
 
-} // namespace ThetaGP::Test
+uint16_t RequestHandler::frameRefused(Comm::FrameCodec::Drop drop,
+                                     uint8_t *out, uint16_t capacity) {
+    if (out == nullptr || capacity == 0) {
+        return 0;
+    }
+    ThetaGP_Reply reply;
+    std::memset(&reply, 0, sizeof reply);
+    reply.which_kind = ThetaGP_Reply_transport_error_tag;
+    reply.kind.transport_error.reason = reasonOf(drop);
+    return encodeReply(reply, out, capacity);
+}
+
+} // namespace ThetaGP::Comm
