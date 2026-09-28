@@ -22,6 +22,7 @@
 #include "gamepad/profile/profile_store.h"
 #include "conf/ThetaGP_Config.h" // THETAGP_CFG_HAS_FLASH, the flash switch this file branches on
 #include "drivers/device/flash/flash_w25qxx.h"
+#include "utils/crc.h"
 #include "utils/log/log.h"
 
 #include <cstring>
@@ -31,23 +32,6 @@
 namespace ThetaGP::Gamepad::Profile {
 
 COMMON_ZERO_INIT uint8_t s_staging[PROFILE_STAGING_SIZE];
-
-// ── CRC16 (CCITT, poly=0x1021) ──
-
-static uint16_t crc16Ccitt(const uint8_t *data, uint16_t len) {
-  uint16_t crc = 0xFFFF;
-  for (uint16_t i = 0; i < len; ++i) {
-    crc ^= (uint16_t)data[i] << 8;
-    for (uint8_t j = 0; j < 8; ++j) {
-      if (crc & 0x8000) {
-        crc = (crc << 1) ^ 0x1021;
-      } else {
-        crc <<= 1;
-      }
-    }
-  }
-  return crc;
-}
 
 // ── Slot index helpers (ring buffer wraparound) ──
 
@@ -93,7 +77,7 @@ ProfileStore &ProfileStore::getInstance() {
 // ── CRC16 for BootMeta ──
 
 uint16_t ProfileStore::crc16BootMeta(const BootMeta *meta) const {
-  return crc16Ccitt(reinterpret_cast<const uint8_t *>(meta), 14);
+  return Crc::crc16Ccitt(reinterpret_cast<const uint8_t *>(meta), 14);
 }
 
 // ── seqBeforeIncrement: check seq overflow before incrementing ──
