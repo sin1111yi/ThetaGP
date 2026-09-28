@@ -749,6 +749,18 @@ bool ProfileStore::loadActive(uint8_t *buf, uint16_t *outLen) {
   return readBody(_activeAddress, buf, outLen);
 }
 
+// ── carriesProfile() ──
+// The two branches readProfile() resolves without consulting the address map,
+// and the map itself for every other id. Nothing here reads the flash or writes
+// anywhere, so the answer costs nothing a read of a body costs.
+
+bool ProfileStore::carriesProfile(uint16_t id) const {
+  if (id == PROFILE_ID_ACTIVE || id == 0) {
+    return true;
+  }
+  return id <= PROFILE_MAX_ID && _profileAddresses[id] != 0;
+}
+
 // ── readProfile() ──
 
 bool ProfileStore::readProfile(uint16_t id, ProfileText *out) {

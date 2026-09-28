@@ -217,6 +217,19 @@ public:
    * active profile). Returns false when there is no such profile. */
   bool readProfile(uint16_t id, ProfileText *out);
 
+  /** True when this store has an address for profile `id`: the fixed address
+   * the factory profile sits at, for id 0, the active profile's address, for
+   * PROFILE_ID_ACTIVE, and the Address Ring's entry, for every other id in
+   * range. Those are the ids readProfile() resolves an address for, so a false
+   * here is readProfile()'s answer for an id the ring holds no entry for.
+   *
+   * Derived from the address map the last scan filled — the same map
+   * getStatus() counts profileCount from — and answered from it alone: no read
+   * of the flash, nothing written, and no path of its own to fall out of step
+   * with the reader. A caller that needs to know whether the store carries an
+   * id can ask this instead of reading a body for the answer. */
+  bool carriesProfile(uint16_t id) const;
+
   /** Get runtime status of the profile system. */
   ProfileStatus getStatus() const;
 

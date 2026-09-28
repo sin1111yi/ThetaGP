@@ -6,7 +6,9 @@
 
 #include <cstring>
 
+#include "comm/profile_handler.h"
 #include "comm/sys_handler.h"
+#include "conf/ThetaGP_Config.h"
 #include "pb_decode.h"
 #include "pb_encode.h"
 #include "protocol/ThetaGP.pb.h"
@@ -98,6 +100,14 @@ uint16_t RequestHandler::answer(const uint8_t *payload, uint16_t length,
         case ThetaGP_Request_sys_get_usage_tag:
             SysHandler::usage(reply);
             break;
+#if THETAGP_CFG_HAS_FLASH
+        case ThetaGP_Request_profile_status_tag:
+            ProfileHandler::status(reply);
+            break;
+        case ThetaGP_Request_profile_list_tag:
+            ProfileHandler::list(reply);
+            break;
+#endif
         default:
             writeFailure(reply, ThetaGP_ErrorCode_ERR_UNKNOWN_CMD,
                          ThetaGP_Reason_REASON_UNKNOWN_COMMAND);
