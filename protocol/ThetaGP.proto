@@ -410,7 +410,7 @@ message TestKeypadScanOk {
 // Begin writing a profile body: the profile it is written to and how many bytes
 // the body holds.
 message ProfilePutStart {
-  uint32 id    = 1;  // The profile to write: 0 for the factory profile, 1..15 for a user profile
+  uint32 id    = 1;  // 0 writes the factory profile; 1..15 asks for a user profile, whose id the store assigns
   uint32 total = 2;  // Number of body bytes the stream carries, 1 to 4096
 }
 
@@ -459,8 +459,8 @@ message ProfileList {}
 
 message ProfileListOk {
   uint32 active = 1;  // Id of the active profile
-  // One entry per profile the store carries, the factory profile (id 0) first
-  // reply builds its array in (src/test/profile_cmd_handler.cpp:286-304).
+  // One entry per profile the store carries, in the store's own order: the
+  // factory profile (id 0) first, then ascending id.
   repeated ProfileEntry profiles = 2;
 }
 
@@ -510,8 +510,9 @@ message ProfileSelectOk {
 // it carries, and how its flash sectors are accounted for.
 message ProfileStatus {}
 
-// Every field is a reading of the store's own status record (ProfileStatus,
-// carries it (src/test/profile_cmd_handler.cpp:421-430); the names and the
+// Every field is a reading of the store's own status record: the profile it
+// reports, the two ring positions, and how its flash sectors are accounted
+// for.
 message ProfileStatusOk {
   uint32 active_profile_id = 1;  // The active profile's id
   uint32 profile_count     = 2;  // Number of valid profiles, the empty ones not counted
@@ -519,7 +520,9 @@ message ProfileStatusOk {
   uint32 boot_meta_seq     = 4;  // Sequence number of the current BootMeta entry
   uint32 address_ring_seq  = 5;  // Sequence number of the current Address Ring entry
   uint32 total_sectors     = 6;  // Total sectors of the flash chip
-  uint32 used_sectors      = 7;  // Sectors the stored profiles occupy
+  // Sectors of the User Ring the store has consumed, deletions and abandoned
+  // versions included.
+  uint32 used_sectors      = 7;
   uint32 free_sectors      = 8;  // Sectors still available in the User Ring
   uint32 reserved_sectors  = 9;
 }
@@ -559,7 +562,8 @@ message ProfilePutChunk {
 }
 
 // The end of a body being written: the stream is complete, and the store writes
-// it.
+// it. Its reply is the opening arm's own success arm, carrying the id the store
+// assigned.
 message ProfilePutEnd {}
 
 // ── request ──
@@ -625,7 +629,8 @@ message Request {
 
 message Reply {
   // The request's queued value plus one, echoed so a host pairs a reply with
-  // its request; a staged profile.start answers zero instead (the write is
+  // its request. A staged write is answered once, when it is written: its
+  // answer carries zero, because it answers the exchange and not one frame.
   optional uint32 queued = 34;
 
   oneof kind {
