@@ -67,6 +67,12 @@ Rules that hold for every change:
   declared rather than as missing.
 - Anything a device does not answer is `ERR_UNKNOWN_CMD`, and anything it cannot
   do is an `Error` arm naming why.
+- What the frame layer cannot hand on is neither of those: a payload whose sum
+  does not hold, an illegal length prefix, a frame whose bytes stopped arriving,
+  a payload that is not the message it claims and a receive side with no slot
+  left all answer on the transport arm, each with a reason of its own. A reply to
+  such a frame carries the device's own numbering, so a host tells a refusal from
+  a transport failure by the arm it arrived on, never by a code.
 
 ## Adding a command
 
