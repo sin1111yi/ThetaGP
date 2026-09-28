@@ -68,12 +68,6 @@ constexpr int kErrInvalidState = 8;
 // holds its own count to; a list that still does not fit the reply buffer is
 // refused by that function's answer rather than sent cut short.
 
-// The value standing for a destination that was assigned none. It is the one
-// value outside minVal..maxVal that a key carrying kKeyFlagAcceptsUnmapped
-// still accepts.
-constexpr int32_t kUnmappedValue =
-    static_cast<int32_t>(detail::kBtnMapUnmapped);
-
 // The lowest signed 32-bit integer. A `value` that is absent, or spelled as
 // anything but a plain integer, reads as this, and no key of the table accepts
 // a value that low, so a request that arrives with it is refused as carrying no
@@ -81,82 +75,9 @@ constexpr int32_t kUnmappedValue =
 constexpr int kNoIntValue = INT_MIN;
 
 // ── Value access ──
-
-// Reads element `index` of the entry's field out of `cfg` and returns it as a
-// signed integer. The element width comes from the entry's type, and the bytes
-// are copied rather than read through a wider or narrower type. The field's
-// offset is added here and nowhere else, so the entry addresses the byte the
-// running code reads.
-static int32_t loadElement(const ConfigStore &cfg, const KeyEntry &entry,
-                           uint16_t index) {
-  const uint8_t *src = reinterpret_cast<const uint8_t *>(&cfg) + entry.offset +
-                       static_cast<size_t>(index) * keyTypeWidth(entry.type);
-  switch (entry.type) {
-  case KeyType::U8:
-  case KeyType::U8Array: {
-    uint8_t v = 0;
-    memcpy(&v, src, sizeof(v));
-    return v;
-  }
-  case KeyType::U16: {
-    uint16_t v = 0;
-    memcpy(&v, src, sizeof(v));
-    return v;
-  }
-  case KeyType::I16: {
-    int16_t v = 0;
-    memcpy(&v, src, sizeof(v));
-    return v;
-  }
-  case KeyType::Count:
-    break;
-  }
-  static_assert(static_cast<uint8_t>(KeyType::Count) == 4,
-                "key table: a key type added to the enum needs a branch here");
-  return 0;
-}
-
-// Writes `value` as element `index` of the entry's field in `cfg`. The caller
-// has already checked the value against what the entry accepts. The field's
-// offset is added here and nowhere else, so the entry addresses the byte the
-// running code reads.
-static void storeElement(ConfigStore &cfg, const KeyEntry &entry,
-                         uint16_t index, int32_t value) {
-  uint8_t *dst = reinterpret_cast<uint8_t *>(&cfg) + entry.offset +
-                 static_cast<size_t>(index) * keyTypeWidth(entry.type);
-  switch (entry.type) {
-  case KeyType::U8:
-  case KeyType::U8Array: {
-    const uint8_t v = static_cast<uint8_t>(value);
-    memcpy(dst, &v, sizeof(v));
-    break;
-  }
-  case KeyType::U16: {
-    const uint16_t v = static_cast<uint16_t>(value);
-    memcpy(dst, &v, sizeof(v));
-    break;
-  }
-  case KeyType::I16: {
-    const int16_t v = static_cast<int16_t>(value);
-    memcpy(dst, &v, sizeof(v));
-    break;
-  }
-  case KeyType::Count:
-    break;
-  }
-  static_assert(static_cast<uint8_t>(KeyType::Count) == 4,
-                "key table: a key type added to the enum needs a branch here");
-}
-
-// True when `value` is one the entry accepts as a single element: inside the
-// declared range, or the unmapped sentinel on a key whose flags admit it.
-static bool elementAccepted(const KeyEntry &entry, int32_t value) {
-  if (value >= entry.minVal && value <= entry.maxVal) {
-    return true;
-  }
-  return (entry.flags & kKeyFlagAcceptsUnmapped) != 0 &&
-         value == kUnmappedValue;
-}
+// Reading and writing one element of a key's field belongs to the key table
+// (gamepad/config/key_table.h): the offset a row carries is added there and
+// nowhere else, so this handler reaches the byte the row names and no other.
 
 // ── Reply helpers ──
 
@@ -174,13 +95,14 @@ static void sendError(int errorCode, const char *reason) {
 // The entry the request's `key` field names, null-terminated into `name` so
 // the reply can echo it. A field longer than `name` is cut to fit the buffer
 // rather than refused, and what is left is not the name the caller wrote, so
-// the lookup below turns it away. Returns nullptr when the field is missing or
-// names no key of the table.
+// the lookup below turns it away. Returns nullptr when the field is missing, or
+// names a field of the store the control protocol does not accept: such a field
+// is carried by a profile and reached by no command.
 static const KeyEntry *requestedKey(const Json &json, char *name, size_t cap) {
   if (!json.getStrCopy("key", name, static_cast<int>(cap))) {
     return nullptr;
   }
-  return findKeyEntry(name);
+  return findExposedKeyEntry(name);
 }
 
 // ── config.set_key ──
@@ -211,7 +133,7 @@ static void handleConfigSetKey(const char *cmd, const Json &json) {
 
     for (uint16_t i = 0; i < entry->count; ++i) {
       const int32_t value = json.getArrInt("value", i, kNoIntValue);
-      if (value == kNoIntValue || !elementAccepted(*entry, value)) {
+      if (value == kNoIntValue || !keyElementAccepted(*entry, value)) {
         char reason[64];
         snprintf(reason, sizeof(reason), "value[%u] is not accepted",
                  static_cast<unsigned>(i));
@@ -221,7 +143,7 @@ static void handleConfigSetKey(const char *cmd, const Json &json) {
     }
 
     for (uint16_t i = 0; i < entry->count; ++i) {
-      storeElement(
+      storeKeyElement(
           cfg, *entry, i,
           static_cast<int32_t>(json.getArrInt("value", i, kNoIntValue)));
     }
@@ -238,7 +160,7 @@ static void handleConfigSetKey(const char *cmd, const Json &json) {
                                   : "missing value");
       return;
     }
-    if (!elementAccepted(*entry, value)) {
+    if (!keyElementAccepted(*entry, value)) {
       char reason[64];
       snprintf(reason, sizeof(reason), "value is outside %ld..%ld",
                static_cast<long>(entry->minVal),
@@ -246,7 +168,7 @@ static void handleConfigSetKey(const char *cmd, const Json &json) {
       sendError(kErrInvalidParam, reason);
       return;
     }
-    storeElement(cfg, *entry, 0, value);
+    storeKeyElement(cfg, *entry, 0, value);
   }
 
   LOG_INFO("ConfigCmdHandler: set %s", entry->key);
@@ -300,7 +222,7 @@ static void handleConfigGetKey(const char *cmd, const Json &json) {
     for (uint16_t i = 0; i < entry->count; ++i) {
       const int n = snprintf(elems + used, sizeof(elems) - used,
                              (i == 0) ? "%ld" : ",%ld",
-                             static_cast<long>(loadElement(cfg, *entry, i)));
+                             static_cast<long>(loadKeyElement(cfg, *entry, i)));
       if (n < 0) {
         break;
       }
@@ -327,7 +249,7 @@ static void handleConfigGetKey(const char *cmd, const Json &json) {
   } else {
     resp.printf("{cmd:%Q,queued:%d,status:%Q,key:%Q,value:%ld}", cmd, q + 1,
                 "ok", entry->key,
-                static_cast<long>(loadElement(cfg, *entry, 0)));
+                static_cast<long>(loadKeyElement(cfg, *entry, 0)));
   }
 
   uint16_t len = resp.end();
@@ -353,22 +275,29 @@ static void handleConfigListKeys([[maybe_unused]] const char *cmd,
   const KeyEntry *table = keyTable();
   const uint8_t count = keyTableCount();
 
-  // One value per key of the table, in the table's order, so the list a host is
-  // told about is the table and not a second copy of it.
+  // One value per key the protocol accepts, in the table's order, so the list a
+  // host is told about is the table and not a second copy of it. The rows a
+  // profile carries and no command reaches are left out: a caller cannot name
+  // them, so listing them would offer keys every request against them refuses.
   Resp::ConfigKeyEntryValues keys[kKeyTableMaxEntries];
+  uint8_t listed = 0;
   for (uint8_t i = 0; i < count; ++i) {
     const KeyEntry &entry = table[i];
-    keys[i].key = entry.key;
-    keys[i].min = entry.minVal;
-    keys[i].max = entry.maxVal;
-    keys[i].reboot = (entry.flags & kKeyFlagRequiresReboot) != 0;
+    if (!isKeyExposed(entry)) {
+      continue;
+    }
+    keys[listed].key = entry.key;
+    keys[listed].min = entry.minVal;
+    keys[listed].max = entry.maxVal;
+    keys[listed].reboot = (entry.flags & kKeyFlagRequiresReboot) != 0;
+    ++listed;
   }
 
   Json resp;
   resp.beginWrite(s_cfgRespBuf, sizeof(s_cfgRespBuf));
   const bool fits = Resp::configListKeys(
-      resp, static_cast<uint32_t>(q + 1), static_cast<uint32_t>(count), keys,
-      static_cast<uint32_t>(count));
+      resp, static_cast<uint32_t>(q + 1), static_cast<uint32_t>(listed), keys,
+      static_cast<uint32_t>(listed));
 
   if (!fits) {
     // A reply cut short is not a JSON document, so it is refused instead of

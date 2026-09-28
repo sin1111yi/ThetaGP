@@ -7,10 +7,13 @@ field: the protocol key a caller sends and the path its profile body carries are
 this same string, so neither is written anywhere else, and the C++ side of the
 field is its last segment.
 
-The table emitted below carries the keys the control protocol accepts, in the
-order the protocol lists them, with the field's position in ConfigStore (spelled
-through offsetof, so a declared key with no such field does not build), the type
-and element count of a value of it, the range it accepts and its flags.
+The table emitted below carries every field of ConfigStore, in the order the
+declaration lists them, with the field's position in the store (spelled through
+offsetof, so a declared key with no such field does not build), the type and
+element count of a value of it, the range it accepts and its flags. A row the
+declaration marks exposed carries kKeyFlagExposed: those are the fields the
+control protocol accepts, and their count is emitted beside the table so the key
+list reply is sized for the list it writes.
 
 The declaration is separate from the protocol spec, and this emitter reads only
 its own TOML: a row names the consumer's field, and the spec may not know the
@@ -60,6 +63,9 @@ FLAG_MAP = {
     "reboot": "kKeyFlagRequiresReboot",
     "accepts_unmapped": "kKeyFlagAcceptsUnmapped",
 }
+
+# The flag the declaration's `exposed` column becomes.
+EXPOSED_FLAG = "kKeyFlagExposed"
 
 # A default the board supplies rather than the declaration: the board's own
 # configuration is where the value lives, and the firmware reads it there.
@@ -139,6 +145,8 @@ def validate_config_keys(keys: dict) -> None:
         for flag in field.get("flags", []):
             if flag not in FLAG_MAP:
                 problems.append(f"{where}: unknown flag {flag!r}")
+        if "exposed" in field and not isinstance(field["exposed"], bool):
+            problems.append(f"{where}: exposed must be true or false")
         if "doc" not in field:
             problems.append(f"{where}: no doc line — the declaration is what a "
                             f"reader is handed for this field")
@@ -152,16 +160,24 @@ def enum_name(leaf: str) -> str:
     return "".join(word[:1].upper() + word[1:] for word in leaf.split("_") if word)
 
 
+def flag_expression(field: dict) -> str:
+    """The flags a row carries, as the C++ expression the table holds."""
+    names = [FLAG_MAP[flag] for flag in field.get("flags", [])]
+    if field.get("exposed"):
+        names.insert(0, EXPOSED_FLAG)
+    return " | ".join(names) if names else "0"
+
+
 def gen_config_keys(keys: dict, out: Optional[Path] = None,
                     source_path: str = CONFIG_KEYS_PATH) -> str:
     """The config key table the firmware compiles, as C++.
 
-    Only the fields the declaration marks exposed take a row: the table is what
-    `config.*` accepts, and a field the firmware carries but no command reaches
-    is not a key yet.
+    Every field takes a row: a profile body is read and written through this
+    table, so it spans the whole store, and kKeyFlagExposed marks the rows the
+    control protocol accepts.
     """
     fields = keys.get("field", [])
-    exposed = [f for f in fields if f.get("exposed")]
+    exposed_count = sum(1 for field in fields if field.get("exposed"))
 
     lines: List[str] = []
 
@@ -183,35 +199,35 @@ def gen_config_keys(keys: dict, out: Optional[Path] = None,
     w()
     w("namespace ThetaGP::Gamepad::Config {")
     w()
-    w("// Where a key sits in the table below, in table order. An enumerator is the")
-    w("// key's name without its domain, so the code names the row of a field by the")
-    w("// field: position and row come from one declaration and cannot drift.")
+    w("// Where a field sits in the table below, in table order. An enumerator is")
+    w("// the field's name without its domain, so the code names the row of a field")
+    w("// by the field: position and row come from one declaration and cannot drift.")
     w("enum class ConfigKey : uint8_t {")
-    for field in exposed:
+    for field in fields:
         w(f"  {enum_name(field['name'].rsplit('.', 1)[1])},")
     w("  Count,")
     w("};")
     w()
-    w("// The keys this build accepts, in the order the control protocol lists them.")
-    w("// A key's name is the field's name: what a caller sends (config.get_key,")
-    w("// config.set_key, config.list_keys) and the path a profile body carries for")
-    w("// that field are one string, and the leaf a body writes is its last segment.")
-    w("// The code side of the field is that segment too, which is what offsetof")
-    w("// below spells.")
+    w("// Every field of the store, in the order the declaration lists them. A")
+    w("// field's name is the whole identity of that field: what a caller sends")
+    w("// (config.get_key, config.set_key, config.list_keys) and the path a profile")
+    w("// body carries for it are one string, and the leaf a body writes is its last")
+    w("// segment. The code side of the field is that segment too, which is what")
+    w("// offsetof below spells. A row the protocol accepts carries")
+    w("// kKeyFlagExposed; the rest are carried by a profile and reached by no")
+    w("// command.")
     w("inline constexpr KeyEntry kKeyTable[] = {")
-    for field in exposed:
+    for field in fields:
         leaf = field["name"].rsplit(".", 1)[1]
         type_name = field["type"]
         count = field.get("count", 1)
-        flags = field.get("flags", [])
-        flag_expr = " | ".join(FLAG_MAP[f] for f in flags) if flags else "0"
         w(f"    // {field['name']} — {field['doc']}")
         w(f'    {{"{field["name"]}", offsetof(ConfigStore, {leaf}), '
           f"KeyType::{TYPE_MAP[type_name]},")
-        w(f"     {count}, {field['min']}, {field['max']}, {flag_expr}}},")
+        w(f"     {count}, {field['min']}, {field['max']}, {flag_expression(field)}}},")
     w("};")
     w()
-    w("// The entry of a key, by the position the enum names.")
+    w("// The entry of a field, by the position the enum names.")
     w("constexpr const KeyEntry &keyEntry(ConfigKey which) {")
     w("  return kKeyTable[static_cast<uint8_t>(which)];")
     w("}")
@@ -221,6 +237,10 @@ def gen_config_keys(keys: dict, out: Optional[Path] = None,
     w()
     w("static_assert(kKeyTableCount == static_cast<uint8_t>(ConfigKey::Count),")
     w('              "config keys: a generated row carries no position");')
+    w()
+    w("// The rows the control protocol accepts: what config.list_keys answers with,")
+    w("// and what its reply buffer is sized for.")
+    w(f"inline constexpr uint8_t kExposedKeyCount = {exposed_count};")
     w()
     w("} // namespace ThetaGP::Gamepad::Config")
     w()

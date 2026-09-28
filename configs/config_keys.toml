@@ -20,7 +20,10 @@
 #           board's own configuration supplies. The firmware's copies of these
 #           numbers (conf/ThetaGP_Config.h) are where they live today and are
 #           moving here; until they do, the two are held equal by hand.
-# exposed   true when config.* accepts this key
+# exposed   true when config.* accepts this key. Every row names a field of
+#           ConfigStore, so a profile body is read and written through this
+#           table as a whole; this column is what separates the fields the
+#           control protocol reaches from the ones only a profile carries.
 # flags     reboot (reaches the field only at the next boot)
 #           accepts_unmapped (255 is an element a caller may set back)
 
@@ -41,17 +44,6 @@ max = 1
 default = 0
 exposed = true
 doc = "Four-way mode: of two opposing directions only the most recent one is kept"
-
-[[field]]
-name = "map.btn_map"
-type = "u8_array"
-count = 32
-min = 0
-max = 31
-default = "board"
-exposed = true
-flags = ["accepts_unmapped"]
-doc = "Physical key to button bit index (255 = a key with no button)"
 
 [[field]]
 name = "map.dpad"
@@ -106,6 +98,21 @@ max = 1
 default = 0
 exposed = false
 doc = "Swap the left and right analog sticks"
+
+# The rows below follow the order a profile body carries them in, and the body
+# is written by walking this table: a row belongs where the body puts the field,
+# not where ConfigStore declares it. map.btn_map is declared first in the store
+# and written last inside the map object.
+[[field]]
+name = "map.btn_map"
+type = "u8_array"
+count = 32
+min = 0
+max = 31
+default = "board"
+exposed = true
+flags = ["accepts_unmapped"]
+doc = "Physical key to button bit index (255 = a key with no button)"
 
 [[field]]
 name = "stick.lx_dz"
@@ -296,59 +303,3 @@ default = 0
 exposed = false
 doc = "RY center offset"
 
-[[field]]
-name = "usb.poll_rate"
-type = "u8"
-min = 0
-max = 3
-default = 2
-exposed = false
-flags = ["reboot"]
-doc = "USB poll rate (2 = 500 Hz)"
-
-[[field]]
-name = "usb.vid"
-type = "u16"
-min = 0
-max = 65535
-default = 65535
-exposed = false
-flags = ["reboot"]
-doc = "USB vendor id"
-
-[[field]]
-name = "usb.pid"
-type = "u16"
-min = 0
-max = 65535
-default = 65535
-exposed = false
-flags = ["reboot"]
-doc = "USB product id"
-
-[[field]]
-name = "sys.log_level"
-type = "u8"
-min = 0
-max = 3
-default = 1
-exposed = false
-doc = "Log level (1 = info)"
-
-[[field]]
-name = "sys.debounce_samples"
-type = "u8"
-min = 4
-max = 64
-default = 16
-exposed = false
-doc = "Keypad debounce window, in samples"
-
-[[field]]
-name = "sys.debounce_threshold"
-type = "u8"
-min = 1
-max = 64
-default = 12
-exposed = false
-doc = "Keypad debounce threshold"
