@@ -20,6 +20,7 @@
 namespace ThetaGP::Comm {
 namespace {
 
+using Gamepad::Profile::PROFILE_JSON_MAX;
 using Gamepad::Profile::PROFILE_MAX_ID;
 using Gamepad::Profile::ProfileStatus;
 using Gamepad::Profile::ProfileStore;
@@ -40,44 +41,103 @@ constexpr size_t kListCapacity =
 static_assert(static_cast<size_t>(PROFILE_MAX_ID) + 1 <= kListCapacity,
               "the reply's entries array must have room for every profile id");
 
+// The two arms a staged write is carried by: the one that brings the body's
+// pieces and the one that ends it. They are the arms a staging exists for, so
+// they are the only ones the gate lets past while a staged write holds the
+// store's staging buffer.
+bool carriesStagedWrite(pb_size_t arm) {
+    return arm == ThetaGP_Request_profile_put_chunk_tag ||
+           arm == ThetaGP_Request_profile_put_end_tag;
+}
+
+// The arm a staged write is opened by: the frame that declares the body's
+// length and takes the store's staging buffer for it. A staging speaks for
+// three arms -- this one and the two above -- and this is the only one of the
+// three a staging in hand leaves unheld: an opening frame is answered where it
+// is met, before the gate, and what it meets there is a staging it drops
+// rather than a device that refuses it.
+bool opensStagedWrite(pb_size_t arm) {
+    return arm == ThetaGP_Request_profile_create_tag;
+}
+
 } // namespace
 
-bool ProfileHandler::handle(const ThetaGP_Request &request,
-                            ThetaGP_Reply &reply) {
+ProfileHandler::Answers ProfileHandler::handle(const uint8_t *payload,
+                                               uint16_t length,
+                                               const ThetaGP_Request &request,
+                                               ThetaGP_Reply &reply) {
     // The two arms that read no body, answered ahead of the gate: they answer
     // from the store's index and touch nothing a stream or a staged write
     // holds, so there is nothing to refuse them for.
     switch (request.which_kind) {
     case ThetaGP_Request_profile_status_tag:
         status(reply);
-        return true;
+        return Answers::Reply;
     case ThetaGP_Request_profile_list_tag:
         list(reply);
-        return true;
+        return Answers::Reply;
     default:
         break;
     }
 
+    // An opening frame that arrives over a staged write drops the staging in
+    // hand: the length it declared and the position it reached are forgotten
+    // with it, and the staging the frame opens in its place counts its bytes
+    // from the first one. A staging that never reached the arm that ends it
+    // holds no body the store was ever written, so dropping one loses nothing
+    // that could have been written -- and it is what a host is left with
+    // instead of a timer: no staging is closed by the clock, and no staging is
+    // a state the next opening frame cannot leave.
+    if (opensStagedWrite(request.which_kind) && ProfileTransfer::writeOpen()) {
+        ProfileTransfer::abandon();
+    }
+
     // The gate, judged once for the domain and on the way in: every arm the
-    // switch below answers reads a body, and every one of them reads it from
-    // the store's one staging buffer. An arm added to that switch is refused
-    // here while a stream or a staged write holds the buffer, without a call
-    // of its own; an arm added above this point is an arm that reads no body,
-    // which is the only kind the gate has nothing to say to. A request refused
-    // here is refused whatever arm it names, and a host that asks again once
-    // the stream or the staged write is done gets its answer.
-    if (refusedWhileBodyBusy(reply)) {
-        return true;
+    // switch below answers reads a body out of the store's one staging buffer
+    // or writes one into it. The arms a staged write is carried by are let
+    // past only while a staged write is what holds the buffer -- a staged
+    // write's own frames are the frames that staging exists for -- and the arm
+    // that opens one is let past by the opening above, which has left it the
+    // buffer already; it is refused here like any other arm while the buffer
+    // holds a body on its way back to the host. Every other arm, those two
+    // included, is refused while a body is on its way back, because the buffer
+    // a stream is read out of is the buffer a staged body lands in. An arm
+    // added to that switch is refused here without a call of its own; an arm
+    // added above this point is an arm that reads no body, which is the only
+    // kind the gate has nothing to say to. A request refused here is refused
+    // whatever arm it names, and a host that asks again once the stream or the
+    // staged write is done gets its answer.
+    const bool carried =
+        carriesStagedWrite(request.which_kind) && ProfileTransfer::writeOpen();
+    if (!carried && refusedWhileBodyBusy(reply)) {
+        // The refusal the end of a staged write is owed belongs to the
+        // exchange the same way the answer to a body it wrote does.
+        return request.which_kind == ThetaGP_Request_profile_put_end_tag
+                   ? Answers::Exchange
+                   : Answers::Reply;
     }
 
     switch (request.which_kind) {
     case ThetaGP_Request_profile_get_tag:
         get(request, reply);
-        return true;
+        return Answers::Reply;
+    case ThetaGP_Request_profile_create_tag:
+        return create(request, reply);
+    case ThetaGP_Request_profile_put_chunk_tag:
+        return chunk(payload, length, request, reply);
+    case ThetaGP_Request_profile_put_end_tag:
+        putEnd(reply);
+        return Answers::Exchange;
+    case ThetaGP_Request_profile_delete_tag:
+        remove(request, reply);
+        return Answers::Reply;
+    case ThetaGP_Request_profile_select_tag:
+        select(request, reply);
+        return Answers::Reply;
     default:
         // No arm of this domain: the envelope that routed the request here
         // answers it as the command it has no unit for.
-        return false;
+        return Answers::NotMine;
     }
 }
 
@@ -202,6 +262,172 @@ void ProfileHandler::get(const ThetaGP_Request &request, ThetaGP_Reply &reply) {
     ThetaGP_ProfileGetStart &start = reply.kind.profile_get;
     start.total = text.len;
     start.id = id;
+}
+
+ProfileHandler::Answers ProfileHandler::create(const ThetaGP_Request &request,
+                                               ThetaGP_Reply &reply) {
+    const uint32_t total = request.kind.profile_create.total;
+
+    // A body is what the store holds a profile in, so a stream that declares
+    // none of it, or more of it than a body may hold, is refused for the range
+    // the length must fall in rather than opened.
+    if (total == 0 || total > PROFILE_JSON_MAX) {
+        writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_PARAM,
+                     ThetaGP_Reason_REASON_VALUE_OUT_OF_RANGE, 1,
+                     PROFILE_JSON_MAX);
+        return Answers::Reply;
+    }
+
+    // The body does not arrive with this frame: the staging opens over the
+    // length the request declares, and the frames that follow bring the body.
+    // Nothing is answered here, because there is nothing to report until the
+    // body has been written -- and the id it is written under is the store's
+    // to assign when it is.
+    ProfileTransfer::beginWrite(static_cast<uint16_t>(total));
+    return Answers::Nothing;
+}
+
+ProfileHandler::Answers ProfileHandler::chunk(const uint8_t *payload,
+                                              uint16_t length,
+                                              const ThetaGP_Request &request,
+                                              ThetaGP_Reply &reply) {
+    // The stream's own readings, taken before the piece is put: a refused
+    // piece voids the staging, and what the refusal names as the range the
+    // piece fell outside of is the stream as it stood when the piece arrived.
+    const uint32_t received = ProfileTransfer::writeReceived();
+    const uint32_t total = ProfileTransfer::writeTotal();
+    const uint32_t room = total - received;
+
+    switch (ProfileTransfer::put(payload, length, request)) {
+    case ProfileTransfer::Piece::Taken:
+        // The piece is in the staging buffer, and there is nothing to say
+        // about it: a piece is answered with no frame at all, so the host's
+        // next frame follows it on the wire without a reply between them.
+        return Answers::Nothing;
+    case ProfileTransfer::Piece::NoStaging:
+        // No body was opened, so there is no stream for a piece to belong to.
+        // The code names the whole of it -- the state the device is in refused
+        // the request -- and a reason names a fact the request carried, of
+        // which a frame with no body open carries none.
+        writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_STATE,
+                     ThetaGP_Reason_REASON_NONE);
+        return Answers::Reply;
+    case ProfileTransfer::Piece::WrongLength:
+        // What a piece may be is as long as the body has left and no longer:
+        // an empty piece and one that runs past the body's end are the same
+        // refusal, and both ends of the range are reported.
+        writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_PARAM,
+                     ThetaGP_Reason_REASON_INVALID_LENGTH, 1, room);
+        return Answers::Reply;
+    case ProfileTransfer::Piece::WrongOffset:
+        // The offset a frame reports is the position its bytes were appended
+        // at, so the range it must fall in is the offsets the stream has room
+        // for: the one it stood at, and the last one of the body.
+        writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_PARAM,
+                     ThetaGP_Reason_REASON_VALUE_OUT_OF_RANGE, received,
+                     total - 1);
+        return Answers::Reply;
+    }
+    return Answers::Reply;
+}
+
+void ProfileHandler::putEnd(ThetaGP_Reply &reply) {
+    if (!ProfileTransfer::writeOpen()) {
+        // The end of a body nothing opened: no stream is brought to an end by
+        // it, and no body is written. The code names the whole of it, and no
+        // reason is added to a code that already says it.
+        writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_STATE,
+                     ThetaGP_Reason_REASON_NONE);
+        return;
+    }
+
+    const uint32_t received = ProfileTransfer::writeReceived();
+    const uint32_t total = ProfileTransfer::writeTotal();
+
+    // The body is written only when the whole of it is there. A body short of
+    // the length its opening frame declared is a piece of a body, and a piece
+    // of a body is not what the store is asked for: the stream is voided and
+    // the refusal reports what arrived against what was declared.
+    if (received != total) {
+        ProfileTransfer::abandon();
+        writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_PARAM,
+                     ThetaGP_Reason_REASON_INVALID_LENGTH, received, total);
+        return;
+    }
+
+    uint16_t id = 0;
+    if (!ProfileTransfer::commit(&id)) {
+        writeFailure(reply, ThetaGP_ErrorCode_ERR_INTERNAL,
+                     ThetaGP_Reason_REASON_PROFILE_CREATE_FAILED);
+        return;
+    }
+
+    // The body is a profile now, and it is the arm that opened the staging
+    // that says so: profile.create is the arm that opens one, so its own
+    // success arm carries the id the store assigned and the length written.
+    reply.which_kind = ThetaGP_Reply_profile_create_tag;
+    reply.kind.profile_create.id = id;
+    reply.kind.profile_create.len = received;
+}
+
+void ProfileHandler::remove(const ThetaGP_Request &request,
+                            ThetaGP_Reply &reply) {
+    const uint32_t id = request.kind.profile_delete.id;
+
+    if (id > PROFILE_MAX_ID) {
+        writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_PARAM,
+                     ThetaGP_Reason_REASON_ID_OUT_OF_RANGE, 0,
+                     static_cast<uint32_t>(PROFILE_MAX_ID));
+        return;
+    }
+    if (id == 0) {
+        // The factory profile is the body the device falls back to, so it is
+        // the one profile the store never drops: the request is refused for it
+        // rather than answered with a write that failed.
+        writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_PARAM,
+                     ThetaGP_Reason_REASON_CANNOT_DELETE_FACTORY, 1,
+                     static_cast<uint32_t>(PROFILE_MAX_ID));
+        return;
+    }
+
+    if (!ProfileStore::getInstance().deleteProfile(
+            static_cast<uint16_t>(id))) {
+        writeFailure(reply, ThetaGP_ErrorCode_ERR_INTERNAL,
+                     ThetaGP_Reason_REASON_PROFILE_DELETE_FAILED);
+        return;
+    }
+
+    reply.which_kind = ThetaGP_Reply_profile_delete_tag;
+    reply.kind.profile_delete.id = id;
+}
+
+void ProfileHandler::select(const ThetaGP_Request &request,
+                            ThetaGP_Reply &reply) {
+    const ThetaGP_ProfileSelect &arm = request.kind.profile_select;
+    if (!arm.has_id) {
+        // A request that names no profile at all: the schema makes the field
+        // optional so that this is tellable from a request naming id 0, which
+        // is the factory profile and a profile the store can be left on.
+        writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_PARAM,
+                     ThetaGP_Reason_REASON_VALUE_MISSING);
+        return;
+    }
+    if (arm.id > PROFILE_MAX_ID) {
+        writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_PARAM,
+                     ThetaGP_Reason_REASON_ID_OUT_OF_RANGE, 0,
+                     static_cast<uint32_t>(PROFILE_MAX_ID));
+        return;
+    }
+
+    if (!ProfileStore::getInstance().selectProfile(
+            static_cast<uint16_t>(arm.id))) {
+        writeFailure(reply, ThetaGP_ErrorCode_ERR_INTERNAL,
+                     ThetaGP_Reason_REASON_PROFILE_SELECT_FAILED);
+        return;
+    }
+
+    reply.which_kind = ThetaGP_Reply_profile_select_tag;
+    reply.kind.profile_select.id = arm.id;
 }
 
 } // namespace ThetaGP::Comm

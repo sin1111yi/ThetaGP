@@ -118,15 +118,39 @@ uint16_t RequestHandler::answer(const uint8_t *payload, uint16_t length,
         case ThetaGP_Request_profile_status_tag:
         case ThetaGP_Request_profile_list_tag:
         case ThetaGP_Request_profile_get_tag:
+        case ThetaGP_Request_profile_create_tag:
+        case ThetaGP_Request_profile_put_chunk_tag:
+        case ThetaGP_Request_profile_put_end_tag:
+        case ThetaGP_Request_profile_delete_tag:
+        case ThetaGP_Request_profile_select_tag:
             // The profile domain's one entry, whatever arm the request names:
             // the dispatch to the arm and the refusal owed to every arm that
-            // reads a body while a body's bytes are spoken for both live there,
-            // judged once on the way in. No arm of the domain carries that
-            // refusal itself, so an arm added to the domain is routed here the
-            // same way and is refused with the rest.
-            if (!ProfileHandler::handle(request, reply)) {
+            // reads or writes a body while a body's bytes are spoken for both
+            // live there, judged once on the way in. No arm of the domain
+            // carries that refusal itself, so an arm added to the domain is
+            // routed here the same way and is refused with the rest. The
+            // frame's own bytes go with the request, because the field a
+            // staged body's piece arrives in is a callback field and is
+            // collected out of those bytes.
+            switch (ProfileHandler::handle(payload, length, request, reply)) {
+            case ProfileHandler::Answers::Reply:
+                break;
+            case ProfileHandler::Answers::Exchange:
+                // The answer to the end of a staged write belongs to the
+                // exchange the write made up and not to one frame of the
+                // host's stream: the schema reserves the zero it carries for
+                // exactly that, so a host does not pair it with a frame.
+                reply.queued = 0;
+                break;
+            case ProfileHandler::Answers::Nothing:
+                // An arm whose success is answered with no frame at all: the
+                // piece is in the staging buffer, and there is nothing to
+                // report about it until the body it belongs to is written.
+                return 0;
+            case ProfileHandler::Answers::NotMine:
                 writeFailure(reply, ThetaGP_ErrorCode_ERR_UNKNOWN_CMD,
                              ThetaGP_Reason_REASON_UNKNOWN_COMMAND);
+                break;
             }
             break;
 #endif
