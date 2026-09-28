@@ -195,6 +195,10 @@ static void handleSysGetTaskInfo([[maybe_unused]] const char *cmd,
         THETAGP_RESP_SYS_GET_TASK_INFO(THETAGP_RESP_FIELD)
         resp.printf("}");
     } else {
+        // The reply carries the response field the request asked about beside
+        // the keys a reply that failed carries, which is a shape the generated
+        // error reply writers do not write (protocol/proto_resp.h), so the
+        // format string stays here.
         resp.printf("{status:%Q,cmd:%Q,queued:%d,tid:%d,"
                     "error_code:%d,reason:%Q}",
                     "error", "sys.get_task_info", queued + 1, tid,
@@ -210,10 +214,9 @@ static void handleSysEnterDfu([[maybe_unused]] const char *cmd,
     int queued = json.getInt("queued");
     Json resp;
     resp.beginWrite(s_sysRespBuf, sizeof(s_sysRespBuf));
-    resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,reason:%Q}",
-                "error", "sys.enter_dfu", queued + 1,
-                static_cast<int>(Proto::ErrorCode::ERR_NOT_SUPPORTED),
-                "DFU not yet implemented");
+    Resp::errorReply(resp, "sys.enter_dfu", static_cast<uint32_t>(queued + 1),
+                     Proto::ErrorCode::ERR_NOT_SUPPORTED,
+                     "DFU not yet implemented");
     uint16_t len = resp.end();
     FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
@@ -287,10 +290,10 @@ static void handleSysGetUsage([[maybe_unused]] const char *cmd,
         // being sent as one.
         LOG_ERROR("SysHandler: region list does not fit the reply buffer");
         resp.beginWrite(s_sysRespBuf, sizeof(s_sysRespBuf));
-        resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,reason:%Q}",
-                    "error", "sys.get_usage", queued + 1,
-                    static_cast<int>(Proto::ErrorCode::ERR_NOT_SUPPORTED),
-                    "region list does not fit the reply buffer");
+        Resp::errorReply(resp, "sys.get_usage",
+                         static_cast<uint32_t>(queued + 1),
+                         Proto::ErrorCode::ERR_NOT_SUPPORTED,
+                         "region list does not fit the reply buffer");
         uint16_t len = resp.end();
         FrameLayer::getInstance().sendResponse(resp.c_str(), len);
         return;
@@ -338,10 +341,8 @@ void SysHandler::handle(const char *cmd, const Json &json) {
         int queued = json.getInt("queued");
         Json resp;
         resp.beginWrite(s_sysRespBuf, sizeof(s_sysRespBuf));
-        resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,reason:%Q}",
-                    "error", cmd, queued + 1,
-                    static_cast<int>(Proto::ErrorCode::ERR_UNKNOWN_CMD),
-                    "unknown command");
+        Resp::errorReply(resp, cmd, static_cast<uint32_t>(queued + 1),
+                         Proto::ErrorCode::ERR_UNKNOWN_CMD, "unknown command");
         uint16_t len = resp.end();
         FrameLayer::getInstance().sendResponse(resp.c_str(), len);
     }

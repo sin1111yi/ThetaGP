@@ -35,7 +35,10 @@
 // The generated response field tables, for the flags a response field's
 // declaration carries (THETAGP_RESP_OPTIONAL_*) and for the one a command with
 // no table carries (THETAGP_RESP_NO_TABLE_*): what a reply may leave out, and
-// which replies are assembled by hand. The write sites below are held to both.
+// which replies are assembled by hand. The write sites below are held to both,
+// and a reply that failed is written through the generated writer for that
+// shape rather than through a format string here.
+#include "protocol/proto.h"
 #include "protocol/proto_resp.h"
 
 #include <climits>
@@ -51,15 +54,6 @@ using ConfigMgr = ThetaGP::Gamepad::Config::ConfigManager;
 
 // Staging buffer for building response JSON
 COMMON_ZERO_INIT static char s_cfgRespBuf[2048];
-
-// The error codes the config domain answers with, as the protocol declares
-// them: a key the table does not carry, a value outside what the key accepts
-// and a request that names no key at all are all invalid parameters, while a
-// command this build cannot carry out names the missing facility instead, and
-// one the state of the device refuses names that state.
-constexpr int kErrInvalidParam = 2;
-constexpr int kErrNotSupported = 6;
-constexpr int kErrInvalidState = 8;
 
 // One value per key of the table is filled from the table itself, and the text
 // of the list is written by the function the generator emits for the command
@@ -81,13 +75,13 @@ constexpr int kNoIntValue = INT_MIN;
 
 // ── Reply helpers ──
 
-// An error reply carries the three keys the protocol gives that shape: the
-// outcome, the code and what was wrong with the request.
-static void sendError(int errorCode, const char *reason) {
+// An error reply: the keys, their order and the conversions come from the
+// generated writer for the shape (protocol/proto_resp.h), and the code from the
+// protocol's own [error_codes] at the call site.
+static void sendError(Proto::ErrorCode code, const char *reason) {
   Json resp;
   resp.beginWrite(s_cfgRespBuf, sizeof(s_cfgRespBuf));
-  resp.printf("{status:%Q,error_code:%d,reason:%Q}", "error", errorCode,
-              reason);
+  Resp::errorReply(resp, code, reason);
   uint16_t len = resp.end();
   FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
@@ -113,7 +107,7 @@ static void handleConfigSetKey(const char *cmd, const Json &json) {
   char keyName[64];
   const KeyEntry *entry = requestedKey(json, keyName, sizeof(keyName));
   if (!entry) {
-    sendError(kErrInvalidParam, "missing or unknown key");
+    sendError(Proto::ErrorCode::ERR_INVALID_PARAM, "missing or unknown key");
     return;
   }
 
@@ -127,7 +121,7 @@ static void handleConfigSetKey(const char *cmd, const Json &json) {
       char reason[64];
       snprintf(reason, sizeof(reason), "value must hold %u elements",
                static_cast<unsigned>(entry->count));
-      sendError(kErrInvalidParam, reason);
+      sendError(Proto::ErrorCode::ERR_INVALID_PARAM, reason);
       return;
     }
 
@@ -137,7 +131,7 @@ static void handleConfigSetKey(const char *cmd, const Json &json) {
         char reason[64];
         snprintf(reason, sizeof(reason), "value[%u] is not accepted",
                  static_cast<unsigned>(i));
-        sendError(kErrInvalidParam, reason);
+        sendError(Proto::ErrorCode::ERR_INVALID_PARAM, reason);
         return;
       }
     }
@@ -155,7 +149,7 @@ static void handleConfigSetKey(const char *cmd, const Json &json) {
       // integer the sentinel stands for, and no key accepts it. Whether the
       // field was there tells the two apart, so a number that was sent is not
       // answered with a claim that nothing arrived.
-      sendError(kErrInvalidParam,
+      sendError(Proto::ErrorCode::ERR_INVALID_PARAM,
                 json.has("value") ? "value is not an integer this key accepts"
                                   : "missing value");
       return;
@@ -165,7 +159,7 @@ static void handleConfigSetKey(const char *cmd, const Json &json) {
       snprintf(reason, sizeof(reason), "value is outside %ld..%ld",
                static_cast<long>(entry->minVal),
                static_cast<long>(entry->maxVal));
-      sendError(kErrInvalidParam, reason);
+      sendError(Proto::ErrorCode::ERR_INVALID_PARAM, reason);
       return;
     }
     storeKeyElement(cfg, *entry, 0, value);
@@ -189,7 +183,7 @@ static void handleConfigGetKey(const char *cmd, const Json &json) {
   char keyName[64];
   const KeyEntry *entry = requestedKey(json, keyName, sizeof(keyName));
   if (!entry) {
-    sendError(kErrInvalidParam, "missing or unknown key");
+    sendError(Proto::ErrorCode::ERR_INVALID_PARAM, "missing or unknown key");
     return;
   }
 
@@ -239,7 +233,8 @@ static void handleConfigGetKey(const char *cmd, const Json &json) {
       // instead of being sent as one.
       LOG_ERROR("ConfigCmdHandler: value of %s does not fit %u bytes",
                 entry->key, static_cast<unsigned>(sizeof(elems)));
-      sendError(kErrNotSupported, "value does not fit the reply buffer");
+      sendError(Proto::ErrorCode::ERR_NOT_SUPPORTED,
+                "value does not fit the reply buffer");
       return;
     }
 
@@ -303,7 +298,8 @@ static void handleConfigListKeys([[maybe_unused]] const char *cmd,
     // A reply cut short is not a JSON document, so it is refused instead of
     // being sent as one.
     LOG_ERROR("ConfigCmdHandler: key list does not fit the reply buffer");
-    sendError(kErrNotSupported, "key list does not fit the reply buffer");
+    sendError(Proto::ErrorCode::ERR_NOT_SUPPORTED,
+              "key list does not fit the reply buffer");
     return;
   }
 
@@ -343,11 +339,13 @@ static void handleConfigSave(const char *cmd, const Json &json) {
   // refuses to write it: the reply names that state instead of reporting a
   // write that was never attempted.
   if (ConfigMgr::getInstance().activeProfileId() == 0) {
-    sendError(kErrInvalidState, "the active profile is the factory one");
+    sendError(Proto::ErrorCode::ERR_INVALID_STATE,
+              "the active profile is the factory one");
     return;
   }
   if (!ConfigMgr::getInstance().saveProfile(&droppedKeys)) {
-    sendError(kErrInvalidState, "the active profile could not be written");
+    sendError(Proto::ErrorCode::ERR_INVALID_STATE,
+              "the active profile could not be written");
     return;
   }
   persisted = true;
@@ -394,7 +392,8 @@ static void handleConfigLoad(const char *cmd, const Json &json) {
 #if THETAGP_CFG_HAS_FLASH
   if (!ConfigMgr::getInstance().loadProfile(
           ConfigMgr::getInstance().activeProfileId())) {
-    sendError(kErrInvalidParam, "no readable profile on the active slot");
+    sendError(Proto::ErrorCode::ERR_INVALID_PARAM,
+              "no readable profile on the active slot");
     return;
   }
 #else
@@ -402,7 +401,8 @@ static void handleConfigLoad(const char *cmd, const Json &json) {
   // carry rather than reporting a read that failed. The refusal keeps the
   // error reply's shape, which names no command.
   (void)cmd;
-  sendError(kErrNotSupported, "no persistent storage on this board");
+  sendError(Proto::ErrorCode::ERR_NOT_SUPPORTED,
+            "no persistent storage on this board");
   return;
 #endif
 
@@ -449,7 +449,7 @@ void ConfigCmdHandler::handleConfig(const char *cmd, const Json &json) {
     handleConfigFactoryReset(cmd, json);
   } else {
     LOG_WARN("ConfigCmdHandler: unknown config command '%s'", cmd);
-    sendError(kErrNotSupported, "unknown config command");
+    sendError(Proto::ErrorCode::ERR_NOT_SUPPORTED, "unknown config command");
   }
 }
 

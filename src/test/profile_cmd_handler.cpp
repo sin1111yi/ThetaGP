@@ -29,6 +29,9 @@
 #include "gamepad/config/config_manager.h"
 #include "gamepad/profile/profile_store.h"
 
+#include "protocol/proto.h"
+#include "protocol/proto_resp.h"
+
 #include "utils/log/log.h"
 
 #include "tusb.h"
@@ -66,13 +69,16 @@ static uint16_t hexDecode(const char *hex, uint8_t *buf, uint16_t hexLen, uint16
   return byteLen;
 }
 
-static void sendError(const char *cmd, const Json &json,
-                      int errorCode, const char *reason) {
+// A refused command, answered with the shape the generated error reply writer
+// for a reply that echoes its request writes (protocol/proto_resp.h, the keys
+// and their order); the code is one of the protocol's own [error_codes], named
+// at the call site, so the number it travels as is the declaration's.
+static void sendError(const char *cmd, const Json &json, Proto::ErrorCode code,
+                      const char *reason) {
   int q = json.getInt("queued");
   Json resp;
   resp.beginWrite(s_profRespBuf, sizeof(s_profRespBuf));
-  resp.printf("{cmd:%Q,queued:%d,status:%Q,error_code:%d,reason:%Q}",
-              cmd, q + 1, "error", errorCode, reason);
+  Resp::errorReply(resp, cmd, static_cast<uint32_t>(q + 1), code, reason);
   uint16_t len = resp.end();
   FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
@@ -143,8 +149,8 @@ static void onStagingDone(const uint8_t *buf, uint16_t len) {
 
   if (s_pendingProfileId == 0) {
     if (!ProfileStore::getInstance().writeFactoryProfile(json, len)) {
-      resp.printf("{cmd:%Q,queued:%d,status:%Q,reason:%Q}",
-                  "profile.start", 0, "error", "writeFactoryProfile failed");
+      Resp::errorReplyNoCode(resp, "profile.start", 0,
+                             "writeFactoryProfile failed");
       uint16_t rlen = resp.end();
       FrameLayer::getInstance().sendResponse(resp.c_str(), rlen);
       LOG_ERROR("ProfileCmdHandler: writeFactoryProfile failed");
@@ -155,8 +161,7 @@ static void onStagingDone(const uint8_t *buf, uint16_t len) {
   } else {
     uint16_t newId = 0;
     if (!ProfileStore::getInstance().createProfile(json, len, &newId)) {
-      resp.printf("{cmd:%Q,queued:%d,status:%Q,reason:%Q}",
-                  "profile.start", 0, "error", "createProfile failed");
+      Resp::errorReplyNoCode(resp, "profile.start", 0, "createProfile failed");
       uint16_t rlen = resp.end();
       FrameLayer::getInstance().sendResponse(resp.c_str(), rlen);
       LOG_ERROR("ProfileCmdHandler: createProfile failed");
@@ -176,13 +181,15 @@ static void onStagingDone(const uint8_t *buf, uint16_t len) {
 static void handleProfileStart(const char *cmd, const Json &json) {
   int rawLen = json.getInt("len", 0);
   if (rawLen <= 0 || rawLen > 4096) {
-    sendError(cmd, json, 1, "invalid or missing len (1-4096)");
+    sendError(cmd, json, Proto::ErrorCode::ERR_UNKNOWN_CMD,
+              "invalid or missing len (1-4096)");
     return;
   }
 
   int profileId = json.getInt("profileId", 0);
   if (profileId < 0 || profileId > 15) {
-    sendError(cmd, json, 1, "profileId out of range (0-15)");
+    sendError(cmd, json, Proto::ErrorCode::ERR_UNKNOWN_CMD,
+              "profileId out of range (0-15)");
     return;
   }
 
@@ -206,14 +213,16 @@ static void handleProfileStart(const char *cmd, const Json &json) {
 static void handleProfileGet(const char *cmd, const Json &json) {
   int profileId = json.getInt("id", -1);
   if (profileId < 0 || profileId > 15) {
-    sendError(cmd, json, 1, "invalid or missing id (0-15)");
+    sendError(cmd, json, Proto::ErrorCode::ERR_UNKNOWN_CMD,
+              "invalid or missing id (0-15)");
     return;
   }
 
   uint32_t addr = 0;
   uint16_t dataLen = 0;
   if (!findProfileAddress(static_cast<uint16_t>(profileId), addr, dataLen) || dataLen == 0) {
-    sendError(cmd, json, 1, "profile not found or empty");
+    sendError(cmd, json, Proto::ErrorCode::ERR_UNKNOWN_CMD,
+              "profile not found or empty");
     return;
   }
 
@@ -309,13 +318,15 @@ static void handleProfileCreate(const char *cmd, const Json &json) {
   const char *dataHex = json.getStr("data_hex", &dataHexLen);
 
   if (!dataHex || dataHexLen == 0) {
-    sendError(cmd, json, 1, "data_hex field required");
+    sendError(cmd, json, Proto::ErrorCode::ERR_UNKNOWN_CMD,
+              "data_hex field required");
     return;
   }
 
   uint16_t len = hexDecode(dataHex, s_staging, dataHexLen, PROFILE_JSON_MAX);
   if (len == 0) {
-    sendError(cmd, json, 1, "no data decoded from data_hex");
+    sendError(cmd, json, Proto::ErrorCode::ERR_UNKNOWN_CMD,
+              "no data decoded from data_hex");
     return;
   }
 
@@ -329,7 +340,8 @@ static void handleProfileCreate(const char *cmd, const Json &json) {
   uint16_t newId = 0;
   if (!ProfileStore::getInstance().createProfile(
           reinterpret_cast<const char *>(s_staging), len, &newId)) {
-    sendError(cmd, json, 1, "createProfile failed");
+    sendError(cmd, json, Proto::ErrorCode::ERR_UNKNOWN_CMD,
+              "createProfile failed");
     return;
   }
 
@@ -347,12 +359,14 @@ static void handleProfileCreate(const char *cmd, const Json &json) {
 static void handleProfileDelete(const char *cmd, const Json &json) {
   int profileId = json.getInt("id", -1);
   if (profileId <= 0 || profileId > 15) {
-    sendError(cmd, json, 1, "invalid id (1-15), cannot delete Profile0");
+    sendError(cmd, json, Proto::ErrorCode::ERR_UNKNOWN_CMD,
+              "invalid id (1-15), cannot delete Profile0");
     return;
   }
 
   if (!ProfileStore::getInstance().deleteProfile(static_cast<uint16_t>(profileId))) {
-    sendError(cmd, json, 1, "deleteProfile failed (profile may not exist)");
+    sendError(cmd, json, Proto::ErrorCode::ERR_UNKNOWN_CMD,
+              "deleteProfile failed (profile may not exist)");
     return;
   }
 
@@ -370,12 +384,14 @@ static void handleProfileDelete(const char *cmd, const Json &json) {
 static void handleProfileSelect(const char *cmd, const Json &json) {
   int profileId = json.getInt("id", -1);
   if (profileId < 0 || profileId > 15) {
-    sendError(cmd, json, 1, "invalid or missing id (0-15)");
+    sendError(cmd, json, Proto::ErrorCode::ERR_UNKNOWN_CMD,
+              "invalid or missing id (0-15)");
     return;
   }
 
   if (!ProfileStore::getInstance().selectProfile(static_cast<uint16_t>(profileId))) {
-    sendError(cmd, json, 1, "selectProfile failed");
+    sendError(cmd, json, Proto::ErrorCode::ERR_UNKNOWN_CMD,
+              "selectProfile failed");
     return;
   }
 
@@ -424,7 +440,8 @@ static void handleProfileSave(const char *cmd, const Json &json) {
   // than dropped in silence, under the key config.save reports them under.
   uint32_t droppedKeys = 0;
   if (!ConfigMgr::getInstance().saveProfile(&droppedKeys)) {
-    sendError(cmd, json, 1, "saveProfile failed");
+    sendError(cmd, json, Proto::ErrorCode::ERR_UNKNOWN_CMD,
+              "saveProfile failed");
     return;
   }
 
@@ -458,7 +475,8 @@ static void handleProfileLoad(const char *cmd, const Json &json) {
   }
 
   if (!ConfigMgr::getInstance().loadProfile(static_cast<uint16_t>(profileId))) {
-    sendError(cmd, json, 1, "loadProfile failed");
+    sendError(cmd, json, Proto::ErrorCode::ERR_UNKNOWN_CMD,
+              "loadProfile failed");
     return;
   }
 
@@ -498,10 +516,9 @@ void ProfileCmdHandler::handleProfile(const char *cmd, const Json &json) {
     int q = json.getInt("queued");
     Json resp;
     resp.beginWrite(s_profRespBuf, sizeof(s_profRespBuf));
-    resp.printf("{cmd:%Q,queued:%d,status:%Q,error_code:%d,reason:%Q}",
-                cmd, q + 1, "error",
-                static_cast<int>(ThetaGP::Result::Unsupported),
-                "unknown profile command");
+    Resp::errorReply(resp, cmd, static_cast<uint32_t>(q + 1),
+                     Proto::ErrorCode::ERR_UNKNOWN_CMD,
+                     "unknown profile command");
     uint16_t len = resp.end();
     FrameLayer::getInstance().sendResponse(resp.c_str(), len);
   }

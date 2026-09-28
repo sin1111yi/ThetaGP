@@ -34,6 +34,7 @@
 #include "utils/mem_info.h"
 
 #include "protocol/proto.h"
+#include "protocol/proto_resp.h"
 
 #include <cstring>
 
@@ -150,8 +151,8 @@ static void handleChipErase(const char *cmd, const Json &json) {
                     "ok", cmd, queued + 1,
                     "chip_erase is dangerous — entire SPI flash wiped");
     } else {
-        resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,reason:%Q}",
-                    "error", cmd, queued + 1, 1, "eraseChip failed");
+        Resp::errorReply(resp, cmd, static_cast<uint32_t>(queued + 1),
+                         Proto::ErrorCode::ERR_UNKNOWN_CMD, "eraseChip failed");
     }
     uint16_t len = resp.end();
     FrameLayer::getInstance().sendResponse(resp.c_str(), len);
@@ -215,17 +216,16 @@ static void handleFlashRead(const char *cmd, const Json &json) {
             resp.printf("{status:%Q,cmd:%Q,queued:%d,lenRead:%d}",
                         "ok", cmd, queued + 1, len);
         } else {
-            resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,"
-                        "reason:%Q}",
-                        "error", cmd, queued + 1, 1, "read failed");
+            Resp::errorReply(resp, cmd, static_cast<uint32_t>(queued + 1),
+                             Proto::ErrorCode::ERR_UNKNOWN_CMD, "read failed");
         }
         uint16_t slen = resp.end();
         FrameLayer::getInstance().sendResponse(resp.c_str(), slen);
     } else {
         Json resp;
         resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
-        resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,reason:%Q}",
-                    "error", cmd, queued + 1, 1, "invalid addr/len");
+        Resp::errorReply(resp, cmd, static_cast<uint32_t>(queued + 1),
+                         Proto::ErrorCode::ERR_UNKNOWN_CMD, "invalid addr/len");
         uint16_t slen = resp.end();
         FrameLayer::getInstance().sendResponse(resp.c_str(), slen);
     }
@@ -367,10 +367,8 @@ void TestCmdHandler::handle(const char *cmd, const Json &json) {
         int queued = json.getInt("queued");
         Json resp;
         resp.beginWrite(s_testRespBuf, sizeof(s_testRespBuf));
-        resp.printf("{status:%Q,cmd:%Q,queued:%d,error_code:%d,reason:%Q}",
-                    "error", cmd, queued + 1,
-                    static_cast<int>(Proto::ErrorCode::ERR_UNKNOWN_CMD),
-                    "unknown command");
+        Resp::errorReply(resp, cmd, static_cast<uint32_t>(queued + 1),
+                         Proto::ErrorCode::ERR_UNKNOWN_CMD, "unknown command");
         uint16_t len = resp.end();
         FrameLayer::getInstance().sendResponse(resp.c_str(), len);
     }

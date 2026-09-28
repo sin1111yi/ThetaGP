@@ -23,6 +23,8 @@
 #include "test/frame_layer.h"
 
 #include "build_info.h"
+#include "protocol/proto.h"
+#include "protocol/proto_resp.h"
 #include "utils/log/log.h"
 
 #include <cstring>
@@ -52,8 +54,8 @@ void Dispatcher::dispatchImpl(const char *jsonLine) {
         LOG_WARN("Dispatcher: Missing or empty 'cmd' field");
         Json resp;
         resp.beginWrite(_respBuf, sizeof(_respBuf));
-        resp.printf("{status:%Q,error_code:%d,reason:%Q}",
-                    "error", 2, "missing 'cmd' field");
+        Resp::errorReply(resp, Proto::ErrorCode::ERR_INVALID_PARAM,
+                         "missing 'cmd' field");
         uint16_t len = resp.end();
         FrameLayer::getInstance().sendResponse(resp.c_str(), len);
         return;
@@ -72,8 +74,8 @@ void Dispatcher::dispatchImpl(const char *jsonLine) {
         LOG_WARN("Dispatcher: Missing or invalid 'queued' field");
         Json resp;
         resp.beginWrite(_respBuf, sizeof(_respBuf));
-        resp.printf("{status:%Q,error_code:%d,reason:%Q}",
-                    "error", 2, "missing or invalid 'queued' field");
+        Resp::errorReply(resp, Proto::ErrorCode::ERR_INVALID_PARAM,
+                         "missing or invalid 'queued' field");
         uint16_t len = resp.end();
         FrameLayer::getInstance().sendResponse(resp.c_str(), len);
         return;
@@ -96,8 +98,8 @@ void Dispatcher::dispatchImpl(const char *jsonLine) {
     LOG_WARN("Dispatcher: Unknown command: %s", cmd);
     Json resp;
     resp.beginWrite(_respBuf, sizeof(_respBuf));
-    resp.printf("{cmd:%Q,queued:%d,status:%Q,error_code:%d,reason:%Q}",
-                cmd, queued + 1, "error", 1, "unknown command");
+    Resp::errorReply(resp, cmd, static_cast<uint32_t>(queued + 1),
+                     Proto::ErrorCode::ERR_UNKNOWN_CMD, "unknown command");
     uint16_t len = resp.end();
     FrameLayer::getInstance().sendResponse(resp.c_str(), len);
 }
