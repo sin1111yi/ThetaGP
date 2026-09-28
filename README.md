@@ -75,18 +75,22 @@ ThetaGP/
 │       ├── link/               Linker script
 │       └── system/             HAL config, system init, syscalls
 ├── protocol/                   Protocol definition & generated code
-│   ├── protocol.toml           Single source of truth (CDC JSON protocol)
-│   └── proto.h                 Generated C++ header
+│   ├── ThetaGP.proto           Single source of truth (device ↔ host protocol)
+│   ├── ThetaGP.options         Field bounds nanopb reads beside it
+│   └── ThetaGP.pb.c/h          Generated codec (configure time, ignored)
 ├── scripts/                    Build tooling
 │   ├── generate_config.py      Board config generator (TOML → C macros)
-│   ├── gen_proto.py            Protocol code generator
+│   ├── gen_proto_pb.py         Protocol codec generator (protoc + nanopb)
+│   ├── gen_proto_py.py         Host bindings generator (protoc → Python)
+│   ├── extract_font.py         Font asset extractor
 │   ├── config/                 Generator modules (validators, generators, pin utils)
-│   └── test/                   Python test suite via CDC ACM
+│   ├── tools/                  Host tools (thetagp.py: send, ping, decode)
+│   └── test/                   Config-key suites
 ├── src/                        Application code
+│   ├── comm/                   Wire: frame codec, request handler
 │   ├── conf/                   TinyUSB configuration
 │   ├── drivers/                Device & gamepad drivers
 │   ├── gamepad/                Core gamepad logic & scheduler
-│   ├── test/                   Test API
 │   ├── utils/                  Resource accounting, logging, atomic, time
 │   └── taskmanager.cpp/h       Task lifecycle
 ├── lib/                        Third-party libraries (auto-fetched)

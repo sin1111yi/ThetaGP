@@ -172,14 +172,16 @@ Before any operation, query files in this order:
 cmake -B build -DTARGET=BoringTechH743
 cmake --build build
 
-# Build with test API enabled
-cmake -B build -DTARGET=BoringTechH743 -DTHETAGP_CFG_TEST=ON
+# Reconfigure after a protocol change: the codec beside the schema is
+# regenerated then, which needs protoc and the nanopb generator
+cmake -B build -DTARGET=BoringTechH743
 cmake --build build
 ```
 
-Note: `THETAGP_CFG_TEST` is the compile switch that pulls in the test
-domain handlers (see `src/CMakeLists.txt`). The old
-`THETAGP_ENABLE_TEST_API` name is retired.
+Note: there is no separate test-API build. Every command — the diagnostic ones
+included — travels on the protocol in `protocol/ThetaGP.proto`; see
+`protocol/README.md` for the wire and for how the codec and the host bindings
+are generated.
 
 ### Flashing
 
@@ -210,12 +212,10 @@ Logger outputs on UART1 (PA9 TX, PA10 RX) at 115200 baud. The CMSIS-DAP (DAPLink
 
 ### CDC command channel
 
-The CDC ACM virtual serial port carrying JSON commands is present in **every**
-build — the interface is unconditional in the USB descriptors and
-`CFG_TUD_CDC` is always 1. `-DTHETAGP_CFG_TEST=ON` gates only the `test.*`
-command set: without it those handlers compile to no-op stubs. The `sys.*`
-domain is always live, and `profile.*` is live whenever the board declares a
-flash chip (`THETAGP_CFG_HAS_FLASH`).
+The CDC ACM virtual serial port is present in **every** build — the interface is
+unconditional in the USB descriptors and `CFG_TUD_CDC` is always 1. It carries
+binary protocol frames; the JSON text protocol it used to carry is gone. The
+wire and the schema are in `protocol/README.md` and `protocol/ThetaGP.proto`.
 
 Plugged via the device's own USB interface (not the debug probe). The ttyACM
 number shifts across flashes; locate it via the stable symlink instead of a
@@ -225,38 +225,24 @@ hardcoded node:
 ls -l /dev/serial/by-id/usb-ThetaGamepad*if01*
 # e.g. usb-ThetaGamepad_BoringTechH743-if01 -> ../../ttyACM0
 
-# Send a ping
-echo '{"cmd":"sys.ping","queued":0}' > /dev/serial/by-id/usb-ThetaGamepad*if01*
-# Read response
-cat /dev/serial/by-id/usb-ThetaGamepad*if01*
+# Ping over the protocol: builds the request, checks the reply's number
+python3 scripts/tools/thetagp.py ping --port /dev/ttyACM0
+
+# Encode a request, or read a frame, without a board
+python3 scripts/tools/thetagp.py send sys.ping --dry-run
+python3 scripts/tools/thetagp.py decode 051a00900207b300
 ```
 
-See `docs/cdc-json-protocol.md` for the full protocol specification and the
-automated suites under `scripts/test/`:
+The two suites under `scripts/test/` guard the configuration-key emitter
+(`scripts/config/gen_config_keys.py`), where a wrong key name, type, range or
+default still compiles — the one class of defect a build cannot catch:
+`test_profile_keys.py` and `test_profile_version.py`, each beside the cases it
+compiles.
 
-- `test_cdc_protocol.py` — sys domain + read-only test domain commands
-  (`test.flash_info`, `test.mem_info`, `test.flash_read`,
-  `test.spi_mode`; `test.mem_info` reports the six raw linker memory
-  regions). Destructive commands (`test.chip_erase`,
-  `test.erase_sector`, `test.compaction`) are intentionally not executed
-  here; they are covered by the profile suite. The suite is board-aware:
-  it derives whether the board declares an external flash from
-  `sys.get_usage.ext_flash_total_sectors`, and when it does not, the
-  flash/SPI commands are reported as SKIP with that reason instead of
-  FAIL — those commands are compiled out without a chip, so a failure
-  there would say nothing. On a board with a flash they must all pass.
-  A run against a firmware built without `THETAGP_CFG_TEST` skips both
-  the test-domain group and the checks that compare it against
-  `sys.get_usage`.
-- `test_profile.py` — profile store lifecycle (create/delete/select/save/
-  load, wraparound, compaction, CRC, 16-profile limit).
-- `cdc_serial.py` — shared serial I/O helper (stable-symlink port
-  discovery, raw mode setup).
-
-The gamepad/HID injection commands (`test.set_mode`, `test.inject_*`,
-`test.set_override`, history/reset) were removed in commit 2408e32
-(refactor(test): remove TestInjector and gamepad/HID report hooks) and do
-not exist in current firmware.
+Which commands a board answers is a property of the firmware it runs and not of
+its build flags: an arm with no handler answers `ERR_UNKNOWN_CMD`, so a host can
+ask rather than assume. Today the `sys` domain is live and the others are still
+being moved onto the protocol.
 
 ---
 
@@ -296,7 +282,7 @@ Variables that are either DMA-accessed, or large/cold enough to justify saving f
 |-----------|-------|----------|
 | **DMA buffers** (fast RAM is not DMA-accessible) | `COMMON_ZERO_INIT` | CDC buffers, USB descriptors, SPI staging buffers (`s_nv3kSpiTxBuf`, `s_flashSpiTxBuf`) |
 | **ISR dispatch tables** (low-frequency ISRs) | `COMMON_ZERO_INIT` | DMA/SPI/UART/TIM ISR callback tables |
-| **Large NOLOAD buffers** (allocated once, touched off the hot path) | `COMMON_ZERO_INIT` | CDC command queue (`FrameLayer::_cmdQueue`, 16,384 B), test-domain response staging (`s_testRespBuf`, 4,096 B) |
+| **Large NOLOAD buffers** (allocated once, touched off the hot path) | `COMMON_ZERO_INIT` | CDC command queue, the reply buffer the wire answers into (`s_reply`, 1,024 B), the frame it writes (`s_frame`, 1,028 B) |
 | **Log/infrastructure buffers** (slow path) | `COMMON_ZERO_INIT` | Log ring buffer |
 | **Peripheral config tables** (constructor-initialized) | `COMMON_DATA` | SPI/UART bus descriptor arrays |
 | **Init-once, rarely-touched values** | `COMMON_ZERO_INIT` | CPU frequency cache, config sizes, USB state |
