@@ -254,6 +254,10 @@ python3 scripts/gen_proto.py --protocol path/to/protocol.toml
      what lets it catch a firmware sending more than it declared, and it is not
      a statement about what a host must tolerate from a device it did not build
      against.
+   - A host reads a reply by key and never by position. The keys a reply carries,
+     and the order they are written in, belong to this source: two versions that
+     order the same keys differently say the same thing on the wire, and a
+     consumer that parsed the keys and their values sees no change at all.
 
 7. **The protocol does not know the codebase.** The dependency runs one way: the
    codebase depends on this file and on what is generated from it, never the other way

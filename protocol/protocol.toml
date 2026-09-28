@@ -127,8 +127,9 @@ ERR_INVALID_STATE   = { code = 8,  description = "Command refused by the state t
 #     configuration domains with `cmd,queued,status`, and the `profile.end`
 #     trailer orders `cmd,status`. A reply that failed is not one of those: the
 #     writer generated for its shape orders the keys as this section and
-#     [error_reply] declare them, so a consumer keys off the names and not the
-#     positions.
+#     [error_reply] declare them. A consumer keys off the names and never the
+#     positions: the order belongs to this declaration, and two versions that
+#     order the same keys differently say the same thing on the wire.
 #   * `error_code` and `reason` are not declared here: they are the error
 #     reply's, which [error_reply] below declares, and a reply that failed
 #     carries them through the writer the generator emits for that section and
