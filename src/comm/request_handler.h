@@ -29,6 +29,15 @@ public:
     // and no number, because the frame was never read.
     static uint16_t frameRefused(FrameCodec::Drop drop, uint8_t *out,
                                  uint16_t capacity);
+
+    // The next frame of a stream a domain left open, and 0 when none is open.
+    // A body sent back is more than one frame is wide, so the arm that opened
+    // the stream answers with its first frame and the frames that carry the
+    // body itself follow from here, one per call -- the wire carries one frame
+    // at a time whichever frame it is. Those frames answer the exchange the
+    // first one began rather than any frame of the host's, which is what the
+    // zero they carry says.
+    static uint16_t pending(uint8_t *out, uint16_t capacity);
 };
 
 } // namespace ThetaGP::Comm

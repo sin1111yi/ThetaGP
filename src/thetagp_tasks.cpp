@@ -151,6 +151,21 @@ FAST_CODE static void taskCmdProc(uint32_t currentTimeUs) {
     queueFrame(framed);
     pumpCdcTx();
   }
+
+  // A stream's frames answer no frame of the host's, so they leave from here,
+  // one per tick, and only while nothing else is in flight.
+  if (s_txLength == 0) {
+    const uint16_t carried =
+        Comm::RequestHandler::pending(s_reply, sizeof s_reply);
+    if (carried != 0) {
+      const uint16_t streamed =
+          Comm::FrameCodec::encode(s_reply, carried, s_frame, sizeof s_frame);
+      if (streamed != 0) {
+        queueFrame(streamed);
+        pumpCdcTx();
+      }
+    }
+  }
 }
 
 void ThetaGP::ThetaGamepad::registerTasks(void) {

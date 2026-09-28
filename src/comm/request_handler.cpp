@@ -7,6 +7,7 @@
 #include <cstring>
 
 #include "comm/profile_handler.h"
+#include "comm/profile_transfer.h"
 #include "comm/sys_handler.h"
 #include "conf/ThetaGP_Config.h"
 #include "pb_decode.h"
@@ -53,6 +54,19 @@ uint16_t encodeReply(const ThetaGP_Reply &reply, uint8_t *out,
         return 0;
     }
     return static_cast<uint16_t>(os.bytes_written);
+}
+
+// The refusal that stands in for an answer too wide for the frame the caller
+// offered: the number the answer would have carried, and the reason both of
+// the arms whose answers are not one fixed width are answered with.
+uint16_t tooLongReply(const ThetaGP_Reply &answered, ThetaGP_ErrorCode code,
+                      uint8_t *out, uint16_t capacity) {
+    ThetaGP_Reply reply;
+    std::memset(&reply, 0, sizeof reply);
+    reply.has_queued = answered.has_queued;
+    reply.queued = answered.queued;
+    writeFailure(reply, code, ThetaGP_Reason_REASON_REPLY_TOO_LONG);
+    return encodeReply(reply, out, capacity);
 }
 
 } // namespace
@@ -102,10 +116,18 @@ uint16_t RequestHandler::answer(const uint8_t *payload, uint16_t length,
             break;
 #if THETAGP_CFG_HAS_FLASH
         case ThetaGP_Request_profile_status_tag:
-            ProfileHandler::status(reply);
-            break;
         case ThetaGP_Request_profile_list_tag:
-            ProfileHandler::list(reply);
+        case ThetaGP_Request_profile_get_tag:
+            // The profile domain's one entry, whatever arm the request names:
+            // the dispatch to the arm and the refusal owed to every arm that
+            // reads a body while a body's bytes are spoken for both live there,
+            // judged once on the way in. No arm of the domain carries that
+            // refusal itself, so an arm added to the domain is routed here the
+            // same way and is refused with the rest.
+            if (!ProfileHandler::handle(request, reply)) {
+                writeFailure(reply, ThetaGP_ErrorCode_ERR_UNKNOWN_CMD,
+                             ThetaGP_Reason_REASON_UNKNOWN_COMMAND);
+            }
             break;
 #endif
         default:
@@ -120,20 +142,57 @@ uint16_t RequestHandler::answer(const uint8_t *payload, uint16_t length,
         return written;
     }
 
-    // The one answer whose length follows the device's memory table: when it
-    // does not fit a frame, the host is answered with the refusal instead of
-    // nothing.
-    if (read && request.which_kind == ThetaGP_Request_sys_get_usage_tag) {
-        const bool had_queued = reply.has_queued;
-        const uint32_t count = reply.queued;
-        std::memset(&reply, 0, sizeof reply);
-        reply.has_queued = had_queued;
-        reply.queued = count;
-        writeFailure(reply, ThetaGP_ErrorCode_ERR_NOT_SUPPORTED,
-                     ThetaGP_Reason_REASON_REPLY_TOO_LONG);
-        return encodeReply(reply, out, capacity);
+    // The answers whose length follows the data in the device: when one does
+    // not fit the frame the caller offered, the host is answered with the
+    // refusal instead of nothing.
+    if (!read) {
+        return 0;
+    }
+    if (request.which_kind == ThetaGP_Request_sys_get_usage_tag) {
+        return tooLongReply(reply, ThetaGP_ErrorCode_ERR_NOT_SUPPORTED, out,
+                            capacity);
+    }
+    if (request.which_kind == ThetaGP_Request_profile_get_tag) {
+        // The frames that would have carried the body follow the opening frame
+        // this answer did not become: they must not go out for a body no host
+        // was told the length of.
+        ProfileTransfer::abandon();
+        return tooLongReply(reply, ThetaGP_ErrorCode_ERR_BUFFER_OVERFLOW, out,
+                            capacity);
     }
     return 0;
+}
+
+uint16_t RequestHandler::pending(uint8_t *out, uint16_t capacity) {
+    if (out == nullptr || capacity == 0) {
+        return 0;
+    }
+
+    ThetaGP_Reply reply;
+    std::memset(&reply, 0, sizeof reply);
+    if (!ProfileTransfer::next(reply)) {
+        return 0;
+    }
+
+    // The frames of a stream answer the exchange and not one frame of the
+    // host's, so they carry the zero the envelope reserves for that -- the
+    // same number a staged write's own answer carries.
+    reply.has_queued = true;
+    reply.queued = 0;
+
+    const uint16_t written = encodeReply(reply, out, capacity);
+    if (written != 0 && !ProfileTransfer::shortFrame()) {
+        return written;
+    }
+
+    // The frame did not fit what the caller offered, or it does not carry the
+    // body bytes it was built for. The length of a piece is not among the
+    // fields the frame carries, so a host cannot tell a short piece from a
+    // whole one: it is told the answer is too long instead, and the stream
+    // that would have carried the rest ends with this frame.
+    ProfileTransfer::abandon();
+    return tooLongReply(reply, ThetaGP_ErrorCode_ERR_BUFFER_OVERFLOW, out,
+                        capacity);
 }
 
 uint16_t RequestHandler::frameRefused(Comm::FrameCodec::Drop drop,
