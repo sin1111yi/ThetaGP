@@ -49,9 +49,47 @@ namespace {
 COMMON_ZERO_INIT static uint8_t s_reply[Comm::FrameCodec::PAYLOAD_MAX]{};
 COMMON_ZERO_INIT static uint8_t s_frame[Comm::FrameCodec::FRAME_MAX]{};
 
+// How much of s_frame is still to go out. The CDC FIFO takes 64 bytes at a
+// time, so a larger reply leaves over several calls instead of being cut off.
+uint16_t s_txLength = 0;
+uint16_t s_txSent = 0;
+
 // The refusals the frame layer has counted, so the task answers a frame it had
 // to refuse once and only once.
 uint32_t s_refused = 0;
+
+// Hand the CDC FIFO as much of the pending frame as it will take. Nothing
+// waits here: a full FIFO ends the call, and the rest goes out on the next one.
+static void pumpCdcTx(void) {
+  while (s_txLength != 0) {
+    const uint16_t left = static_cast<uint16_t>(s_txLength - s_txSent);
+    const uint32_t room = tud_cdc_write_available();
+    if (room == 0) {
+      break;
+    }
+    const uint16_t chunk = (left < room) ? left : static_cast<uint16_t>(room);
+    const uint32_t wrote = tud_cdc_write(s_frame + s_txSent, chunk);
+    if (wrote == 0) {
+      break;
+    }
+    s_txSent = static_cast<uint16_t>(s_txSent + wrote);
+    tud_cdc_write_flush();
+  }
+  if (s_txSent >= s_txLength) {
+    s_txLength = 0;
+    s_txSent = 0;
+  }
+}
+
+// Take a framed reply for sending, unless one is still on its way out.
+static bool queueFrame(uint16_t length) {
+  if (length == 0 || s_txLength != 0) {
+    return false;
+  }
+  s_txLength = length;
+  s_txSent = 0;
+  return true;
+}
 
 } // namespace
 
@@ -69,12 +107,19 @@ FAST_CODE static void taskGamepadCore(uint32_t currentTimeUs) {
 FAST_CODE static void taskCmdProc(uint32_t currentTimeUs) {
   UNUSED(currentTimeUs);
 
-  // The 20 Hz command tick: drop a half frame whose bytes stopped arriving,
-  // then answer every whole frame the USB interrupt assembled. A reply is
-  // framed and written to the CDC FIFO here; tud_task() on the report tick is
-  // what moves those bytes out.
+  // The 20 Hz command tick: move on what is still going out, drop a half frame
+  // whose bytes stopped arriving, then answer the whole frames the USB
+  // interrupt assembled. A reply is framed here and handed to the CDC FIFO;
+  // tud_task() on the report tick is what moves those bytes out.
   Comm::FrameCodec &codec = Comm::FrameCodec::getInstance();
   codec.tick(Drivers::Device::SystemTimer::getInstance().getMillis());
+  pumpCdcTx();
+
+  // One reply at a time: while a frame is leaving, s_frame holds it and the
+  // frames the codec assembled wait for a later tick.
+  if (s_txLength != 0) {
+    return;
+  }
 
   // A frame the layer refused is answered with a transport error: the host
   // resends the command it could not get through.
@@ -86,15 +131,13 @@ FAST_CODE static void taskCmdProc(uint32_t currentTimeUs) {
     if (answered != 0) {
       const uint16_t framed =
           Comm::FrameCodec::encode(s_reply, answered, s_frame, sizeof s_frame);
-      if (framed != 0) {
-        tud_cdc_write(s_frame, framed);
-        tud_cdc_write_flush();
-      }
+      queueFrame(framed);
     }
+    return;
   }
 
   Comm::FrameCodec::Payload payload{};
-  while (codec.take(payload)) {
+  while (s_txLength == 0 && codec.take(payload)) {
     const uint16_t answered = Comm::RequestHandler::answer(
         payload.bytes, payload.length, s_reply, sizeof s_reply);
     if (answered == 0) {
@@ -105,8 +148,8 @@ FAST_CODE static void taskCmdProc(uint32_t currentTimeUs) {
     if (framed == 0) {
       continue;
     }
-    tud_cdc_write(s_frame, framed);
-    tud_cdc_write_flush();
+    queueFrame(framed);
+    pumpCdcTx();
   }
 }
 
