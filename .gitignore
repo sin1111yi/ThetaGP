@@ -34,11 +34,6 @@ lib/nanopb
 *example*
 
 # Generated protocol output
-protocol/proto.h
-protocol/proto.rs
-protocol/types.ts
-protocol/proto_fields.json
-protocol/proto_resp.h
 # Patterns and not one line per generated name: every schema under protocol/
 # generates a pair of that shape beside it, so adding a schema does not add a
 # line here.
@@ -56,5 +51,4 @@ REASONIX.md
 # Test tooling and fixtures. They reproduce measurements the firmware work
 # depends on, so they stay in the worktree, but they are not part of the
 # product, so they stay out of the repository.
-protocol/protocol-fields.md
 scripts/test/tmp_*

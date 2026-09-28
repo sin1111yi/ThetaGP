@@ -25,20 +25,22 @@
 
 // Firmware-level defaults: this file is where the software behaviour of the
 // firmware is configured. BoardConfig.h is included first and every macro below
-// is wrapped in #ifndef, so a board definition wins. The build forwards only
-// the switches it names (see src/CMakeLists.txt); everything else is changed by
-// editing the value here.
+// is wrapped in #ifndef, so a board definition wins. The build forwards no
+// THETAGP_CFG_ switch (see src/CMakeLists.txt), so a value below is changed by
+// editing it here.
 
 // ── Index ──
 // Every knob in this file with its default. The per-knob block below carries
 // the unit and the meaning; this list is only so a reader sees the whole set
 // in one screen without scrolling.
 //
-//   build / test
-//     THETAGP_CFG_BUILD_TEST_API            0     compile the CDC JSON test API
+//   build
 //     THETAGP_CFG_USB_DBG                   0     TinyUSB verbose debug (the build
 //                                                  forwards it as CFG_TUSB_DEBUG)
 //     THETAGP_CFG_LOG_EN / THETAGP_CFG_LOG_LV     derived from the build type
+//   protocol
+//     THETAGP_CFG_TASK_COUNTERS             0     report the two per-task counters
+//                                                  in sys.get_task_info
 //   report path
 //     THETAGP_CFG_USB_REPORT_RATE_HZ        1000  gamepad task rate, <= link ceiling
 //     THETAGP_CFG_USB_REPORT_RATE_MAX_HZ          derived from the board's USB speed
@@ -56,21 +58,14 @@
 //     LED_BRIGHTNESS 128  LED_MODE 0    LED_HUE 180 LED_SATURATION 255  LED_SPEED 128
 //     CAL_LX/LY/RX/RY 0
 
-// ── Test API ──
-// Compiles the CDC JSON test command infrastructure. The late-task statistics
-// that sys.get_task_info reports belong to it, so they are bound here instead
-// of being set separately by the build.
-//
-// Switched on by the build (src/CMakeLists.txt passes
-// THETAGP_CFG_BUILD_TEST_API=1 when its BUILD_TEST_API switch is on) or by a
-// board; the default is off. It gates the copy and the reporting of the task
-// counters, not the counters themselves: the scheduler maintains those in
-// every build.
-#ifndef THETAGP_CFG_BUILD_TEST_API
-#define THETAGP_CFG_BUILD_TEST_API 0
-#endif
-#if THETAGP_CFG_BUILD_TEST_API
-#define USE_TASK_COUNTERS
+// ── Task counters ──
+// Whether sys.get_task_info reports the scheduler's two per-task counters,
+// run_count and late_count. Both are optional fields of that reply, so a build
+// that leaves the switch off answers without them and a host reads their
+// absence as a device that does not report counters. The scheduler maintains
+// the counters in every build: this gates only the copy and the reporting.
+#ifndef THETAGP_CFG_TASK_COUNTERS
+#define THETAGP_CFG_TASK_COUNTERS 0
 #endif
 
 // ── TinyUSB debug ──

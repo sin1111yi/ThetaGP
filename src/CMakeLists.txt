@@ -20,37 +20,11 @@
 cmake_minimum_required(VERSION 3.22)
 
 # =============================================================================
-# Protocol Code Generation (configure-time)
+# Generators (configure-time)
 # =============================================================================
-# Run gen_proto.py at configure time to generate the protocol artifacts from
-# protocol/protocol.toml, as documented in protocol/README.md:
-#   protocol/proto.h           — C++ types and command dispatch
-#   protocol/proto.rs          — Rust types (Tauri backend)
-#   protocol/types.ts          — TypeScript types (frontend)
-#   protocol/proto_fields.json — ordered request/response field lists
-#   protocol/proto_resp.h      — C++ response field tables (firmware)
-#   protocol/protocol-fields.md — response field tables (docs, Markdown)
+# The interpreter the two generation steps below run in: the config key table
+# and the protobuf codecs.
 find_program(PYTHON3 python3)
-if(PYTHON3)
-    set(PROTO_TOML "${CMAKE_SOURCE_DIR}/protocol/protocol.toml")
-    if(EXISTS "${PROTO_TOML}")
-        message(STATUS "Generating protocol files from protocol.toml (cpp, rust, ts, fields, resp, fields-md) ...")
-        execute_process(
-            COMMAND ${PYTHON3} "${CMAKE_SOURCE_DIR}/scripts/gen_proto.py"
-            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-            RESULT_VARIABLE PROTO_GEN_RESULT
-        )
-        if(PROTO_GEN_RESULT EQUAL 0)
-            message(STATUS "Generated protocol/proto.h, protocol/proto.rs, protocol/types.ts, protocol/proto_fields.json, protocol/proto_resp.h, protocol/protocol-fields.md")
-        else()
-            message(WARNING "Protocol generation failed (exit=${PROTO_GEN_RESULT})")
-        endif()
-    else()
-        message(STATUS "protocol/protocol.toml not found — skipping code generation")
-    endif()
-else()
-    message(STATUS "Protocol code generation: skipped (python3 not found)")
-endif()
 
 # =============================================================================
 # Config Key Table (configure-time)
@@ -470,18 +444,6 @@ target_compile_definitions(${CMAKE_PROJECT_NAME}
     BOARD_IDENTIFIER="${BOARD_IDENTIFIER}"
     BOARD_NAME="${BOARD_NAME}"
 )
-
-if(BUILD_TEST_API)
-    target_compile_definitions(${CMAKE_PROJECT_NAME}
-        PRIVATE
-        # Build-layer switch: the command line uses BUILD_TEST_API, the source
-        # sees this THETAGP_CFG_* macro. Its default and the USE_TASK_COUNTERS
-        # binding live in src/conf/ThetaGP_Config.h.
-        # The value must be given: the header tests this name with #if, and an
-        # empty definition would be a syntax error.
-        THETAGP_CFG_BUILD_TEST_API=1
-    )
-endif()
 
 # Set output directory and link script
 set_target_properties(${CMAKE_PROJECT_NAME}

@@ -92,7 +92,7 @@ struct TaskInfo {
   float movingAverageCycleTimeUs;
 // The scheduler maintains runCount / lateCount in every build; this switch only
 // decides whether sys.get_task_info copies and reports them.
-#ifdef USE_TASK_COUNTERS
+#if THETAGP_CFG_TASK_COUNTERS
   uint32_t runCount;
   uint32_t lateCount;
 #endif

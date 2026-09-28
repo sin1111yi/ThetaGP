@@ -37,9 +37,9 @@ if(NOT DEFINED CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
     set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type (e.g. Debug, Release, RelWithDebInfo)" FORCE)
 endif()
 
-# Configuration lives in src/conf/ThetaGP_Config.h. Build-layer switches are
-# named BUILD_* on the command line (-DBUILD_TEST_API=ON) and are passed through
-# by src/CMakeLists.txt.
+# Configuration lives in src/conf/ThetaGP_Config.h. The build adds no override
+# for it: src/CMakeLists.txt reads the one value a library needs (the TinyUSB log
+# level) straight from that file.
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(WARNING "Logging enabled (Debug build) — each log call adds ~100us delay. "
@@ -104,18 +104,12 @@ add_subdirectory(src)
 # =============================================================================
 
 # The configure step writes into the source tree in three places: the board
-# configuration generator, the protocol generator, and the protobuf pair
-# generator together with the configuration key table. Everything but the board
-# configuration is ignored (see .gitignore), and none of it is removed by the
-# build system's own clean target, which only knows about build/. This target
-# removes the ignored ones so the next configure writes them again.
+# configuration generator, the protobuf codec generator, and the configuration
+# key table generator. Everything but the board configuration is ignored (see
+# .gitignore), and none of it is removed by the build system's own clean target,
+# which only knows about build/. This target removes the ignored ones so the next
+# configure writes them again.
 set(THETAGP_GENERATED_ARTIFACTS
-    "${CMAKE_SOURCE_DIR}/protocol/proto.h"
-    "${CMAKE_SOURCE_DIR}/protocol/proto_resp.h"
-    "${CMAKE_SOURCE_DIR}/protocol/proto_fields.json"
-    "${CMAKE_SOURCE_DIR}/protocol/proto.rs"
-    "${CMAKE_SOURCE_DIR}/protocol/types.ts"
-    "${CMAKE_SOURCE_DIR}/protocol/protocol-fields.md"
     "${CMAKE_SOURCE_DIR}/configs/config_keys.gen.h"
     "${CMAKE_BINARY_DIR}/proto_py"
 )

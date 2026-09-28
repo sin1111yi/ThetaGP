@@ -140,7 +140,7 @@ const TaskInfo *TaskManager::getTaskInfo(TID tid) {
   info.averageExecutionTime10thUs = t->movingSumExecutionTime10thUs / TASK_STATS_MOVING_SUM_COUNT;
   info.averageDeltaTime10thUs = t->movingSumDeltaTime10thUs / TASK_STATS_MOVING_SUM_COUNT;
   info.movingAverageCycleTimeUs = t->movingAverageCycleTimeUs;
-#ifdef USE_TASK_COUNTERS
+#if THETAGP_CFG_TASK_COUNTERS
   info.runCount = t->runCount;
   info.lateCount = t->lateCount;
 #endif
