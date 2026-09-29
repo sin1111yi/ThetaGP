@@ -44,6 +44,8 @@ Model: <model-name> <model-provider>
 Agent: <agent-name>
 ```
 
+The tree's own commits write `Model: deepseek-flash deepseek` and `Agent: Hermes`. Copy those two lines rather than inventing a name, and put the pair on every commit: a message that lacks them is the one thing a reader notices is missing.
+
 ### Type
 
 - `feat`: new feature
@@ -59,13 +61,14 @@ Agent: <agent-name>
 - Use imperative mood ("add" not "added")
 - No leading capital letter
 - No trailing period
-- Keep under 50 characters
+- Keep it to one line. The tree's own subjects run 40 to 90 characters, so a descriptive subject is preferred over a clipped one
 
 ### Body
 
 - Each line ≤ 72 characters
 - Explain WHY and HOW, not WHAT
 - Use `-` bullet points for details
+- No verification section: a message says why the change is what it is, not the build and suite numbers that were true the day it landed
 
 ### Example
 
@@ -78,8 +81,8 @@ fix(usb): correct clock macros and port configuration
 - Change BOARD_TUD_RHPORT from 0 to 1 for correct port mapping
 - Update ULPI, high-speed and full-speed pin initialization macros
 
-Model: MiniMax-M2.7 MiniMax
-Agent: opencode
+Model: deepseek-flash deepseek
+Agent: Hermes
 ```
 
 Should I commit this change?
