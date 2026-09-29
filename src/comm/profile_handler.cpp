@@ -69,24 +69,6 @@ ProfileHandler::Answers ProfileHandler::handle(const uint8_t *payload,
                                                uint16_t length,
                                                const ThetaGP_Request &request,
                                                ThetaGP_Reply &reply) {
-    // The active profile stands in two places and is one profile. The store
-    // carries it: a body written becomes the active profile, a select names
-    // one, and a delete that drops the active profile leaves the store on the
-    // factory one. The configuration the device runs on carries the other
-    // reading of it -- the profile a save writes to -- and the store's is the
-    // one the arms below move. So the two are brought back onto one another
-    // here, on the way in and ahead of every arm: no request of this domain is
-    // served without it, so what a save or a load below reads is the store's
-    // reading carried over, and the arm that follows one which moved the
-    // store's active profile meets a layer already on it. The comparison is two
-    // readings out of RAM -- the store's status record is its own cached
-    // numbers -- and both arms of it are no-ops when the two already agree.
-    const uint16_t activeId =
-        ProfileStore::getInstance().getStatus().activeId;
-    if (ConfigManager::getInstance().activeProfileId() != activeId) {
-        ConfigManager::getInstance().setActiveProfileId(activeId);
-    }
-
     // The two arms that read no body, answered ahead of the gate: they answer
     // from the store's index and touch nothing a stream or a staged write
     // holds, so there is nothing to refuse them for.
@@ -529,9 +511,10 @@ void ProfileHandler::select(const ThetaGP_Request &request,
 
 void ProfileHandler::save(ThetaGP_Reply &reply) {
     ConfigManager &config = ConfigManager::getInstance();
-    // The profile the configuration is written to, read once: the arm is
-    // refused on the profile the device is on, and the write leaves that where
-    // it is.
+    // The profile the configuration is written to, read once for the whole
+    // arm: the layer answers this from the store's status record, so it is the
+    // profile the device is on, and the arm is refused on that profile rather
+    // than answered with a write under another id.
     const uint16_t active = config.activeProfileId();
 
     // The factory profile is the body the device falls back to, and no profile

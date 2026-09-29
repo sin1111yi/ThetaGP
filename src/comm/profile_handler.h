@@ -32,12 +32,12 @@ namespace ThetaGP::Comm {
 // index and reach no staging buffer, so no gate stands in front of them and
 // they are answered whatever a body's bytes are doing.
 //
-// The active profile is one profile and stands in two places: the store
-// carries it, and the configuration the device runs on carries the profile a
-// save writes to. Every arm the domain serves leaves the two on the same
-// profile -- one comparison after the dispatch below rather than a call inside
-// each arm -- so an arm that moves the store's active profile cannot leave the
-// configuration layer on another one.
+// The active profile is carried by the store alone: a body written becomes it,
+// a select names one, and a delete that drops it leaves the store on the
+// factory one. The configuration the device runs on reads the profile it
+// belongs to -- the one a save writes to, and the one a read that names no
+// profile reads -- from the store's reading of it, so no arm of this domain
+// leaves the two apart.
 class ProfileHandler {
 public:
     // What answering an arm of this domain produced.

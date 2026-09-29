@@ -49,21 +49,25 @@ public:
    * defaults. */
   bool readProfileBody(uint16_t profileId);
 
-  /** Write the configuration in effect to the profile it belongs to.
+  /** Write the configuration in effect to the profile it belongs to, which is
+   * the profile the store carries as active: read from the store as the call
+   * starts, once, and the one id the whole call stands on.
    *
    * `droppedKeys`, when it is not null, is handed what the write did not carry
    * over from the body it replaced: the number of object keys of that body the
    * body written in its place does not hold (Json::missingKeyCount, which is
    * where the count is defined). The body compared against is the one of the
-   * profile this call writes to, read back by that id — not whichever profile
-   * the store calls active, which a host upload moves on its own. A write that
-   * carried every key over leaves it at 0, and so does every call that returns
-   * without writing: the count is only ever raised by a write that reached the
-   * flash, so a caller reports it as a fact of a save that happened. It stays 0
-   * when the body being replaced cannot be read back, and when the comparison
-   * has no answer (Json::missingKeyCount): a write that happened is not evidence
+   * profile this call writes to, read back by that id. A write that carried
+   * every key over leaves it at 0, and so does every call that returns without
+   * writing: the count is only ever raised by a write that reached the flash,
+   * so a caller reports it as a fact of a save that happened. It stays 0 when
+   * the body being replaced cannot be read back, and when the comparison has
+   * no answer (Json::missingKeyCount): a write that happened is not evidence
    * of one that dropped nothing. */
   bool saveProfile(uint32_t *droppedKeys = nullptr);
+
+  /** The profile the configuration the device runs on belongs to: the store's
+   * active profile, read from the store. */
   uint16_t activeProfileId() const;
   uint8_t profileCount() const;
 
@@ -75,9 +79,8 @@ public:
   /** Reserved for a later entry of this layer: not implemented, so it moves
    * nothing. */
   bool selectProfile(uint16_t profileId);
-  /** Make a profile the one the configuration the device runs on belongs to:
-   * the profile a save writes to, and the one a read that names no profile
-   * reads. */
+  /** Reserved for a later entry of this layer: not implemented, so it moves
+   * nothing. */
   void setActiveProfileId(uint16_t id);
   Profile::ProfileStatus getStatus() const;
 
@@ -102,7 +105,6 @@ public:
 private:
   ConfigManager() = default;
   ConfigStore _config;
-  uint16_t _activeId = 0;
 };
 
 } // namespace ThetaGP::Gamepad::Config

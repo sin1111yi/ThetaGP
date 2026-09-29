@@ -37,9 +37,13 @@ ConfigManager &ConfigManager::getInstance() {
   return instance;
 }
 
-uint16_t ConfigManager::activeProfileId() const { return _activeId; }
+// The profile the configuration the device runs on belongs to: the store's
+// active profile. The layer keeps no reading of its own, and getStatus() is
+// where each build says where that record comes from.
+uint16_t ConfigManager::activeProfileId() const { return getStatus().activeId; }
 
-void ConfigManager::setActiveProfileId(uint16_t id) { _activeId = id; }
+// Reserved: not implemented, so it moves nothing.
+void ConfigManager::setActiveProfileId(uint16_t) {}
 
 #if THETAGP_CFG_HAS_FLASH
 
@@ -65,7 +69,6 @@ bool ConfigManager::init() {
   (void)ensureFactoryProfile();
 
   Profile::ProfileStatus status = store.getStatus();
-  _activeId = status.activeId;
 
   ProfileText text;
   if (!store.readProfile(PROFILE_ID_ACTIVE, &text)) {
@@ -83,7 +86,7 @@ bool ConfigManager::init() {
              "stays at the compiled defaults");
   }
 
-  LOG_INFO("ConfigManager: init OK, active=%u count=%u", _activeId,
+  LOG_INFO("ConfigManager: init OK, active=%u count=%u", status.activeId,
            status.profileCount);
   return true;
 }
@@ -120,7 +123,6 @@ bool ConfigManager::ensureFactoryProfile() {
   // The flash now holds exactly the compiled defaults, so the RAM copy of the
   // configuration becomes those defaults too.
   _config = kConfigDefaults;
-  _activeId = 0;
 
   LOG_INFO("ConfigManager: factory Profile0 written, %u bytes", jsonLen);
   return true;
@@ -167,31 +169,33 @@ static COMMON_ZERO_INIT uint8_t s_replaced[PROFILE_STAGING_SIZE];
 bool ConfigManager::saveProfile(uint32_t *droppedKeys) {
   ProfileStore &store = ProfileStore::getInstance();
 
+  // The profile this save writes to, read from the store as the save starts:
+  // the store carries the active profile and this layer keeps no reading of
+  // it, so the profile the configuration belongs to is asked for here rather
+  // than remembered. Read once, and the one id the whole save stands on.
+  const uint16_t activeId = store.getStatus().activeId;
+
   // What the caller is handed is raised by the write below and by nothing
   // else, so every path that returns before it leaves this at 0.
   if (droppedKeys) {
     *droppedKeys = 0;
   }
 
-  if (_activeId == 0) {
+  if (activeId == 0) {
     LOG_WARN("ConfigManager: cannot save to factory Profile0");
     return false;
   }
 
   // How many keys of the body being replaced the new body does not carry. The
-  // replaced body is the one of the profile this save writes to, read by its id
-  // rather than as "the active one": createProfile moves the store's active id
-  // on its own — a profile the host just uploaded becomes the active one while
-  // this layer still writes the profile it has in hand — and a count taken
-  // against that other body describes a replacement that is not this one. Its
-  // keys are looked up in the body about to be written rather than in a list of
-  // the keys the serializer writes, so a key added to the profile shape moves
-  // this count with it.
+  // replaced body is the one of the profile this save writes to, read back by
+  // that id. Its keys are looked up in the body about to be written rather
+  // than in a list of the keys the serializer writes, so a key added to the
+  // profile shape moves this count with it.
   bool haveReplaced = false;
   uint16_t replacedLen = 0;
   if (droppedKeys) {
     ProfileText replaced;
-    if (store.readProfile(_activeId, &replaced) && replaced.len > 0) {
+    if (store.readProfile(activeId, &replaced) && replaced.len > 0) {
       // ProfileStore::readBody reports at most PROFILE_JSON_MAX bytes, one below
       // this buffer.
       replacedLen = replaced.len;
@@ -225,9 +229,9 @@ bool ConfigManager::saveProfile(uint32_t *droppedKeys) {
     notCarriedOver = fresh.missingKeyCount(replaced);
   }
 
-  if (!store.modifyProfile(_activeId, reinterpret_cast<const char *>(s_staging),
+  if (!store.modifyProfile(activeId, reinterpret_cast<const char *>(s_staging),
                            jsonLen)) {
-    LOG_ERROR("ConfigManager: save failed id=%u", _activeId);
+    LOG_ERROR("ConfigManager: save failed id=%u", activeId);
     return false;
   }
 
@@ -237,7 +241,7 @@ bool ConfigManager::saveProfile(uint32_t *droppedKeys) {
     *droppedKeys = notCarriedOver;
   }
 
-  LOG_INFO("ConfigManager: save OK id=%u, len=%u, dropped=%u", _activeId,
+  LOG_INFO("ConfigManager: save OK id=%u, len=%u, dropped=%u", activeId,
            jsonLen, static_cast<unsigned>(notCarriedOver));
   return true;
 }
