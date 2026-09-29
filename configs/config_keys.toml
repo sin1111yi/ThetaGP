@@ -17,9 +17,9 @@
 # count     element count, arrays only
 # min/max   accepted range, both inclusive
 # default   the value a factory profile starts from, or "board" for a field the
-#           board's own configuration supplies. The firmware's copies of these
-#           numbers (conf/ThetaGP_Config.h) are where they live today and are
-#           moving here; until they do, the two are held equal by hand.
+#           board's own configuration supplies. This is the one home of the
+#           value: the generator emits it and the firmware's store starts from
+#           it, so it is not written anywhere else.
 # exposed   true when config.* accepts this key. Every row names a field of
 #           ConfigStore, so a profile body is read and written through this
 #           table as a whole; this column is what separates the fields the

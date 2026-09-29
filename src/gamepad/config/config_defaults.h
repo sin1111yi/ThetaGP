@@ -21,7 +21,8 @@
 
 #pragma once
 
-#include "conf/ThetaGP_Config.h"
+#include "BoardConfig.h"
+#include "configs/config_keys.gen.h"
 #include "gamepad/config/config_store.h"
 
 // GAMEPAD_MASK_*, which BDCFG_KEYPAD_BUTTON_MAP is written in terms of.
@@ -119,9 +120,10 @@ static_assert(keysAddressSlots(),
 
 inline constexpr std::array<uint8_t, kBtnMapSlots> kBtnMap = buildBtnMap();
 
-// The default set as a whole: the firmware-level scalars from ThetaGP_Config.h
-// plus the board's key table. The fields are written one by one in declaration
-// order, and the button table is a compile-time conversion of the board macro.
+// The default set as a whole: each field's factory default, emitted from the
+// config key declaration, plus the board's key table. The fields are written
+// one by one in declaration order; the button table is a compile-time
+// conversion of the board macro.
 constexpr ConfigStore makeDefaults() {
   ConfigStore cfg{};
 
@@ -129,43 +131,43 @@ constexpr ConfigStore makeDefaults() {
   for (uint8_t slot = 0; slot < kBtnMapSlots; ++slot) {
     cfg.btn_map[slot] = kBtnMap[slot];
   }
-  cfg.socd     = THETAGP_CFG_DEFAULT_SOCD_MODE;
-  cfg.four_way = THETAGP_CFG_DEFAULT_FOUR_WAY_MODE;
-  cfg.dpad     = THETAGP_CFG_DEFAULT_DPAD_MODE;
-  cfg.inv_x    = THETAGP_CFG_DEFAULT_INV_X;
-  cfg.inv_y    = THETAGP_CFG_DEFAULT_INV_Y;
-  cfg.inv_rx   = THETAGP_CFG_DEFAULT_INV_RX;
-  cfg.inv_ry   = THETAGP_CFG_DEFAULT_INV_RY;
-  cfg.swap     = THETAGP_CFG_DEFAULT_SWAP_STICKS;
+  cfg.socd     = kKeyDefaultSocd;
+  cfg.four_way = kKeyDefaultFourWay;
+  cfg.dpad     = kKeyDefaultDpad;
+  cfg.inv_x    = kKeyDefaultInvX;
+  cfg.inv_y    = kKeyDefaultInvY;
+  cfg.inv_rx   = kKeyDefaultInvRx;
+  cfg.inv_ry   = kKeyDefaultInvRy;
+  cfg.swap     = kKeyDefaultSwap;
 
   // ── Stick settings ──
-  cfg.lx_dz   = THETAGP_CFG_DEFAULT_LX_DZ;
-  cfg.ly_dz   = THETAGP_CFG_DEFAULT_LY_DZ;
-  cfg.rx_dz   = THETAGP_CFG_DEFAULT_RX_DZ;
-  cfg.ry_dz   = THETAGP_CFG_DEFAULT_RY_DZ;
-  cfg.lx_sens = THETAGP_CFG_DEFAULT_LX_SENS;
-  cfg.ly_sens = THETAGP_CFG_DEFAULT_LY_SENS;
-  cfg.rx_sens = THETAGP_CFG_DEFAULT_RX_SENS;
-  cfg.ry_sens = THETAGP_CFG_DEFAULT_RY_SENS;
-  cfg.curve   = THETAGP_CFG_DEFAULT_CURVE;
-  cfg.ema     = THETAGP_CFG_DEFAULT_EMA;
+  cfg.lx_dz   = kKeyDefaultLxDz;
+  cfg.ly_dz   = kKeyDefaultLyDz;
+  cfg.rx_dz   = kKeyDefaultRxDz;
+  cfg.ry_dz   = kKeyDefaultRyDz;
+  cfg.lx_sens = kKeyDefaultLxSens;
+  cfg.ly_sens = kKeyDefaultLySens;
+  cfg.rx_sens = kKeyDefaultRxSens;
+  cfg.ry_sens = kKeyDefaultRySens;
+  cfg.curve   = kKeyDefaultCurve;
+  cfg.ema     = kKeyDefaultEma;
 
   // ── Trigger settings ──
-  cfg.lt_dz = THETAGP_CFG_DEFAULT_LT_DZ;
-  cfg.rt_dz = THETAGP_CFG_DEFAULT_RT_DZ;
+  cfg.lt_dz = kKeyDefaultLtDz;
+  cfg.rt_dz = kKeyDefaultRtDz;
 
   // ── LED settings ──
-  cfg.bri  = THETAGP_CFG_DEFAULT_LED_BRIGHTNESS;
-  cfg.mode = THETAGP_CFG_DEFAULT_LED_MODE;
-  cfg.hue  = THETAGP_CFG_DEFAULT_LED_HUE;
-  cfg.sat  = THETAGP_CFG_DEFAULT_LED_SATURATION;
-  cfg.spd  = THETAGP_CFG_DEFAULT_LED_SPEED;
+  cfg.bri  = kKeyDefaultBri;
+  cfg.mode = kKeyDefaultMode;
+  cfg.hue  = kKeyDefaultHue;
+  cfg.sat  = kKeyDefaultSat;
+  cfg.spd  = kKeyDefaultSpd;
 
   // ── Calibration ──
-  cfg.lx_c = THETAGP_CFG_DEFAULT_CAL_LX;
-  cfg.ly_c = THETAGP_CFG_DEFAULT_CAL_LY;
-  cfg.rx_c = THETAGP_CFG_DEFAULT_CAL_RX;
-  cfg.ry_c = THETAGP_CFG_DEFAULT_CAL_RY;
+  cfg.lx_c = kKeyDefaultLxC;
+  cfg.ly_c = kKeyDefaultLyC;
+  cfg.rx_c = kKeyDefaultRxC;
+  cfg.ry_c = kKeyDefaultRyC;
 
   return cfg;
 }

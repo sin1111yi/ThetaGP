@@ -24,7 +24,7 @@
 # Method: reads the declaration and writes it back as C++ — one row per declared
 #         field, in the order the declaration lists them, with the field's
 #         position in ConfigStore, its type and element count, its accepted
-#         range and its flags.
+#         range, its factory default and its flags.
 # Usage:  python3 scripts/config/gen_config_keys.py [--declaration FILE]
 #                                                  [--out FILE] [--dry-run]
 # Expect: exit 0 = the header was written (with --dry-run: printed to stdout).
@@ -66,10 +66,9 @@ The declaration is separate from the protocol spec, and this emitter reads only
 its own TOML: a row names the consumer's field, and the spec may not know the
 consumer (protocol/README.md, design principles).
 
-Where a fact here also lives in the firmware — a factory default in
-conf/ThetaGP_Config.h, say — this declaration is the home it is moving to; until
-that move is done the two are held equal by hand, and a difference is a defect
-in one of them, not a free choice.
+A factory default is declared here and emitted beside the table, so the
+firmware's store starts from this declaration's own `default` column and the two
+cannot drift.
 """
 
 from __future__ import annotations
@@ -109,6 +108,19 @@ TYPE_MAP = {
 # one of the two, and the store-bound assert in key_table.cpp is what notices.
 TYPE_WIDTH = {"u8": 1, "u16": 2, "i16": 2, "bool": 1, "u8_array": 1}
 
+# Whether a value of the type is signed. With TYPE_WIDTH it gives the range the
+# type can hold, which a declared min/max must stay inside: a range wider than
+# its own type names values no element can carry.
+TYPE_SIGNED = {"u8": False, "u16": False, "i16": True, "bool": False,
+               "u8_array": False}
+
+# The columns a field row may carry. A name outside this set is a column the
+# declaration misspells or the generator does not read, and it is refused rather
+# than dropped: a dropped `exposed` would leave the row in the table without its
+# flag, which no later check could see.
+FIELD_KEYS = {"name", "type", "count", "min", "max", "default", "exposed",
+              "flags", "doc"}
+
 # A declared flag and the constant the table carries it as.
 FLAG_MAP = {
     "reboot": "kKeyFlagRequiresReboot",
@@ -121,6 +133,22 @@ EXPOSED_FLAG = "kKeyFlagExposed"
 # A default the board supplies rather than the declaration: the board's own
 # configuration is where the value lives, and the firmware reads it there.
 DEFAULT_FROM_BOARD = "board"
+
+
+def type_limits(type_name: str) -> tuple[int, int]:
+    """The lowest and highest value a type can hold, both inclusive.
+
+    A bool is 0 or 1 whatever its byte width; the rest span the bytes
+    TYPE_WIDTH gives them, signed or not. A declared min/max outside this range
+    names values no element of that type can carry.
+    """
+    if type_name == "bool":
+        return (0, 1)
+    width = TYPE_WIDTH[type_name]
+    if TYPE_SIGNED[type_name]:
+        half = 1 << (8 * width - 1)
+        return (-half, half - 1)
+    return (0, (1 << (8 * width)) - 1)
 
 
 def fail(*lines: str) -> NoReturn:
@@ -208,6 +236,10 @@ def validate_config_keys(keys: dict) -> None:
             continue
         where = name
         domain, leaf = name.rsplit(".", 1)
+        for key in sorted(set(field) - FIELD_KEYS):
+            problems.append(
+                f"{where}: unknown column {key!r} — a misspelled column is "
+                f"dropped, so it is refused here")
         if not domain:
             problems.append(f"{where}: name carries an empty domain")
         if not leaf.isidentifier():
@@ -236,6 +268,12 @@ def validate_config_keys(keys: dict) -> None:
             problems.append(f"{where}: min and max are integers")
         elif low > high:
             problems.append(f"{where}: min {low} is above max {high}")
+        else:
+            bound_low, bound_high = type_limits(type_name)
+            if low < bound_low or high > bound_high:
+                problems.append(
+                    f"{where}: {type_name} holds {bound_low}..{bound_high}, "
+                    f"but min {low} / max {high} reach outside it")
 
         default = field.get("default")
         if default is None:
@@ -314,6 +352,17 @@ def gen_config_keys(keys: dict, out: Optional[Path] = None,
         w(f"  {enum_name(field['name'].rsplit('.', 1)[1])},")
     w("  Count,")
     w("};")
+    w()
+    w("// The factory default of each field: the declaration's `default` column,")
+    w("// the value a store starts from before any profile is read. makeDefaults()")
+    w("// reads these, so a default has this one home. A field whose value the")
+    w("// board supplies instead (the button table) carries no constant here.")
+    for field in fields:
+        if field.get("default") == DEFAULT_FROM_BOARD:
+            continue
+        leaf = field["name"].rsplit(".", 1)[1]
+        w(f"inline constexpr int32_t kKeyDefault{enum_name(leaf)} = "
+          f"{field['default']};")
     w()
     w("// Every field of the store, in the order the declaration lists them. A")
     w("// field's name is the whole identity of that field: what a caller sends")
