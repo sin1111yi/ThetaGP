@@ -44,7 +44,7 @@ Model: <model-name> <model-provider>
 Agent: <agent-name>
 ```
 
-The tree's own commits write `Model: deepseek-flash deepseek` and `Agent: Hermes`. Copy those two lines rather than inventing a name, and put the pair on every commit: a message that lacks them is the one thing a reader notices is missing.
+The two lines are readings, not conventions: they name the model that produced the commit and the agent that ran the session, both as the session reports them. Do not copy a value out of an older commit — the model changes, and a copied line turns a record into a hard-coded claim.
 
 ### Type
 
