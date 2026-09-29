@@ -39,6 +39,8 @@ ConfigManager &ConfigManager::getInstance() {
 
 uint16_t ConfigManager::activeProfileId() const { return _activeId; }
 
+void ConfigManager::setActiveProfileId(uint16_t id) { _activeId = id; }
+
 #if THETAGP_CFG_HAS_FLASH
 
 using Profile::PROFILE_ID_ACTIVE;
@@ -87,11 +89,10 @@ bool ConfigManager::init() {
 }
 
 // Restore the factory Profile0 on a flash that carries no profile, and reset
-// the active configuration to what that body holds. Both callers go through
-// here: init() on a fresh flash, and test.chip_erase, which wipes the chip
-// without a reboot — the question "is there a profile?" is put to the flash on
-// the spot (ProfileStore::needsFactoryProfile()) instead of being answered once
-// at boot.
+// the active configuration to what that body holds. The question "is there a
+// profile?" is put to the flash on the spot (ProfileStore::needsFactoryProfile())
+// instead of being answered once at boot, so init() is the only caller and the
+// answer stays right for a profile area left empty while the device ran.
 bool ConfigManager::ensureFactoryProfile() {
   ProfileStore &store = ProfileStore::getInstance();
   if (!store.needsFactoryProfile()) {
@@ -125,30 +126,24 @@ bool ConfigManager::ensureFactoryProfile() {
   return true;
 }
 
-bool ConfigManager::loadProfile(uint16_t profileId) {
-  ProfileStore &store = ProfileStore::getInstance();
-  if (profileId != _activeId) {
-    if (!store.selectProfile(profileId))
-      return false;
-    // The select above wrote the BootMeta entry that names this profile active,
-    // so _activeId follows it and is not rolled back when the read below fails:
-    // a reboot's scan reaches the same id. What a failed read leaves behind is
-    // _config at the compiled defaults, which the reset below applies whichever
-    // way the read goes.
-    _activeId = profileId;
-  }
+// Reserved: not implemented, so it reads nothing and answers that it did not.
+bool ConfigManager::loadProfile(uint16_t) { return false; }
 
+bool ConfigManager::readProfileBody(uint16_t profileId) {
   // The reset does not depend on what the read returns: _config is overwritten
   // with the compiled-in defaults before the read, and a body of length 0
   // (erased or half-written sector) leaves it at those defaults. Only the parse
   // step below looks at len.
   _config = kConfigDefaults;
 
+  // The id read is the one this call was handed, whether or not the store calls
+  // that profile active: the active profile and the profile being read are one
+  // reading only for the entry that moved onto it first.
   ProfileText text;
-  bool ok = store.readProfile(PROFILE_ID_ACTIVE, &text);
+  bool ok = ProfileStore::getInstance().readProfile(profileId, &text);
   // text.len is the length of the body the read placed in text.data, so it is
   // the parse window here too. A body of a version this firmware does not read
-  // is refused, and the load is answered as failed: the configuration then
+  // is refused, and the read is answered as failed: the configuration then
   // stands at the compiled defaults the reset above applied, which is what the
   // caller is told.
   if (ok && text.len > 0 && !parseProfile(text.data, text.len, &_config)) {
@@ -197,7 +192,7 @@ bool ConfigManager::saveProfile(uint32_t *droppedKeys) {
   if (droppedKeys) {
     ProfileText replaced;
     if (store.readProfile(_activeId, &replaced) && replaced.len > 0) {
-      // readBody reports at most PROFILE_JSON_MAX bytes, one below the size of
+      // ProfileStore::readBody reports at most PROFILE_JSON_MAX bytes, one below
       // this buffer.
       replacedLen = replaced.len;
       memcpy(s_replaced, replaced.data, replacedLen);
@@ -251,7 +246,8 @@ uint8_t ConfigManager::profileCount() const {
   return ProfileStore::getInstance().getStatus().profileCount;
 }
 
-bool ConfigManager::selectProfile(uint16_t pid) { return loadProfile(pid); }
+// Reserved like the entry above: not implemented, so it moves nothing.
+bool ConfigManager::selectProfile(uint16_t) { return false; }
 
 Profile::ProfileStatus ConfigManager::getStatus() const {
   return ProfileStore::getInstance().getStatus();
@@ -271,6 +267,11 @@ bool ConfigManager::init() {
 }
 
 bool ConfigManager::loadProfile(uint16_t) { return false; }
+
+// No storage to read from, so there is no body to read and no profile to move
+// onto: the configuration stays at the compiled defaults it was initialized
+// with.
+bool ConfigManager::readProfileBody(uint16_t) { return false; }
 
 bool ConfigManager::saveProfile(uint32_t *droppedKeys) {
   // No storage to write to, so no body is replaced and nothing can be left

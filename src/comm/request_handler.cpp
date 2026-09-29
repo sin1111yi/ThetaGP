@@ -119,10 +119,13 @@ uint16_t RequestHandler::answer(const uint8_t *payload, uint16_t length,
         case ThetaGP_Request_profile_list_tag:
         case ThetaGP_Request_profile_get_tag:
         case ThetaGP_Request_profile_create_tag:
+        case ThetaGP_Request_profile_start_tag:
         case ThetaGP_Request_profile_put_chunk_tag:
         case ThetaGP_Request_profile_put_end_tag:
         case ThetaGP_Request_profile_delete_tag:
         case ThetaGP_Request_profile_select_tag:
+        case ThetaGP_Request_profile_save_tag:
+        case ThetaGP_Request_profile_load_tag:
             // The profile domain's one entry, whatever arm the request names:
             // the dispatch to the arm and the refusal owed to every arm that
             // reads or writes a body while a body's bytes are spoken for both

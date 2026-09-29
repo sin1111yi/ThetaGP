@@ -9,6 +9,7 @@
 #include "comm/profile_transfer.h"
 #include "comm/reply_error.h"
 #include "conf/ThetaGP_Config.h"
+#include "gamepad/config/config_manager.h"
 #include "gamepad/profile/profile_store.h"
 
 // The store lives on an external flash chip, so on a board that carries none
@@ -20,6 +21,7 @@
 namespace ThetaGP::Comm {
 namespace {
 
+using Gamepad::Config::ConfigManager;
 using Gamepad::Profile::PROFILE_JSON_MAX;
 using Gamepad::Profile::PROFILE_MAX_ID;
 using Gamepad::Profile::ProfileStatus;
@@ -50,14 +52,15 @@ bool carriesStagedWrite(pb_size_t arm) {
            arm == ThetaGP_Request_profile_put_end_tag;
 }
 
-// The arm a staged write is opened by: the frame that declares the body's
-// length and takes the store's staging buffer for it. A staging speaks for
-// three arms -- this one and the two above -- and this is the only one of the
-// three a staging in hand leaves unheld: an opening frame is answered where it
-// is met, before the gate, and what it meets there is a staging it drops
-// rather than a device that refuses it.
+// The arms a staged write is opened by: the frames that declare a body's
+// length and take the store's staging buffer for it. A staging speaks for
+// these two and the two that carry it, and they are the ones a staging in hand
+// leaves unheld: an opening frame is answered where it is met, before the
+// gate, and what it meets there is a staging it drops rather than a device
+// that refuses it.
 bool opensStagedWrite(pb_size_t arm) {
-    return arm == ThetaGP_Request_profile_create_tag;
+    return arm == ThetaGP_Request_profile_create_tag ||
+           arm == ThetaGP_Request_profile_start_tag;
 }
 
 } // namespace
@@ -66,6 +69,24 @@ ProfileHandler::Answers ProfileHandler::handle(const uint8_t *payload,
                                                uint16_t length,
                                                const ThetaGP_Request &request,
                                                ThetaGP_Reply &reply) {
+    // The active profile stands in two places and is one profile. The store
+    // carries it: a body written becomes the active profile, a select names
+    // one, and a delete that drops the active profile leaves the store on the
+    // factory one. The configuration the device runs on carries the other
+    // reading of it -- the profile a save writes to -- and the store's is the
+    // one the arms below move. So the two are brought back onto one another
+    // here, on the way in and ahead of every arm: no request of this domain is
+    // served without it, so what a save or a load below reads is the store's
+    // reading carried over, and the arm that follows one which moved the
+    // store's active profile meets a layer already on it. The comparison is two
+    // readings out of RAM -- the store's status record is its own cached
+    // numbers -- and both arms of it are no-ops when the two already agree.
+    const uint16_t activeId =
+        ProfileStore::getInstance().getStatus().activeId;
+    if (ConfigManager::getInstance().activeProfileId() != activeId) {
+        ConfigManager::getInstance().setActiveProfileId(activeId);
+    }
+
     // The two arms that read no body, answered ahead of the gate: they answer
     // from the store's index and touch nothing a stream or a staged write
     // holds, so there is nothing to refuse them for.
@@ -96,17 +117,17 @@ ProfileHandler::Answers ProfileHandler::handle(const uint8_t *payload,
     // switch below answers reads a body out of the store's one staging buffer
     // or writes one into it. The arms a staged write is carried by are let
     // past only while a staged write is what holds the buffer -- a staged
-    // write's own frames are the frames that staging exists for -- and the arm
-    // that opens one is let past by the opening above, which has left it the
-    // buffer already; it is refused here like any other arm while the buffer
-    // holds a body on its way back to the host. Every other arm, those two
-    // included, is refused while a body is on its way back, because the buffer
-    // a stream is read out of is the buffer a staged body lands in. An arm
-    // added to that switch is refused here without a call of its own; an arm
-    // added above this point is an arm that reads no body, which is the only
-    // kind the gate has nothing to say to. A request refused here is refused
-    // whatever arm it names, and a host that asks again once the stream or the
-    // staged write is done gets its answer.
+    // write's own frames are the frames that staging exists for -- and the
+    // arms that open one are let past by the opening above, which has left
+    // them the buffer already; they are refused here like any other arm while
+    // the buffer holds a body on its way back to the host. Every other arm,
+    // those two included, is refused while a body is on its way back, because
+    // the buffer a stream is read out of is the buffer a staged body lands in.
+    // An arm added to that switch is refused here without a call of its own; an
+    // arm added above this point is an arm that reads no body, which is the
+    // only kind the gate has nothing to say to. A request refused here is
+    // refused whatever arm it names, and a host that asks again once the stream
+    // or the staged write is done gets its answer.
     const bool carried =
         carriesStagedWrite(request.which_kind) && ProfileTransfer::writeOpen();
     if (!carried && refusedWhileBodyBusy(reply)) {
@@ -117,28 +138,50 @@ ProfileHandler::Answers ProfileHandler::handle(const uint8_t *payload,
                    : Answers::Reply;
     }
 
+    // The answer the dispatch below produces.
+    Answers answer = Answers::NotMine;
     switch (request.which_kind) {
     case ThetaGP_Request_profile_get_tag:
         get(request, reply);
-        return Answers::Reply;
+        answer = Answers::Reply;
+        break;
     case ThetaGP_Request_profile_create_tag:
-        return create(request, reply);
+        answer = create(request, reply);
+        break;
+    case ThetaGP_Request_profile_start_tag:
+        answer = start(request, reply);
+        break;
     case ThetaGP_Request_profile_put_chunk_tag:
-        return chunk(payload, length, request, reply);
+        answer = chunk(payload, length, request, reply);
+        break;
     case ThetaGP_Request_profile_put_end_tag:
         putEnd(reply);
-        return Answers::Exchange;
+        answer = Answers::Exchange;
+        break;
     case ThetaGP_Request_profile_delete_tag:
         remove(request, reply);
-        return Answers::Reply;
+        answer = Answers::Reply;
+        break;
     case ThetaGP_Request_profile_select_tag:
         select(request, reply);
-        return Answers::Reply;
+        answer = Answers::Reply;
+        break;
+    case ThetaGP_Request_profile_save_tag:
+        save(reply);
+        answer = Answers::Reply;
+        break;
+    case ThetaGP_Request_profile_load_tag:
+        load(request, reply);
+        answer = Answers::Reply;
+        break;
     default:
         // No arm of this domain: the envelope that routed the request here
         // answers it as the command it has no unit for.
-        return Answers::NotMine;
+        break;
     }
+
+    // The answer the arm above produced, handed back.
+    return answer;
 }
 
 bool ProfileHandler::refusedWhileBodyBusy(ThetaGP_Reply &reply) {
@@ -283,7 +326,43 @@ ProfileHandler::Answers ProfileHandler::create(const ThetaGP_Request &request,
     // Nothing is answered here, because there is nothing to report until the
     // body has been written -- and the id it is written under is the store's
     // to assign when it is.
-    ProfileTransfer::beginWrite(static_cast<uint16_t>(total));
+    ProfileTransfer::beginWrite(static_cast<uint16_t>(total),
+                                {ThetaGP_Request_profile_create_tag, false});
+    return Answers::Nothing;
+}
+
+ProfileHandler::Answers ProfileHandler::start(const ThetaGP_Request &request,
+                                              ThetaGP_Reply &reply) {
+    const ThetaGP_ProfilePutStart &arm = request.kind.profile_start;
+
+    // A body is what the store holds a profile in, so a stream that declares
+    // none of it, or more of it than a body may hold, is refused for the range
+    // the length must fall in rather than opened. The length is judged first,
+    // because it is the number every frame that follows is held against
+    // whatever profile the body is for.
+    if (arm.total == 0 || arm.total > PROFILE_JSON_MAX) {
+        writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_PARAM,
+                     ThetaGP_Reason_REASON_VALUE_OUT_OF_RANGE, 1,
+                     PROFILE_JSON_MAX);
+        return Answers::Reply;
+    }
+
+    // The profile the body is for. The factory profile's id is the one id the
+    // store does not assign, so a request naming it is the request that
+    // replaces the body the device falls back to; every other id in range asks
+    // for a user profile, whose id the store assigns when the body is written.
+    // The two are one kind of request either way, so what tells them apart is
+    // the id alone.
+    if (arm.id > PROFILE_MAX_ID) {
+        writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_PARAM,
+                     ThetaGP_Reason_REASON_ID_OUT_OF_RANGE, 0,
+                     static_cast<uint32_t>(PROFILE_MAX_ID));
+        return Answers::Reply;
+    }
+
+    ProfileTransfer::beginWrite(static_cast<uint16_t>(arm.total),
+                                {ThetaGP_Request_profile_start_tag,
+                                 arm.id == 0});
     return Answers::Nothing;
 }
 
@@ -343,6 +422,10 @@ void ProfileHandler::putEnd(ThetaGP_Reply &reply) {
 
     const uint32_t received = ProfileTransfer::writeReceived();
     const uint32_t total = ProfileTransfer::writeTotal();
+    // The opening frame the staging belongs to, read before the write: writing
+    // the body closes the staging, and it is the arm that opened it that
+    // reports it.
+    const ProfileTransfer::Opening opening = ProfileTransfer::opening();
 
     // The body is written only when the whole of it is there. A body short of
     // the length its opening frame declared is a piece of a body, and a piece
@@ -357,17 +440,31 @@ void ProfileHandler::putEnd(ThetaGP_Reply &reply) {
 
     uint16_t id = 0;
     if (!ProfileTransfer::commit(&id)) {
+        // The store refused the write, and what it refused is the arm that
+        // opened the staging names: a body meant for a new profile is a
+        // profile the store did not create, while a body meant for the factory
+        // profile is a body it did not write -- which is what a device whose
+        // fallback body is already there answers, the factory profile being
+        // the one profile written only onto a flash that carries none.
         writeFailure(reply, ThetaGP_ErrorCode_ERR_INTERNAL,
-                     ThetaGP_Reason_REASON_PROFILE_CREATE_FAILED);
+                     opening.factory
+                         ? ThetaGP_Reason_REASON_PROFILE_WRITE_FAILED
+                         : ThetaGP_Reason_REASON_PROFILE_CREATE_FAILED);
         return;
     }
 
     // The body is a profile now, and it is the arm that opened the staging
-    // that says so: profile.create is the arm that opens one, so its own
-    // success arm carries the id the store assigned and the length written.
-    reply.which_kind = ThetaGP_Reply_profile_create_tag;
-    reply.kind.profile_create.id = id;
-    reply.kind.profile_create.len = received;
+    // that says so: the opening arm's own success arm carries the id the body
+    // is read back under and the length written.
+    if (opening.arm == ThetaGP_Request_profile_create_tag) {
+        reply.which_kind = ThetaGP_Reply_profile_create_tag;
+        reply.kind.profile_create.id = id;
+        reply.kind.profile_create.len = received;
+        return;
+    }
+    reply.which_kind = ThetaGP_Reply_profile_start_tag;
+    reply.kind.profile_start.id = id;
+    reply.kind.profile_start.len = received;
 }
 
 void ProfileHandler::remove(const ThetaGP_Request &request,
@@ -428,6 +525,90 @@ void ProfileHandler::select(const ThetaGP_Request &request,
 
     reply.which_kind = ThetaGP_Reply_profile_select_tag;
     reply.kind.profile_select.id = arm.id;
+}
+
+void ProfileHandler::save(ThetaGP_Reply &reply) {
+    ConfigManager &config = ConfigManager::getInstance();
+    // The profile the configuration is written to, read once: the arm is
+    // refused on the profile the device is on, and the write leaves that where
+    // it is.
+    const uint16_t active = config.activeProfileId();
+
+    // The factory profile is the body the device falls back to, and no profile
+    // is written under its id: a save with it active is refused for the state
+    // the device is in rather than answered with a write that failed. A request
+    // naming the active profile is not what this arm takes -- it writes the one
+    // the configuration is on -- so the refusal is the state and not a
+    // parameter.
+    if (active == 0) {
+        writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_STATE,
+                     ThetaGP_Reason_REASON_ACTIVE_PROFILE_IS_FACTORY);
+        return;
+    }
+
+    // What the write did not carry over from the body it replaced. The count is
+    // raised only by a write that reached the store, so a save that cannot say
+    // what it dropped leaves it at zero and answers no count rather than a
+    // count of none.
+    uint32_t droppedKeys = 0;
+    if (!config.saveProfile(&droppedKeys)) {
+        writeFailure(reply, ThetaGP_ErrorCode_ERR_INTERNAL,
+                     ThetaGP_Reason_REASON_PROFILE_SAVE_FAILED);
+        return;
+    }
+
+    reply.which_kind = ThetaGP_Reply_profile_save_tag;
+    ThetaGP_ProfileSaveOk &ok = reply.kind.profile_save;
+    ok.id = active;
+    // The count is a field of the answer only when it says something: a save
+    // that carried every key over answers no count at all, and the field the
+    // schema makes optional is the one that carries that difference.
+    if (droppedKeys != 0) {
+        ok.has_dropped_keys = true;
+        ok.dropped_keys = droppedKeys;
+    }
+}
+
+void ProfileHandler::load(const ThetaGP_Request &request,
+                          ThetaGP_Reply &reply) {
+    const ThetaGP_ProfileLoad &arm = request.kind.profile_load;
+    ConfigManager &config = ConfigManager::getInstance();
+
+    // A request naming no profile reads the active one, and the active one is
+    // the profile the configuration the device runs on belongs to -- the
+    // profile the arm above writes it back to. A read is a read of a body and
+    // not a move onto it: the active profile is where the arm found it,
+    // whichever id the request carried, and the profile layer is handed that id
+    // to read from rather than to become.
+    uint32_t id = config.activeProfileId();
+    if (arm.has_id) {
+        // Naming a profile is not the same request as naming none, which is
+        // what the field is optional for. An id beyond the range is refused as
+        // the value it is, and not read as a request for the active one.
+        if (arm.id > PROFILE_MAX_ID) {
+            writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_PARAM,
+                         ThetaGP_Reason_REASON_ID_OUT_OF_RANGE, 0,
+                         static_cast<uint32_t>(PROFILE_MAX_ID));
+            return;
+        }
+        id = arm.id;
+    }
+
+    // The body is read into the configuration the device runs on, which is
+    // reset to the compiled defaults by the read itself: a body this firmware
+    // cannot read leaves the device on those defaults and is answered as a
+    // read that failed rather than as one that happened. The profile read is
+    // the one the request named and not a move onto it, so the profile the
+    // configuration belongs to after the read is the one it belonged to before
+    // it.
+    if (!config.readProfileBody(static_cast<uint16_t>(id))) {
+        writeFailure(reply, ThetaGP_ErrorCode_ERR_INTERNAL,
+                     ThetaGP_Reason_REASON_PROFILE_LOAD_FAILED);
+        return;
+    }
+
+    reply.which_kind = ThetaGP_Reply_profile_load_tag;
+    reply.kind.profile_load.id = id;
 }
 
 } // namespace ThetaGP::Comm

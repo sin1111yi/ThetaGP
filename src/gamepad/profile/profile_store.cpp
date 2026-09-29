@@ -120,8 +120,8 @@ uint16_t ProfileStore::ensureAddressRingSlot() {
 // Scans both Sector 0 rings and leaves every cache field describing the flash
 // as it is now. It writes nothing: on a flash that carries no profile at all,
 // the configuration layer writes the factory Profile0 (ConfigManager::
-// ensureFactoryProfile()), which is also what the test.chip_erase post-path
-// needs after wiping the chip.
+// ensureFactoryProfile()), which asks this flash each time and so fits a chip
+// that was erased under a running device too.
 
 bool ProfileStore::init() {
   LOG_INFO("ProfileStore: init");
@@ -744,10 +744,8 @@ bool ProfileStore::readBody(uint32_t address, uint8_t *buf, uint16_t *outLen) {
   return true;
 }
 
-bool ProfileStore::loadActive(uint8_t *buf, uint16_t *outLen) {
-  LOG_DEBUG("ProfileStore: loadActive");
-  return readBody(_activeAddress, buf, outLen);
-}
+// Reserved: not implemented, so it reads nothing and answers that it did not.
+bool ProfileStore::loadActive(uint8_t *, uint16_t *) { return false; }
 
 // ── carriesProfile() ──
 // The two branches readProfile() resolves without consulting the address map,

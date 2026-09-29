@@ -198,19 +198,8 @@ public:
   /** Select a profile as active (appends BootMeta entry). */
   bool selectProfile(uint16_t id);
 
-  /** Load the active profile JSON body into buf. Reports the body length (raw
-   * JSON, no parse) in outLen. No terminator is written: the read copies
-   * PROFILE_JSON_MAX bytes out of flash and the length scan stops at the first
-   * 0x00 or 0xFF inside the window, so when it stops, buf[outLen] is that byte
-   * rather than a NUL this function placed; a body that fills the window whole
-   * ends at PROFILE_JSON_MAX with no stop byte at outLen.
-   *
-   * To use the result as a C string, terminate it yourself; the buffer then
-   * needs room for that byte too (len + 1, i.e. PROFILE_STAGING_SIZE for a body
-   * that could be any size). For the call itself, PROFILE_JSON_MAX bytes in buf
-   * are enough — that is the most the read writes.
-   *
-   * Pass nullptr to read into the store's own staging buffer. */
+  /** Reserved for a later entry into the store: not implemented, so it reads
+   * nothing and answers that it did not. */
   bool loadActive(uint8_t *buf, uint16_t *outLen);
 
   /** Read-only view of the body of profile `id` (PROFILE_ID_ACTIVE selects the

@@ -91,11 +91,13 @@ bool writePiece(pb_ostream_t *stream, const pb_field_iter_t *field,
 
 // ── the body on its way to the store ──
 
-// The staged body's own record: the length its opening frame declared, and how
-// many of those bytes the staging buffer holds. The bytes themselves are not
-// copied anywhere: they are appended to the store's staging buffer as the
-// frames bringing them arrive, and that buffer is what the store writes out of
-// when the body is written.
+// The staged body's own record: the opening frame it belongs to -- the arm
+// that opened it and the profile that frame named -- the length it declared,
+// and how many of those bytes the staging buffer holds. The bytes themselves
+// are not copied anywhere: they are appended to the store's staging buffer as
+// the frames bringing them arrive, and that buffer is what the store writes
+// out of when the body is written.
+ProfileTransfer::Opening s_writeOpening{};
 uint16_t s_writeTotal = 0;
 uint16_t s_writeReceived = 0;
 
@@ -154,6 +156,7 @@ void closeBody() {
     s_piece.data = nullptr;
     s_piece.len = 0;
     s_piece.written = 0;
+    s_writeOpening = ProfileTransfer::Opening{};
     s_writeTotal = 0;
     s_writeReceived = 0;
     s_chunk.declared = 0;
@@ -229,7 +232,10 @@ uint16_t ProfileTransfer::writeTotal() { return s_writeTotal; }
 
 uint16_t ProfileTransfer::writeReceived() { return s_writeReceived; }
 
-void ProfileTransfer::beginWrite(uint16_t total) {
+ProfileTransfer::Opening ProfileTransfer::opening() { return s_writeOpening; }
+
+void ProfileTransfer::beginWrite(uint16_t total, Opening opening) {
+    s_writeOpening = opening;
     s_writeTotal = total;
     s_writeReceived = 0;
     s_chunk.declared = 0;
@@ -299,6 +305,9 @@ bool ProfileTransfer::commit(uint16_t *newId) {
 
     const uint16_t total = s_writeTotal;
     const uint16_t received = s_writeReceived;
+    // The profile the body is written to, decided by the frame that opened the
+    // staging and read here because the staging is closed below.
+    const bool factory = s_writeOpening.factory;
 
     // The body is what the staging holds only when the whole of it is there: a
     // body short of the length its opening frame declared is a piece of a
@@ -310,16 +319,24 @@ bool ProfileTransfer::commit(uint16_t *newId) {
         return false;
     }
 
-    uint16_t id = 0;
+    const char *body =
+        reinterpret_cast<const char *>(Gamepad::Profile::s_staging);
     // The store reads the bytes out of the staging buffer, which is why they
     // had to be spoken for until this call: this write is the last reader of
-    // them.
-    const bool written =
-        Gamepad::Profile::ProfileStore::getInstance().createProfile(
-            reinterpret_cast<const char *>(Gamepad::Profile::s_staging),
-            received, &id);
+    // them. A body for the factory profile replaces the one the device falls
+    // back to and is written at the address that body sits at; every other
+    // body asks for a profile of its own, and the id it lands under is the
+    // store's to assign.
+    uint16_t id = 0;
+    const bool written = factory
+                             ? Gamepad::Profile::ProfileStore::getInstance()
+                                   .writeFactoryProfile(body, received)
+                             : Gamepad::Profile::ProfileStore::getInstance()
+                                   .createProfile(body, received, &id);
     if (written && newId != nullptr) {
-        *newId = id;
+        // The factory profile's id is the one the store writes no id for: it
+        // is the fixed id that body is read back under.
+        *newId = factory ? 0 : id;
     }
     return written;
 }

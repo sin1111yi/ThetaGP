@@ -18,19 +18,26 @@ namespace ThetaGP::Comm {
 // is refused while that buffer is spoken for without carrying a call of its
 // own. The two arms a staged write is carried by are the arms that staging
 // exists for, so they are the ones the gate lets past while a staged write is
-// what holds the buffer; the arm that opens a staged write is met ahead of the
-// gate, where a staging the host never ended is dropped and the opening frame
-// takes the buffer itself rather than being refused for what it arrived over;
-// every other arm, the two carried ones included, is refused while a body is
-// on its way back to the host, because the buffer a stream is read out of is
-// the buffer a staged body lands in. The arms behind the gate are declared
-// below it and reached only through it, which is how a body is read from that
-// buffer by no arm but a refused one.
+// what holds the buffer; the arms that open a staged write are met ahead of
+// the gate, where a staging the host never ended is dropped and the opening
+// frame takes the buffer itself rather than being refused for what it arrived
+// over; every other arm, the two carried ones included, is refused while a
+// body is on its way back to the host, because the buffer a stream is read out
+// of is the buffer a staged body lands in. The arms behind the gate are
+// declared below it and reached only through it, which is how a body is read
+// from that buffer by no arm but a refused one.
 //
 // The two arms the domain serves that read no body -- the store's own status
 // record and its list of the ids it carries -- are answered from the store's
 // index and reach no staging buffer, so no gate stands in front of them and
 // they are answered whatever a body's bytes are doing.
+//
+// The active profile is one profile and stands in two places: the store
+// carries it, and the configuration the device runs on carries the profile a
+// save writes to. Every arm the domain serves leaves the two on the same
+// profile -- one comparison after the dispatch below rather than a call inside
+// each arm -- so an arm that moves the store's active profile cannot leave the
+// configuration layer on another one.
 class ProfileHandler {
 public:
     // What answering an arm of this domain produced.
@@ -89,6 +96,13 @@ private:
     static Answers create(const ThetaGP_Request &request,
                           ThetaGP_Reply &reply);
 
+    // Begin a profile body, naming the profile it is for: the factory profile,
+    // which the body replaces, or a user profile, which is the same request
+    // the arm above makes -- the store assigns the id of a new profile either
+    // way, so the id in range names no profile, it asks for one. An opening
+    // frame is answered with no frame of its own, as the arm above is.
+    static Answers start(const ThetaGP_Request &request, ThetaGP_Reply &reply);
+
     // One piece of the body being staged, taken out of the frame that brought
     // it and appended to the staging buffer. A taken piece is answered with no
     // frame at all; a refused one is answered with the refusal it is owed, and
@@ -99,8 +113,9 @@ private:
 
     // The end of a staged body: the bytes the staging buffer holds are written
     // to the store as one body, and the answer is the opening arm's own
-    // success arm carrying the id the store assigned. A body short of the
-    // length its opening frame declared is refused and never written.
+    // success arm, carrying the id the body is read back under and the length
+    // written. A body short of the length its opening frame declared is
+    // refused and never written.
     static void putEnd(ThetaGP_Reply &reply);
 
     // Drop a profile from the store: the store's id no longer answers, and the
@@ -111,6 +126,21 @@ private:
     // Make a profile the active one: the body the configuration the device
     // runs on is read from at the next boot.
     static void select(const ThetaGP_Request &request, ThetaGP_Reply &reply);
+
+    // Write the configuration the device is running into the profile it
+    // belongs to, which is the active one. The factory profile is not written
+    // to: it is the body the device falls back to, and the request is refused
+    // for the state it is in rather than answered with a write that failed.
+    static void save(ThetaGP_Reply &reply);
+
+    // Read a profile's body into the configuration the device is running,
+    // starting from the compiled-in defaults. A request naming no profile
+    // reads the active one, which is not refused: the field is optional so
+    // that naming none and naming the factory profile are two requests. The
+    // active profile is not changed by the read, whichever id the request
+    // carries: the profile the configuration belongs to after the arm is the
+    // one it belonged to before it.
+    static void load(const ThetaGP_Request &request, ThetaGP_Reply &reply);
 };
 
 } // namespace ThetaGP::Comm

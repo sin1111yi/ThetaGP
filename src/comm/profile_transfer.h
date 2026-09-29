@@ -57,6 +57,21 @@ public:
 
     // ── the body on its way to the store ──
 
+    // What the frame that opened a staging said about the write it begins: the
+    // arm it was, and whether it named the factory profile. The two travel
+    // together because one frame set both, and both outlive the frame -- the
+    // arm decides which of the opening arms' success arms answers the end of
+    // the write, and the profile it named decides the store call the body is
+    // written by.
+    struct Opening {
+        // The arm the staging was opened by, as the request's own kind.
+        pb_size_t arm = 0;
+        // Whether that arm named the factory profile: profile.start with id 0.
+        // An arm with no id of its own never names it, and every other opening
+        // asks the store for a user profile.
+        bool factory = false;
+    };
+
     // Whether a body is being staged for the store: the bytes it has received
     // are in the store's staging buffer, and the frames that follow the one
     // that opened the staging append to them.
@@ -67,12 +82,17 @@ public:
     static uint16_t writeTotal();
     static uint16_t writeReceived();
 
-    // Open a staging for a body of `total` bytes. Nothing of the body reaches
-    // the store until it is written, and the id it is written under is the
-    // store's to assign. The arm that opens a staging decides which of the
-    // opening arms' replies the write is answered in: profile.create is the
-    // arm that opens one, so its own success arm reports the write.
-    static void beginWrite(uint16_t total);
+    // Open a staging for a body of `total` bytes, to be written to the profile
+    // the opening frame names. Nothing of the body reaches the store until it
+    // is written, and where it is written is that frame's to say: a body for a
+    // new profile is written under the id the store assigns when it is, and
+    // the factory profile is the one id the store does not assign.
+    static void beginWrite(uint16_t total, Opening opening);
+
+    // The opening frame the staging in hand belongs to: what that frame said
+    // of how the body is answered and of the profile it is written to. It is
+    // read before the write, because writing a body closes the staging.
+    static Opening opening();
 
     // What one piece of a staged body came to.
     enum class Piece {
@@ -102,12 +122,14 @@ public:
                      const ThetaGP_Request &request);
 
     // Write the staged body to the store as one body: the bytes in the staging
-    // buffer are the body, the store assigns the id it is written under, and
-    // the staging is closed. A body short of the length its opening frame
-    // declared is not written at all; the staging is closed either way,
-    // because the stream it belonged to is over once the frame that ends it
-    // has been answered. Reports whether the store took the body, and the id
-    // it assigned.
+    // buffer are the body, and the staging is closed. A body for a new profile
+    // is written under the id the store assigns, which is reported back; a
+    // body for the factory profile goes to the address that body sits at and
+    // reports the fixed id it is read under. A body short of the length its
+    // opening frame declared is not written at all; the staging is closed
+    // either way, because the stream it belonged to is over once the frame
+    // that ends it has been answered. Reports whether the store took the body,
+    // and the id it is read back under.
     static bool commit(uint16_t *newId);
 
     // Drop whatever holds the buffer -- an open stream or a staged body -- and
