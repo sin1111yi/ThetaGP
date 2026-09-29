@@ -81,8 +81,8 @@ fix(usb): correct clock macros and port configuration
 - Change BOARD_TUD_RHPORT from 0 to 1 for correct port mapping
 - Update ULPI, high-speed and full-speed pin initialization macros
 
-Model: deepseek-flash deepseek
-Agent: Hermes
+Model: <the model that produced the commit>
+Agent: <the agent that ran the session>
 ```
 
 Should I commit this change?
