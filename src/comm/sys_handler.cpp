@@ -23,7 +23,15 @@ void copyText(char *out, size_t capacity, const char *text) {
     std::snprintf(out, capacity, "%s", text);
 }
 
-constexpr const char *kFirmwareVersion = "0.1.1";
+// The version the build names, forwarded as a compile definition by
+// src/CMakeLists.txt from the top-level CMakeLists. A build that did not pass
+// it has no version to report, which is a build fault rather than a value to
+// fall back on.
+#ifndef THETAGP_FW_VERSION
+#error "THETAGP_FW_VERSION is not defined — the build must forward the version"
+#endif
+
+constexpr const char *kFirmwareVersion = THETAGP_FW_VERSION;
 
 constexpr size_t kMaxRegions =
     static_cast<size_t>(Util::MemInfo::RegionId::Count);

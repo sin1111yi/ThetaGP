@@ -443,6 +443,11 @@ target_compile_definitions(${CMAKE_PROJECT_NAME}
 
     BOARD_IDENTIFIER="${BOARD_IDENTIFIER}"
     BOARD_NAME="${BOARD_NAME}"
+
+    # The firmware version sys.get_fw_version reports, taken from the one place
+    # the build names it (the top-level CMakeLists). A source that spelled its
+    # own copy would report a version the build had moved past.
+    THETAGP_FW_VERSION="${THETAGP_VERSION}"
 )
 
 # Set output directory and link script
