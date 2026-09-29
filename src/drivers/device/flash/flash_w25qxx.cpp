@@ -334,10 +334,6 @@ bool FlashW25qxx::eraseChip() {
 
 const FlashInfo &FlashW25qxx::getInfo() const { return _info; }
 
-void FlashW25qxx::setSpiBusMode(Mode mode) {
-  _spi.setMode(mode);
-}
-
 FlashBase &FlashBase::getInstance() { return FlashW25qxx::getInstance(); }
 
 } // namespace ThetaGP::Drivers::Device

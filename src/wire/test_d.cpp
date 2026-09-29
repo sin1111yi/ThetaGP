@@ -6,7 +6,7 @@
 
 #include "wire/flash.h"
 #include "wire/dispatch.h"
-#include "drivers/device/flash/flash_w25qxx.h"
+#include "drivers/device/flash/flash_base.h"
 #include "drivers/device/keypad.h"
 #include "drivers/device/system_timer.h"
 #include "gamepad/profile/profile_store.h"
@@ -15,7 +15,7 @@
 
 namespace ThetaGP::Wire {
 
-using Drivers::Device::FlashW25qxx;
+using Drivers::Device::FlashBase;
 using Drivers::Device::Keypad;
 using Drivers::Device::KeypadConfig;
 using Drivers::Device::SystemTimer;
@@ -61,7 +61,7 @@ bool collectBytes(pb_istream_t *stream, const pb_field_iter_t *,
 // Whether the run the request names falls inside the chip. The chip's own size
 // is what bounds it: no region of the layout is named here.
 bool rangeInsideChip(uint32_t addr, uint32_t len) {
-    const uint32_t size = FlashW25qxx::getInstance().getInfo().sizeBytes;
+    const uint32_t size = FlashBase::getInstance().getInfo().sizeBytes;
     return addr <= size && len <= size - addr;
 }
 
@@ -80,13 +80,13 @@ void TestDomain::chipErase(ThetaGP_Reply &reply) {
 void TestDomain::eraseSector(const ThetaGP_Request &request,
                               ThetaGP_Reply &reply) {
     const uint32_t addr = request.kind.test_erase_sector.addr;
-    if (addr >= FlashW25qxx::getInstance().getInfo().sizeBytes) {
+    if (addr >= FlashBase::getInstance().getInfo().sizeBytes) {
         writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_PARAM,
                      ThetaGP_Reason_REASON_INVALID_ADDRESS_RANGE);
         return;
     }
 
-    const bool ok = FlashW25qxx::getInstance().eraseSector(addr);
+    const bool ok = FlashBase::getInstance().eraseSector(addr);
 
     // The erase changed the chip under the store, so the store is put back in
     // step with it: what it remembered about the sectors the erase reached is
@@ -115,21 +115,21 @@ void TestDomain::spiMode(const ThetaGP_Request &request,
         return;
     }
 
-    FlashW25qxx::getInstance().setSpiBusMode(static_cast<Mode>(mode));
+    FlashBase::getInstance().setSpiBusMode(static_cast<Mode>(mode));
 
     reply.which_kind = ThetaGP_Reply_test_spi_mode_tag;
     reply.kind.test_spi_mode.mode = mode;
 }
 
 void TestDomain::flashInfo(ThetaGP_Reply &reply) {
-    const Drivers::Device::FlashInfo &info = FlashW25qxx::getInstance().getInfo();
+    const Drivers::Device::FlashInfo &info = FlashBase::getInstance().getInfo();
 
     reply.which_kind = ThetaGP_Reply_test_flash_info_tag;
     ThetaGP_TestFlashInfoOk &ok = reply.kind.test_flash_info;
     ok.size_bytes = info.sizeBytes;
     ok.page_size = info.pageSize;
     ok.sector_size = info.sectorSize;
-    ok.init = FlashW25qxx::getInstance().isInitialized();
+    ok.init = FlashBase::getInstance().isInitialized();
 }
 
 void TestDomain::flashRead(const ThetaGP_Request &request,
@@ -200,7 +200,7 @@ void TestDomain::flashWrite(const uint8_t *payload, uint16_t length,
         return;
     }
 
-    const bool ok = FlashW25qxx::getInstance().write(
+    const bool ok = FlashBase::getInstance().write(
         addr, Flash::staging(), static_cast<uint32_t>(len));
 
     // The write changed the chip under the store, so the store is put back in

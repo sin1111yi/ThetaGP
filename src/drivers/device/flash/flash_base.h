@@ -86,6 +86,9 @@ public:
   /** @brief Check if the flash is busy (erase/program in progress) */
   [[nodiscard]] virtual bool isBusy() = 0;
 
+  /** @brief Set the transfer mode (Polling or Dma) of the bus the flash owns */
+  void setSpiBusMode(Peripheral::BUS::Mode mode) { _spi.setMode(mode); }
+
 protected:
   Drivers::Peripheral::BUS::SpiBus &_spi;
   FlashInfo _info;

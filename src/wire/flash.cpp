@@ -7,14 +7,14 @@
 #include <cstddef>
 
 #include "build_info.h"
-#include "drivers/device/flash/flash_w25qxx.h"
+#include "drivers/device/flash/flash_base.h"
 #include "wire/frame.h"
 #include "pb_encode.h"
 
 namespace ThetaGP::Wire {
 namespace {
 
-using Drivers::Device::FlashW25qxx;
+using Drivers::Device::FlashBase;
 
 // The one staging buffer: the run of flash bytes the domain holds. A read keeps
 // the whole run here while its pieces go out; a write collects its bytes here
@@ -90,7 +90,7 @@ bool Flash::open(uint32_t addr, uint32_t len) {
         // may have is not a stream.
         return false;
     }
-    if (!FlashW25qxx::getInstance().read(addr, s_stage, len)) {
+    if (!FlashBase::getInstance().read(addr, s_stage, len)) {
         // The bytes are not there: a stream over a run that was not read would
         // announce a length the pieces could not fill.
         return false;

@@ -21,7 +21,7 @@
 
 #include "gamepad/profile/profile_store.h"
 #include "conf/ThetaGP_Config.h" // THETAGP_CFG_HAS_FLASH, the flash switch this file branches on
-#include "drivers/device/flash/flash_w25qxx.h"
+#include "drivers/device/flash/flash_base.h"
 #include "utils/crc.h"
 #include "utils/log/log.h"
 
@@ -36,7 +36,7 @@ COMMON_ZERO_INIT uint8_t s_staging[PROFILE_STAGING_SIZE];
 // ── Slot index helpers (ring buffer wraparound) ──
 
 static uint16_t bootMetaSlotIndex() {
-  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashBase::getInstance();
   for (uint16_t i = 0; i < BOOTMETA_SLOTS; ++i) {
     uint32_t slotAddr = BOOTMETA_BASE + i * sizeof(BootMeta);
     BootMeta meta;
@@ -52,7 +52,7 @@ static uint16_t bootMetaSlotIndex() {
 }
 
 static uint16_t addressRingSlotIndex() {
-  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashBase::getInstance();
   for (uint16_t i = 0; i < ADDR_RING_SLOTS; ++i) {
     uint32_t slotAddr = ADDR_RING_BASE + i * sizeof(AddressEntry);
     AddressEntry entry;
@@ -126,7 +126,7 @@ uint16_t ProfileStore::ensureAddressRingSlot() {
 bool ProfileStore::init() {
   LOG_INFO("ProfileStore: init");
 
-  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashBase::getInstance();
   if (!flash.isInitialized()) {
     LOG_ERROR("ProfileStore: flash not initialized");
     return false;
@@ -183,7 +183,7 @@ bool ProfileStore::needsFactoryProfile() const {
     return false;
   }
 
-  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashBase::getInstance();
   if (!flash.isInitialized()) {
     return false;
   }
@@ -205,7 +205,7 @@ bool ProfileStore::needsFactoryProfile() const {
 }
 
 bool ProfileStore::scanBootMeta(uint16_t *outActiveId, uint32_t *outAddress) {
-  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashBase::getInstance();
 
   uint16_t maxSeq = 0;
   uint16_t bestId = 0;
@@ -253,7 +253,7 @@ bool ProfileStore::scanBootMeta(uint16_t *outActiveId, uint32_t *outAddress) {
 }
 
 bool ProfileStore::scanAddressRing() {
-  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashBase::getInstance();
 
   for (uint16_t i = 0; i <= PROFILE_MAX_ID; ++i) {
     _profileAddresses[i] = 0;
@@ -299,7 +299,7 @@ bool ProfileStore::scanAddressRing() {
 }
 
 uint32_t ProfileStore::findNextAddr() const {
-  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashBase::getInstance();
   const auto &info = flash.getInfo();
   uint32_t flashSize = info.sizeBytes;
 
@@ -344,7 +344,7 @@ bool ProfileStore::writeFactoryProfile(const char *json, uint16_t len) {
     return false;
   }
 
-  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashBase::getInstance();
 
   if (!flash.write(PROFILE0_ADDR, reinterpret_cast<const uint8_t *>(json),
                    len)) {
@@ -454,7 +454,7 @@ bool ProfileStore::createProfile(const char *json, uint16_t len,
     return false;
   }
 
-  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashBase::getInstance();
   const auto &info = flash.getInfo();
 
   if (_nextAddr >= info.sizeBytes) {
@@ -545,7 +545,7 @@ bool ProfileStore::modifyProfile(uint16_t id, const char *json, uint16_t len) {
     return false;
   }
 
-  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashBase::getInstance();
   const auto &info = flash.getInfo();
 
   if (_nextAddr >= info.sizeBytes) {
@@ -609,7 +609,7 @@ bool ProfileStore::deleteProfile(uint16_t id) {
     return false;
   }
 
-  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashBase::getInstance();
 
   // Mark deleted: write Address Ring entry with address=0, seq=high
   seqBeforeIncrement();
@@ -681,7 +681,7 @@ bool ProfileStore::selectProfile(uint16_t id) {
     return false;
   }
 
-  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashBase::getInstance();
 
   uint32_t address = (id == 0) ? PROFILE0_ADDR : _profileAddresses[id];
 
@@ -716,7 +716,7 @@ bool ProfileStore::selectProfile(uint16_t id) {
 // Reads raw JSON from a flash address into buf; caller drives the parse.
 
 bool ProfileStore::readBody(uint32_t address, uint8_t *buf, uint16_t *outLen) {
-  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashBase::getInstance();
 
   if (!buf) {
     buf = s_staging;
@@ -802,7 +802,7 @@ ProfileStatus ProfileStore::getStatus() const {
   status.bootMetaSeq = _bootMetaSeq;
   status.addressRingSeq = _addressRingSeq;
 
-  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashBase::getInstance();
   const auto &info = flash.getInfo();
 
   status.totalSectors = info.sizeBytes / PROFILE_SECTOR_SIZE;
@@ -821,7 +821,7 @@ ProfileStatus ProfileStore::getStatus() const {
 bool ProfileStore::compaction() {
   LOG_INFO("ProfileStore: compaction start");
 
-  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashBase::getInstance();
 
   // 1. Collect valid user profiles (address != 0).
   //    Profile0 (id=0) is excluded — it stays at the fixed PROFILE0_ADDR and
@@ -972,7 +972,7 @@ bool ProfileStore::compaction() {
 bool ProfileStore::resetSector0() {
   LOG_INFO("ProfileStore: resetSector0");
 
-  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashBase::getInstance();
 
   // Backup current BootMeta
   BootMeta activeBootMeta;
@@ -1058,7 +1058,7 @@ bool ProfileStore::resetSector0() {
 
 bool ProfileStore::eraseSector0Range(uint32_t addr, uint32_t len) {
   (void)len;
-  auto &flash = Drivers::Device::FlashW25qxx::getInstance();
+  auto &flash = Drivers::Device::FlashBase::getInstance();
 
   if (addr < 0x1000) {
     return flash.eraseSector(0x000000);

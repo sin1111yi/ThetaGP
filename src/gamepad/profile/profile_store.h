@@ -25,10 +25,6 @@
 
 #include <cstdint>
 
-namespace ThetaGP::Drivers::Device {
-class FlashW25qxx;
-}
-
 namespace ThetaGP::Gamepad::Profile {
 
 // ── Constants ──
