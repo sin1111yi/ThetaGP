@@ -9,13 +9,13 @@
 #include "conf/ThetaGP_Config.h"
 #include "protocol/ThetaGP.pb.h"
 
-namespace ThetaGP::Comm {
+namespace ThetaGP::Wire {
 
 // The test domain's arms. Each function fills one reply with the answer its own
 // arm carries and sets the kind that names that answer. The arms the flash
 // facility carries are served only by a build that has it; every arm a build
 // does not serve is answered by the envelope as an unknown command.
-class TestHandler {
+class TestDomain {
 public:
 #if THETAGP_CFG_HAS_FLASH
     // The erase of the whole chip is declared and not served: the reply is the
@@ -52,4 +52,4 @@ public:
     static void keypadScan(ThetaGP_Reply &reply);
 };
 
-} // namespace ThetaGP::Comm
+} // namespace ThetaGP::Wire

@@ -2,10 +2,10 @@
  * This file is a part of ThetaGP.
  */
 
-#include "comm/test_handler.h"
+#include "wire/test_d.h"
 
-#include "comm/flash_transfer.h"
-#include "comm/reply_error.h"
+#include "wire/flash.h"
+#include "wire/dispatch.h"
 #include "drivers/device/flash/flash_w25qxx.h"
 #include "drivers/device/keypad.h"
 #include "drivers/device/system_timer.h"
@@ -13,7 +13,7 @@
 #include "pb_decode.h"
 #include "utils/mem_info.h"
 
-namespace ThetaGP::Comm {
+namespace ThetaGP::Wire {
 
 using Drivers::Device::FlashW25qxx;
 using Drivers::Device::Keypad;
@@ -70,14 +70,14 @@ bool rangeInsideChip(uint32_t addr, uint32_t len) {
 
 #if THETAGP_CFG_HAS_FLASH
 
-void TestHandler::chipErase(ThetaGP_Reply &reply) {
+void TestDomain::chipErase(ThetaGP_Reply &reply) {
     // The erase of the whole chip is declared and not served: reaching for it
     // would hold the command task for the minutes a chip takes.
     writeFailure(reply, ThetaGP_ErrorCode_ERR_NOT_SUPPORTED,
                  ThetaGP_Reason_REASON_NOT_IMPLEMENTED);
 }
 
-void TestHandler::eraseSector(const ThetaGP_Request &request,
+void TestDomain::eraseSector(const ThetaGP_Request &request,
                               ThetaGP_Reply &reply) {
     const uint32_t addr = request.kind.test_erase_sector.addr;
     if (addr >= FlashW25qxx::getInstance().getInfo().sizeBytes) {
@@ -100,12 +100,12 @@ void TestHandler::eraseSector(const ThetaGP_Request &request,
     reply.kind.test_erase_sector.ok = ok;
 }
 
-void TestHandler::compaction(ThetaGP_Reply &reply) {
+void TestDomain::compaction(ThetaGP_Reply &reply) {
     reply.which_kind = ThetaGP_Reply_test_compaction_tag;
     reply.kind.test_compaction.ok = ProfileStore::getInstance().compaction();
 }
 
-void TestHandler::spiMode(const ThetaGP_Request &request,
+void TestDomain::spiMode(const ThetaGP_Request &request,
                           ThetaGP_Reply &reply) {
     const uint32_t mode = request.kind.test_spi_mode.mode;
     constexpr uint32_t kModeMax = static_cast<uint32_t>(Mode::Dma);
@@ -121,7 +121,7 @@ void TestHandler::spiMode(const ThetaGP_Request &request,
     reply.kind.test_spi_mode.mode = mode;
 }
 
-void TestHandler::flashInfo(ThetaGP_Reply &reply) {
+void TestDomain::flashInfo(ThetaGP_Reply &reply) {
     const Drivers::Device::FlashInfo &info = FlashW25qxx::getInstance().getInfo();
 
     reply.which_kind = ThetaGP_Reply_test_flash_info_tag;
@@ -132,15 +132,15 @@ void TestHandler::flashInfo(ThetaGP_Reply &reply) {
     ok.init = FlashW25qxx::getInstance().isInitialized();
 }
 
-void TestHandler::flashRead(const ThetaGP_Request &request,
+void TestDomain::flashRead(const ThetaGP_Request &request,
                             ThetaGP_Reply &reply) {
     const uint32_t addr = request.kind.test_flash_read.addr;
     const uint32_t len = request.kind.test_flash_read.len;
 
-    if (len == 0 || len > FlashTransfer::kRunMax) {
+    if (len == 0 || len > Flash::kRunMax) {
         writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_PARAM,
                      ThetaGP_Reason_REASON_INVALID_LENGTH, 1,
-                     FlashTransfer::kRunMax);
+                     Flash::kRunMax);
         return;
     }
     if (!rangeInsideChip(addr, len)) {
@@ -151,7 +151,7 @@ void TestHandler::flashRead(const ThetaGP_Request &request,
 
     // The run is read now, whole, into the transfer's staging buffer; the
     // frames that carry it out follow from the transfer unit.
-    if (!FlashTransfer::open(addr, len)) {
+    if (!Flash::open(addr, len)) {
         writeFailure(reply, ThetaGP_ErrorCode_ERR_INTERNAL,
                      ThetaGP_Reason_REASON_FLASH_READ_FAILED);
         return;
@@ -162,7 +162,7 @@ void TestHandler::flashRead(const ThetaGP_Request &request,
     reply.kind.test_flash_read.addr = addr;
 }
 
-void TestHandler::flashWrite(const uint8_t *payload, uint16_t length,
+void TestDomain::flashWrite(const uint8_t *payload, uint16_t length,
                              const ThetaGP_Request &request,
                              ThetaGP_Reply &reply) {
     const uint32_t addr = request.kind.test_flash_write.addr;
@@ -183,7 +183,7 @@ void TestHandler::flashWrite(const uint8_t *payload, uint16_t length,
     // The request below is read a second time with the collector installed on
     // the arm the message already stands at, so the collector survives the read
     // that uses it.
-    WriteBytes write = {FlashTransfer::staging(), FlashTransfer::kStageBytes, 0};
+    WriteBytes write = {Flash::staging(), Flash::kStageBytes, 0};
     ThetaGP_Request again = request;
     again.kind.test_flash_write.data.funcs.decode = collectBytes;
     again.kind.test_flash_write.data.arg = &write;
@@ -201,7 +201,7 @@ void TestHandler::flashWrite(const uint8_t *payload, uint16_t length,
     }
 
     const bool ok = FlashW25qxx::getInstance().write(
-        addr, FlashTransfer::staging(), static_cast<uint32_t>(len));
+        addr, Flash::staging(), static_cast<uint32_t>(len));
 
     // The write changed the chip under the store, so the store is put back in
     // step with it. A write that did not reach the chip changed nothing.
@@ -217,7 +217,7 @@ void TestHandler::flashWrite(const uint8_t *payload, uint16_t length,
 
 #endif // THETAGP_CFG_HAS_FLASH
 
-void TestHandler::memInfo(ThetaGP_Reply &reply) {
+void TestDomain::memInfo(ThetaGP_Reply &reply) {
     using namespace Util::MemInfo;
 
     const RegionUsage f = region(RegionId::Flash);
@@ -259,7 +259,7 @@ void TestHandler::memInfo(ThetaGP_Reply &reply) {
     ok.ram_live_bytes = ramLiveBytes();
 }
 
-void TestHandler::keypadScan(ThetaGP_Reply &reply) {
+void TestDomain::keypadScan(ThetaGP_Reply &reply) {
     SystemTimer &timer = SystemTimer::getInstance();
 
     Keypad::ScanStats stats;
@@ -291,4 +291,4 @@ void TestHandler::keypadScan(ThetaGP_Reply &reply) {
     ok.sum_cycles = stats.sum_cycles;
 }
 
-} // namespace ThetaGP::Comm
+} // namespace ThetaGP::Wire

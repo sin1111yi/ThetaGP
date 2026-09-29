@@ -8,7 +8,7 @@
 
 #include "protocol/ThetaGP.pb.h"
 
-namespace ThetaGP::Comm {
+namespace ThetaGP::Wire {
 
 // The test domain's flash staging: the one run of flash bytes the domain holds
 // between frames. A read keeps the whole run there while the pieces of it are
@@ -18,7 +18,7 @@ namespace ThetaGP::Comm {
 // never held at once.
 //
 // One frame is built per call, because the wire carries one frame at a time.
-class FlashTransfer {
+class Flash {
 public:
     // The bytes the one staging buffer holds, and the widest run it can carry:
     // the longest flash read the domain serves.
@@ -54,4 +54,4 @@ public:
     static uint8_t *staging();
 };
 
-} // namespace ThetaGP::Comm
+} // namespace ThetaGP::Wire

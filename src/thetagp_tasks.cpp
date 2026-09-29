@@ -35,8 +35,8 @@
 
 #include "ThetaGP.h"
 
-#include "comm/frame_codec.h"
-#include "comm/request_handler.h"
+#include "wire/frame.h"
+#include "wire/dispatch.h"
 
 using namespace ThetaGP;
 using namespace ThetaGP::Gamepad;
@@ -46,8 +46,8 @@ namespace {
 // The reply payload and the frame built around it, held across the command
 // task's calls: one request is answered at a time. Both are allocated once and
 // written off the hot path, so they sit in the system RAM, not in fast RAM.
-COMMON_ZERO_INIT static uint8_t s_reply[Comm::FrameCodec::PAYLOAD_MAX]{};
-COMMON_ZERO_INIT static uint8_t s_frame[Comm::FrameCodec::FRAME_MAX]{};
+COMMON_ZERO_INIT static uint8_t s_reply[Wire::Frame::PAYLOAD_MAX]{};
+COMMON_ZERO_INIT static uint8_t s_frame[Wire::Frame::FRAME_MAX]{};
 
 // How much of s_frame is still to go out. The CDC FIFO takes 64 bytes at a
 // time, so a larger reply leaves over several calls instead of being cut off.
@@ -111,7 +111,7 @@ FAST_CODE static void taskCmdProc(uint32_t currentTimeUs) {
   // whose bytes stopped arriving, then answer the whole frames the USB
   // interrupt assembled. A reply is framed here and handed to the CDC FIFO;
   // tud_task() on the report tick is what moves those bytes out.
-  Comm::FrameCodec &codec = Comm::FrameCodec::getInstance();
+  Wire::Frame &codec = Wire::Frame::getInstance();
   codec.tick(Drivers::Device::SystemTimer::getInstance().getMillis());
   pumpCdcTx();
 
@@ -126,25 +126,25 @@ FAST_CODE static void taskCmdProc(uint32_t currentTimeUs) {
   const uint32_t refused = codec.droppedFrames();
   if (refused != s_refused) {
     s_refused = refused;
-    const uint16_t answered = Comm::RequestHandler::frameRefused(
+    const uint16_t answered = Wire::Dispatch::frameRefused(
         codec.lastDrop(), s_reply, sizeof s_reply);
     if (answered != 0) {
       const uint16_t framed =
-          Comm::FrameCodec::encode(s_reply, answered, s_frame, sizeof s_frame);
+          Wire::Frame::encode(s_reply, answered, s_frame, sizeof s_frame);
       queueFrame(framed);
     }
     return;
   }
 
-  Comm::FrameCodec::Payload payload{};
+  Wire::Frame::Payload payload{};
   while (s_txLength == 0 && codec.take(payload)) {
-    const uint16_t answered = Comm::RequestHandler::answer(
+    const uint16_t answered = Wire::Dispatch::answer(
         payload.bytes, payload.length, s_reply, sizeof s_reply);
     if (answered == 0) {
       continue;
     }
     const uint16_t framed =
-        Comm::FrameCodec::encode(s_reply, answered, s_frame, sizeof s_frame);
+        Wire::Frame::encode(s_reply, answered, s_frame, sizeof s_frame);
     if (framed == 0) {
       continue;
     }
@@ -156,10 +156,10 @@ FAST_CODE static void taskCmdProc(uint32_t currentTimeUs) {
   // one per tick, and only while nothing else is in flight.
   if (s_txLength == 0) {
     const uint16_t carried =
-        Comm::RequestHandler::pending(s_reply, sizeof s_reply);
+        Wire::Dispatch::pending(s_reply, sizeof s_reply);
     if (carried != 0) {
       const uint16_t streamed =
-          Comm::FrameCodec::encode(s_reply, carried, s_frame, sizeof s_frame);
+          Wire::Frame::encode(s_reply, carried, s_frame, sizeof s_frame);
       if (streamed != 0) {
         queueFrame(streamed);
         pumpCdcTx();

@@ -23,7 +23,7 @@
 
 #include <cstdint>
 
-namespace ThetaGP::Comm {
+namespace ThetaGP::Wire {
 
 // One frame of the CDC wire: a varint length, the payload, and the payload's
 // byte sum in the low 16 bits, little endian. The length counts the payload's
@@ -37,13 +37,13 @@ namespace ThetaGP::Comm {
 // the USB interrupt feeds it and the main loop takes from it. A frame whose
 // checksum does not hold is refused whole, and every refusal is counted in a
 // counter nothing else clears.
-class FrameCodec {
+class Frame {
 public:
-    FrameCodec(const FrameCodec &) = delete;
-    FrameCodec &operator=(const FrameCodec &) = delete;
-    FrameCodec() = default;
+    Frame(const Frame &) = delete;
+    Frame &operator=(const Frame &) = delete;
+    Frame() = default;
 
-    static FrameCodec &getInstance();
+    static Frame &getInstance();
 
     // Largest payload one frame carries.
     static constexpr uint16_t PAYLOAD_MAX = 1024;
@@ -169,4 +169,4 @@ private:
     Drop _lastDrop = Drop::None;
 };
 
-} // namespace ThetaGP::Comm
+} // namespace ThetaGP::Wire

@@ -45,7 +45,7 @@
 
 #include "ThetaGP.h"
 
-#include "comm/frame_codec.h"
+#include "wire/frame.h"
 
 using namespace ThetaGP;
 
@@ -54,7 +54,7 @@ namespace {
 // The USB interrupt hands over the bytes the host sent; the assembler holds
 // them until the command task takes a whole frame out of it.
 void onCdcRx(void *buffer, uint16_t length) {
-  Comm::FrameCodec::getInstance().feed(
+  Wire::Frame::getInstance().feed(
       static_cast<const uint8_t *>(buffer), length,
       Drivers::Device::SystemTimer::getInstance().getMillis());
 }

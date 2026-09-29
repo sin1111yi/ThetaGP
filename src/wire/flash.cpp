@@ -2,16 +2,16 @@
  * This file is a part of ThetaGP.
  */
 
-#include "comm/flash_transfer.h"
+#include "wire/flash.h"
 
 #include <cstddef>
 
 #include "build_info.h"
-#include "comm/frame_codec.h"
 #include "drivers/device/flash/flash_w25qxx.h"
+#include "wire/frame.h"
 #include "pb_encode.h"
 
-namespace ThetaGP::Comm {
+namespace ThetaGP::Wire {
 namespace {
 
 using Drivers::Device::FlashW25qxx;
@@ -20,7 +20,7 @@ using Drivers::Device::FlashW25qxx;
 // the whole run here while its pieces go out; a write collects its bytes here
 // before they reach the chip. The two directions are exclusive, so one buffer
 // holds whichever direction is under way.
-COMMON_ZERO_INIT uint8_t s_stage[FlashTransfer::kStageBytes]{};
+COMMON_ZERO_INIT uint8_t s_stage[Flash::kStageBytes]{};
 
 // The read stream's record: the address the run was read from, its length, and
 // the position in it the next piece starts at. Nothing here is read while the
@@ -46,7 +46,7 @@ Piece s_piece = {nullptr, 0, 0};
 // with it and this stops until the piece size moves too.
 constexpr uint16_t kPieceBytes = 1000;
 constexpr uint16_t kFrameOverhead = 20;
-static_assert(kPieceBytes + kFrameOverhead <= FrameCodec::PAYLOAD_MAX,
+static_assert(kPieceBytes + kFrameOverhead <= Frame::PAYLOAD_MAX,
               "a piece and the frame around it must fit one payload");
 
 // Write the piece's bytes out where the encoder asks for them, and record that
@@ -80,11 +80,11 @@ void closeRun() {
 
 } // namespace
 
-bool FlashTransfer::active() { return s_open; }
+bool Flash::active() { return s_open; }
 
-uint8_t *FlashTransfer::staging() { return s_stage; }
+uint8_t *Flash::staging() { return s_stage; }
 
-bool FlashTransfer::open(uint32_t addr, uint32_t len) {
+bool Flash::open(uint32_t addr, uint32_t len) {
     if (s_open || len == 0 || len > kRunMax) {
         // Nothing is opened while the buffer is spoken for, and a length no run
         // may have is not a stream.
@@ -105,7 +105,7 @@ bool FlashTransfer::open(uint32_t addr, uint32_t len) {
     return true;
 }
 
-bool FlashTransfer::next(ThetaGP_Reply &reply) {
+bool Flash::next(ThetaGP_Reply &reply) {
     if (!s_open) {
         return false;
     }
@@ -139,8 +139,8 @@ bool FlashTransfer::next(ThetaGP_Reply &reply) {
     return true;
 }
 
-bool FlashTransfer::shortFrame() { return s_piece.written != s_piece.len; }
+bool Flash::shortFrame() { return s_piece.written != s_piece.len; }
 
-void FlashTransfer::abandon() { closeRun(); }
+void Flash::abandon() { closeRun(); }
 
-} // namespace ThetaGP::Comm
+} // namespace ThetaGP::Wire

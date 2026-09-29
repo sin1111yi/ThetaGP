@@ -19,11 +19,11 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "comm/frame_codec.h"
+#include "wire/frame.h"
 
 #include <cstring>
 
-namespace ThetaGP::Comm {
+namespace ThetaGP::Wire {
 
 // A payload byte is added to the running sum as it arrives and the frame is
 // held against its checksum at the checksum's last byte, so a whole frame
@@ -31,14 +31,14 @@ namespace ThetaGP::Comm {
 // after it. What the feed never does is read a message, write a reply or take a
 // decision about a command: a payload leaves this class as bytes.
 
-FrameCodec &FrameCodec::getInstance() {
-    static FrameCodec instance;
+Frame &Frame::getInstance() {
+    static Frame instance;
     return instance;
 }
 
 // ── the send side ──
 
-uint16_t FrameCodec::checksum(const uint8_t *payload, uint16_t length) {
+uint16_t Frame::checksum(const uint8_t *payload, uint16_t length) {
     uint16_t sum = 0;
     for (uint16_t i = 0; i < length; ++i) {
         sum = static_cast<uint16_t>(sum + payload[i]);
@@ -46,11 +46,11 @@ uint16_t FrameCodec::checksum(const uint8_t *payload, uint16_t length) {
     return sum;
 }
 
-uint8_t FrameCodec::prefixSize(uint16_t length) {
+uint8_t Frame::prefixSize(uint16_t length) {
     return length < 0x80u ? 1 : 2;
 }
 
-uint16_t FrameCodec::encode(const uint8_t *payload, uint16_t length,
+uint16_t Frame::encode(const uint8_t *payload, uint16_t length,
                             uint8_t *out, uint16_t capacity) {
     if (out == nullptr || length > PAYLOAD_MAX) {
         return 0;
@@ -88,7 +88,7 @@ uint16_t FrameCodec::encode(const uint8_t *payload, uint16_t length,
 
 // ── the receive side ──
 
-void FrameCodec::feed(const uint8_t *bytes, uint16_t length, uint32_t nowMs) {
+void Frame::feed(const uint8_t *bytes, uint16_t length, uint32_t nowMs) {
     if (bytes == nullptr) {
         return;
     }
@@ -97,7 +97,7 @@ void FrameCodec::feed(const uint8_t *bytes, uint16_t length, uint32_t nowMs) {
     }
 }
 
-void FrameCodec::feedByte(uint8_t byte, uint32_t nowMs) {
+void Frame::feedByte(uint8_t byte, uint32_t nowMs) {
     _lastByteMs = nowMs;
 
     switch (_state) {
@@ -160,12 +160,12 @@ void FrameCodec::feedByte(uint8_t byte, uint32_t nowMs) {
     }
 }
 
-uint16_t FrameCodec::checksumOfChecksumBytes() const {
+uint16_t Frame::checksumOfChecksumBytes() const {
     return static_cast<uint16_t>(_checksum[0] |
                                  (static_cast<uint16_t>(_checksum[1]) << 8));
 }
 
-bool FrameCodec::tick(uint32_t nowMs) {
+bool Frame::tick(uint32_t nowMs) {
     // Only a length that was declared can be half a frame: a prefix that
     // promised another prefix byte declares nothing yet and is left where it is.
     if (!halfFrame()) {
@@ -178,7 +178,7 @@ bool FrameCodec::tick(uint32_t nowMs) {
     return true;
 }
 
-bool FrameCodec::take(Payload &out) {
+bool Frame::take(Payload &out) {
     if (_slotCount == 0) {
         return false;
     }
@@ -190,33 +190,33 @@ bool FrameCodec::take(Payload &out) {
     return true;
 }
 
-uint8_t FrameCodec::queued() const {
+uint8_t Frame::queued() const {
     return _slotCount;
 }
 
-uint32_t FrameCodec::droppedFrames() const {
+uint32_t Frame::droppedFrames() const {
     return _dropped;
 }
 
-FrameCodec::Drop FrameCodec::lastDrop() const {
+Frame::Drop Frame::lastDrop() const {
     return _lastDrop;
 }
 
-FrameCodec::State FrameCodec::state() const {
+Frame::State Frame::state() const {
     return _state;
 }
 
-bool FrameCodec::halfFrame() const {
+bool Frame::halfFrame() const {
     return _state != State::Prefix;
 }
 
-uint16_t FrameCodec::declaredLength() const {
+uint16_t Frame::declaredLength() const {
     return _length;
 }
 
 // ── the queue of whole frames and the refusals ──
 
-void FrameCodec::publish() {
+void Frame::publish() {
     if (_slotCount == SLOTS) {
         // A whole frame whose checksum held, with every slot taken: the frame
         // is refused and counted, and the stream goes on at the byte after it
@@ -234,13 +234,13 @@ void FrameCodec::publish() {
     reset();
 }
 
-void FrameCodec::drop(Drop reason) {
+void Frame::drop(Drop reason) {
     ++_dropped;
     _lastDrop = reason;
     reset();
 }
 
-void FrameCodec::reset() {
+void Frame::reset() {
     _state = State::Prefix;
     _prefixLen = 0;
     _prefix[0] = 0;
@@ -253,4 +253,4 @@ void FrameCodec::reset() {
     _checksumLen = 0;
 }
 
-} // namespace ThetaGP::Comm
+} // namespace ThetaGP::Wire

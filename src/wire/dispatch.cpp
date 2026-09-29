@@ -2,21 +2,30 @@
  * This file is a part of ThetaGP.
  */
 
-#include "comm/request_handler.h"
+#include "wire/dispatch.h"
 
 #include <cstring>
 
-#include "comm/flash_transfer.h"
-#include "comm/profile_handler.h"
-#include "comm/profile_transfer.h"
-#include "comm/sys_handler.h"
-#include "comm/test_handler.h"
+#include "wire/flash.h"
+#include "wire/profile_d.h"
+#include "wire/sys_d.h"
+#include "wire/test_d.h"
 #include "conf/ThetaGP_Config.h"
 #include "pb_decode.h"
 #include "pb_encode.h"
 #include "protocol/ThetaGP.pb.h"
 
-namespace ThetaGP::Comm {
+namespace ThetaGP::Wire {
+
+void writeFailure(ThetaGP_Reply &reply, ThetaGP_ErrorCode code,
+                  ThetaGP_Reason reason, uint32_t param1, uint32_t param2) {
+    reply.which_kind = ThetaGP_Reply_error_tag;
+    reply.kind.error.has_code = true;
+    reply.kind.error.code = code;
+    reply.kind.error.reason = reason;
+    reply.kind.error.param1 = param1;
+    reply.kind.error.param2 = param2;
+}
 
 namespace {
 
@@ -30,18 +39,18 @@ uint32_t nextNumber(const ThetaGP_Request &request) {
 }
 
 // What a refusal by the frame layer means on the wire.
-ThetaGP_Reason reasonOf(Comm::FrameCodec::Drop drop) {
+ThetaGP_Reason reasonOf(Wire::Frame::Drop drop) {
     switch (drop) {
-    case Comm::FrameCodec::Drop::Checksum:
+    case Wire::Frame::Drop::Checksum:
         return ThetaGP_Reason_REASON_FRAME_CHECKSUM;
-    case Comm::FrameCodec::Drop::Prefix:
-    case Comm::FrameCodec::Drop::Length:
+    case Wire::Frame::Drop::Prefix:
+    case Wire::Frame::Drop::Length:
         return ThetaGP_Reason_REASON_FRAME_PREFIX;
-    case Comm::FrameCodec::Drop::Idle:
+    case Wire::Frame::Drop::Idle:
         return ThetaGP_Reason_REASON_FRAME_INCOMPLETE;
-    case Comm::FrameCodec::Drop::NoRoom:
+    case Wire::Frame::Drop::NoRoom:
         return ThetaGP_Reason_REASON_FRAME_NO_ROOM;
-    case Comm::FrameCodec::Drop::None:
+    case Wire::Frame::Drop::None:
     default:
         return ThetaGP_Reason_REASON_NONE;
     }
@@ -73,7 +82,7 @@ uint16_t tooLongReply(const ThetaGP_Reply &answered, ThetaGP_ErrorCode code,
 
 } // namespace
 
-uint16_t RequestHandler::answer(const uint8_t *payload, uint16_t length,
+uint16_t Dispatch::answer(const uint8_t *payload, uint16_t length,
                                 uint8_t *out, uint16_t capacity) {
     if (out == nullptr || capacity == 0) {
         return 0;
@@ -99,22 +108,22 @@ uint16_t RequestHandler::answer(const uint8_t *payload, uint16_t length,
         reply.queued = nextNumber(request);
         switch (request.which_kind) {
         case ThetaGP_Request_sys_ping_tag:
-            SysHandler::ping(reply);
+            SysDomain::ping(reply);
             break;
         case ThetaGP_Request_sys_get_fw_version_tag:
-            SysHandler::fwVersion(reply);
+            SysDomain::fwVersion(reply);
             break;
         case ThetaGP_Request_sys_reset_tag:
-            SysHandler::reset(reply);
+            SysDomain::reset(reply);
             break;
         case ThetaGP_Request_sys_enter_dfu_tag:
-            SysHandler::enterDfu(reply);
+            SysDomain::enterDfu(reply);
             break;
         case ThetaGP_Request_sys_get_task_info_tag:
-            SysHandler::taskInfo(request, reply);
+            SysDomain::taskInfo(request, reply);
             break;
         case ThetaGP_Request_sys_get_usage_tag:
-            SysHandler::usage(reply);
+            SysDomain::usage(reply);
             break;
 #if THETAGP_CFG_HAS_FLASH
         case ThetaGP_Request_profile_status_tag:
@@ -133,7 +142,7 @@ uint16_t RequestHandler::answer(const uint8_t *payload, uint16_t length,
             // profile arm that reads or writes a body waits for the stream to
             // end. The two arms that read no body answer from the store's index
             // and touch no staging buffer, so the stream leaves them alone.
-            if (FlashTransfer::active() &&
+            if (Flash::active() &&
                 request.which_kind != ThetaGP_Request_profile_status_tag &&
                 request.which_kind != ThetaGP_Request_profile_list_tag) {
                 writeFailure(reply, ThetaGP_ErrorCode_ERR_BUSY,
@@ -149,22 +158,22 @@ uint16_t RequestHandler::answer(const uint8_t *payload, uint16_t length,
             // frame's own bytes go with the request, because the field a
             // staged body's piece arrives in is a callback field and is
             // collected out of those bytes.
-            switch (ProfileHandler::handle(payload, length, request, reply)) {
-            case ProfileHandler::Answers::Reply:
+            switch (ProfileDomain::handle(payload, length, request, reply)) {
+            case ProfileDomain::Answers::Reply:
                 break;
-            case ProfileHandler::Answers::Exchange:
+            case ProfileDomain::Answers::Exchange:
                 // The answer to the end of a staged write belongs to the
                 // exchange the write made up and not to one frame of the
                 // host's stream: the schema reserves the zero it carries for
                 // exactly that, so a host does not pair it with a frame.
                 reply.queued = 0;
                 break;
-            case ProfileHandler::Answers::Nothing:
+            case ProfileDomain::Answers::Nothing:
                 // An arm whose success is answered with no frame at all: the
                 // piece is in the staging buffer, and there is nothing to
                 // report about it until the body it belongs to is written.
                 return 0;
-            case ProfileHandler::Answers::NotMine:
+            case ProfileDomain::Answers::NotMine:
                 writeFailure(reply, ThetaGP_ErrorCode_ERR_UNKNOWN_CMD,
                              ThetaGP_Reason_REASON_UNKNOWN_COMMAND);
                 break;
@@ -186,40 +195,40 @@ uint16_t RequestHandler::answer(const uint8_t *payload, uint16_t length,
             // for it to end; only the arm that opens a read stream is judged
             // below, against both domains' streams.
             if (request.which_kind != ThetaGP_Request_test_flash_read_tag &&
-                FlashTransfer::active()) {
+                Flash::active()) {
                 writeFailure(reply, ThetaGP_ErrorCode_ERR_BUSY,
                              ThetaGP_Reason_REASON_NONE);
                 break;
             }
             switch (request.which_kind) {
             case ThetaGP_Request_test_chip_erase_tag:
-                TestHandler::chipErase(reply);
+                TestDomain::chipErase(reply);
                 break;
             case ThetaGP_Request_test_flash_info_tag:
-                TestHandler::flashInfo(reply);
+                TestDomain::flashInfo(reply);
                 break;
             case ThetaGP_Request_test_spi_mode_tag:
-                TestHandler::spiMode(request, reply);
+                TestDomain::spiMode(request, reply);
                 break;
             case ThetaGP_Request_test_erase_sector_tag:
-                TestHandler::eraseSector(request, reply);
+                TestDomain::eraseSector(request, reply);
                 break;
             case ThetaGP_Request_test_compaction_tag:
-                TestHandler::compaction(reply);
+                TestDomain::compaction(reply);
                 break;
             case ThetaGP_Request_test_flash_read_tag:
                 // A read stream is opened only while nothing else holds a
                 // stream: a second one would leave two streams wanting the one
                 // frame a tick can send.
-                if (ProfileTransfer::busy() || FlashTransfer::active()) {
+                if (ProfileTransfer::busy() || Flash::active()) {
                     writeFailure(reply, ThetaGP_ErrorCode_ERR_BUSY,
                                  ThetaGP_Reason_REASON_NONE);
                     break;
                 }
-                TestHandler::flashRead(request, reply);
+                TestDomain::flashRead(request, reply);
                 break;
             case ThetaGP_Request_test_flash_write_tag:
-                TestHandler::flashWrite(payload, length, request, reply);
+                TestDomain::flashWrite(payload, length, request, reply);
                 break;
             default:
                 break;
@@ -227,10 +236,10 @@ uint16_t RequestHandler::answer(const uint8_t *payload, uint16_t length,
             break;
 #endif
         case ThetaGP_Request_test_mem_info_tag:
-            TestHandler::memInfo(reply);
+            TestDomain::memInfo(reply);
             break;
         case ThetaGP_Request_test_keypad_scan_tag:
-            TestHandler::keypadScan(reply);
+            TestDomain::keypadScan(reply);
             break;
         default:
             writeFailure(reply, ThetaGP_ErrorCode_ERR_UNKNOWN_CMD,
@@ -265,7 +274,7 @@ uint16_t RequestHandler::answer(const uint8_t *payload, uint16_t length,
     return 0;
 }
 
-uint16_t RequestHandler::pending(uint8_t *out, uint16_t capacity) {
+uint16_t Dispatch::pending(uint8_t *out, uint16_t capacity) {
     if (out == nullptr || capacity == 0) {
         return 0;
     }
@@ -276,8 +285,8 @@ uint16_t RequestHandler::pending(uint8_t *out, uint16_t capacity) {
     // At most one stream is open, and the two never are at once: a flash read
     // stream answers from the test domain's staging buffer, a profile read
     // stream from the store's. Whichever is open is the one the tick serves.
-    const bool flash = FlashTransfer::active();
-    const bool built = flash ? FlashTransfer::next(reply)
+    const bool flash = Flash::active();
+    const bool built = flash ? Flash::next(reply)
                              : ProfileTransfer::next(reply);
     if (!built) {
         return 0;
@@ -290,7 +299,7 @@ uint16_t RequestHandler::pending(uint8_t *out, uint16_t capacity) {
     reply.queued = 0;
 
     const uint16_t written = encodeReply(reply, out, capacity);
-    if (written != 0 && !(flash ? FlashTransfer::shortFrame()
+    if (written != 0 && !(flash ? Flash::shortFrame()
                                 : ProfileTransfer::shortFrame())) {
         return written;
     }
@@ -301,12 +310,12 @@ uint16_t RequestHandler::pending(uint8_t *out, uint16_t capacity) {
     // whole one: it is told the answer is too long instead, and the stream
     // that would have carried the rest ends with this frame.
     ProfileTransfer::abandon();
-    FlashTransfer::abandon();
+    Flash::abandon();
     return tooLongReply(reply, ThetaGP_ErrorCode_ERR_BUFFER_OVERFLOW, out,
                         capacity);
 }
 
-uint16_t RequestHandler::frameRefused(Comm::FrameCodec::Drop drop,
+uint16_t Dispatch::frameRefused(Wire::Frame::Drop drop,
                                      uint8_t *out, uint16_t capacity) {
     if (out == nullptr || capacity == 0) {
         return 0;
@@ -318,4 +327,4 @@ uint16_t RequestHandler::frameRefused(Comm::FrameCodec::Drop drop,
     return encodeReply(reply, out, capacity);
 }
 
-} // namespace ThetaGP::Comm
+} // namespace ThetaGP::Wire

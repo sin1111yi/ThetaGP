@@ -2,17 +2,17 @@
  * This file is a part of ThetaGP.
  */
 
-#include "comm/sys_handler.h"
+#include "wire/sys_d.h"
 
 #include <cstdio>
 
-#include "comm/reply_error.h"
+#include "wire/dispatch.h"
 #include "conf/ThetaGP_Config.h"
 #include "gamepad/profile/profile_store.h"
 #include "task_manager.h"
 #include "utils/mem_info.h"
 
-namespace ThetaGP::Comm {
+namespace ThetaGP::Wire {
 namespace {
 
 // A fixed-size text field: what fits goes in, and it is always terminated.
@@ -55,11 +55,11 @@ static_assert(kMaxRegions - 1 <= kUsageRegionsCapacity,
 
 } // namespace
 
-void SysHandler::ping(ThetaGP_Reply &reply) {
+void SysDomain::ping(ThetaGP_Reply &reply) {
     reply.which_kind = ThetaGP_Reply_sys_ping_tag;
 }
 
-void SysHandler::fwVersion(ThetaGP_Reply &reply) {
+void SysDomain::fwVersion(ThetaGP_Reply &reply) {
     reply.which_kind = ThetaGP_Reply_sys_get_fw_version_tag;
     ThetaGP_SysGetFwVersionOk &ok = reply.kind.sys_get_fw_version;
     copyText(ok.board, sizeof ok.board, BOARD_NAME);
@@ -68,16 +68,16 @@ void SysHandler::fwVersion(ThetaGP_Reply &reply) {
     copyText(ok.build_time, sizeof ok.build_time, __TIME__);
 }
 
-void SysHandler::reset(ThetaGP_Reply &reply) {
+void SysDomain::reset(ThetaGP_Reply &reply) {
     reply.which_kind = ThetaGP_Reply_sys_reset_tag;
 }
 
-void SysHandler::enterDfu(ThetaGP_Reply &reply) {
+void SysDomain::enterDfu(ThetaGP_Reply &reply) {
     writeFailure(reply, ThetaGP_ErrorCode_ERR_NOT_SUPPORTED,
                  ThetaGP_Reason_REASON_NOT_IMPLEMENTED);
 }
 
-void SysHandler::taskInfo(const ThetaGP_Request &request, ThetaGP_Reply &reply) {
+void SysDomain::taskInfo(const ThetaGP_Request &request, ThetaGP_Reply &reply) {
     const int32_t tid = request.kind.sys_get_task_info.tid;
     const Gamepad::TaskInfo *info = Gamepad::TaskManager::getTaskInfo(tid);
     if (info == nullptr) {
@@ -108,7 +108,7 @@ void SysHandler::taskInfo(const ThetaGP_Request &request, ThetaGP_Reply &reply) 
 #endif
 }
 
-void SysHandler::usage(ThetaGP_Reply &reply) {
+void SysDomain::usage(ThetaGP_Reply &reply) {
     using namespace Util::MemInfo;
     using Gamepad::TaskManager;
 
@@ -152,4 +152,4 @@ void SysHandler::usage(ThetaGP_Reply &reply) {
     ok.regions_count = static_cast<pb_size_t>(count);
 }
 
-} // namespace ThetaGP::Comm
+} // namespace ThetaGP::Wire

@@ -6,11 +6,11 @@
 
 #include "protocol/ThetaGP.pb.h"
 
-namespace ThetaGP::Comm {
+namespace ThetaGP::Wire {
 
 // The system domain's six arms. Each function fills one reply with the answer
 // its own arm carries and sets the kind that names that answer.
-class SysHandler {
+class SysDomain {
 public:
     static void ping(ThetaGP_Reply &reply);
     static void fwVersion(ThetaGP_Reply &reply);
@@ -29,4 +29,4 @@ public:
     static void usage(ThetaGP_Reply &reply);
 };
 
-} // namespace ThetaGP::Comm
+} // namespace ThetaGP::Wire
