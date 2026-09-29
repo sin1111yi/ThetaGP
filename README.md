@@ -19,18 +19,18 @@ TOML-based board configuration.
 - Scan-matrix keypad input with debounce
 - Configurable debug log output over UART
 - TOML board configuration with validation
-- **CDC ACM test channel** — JSON protocol over USB virtual serial port
-- **Test API** — inject/observe GamepadRawInput and HIDReport via CDC
+- **CDC command channel** — length-framed protobuf messages over the USB virtual serial port
+- **Command domains** — `sys`, `profile` and `test` are served; every arm is declared in `protocol/ThetaGP.proto`
 - TinyUSB stack (auto-fetched, auto-updated)
 - No RTOS — cooperative task scheduler
 - No allocator — all memory is statically allocated (no malloc/free)
-- ArduinoJson v7.4.3 for JSON serialization
+- Profile bodies stored as JSON text, read and written by the in-tree JSON codec (`src/utils/json`, on frozen)
 
 ## Hardware Requirements
 
 | Component | Requirement | Notes |
 |-----------|-------------|-------|
-| **SPI Flash** | **Required** | W25Q128 (16MB) or compatible. Used for WearLevel config storage and OTA staging. |
+| **SPI Flash** | Optional | W25Qxx family; size read from the chip's JEDEC ID (8 MB on BoringTechH743). Stores the profile ring; a board may carry none. |
 | MCU | STM32H7 series | Other families may work with platform porting |
 | USB Connector | USB-C or USB Micro-B | For HID + CDC communication |
 | Debug Probe | CMSIS-DAP / ST-Link / J-Link | Required for flashing and debug. probe-rs supports all three. |
@@ -87,7 +87,7 @@ ThetaGP/
 │   ├── tools/                  Host tools (thetagp.py: send, ping, decode)
 │   └── test/                   Config-key suites
 ├── src/                        Application code
-│   ├── comm/                   Wire: frame codec, request handler
+│   ├── wire/                   Wire: frame, dispatch, per-domain command handlers
 │   ├── conf/                   TinyUSB configuration
 │   ├── drivers/                Device & gamepad drivers
 │   ├── gamepad/                Core gamepad logic & scheduler
@@ -123,8 +123,9 @@ automatically during CMake configure:
 | Library | Source | Purpose |
 |---------|--------|---------|
 | TinyUSB | github.com/sin1111yi/tinyusb | USB device/host stack |
-| mbedTLS | github.com/Mbed-TLS/mbedtls | Cryptographic library |
-| frozen | github.com/cesanta/frozen | C JSON parser (build-time config) |
+| frozen | github.com/cesanta/frozen | C JSON parser behind `src/utils/json` (profile bodies) |
+| nanopb | github.com/nanopb/nanopb | Protobuf codec for the wire messages |
+| mbedTLS | github.com/Mbed-TLS/mbedtls | Fetched; not linked into the firmware |
 
 On each configure, the build system checks upstream for updates and
 fast-forwards if behind. No manual submodule management needed.
