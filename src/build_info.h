@@ -33,9 +33,9 @@ extern "C" {
 //
 // FAST_DATA            → fast CPU-local RAM (DTCM), initialized (Flash load image)
 // FAST_DATA_ZERO_INIT  → fast CPU-local RAM (DTCM), zero-init (NOLOAD, no Flash copy)
-// FAST_CODE            → function in DTCM RAM (.dtcmram_code, 0-wait, copied from Flash)
+// FAST_CODE            → function in fast instruction RAM (.itcmram_code, copied from Flash)
 // FAST_CODE_PREF       → reserved — prefer fast RAM, fallback to Flash
-// FAST_CODE_NOINLINE   → function in DTCM RAM, no inlining
+// FAST_CODE_NOINLINE   → function in fast instruction RAM, no inlining
 
 #if defined (STM32H743xx)
 

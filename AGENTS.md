@@ -264,7 +264,7 @@ COMMON_DATA              → RAM_DATA → __attribute__((section(".ram_data"), a
 COMMON_ZERO_INIT               → RAM_BSS  → __attribute__((section(".ram_bss"), aligned(32)))             → System RAM (DMA-accessible), NOLOAD (zero-init, no Flash copy)
 FAST_DATA             → DTCM_RAM_DATA → __attribute__((section(".dtcmram_data")))                → fast CPU-local RAM (DTCM), initialized
 FAST_DATA_ZERO_INIT   → DTCM_RAM_BSS  → __attribute__((section(".dtcmram_bss")))                 → fast CPU-local RAM (DTCM), NOLOAD (zero-init, no Flash copy)
-FAST_CODE             → DTCM_RAM_CODE → __attribute__((section(".dtcmram_code")))                   → hot-path function in DTCM RAM (0-wait, copied from Flash)
+FAST_CODE             → ITCM_RAM_CODE → __attribute__((section(".itcmram_code")))                   → hot-path function in ITCM RAM (0-wait, copied from Flash)
 FAST_CODE_PREF        → reserved — prefer fast RAM, fallback to Flash
 FAST_CODE_NOINLINE    → FAST_CODE + __attribute__((noinline))
 COMMON_DATA_AUTO         → Convenience: `static COMMON_DATA` (shorthand for `static COMMON_DATA ...`)
