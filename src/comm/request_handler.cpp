@@ -6,9 +6,11 @@
 
 #include <cstring>
 
+#include "comm/flash_transfer.h"
 #include "comm/profile_handler.h"
 #include "comm/profile_transfer.h"
 #include "comm/sys_handler.h"
+#include "comm/test_handler.h"
 #include "conf/ThetaGP_Config.h"
 #include "pb_decode.h"
 #include "pb_encode.h"
@@ -126,6 +128,18 @@ uint16_t RequestHandler::answer(const uint8_t *payload, uint16_t length,
         case ThetaGP_Request_profile_select_tag:
         case ThetaGP_Request_profile_save_tag:
         case ThetaGP_Request_profile_load_tag:
+            // A flash read stream is served one frame per command tick, and the
+            // buffer it holds is the buffer the flash test arms write into: a
+            // profile arm that reads or writes a body waits for the stream to
+            // end. The two arms that read no body answer from the store's index
+            // and touch no staging buffer, so the stream leaves them alone.
+            if (FlashTransfer::active() &&
+                request.which_kind != ThetaGP_Request_profile_status_tag &&
+                request.which_kind != ThetaGP_Request_profile_list_tag) {
+                writeFailure(reply, ThetaGP_ErrorCode_ERR_BUSY,
+                             ThetaGP_Reason_REASON_NONE);
+                break;
+            }
             // The profile domain's one entry, whatever arm the request names:
             // the dispatch to the arm and the refusal owed to every arm that
             // reads or writes a body while a body's bytes are spoken for both
@@ -157,6 +171,67 @@ uint16_t RequestHandler::answer(const uint8_t *payload, uint16_t length,
             }
             break;
 #endif
+#if THETAGP_CFG_HAS_FLASH
+        case ThetaGP_Request_test_chip_erase_tag:
+        case ThetaGP_Request_test_flash_info_tag:
+        case ThetaGP_Request_test_spi_mode_tag:
+        case ThetaGP_Request_test_erase_sector_tag:
+        case ThetaGP_Request_test_compaction_tag:
+        case ThetaGP_Request_test_flash_read_tag:
+        case ThetaGP_Request_test_flash_write_tag:
+            // The test domain's flash arms: every one of them reads the chip or
+            // changes it, and every one of them shares the one flash staging
+            // buffer. A stream already open is a frame of that buffer waiting
+            // to go out, so the arms that would change the chip under it wait
+            // for it to end; only the arm that opens a read stream is judged
+            // below, against both domains' streams.
+            if (request.which_kind != ThetaGP_Request_test_flash_read_tag &&
+                FlashTransfer::active()) {
+                writeFailure(reply, ThetaGP_ErrorCode_ERR_BUSY,
+                             ThetaGP_Reason_REASON_NONE);
+                break;
+            }
+            switch (request.which_kind) {
+            case ThetaGP_Request_test_chip_erase_tag:
+                TestHandler::chipErase(reply);
+                break;
+            case ThetaGP_Request_test_flash_info_tag:
+                TestHandler::flashInfo(reply);
+                break;
+            case ThetaGP_Request_test_spi_mode_tag:
+                TestHandler::spiMode(request, reply);
+                break;
+            case ThetaGP_Request_test_erase_sector_tag:
+                TestHandler::eraseSector(request, reply);
+                break;
+            case ThetaGP_Request_test_compaction_tag:
+                TestHandler::compaction(reply);
+                break;
+            case ThetaGP_Request_test_flash_read_tag:
+                // A read stream is opened only while nothing else holds a
+                // stream: a second one would leave two streams wanting the one
+                // frame a tick can send.
+                if (ProfileTransfer::busy() || FlashTransfer::active()) {
+                    writeFailure(reply, ThetaGP_ErrorCode_ERR_BUSY,
+                                 ThetaGP_Reason_REASON_NONE);
+                    break;
+                }
+                TestHandler::flashRead(request, reply);
+                break;
+            case ThetaGP_Request_test_flash_write_tag:
+                TestHandler::flashWrite(payload, length, request, reply);
+                break;
+            default:
+                break;
+            }
+            break;
+#endif
+        case ThetaGP_Request_test_mem_info_tag:
+            TestHandler::memInfo(reply);
+            break;
+        case ThetaGP_Request_test_keypad_scan_tag:
+            TestHandler::keypadScan(reply);
+            break;
         default:
             writeFailure(reply, ThetaGP_ErrorCode_ERR_UNKNOWN_CMD,
                          ThetaGP_Reason_REASON_UNKNOWN_COMMAND);
@@ -197,7 +272,14 @@ uint16_t RequestHandler::pending(uint8_t *out, uint16_t capacity) {
 
     ThetaGP_Reply reply;
     std::memset(&reply, 0, sizeof reply);
-    if (!ProfileTransfer::next(reply)) {
+
+    // At most one stream is open, and the two never are at once: a flash read
+    // stream answers from the test domain's staging buffer, a profile read
+    // stream from the store's. Whichever is open is the one the tick serves.
+    const bool flash = FlashTransfer::active();
+    const bool built = flash ? FlashTransfer::next(reply)
+                             : ProfileTransfer::next(reply);
+    if (!built) {
         return 0;
     }
 
@@ -208,7 +290,8 @@ uint16_t RequestHandler::pending(uint8_t *out, uint16_t capacity) {
     reply.queued = 0;
 
     const uint16_t written = encodeReply(reply, out, capacity);
-    if (written != 0 && !ProfileTransfer::shortFrame()) {
+    if (written != 0 && !(flash ? FlashTransfer::shortFrame()
+                                : ProfileTransfer::shortFrame())) {
         return written;
     }
 
@@ -218,6 +301,7 @@ uint16_t RequestHandler::pending(uint8_t *out, uint16_t capacity) {
     // whole one: it is told the answer is too long instead, and the stream
     // that would have carried the rest ends with this frame.
     ProfileTransfer::abandon();
+    FlashTransfer::abandon();
     return tooLongReply(reply, ThetaGP_ErrorCode_ERR_BUFFER_OVERFLOW, out,
                         capacity);
 }

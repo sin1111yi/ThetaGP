@@ -293,7 +293,8 @@ message TestEraseSector {
 }
 
 // The refusal of an erase is a value of this command's own and not an arm: a
-// sector erase that fails answers `ok` with `ok` false, and the reply carries
+// sector erase that fails answers this arm with `ok` false rather than an
+// error arm, because the device reached the chip and the chip said no.
 message TestEraseSectorOk {
   uint32 addr = 1;  // The address the request named
   bool   ok   = 2;  // Whether the erase succeeded
@@ -319,16 +320,50 @@ message TestSpiModeOk {
   uint32 mode = 1;  // The mode the device is in after the request, echoing what it was given
 }
 
-// Read bytes from the flash chip, for testing only.
+// Read bytes from the flash chip, for testing only. The bytes come back as a
+// stream: this arm opens it, the chunk arms carry it, and the end arm closes
+// it, because a run of up to a sector is wider than one frame.
 message TestFlashRead {
   uint32 addr = 1;  // First address to read from
   uint32 len  = 2;  // Number of bytes to read, 1 to 4096
 }
 
-// The bytes that were read are not the answer: this command reports that the
-// read happened, and the run it read is dropped. A reply carrying the bytes
-message TestFlashReadOk {
-  uint32 len_read = 1;  // The number of bytes read
+// The first arm of a flash read: the run the stream carries and the address it
+// was read from, for a host to hold the pieces and the close against.
+message TestFlashReadStart {
+  uint32 total = 1;  // Number of bytes the stream carries
+  uint32 addr  = 2;  // The address the run was read from
+}
+
+// One piece of a flash read: the offset it starts at and the bytes themselves.
+message TestFlashChunk {
+  uint32 offset = 1;  // Byte offset of the first byte of `data` in the run
+  bytes  data   = 2;  // The piece of the run
+}
+
+// The last arm of a flash read: what the stream carried, for a host to hold
+// against the length the opening arm gave it.
+message TestFlashEnd {
+  uint32 total = 1;  // Number of bytes the stream carried
+  uint32 addr  = 2;  // The address the run was read from
+}
+
+// Program bytes to the flash chip, for testing only. The write is a page
+// program alone: the sector has to be erased before it, and a program reaches
+// a byte that was not erased as a bitwise and rather than as the byte asked
+// for.
+message TestFlashWrite {
+  uint32 addr = 1;  // First address to write to
+  uint32 len  = 2;  // Number of bytes to write
+  bytes  data = 3;  // The bytes to write
+}
+
+// A flash write's own report: the write either reached the chip or it did not,
+// which is a value of this arm and not an arm of its own.
+message TestFlashWriteOk {
+  uint32 addr = 1;  // The address the request named
+  uint32 len  = 2;  // The number of bytes the request named
+  bool   ok   = 3;  // Whether the write reached the chip
 }
 
 // Report what the flash chip is: how large it is, how it is programmed and
@@ -619,6 +654,10 @@ message Request {
     // Shared by profile.start and profile.create: the opening arm (21 or 24)
     ProfilePutChunk profile_put_chunk = 30;
     ProfilePutEnd   profile_put_end   = 31;
+
+    // -- The test domain's flash write (33) --
+    // It programs one frame's worth of bytes; a longer run repeats the arm.
+    TestFlashWrite test_flash_write = 33;
   }
 }
 
@@ -662,7 +701,7 @@ message Reply {
     TestEraseSectorOk test_erase_sector = 16;
     TestCompactionOk  test_compaction   = 17;
     TestSpiModeOk     test_spi_mode     = 18;
-    TestFlashReadOk   test_flash_read   = 19;
+    TestFlashReadStart test_flash_read  = 19;
     TestFlashInfoOk   test_flash_info   = 20;
     TestMemInfoOk     test_mem_info     = 21;
     TestKeypadScanOk  test_keypad_scan  = 22;
@@ -682,6 +721,13 @@ message Reply {
     // profile.get's read answers with these after its opening arm (24): the
     ProfileChunk profile_chunk = 32;
     ProfileEnd   profile_end   = 33;
+
+    // -- The test domain's flash write and read continuations (35..37) --
+    // A flash write answers with its own arm (35), and a flash read answers
+    // with its opening arm (19) and then with these two.
+    TestFlashWriteOk test_flash_write = 35;
+    TestFlashChunk   test_flash_chunk = 36;
+    TestFlashEnd     test_flash_end   = 37;
   }
 }
 
