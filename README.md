@@ -4,157 +4,51 @@
   <img src="asset/thetagp-logo.png" alt="ThetaGP Logo" width="400">
 </p>
 
-Multi-MCU universal gamepad firmware with USB HID + CDC support and
-TOML-based board configuration.
-
-## Supported MCUs
-
-| MCU Family | Status |
-|------------|--------|
-| STM32H7    | ✅ Supported |
+Universal gamepad firmware: USB HID plus a CDC command channel, configured per
+board. No RTOS, no dynamic allocation.
 
 ## Features
 
-- USB HID gamepad (GP2040-CE compatible button mapping)
-- Scan-matrix keypad input with debounce
-- Configurable debug log output over UART
-- TOML board configuration with validation
-- **CDC command channel** — length-framed protobuf messages over the USB virtual serial port
-- **Command domains** — `sys`, `profile` and `test` are served; every arm is declared in `protocol/ThetaGP.proto`
-- TinyUSB stack (auto-fetched, auto-updated)
-- No RTOS — cooperative task scheduler
-- No allocator — all memory is statically allocated (no malloc/free)
-- Profile bodies stored as JSON text, read and written by the in-tree JSON codec (`src/utils/json`, on frozen)
-
-## Hardware Requirements
-
-| Component | Requirement | Notes |
-|-----------|-------------|-------|
-| **SPI Flash** | Optional | W25Qxx family; size read from the chip's JEDEC ID (8 MB on BoringTechH743). Stores the profile ring; a board may carry none. |
-| MCU | STM32H7 series | Other families may work with platform porting |
-| USB Connector | USB-C or USB Micro-B | For HID + CDC communication |
-| Debug Probe | CMSIS-DAP / ST-Link / J-Link | Required for flashing and debug. probe-rs supports all three. |
-
-## Prerequisites
-
-- CMake 3.22+
-- ARM GNU Toolchain (`arm-none-eabi-gcc`)
-- Python 3.11+
-- Git (for dependency fetching)
-- [probe-rs](https://probe.rs) (for flashing/debugging)
+- USB HID gamepad (GP2040-CE compatible button mapping); scan-matrix keypad
+- CDC command channel carrying protobuf frames (schema: `ThetaGP.PB`)
+- TOML board configuration, validated and generated at configure time
+- Statically allocated, cooperative task scheduler
 
 ## Quick Start
 
 ```bash
-# Configure (fetches dependencies automatically on first run)
-cmake -B build -DTARGET=BoringTechH743
-
-# Build
+cmake -B build -DTARGET=BoringTechH743   # fetches dependencies
 cmake --build build
-
-# Flash & Run (requires probe-rs)
 probe-rs run --chip <CHIP> build/ThetaGP_*.elf
 ```
 
-## Project Structure
+Needs CMake 3.22+, `arm-none-eabi-gcc`, Python 3.11+ and probe-rs.
+
+## Layout
 
 ```
-ThetaGP/
-├── configs/                    Board configurations
-│   ├── CONFIGURATION.md        Configuration authoring guide
-│   └── <TARGET>/
-│       ├── BoardConfig.toml    Input: pins, keypad, USB, UART
-│       ├── BoardConfig.h       Generated: C macros from TOML
-│       └── board_config.cmake  Generated: build variables
-├── platform/                   MCU-specific code
-│   ├── CMakeLists.txt
-│   └── STM32/
-│       ├── cmake/              Toolchain
-│       ├── peripherals/        HAL implementations
-│       ├── startup/            CMSIS startup
-│       ├── link/               Linker script
-│       └── system/             HAL config, system init, syscalls
-├── protocol/                   Protocol definition & generated code
-│   ├── ThetaGP.proto           Single source of truth (device ↔ host protocol)
-│   ├── ThetaGP.options         Field bounds nanopb reads beside it
-│   └── ThetaGP.pb.c/h          Generated codec (configure time, ignored)
-├── scripts/                    Build tooling
-│   ├── generate_config.py      Board config generator (TOML → C macros)
-│   ├── gen_proto_pb.py         Protocol codec generator (protoc + nanopb)
-│   ├── gen_proto_py.py         Host bindings generator (protoc → Python)
-│   ├── extract_font.py         Font asset extractor
-│   ├── config/                 Generator modules (validators, generators, pin utils)
-│   ├── tools/                  Host tools (thetagp.py: send, ping, decode)
-│   └── test/                   Config-key suites
-├── src/                        Application code
-│   ├── wire/                   Wire: frame, dispatch, per-domain command handlers
-│   ├── conf/                   TinyUSB configuration
-│   ├── drivers/                Device & gamepad drivers
-│   ├── gamepad/                Core gamepad logic & scheduler
-│   ├── utils/                  Resource accounting, logging, atomic, time
-│   └── taskmanager.cpp/h       Task lifecycle
-├── lib/                        Third-party libraries (auto-fetched)
-│   └── CMakeLists.txt          Dependency declarations + fetch logic
-├── docs/                       Design documentation
-├── AGENTS.md                   AI agent behavior spec
-└── README.md                   This file
+configs/    per-board TOML and its generated BoardConfig.h / board_config.cmake
+platform/   MCU ports (STM32H7)
+scripts/    build tooling and host tools
+src/        firmware: wire/ (protocol), drivers/, gamepad/, utils/
+lib/        third-party, fetched at configure time
 ```
 
-## Configuration
-
-Board configuration uses TOML files under `configs/<TARGET>/BoardConfig.toml`.
-At configure time, `scripts/generate_config.py` validates the config and
-generates `BoardConfig.h` (C `#define` macros) and `board_config.cmake`.
-
-See **[configs/CONFIGURATION.md](configs/CONFIGURATION.md)** for the full
-configuration guide — all fields, valid values, and examples.
-
-To regenerate after editing:
-
-```bash
-cmake -B build -DTARGET=<TARGET>
-```
+Board configuration is TOML under `configs/<TARGET>/BoardConfig.toml`; see
+`configs/CONFIGURATION.md` for the fields.
 
 ## Dependencies
 
-Third-party libraries are declared in `lib/CMakeLists.txt` and fetched
-automatically during CMake configure:
+Declared in `lib/CMakeLists.txt` and fetched at configure. Branch-tracking
+libraries are checked once a day; the protocol schema is pinned to a tag.
 
-| Library | Source | Purpose |
-|---------|--------|---------|
-| TinyUSB | github.com/sin1111yi/tinyusb | USB device/host stack |
-| frozen | github.com/cesanta/frozen | C JSON parser behind `src/utils/json` (profile bodies) |
-| nanopb | github.com/nanopb/nanopb | Protobuf codec for the wire messages |
-| mbedTLS | github.com/Mbed-TLS/mbedtls | Fetched; not linked into the firmware |
-
-On each configure, the build system checks upstream for updates and
-fast-forwards if behind. No manual submodule management needed.
-
-## Adding an MCU Family
-
-1. Add toolchain config in `platform/<FAMILY>/cmake/`
-2. Add startup + linker files
-3. Implement peripheral HALs in `platform/<FAMILY>/peripherals/`
-4. Add CMake condition in `platform/CMakeLists.txt`
-
-## Adding a New Board
-
-1. Create `configs/<BOARD>/BoardConfig.toml` (see `CONFIGURATION.md`)
-2. Build with `cmake -B build -DTARGET=<BOARD>`
-
-## Architecture
-
-- **No dynamic allocation**: All memory is statically allocated; each buffer is a file-scope static array owned by its module
-- **No RTOS**: Cooperative scheduler in `gamepad/scheduler/` driven by `TaskManager`
-- **USB stack**: TinyUSB handles device enumeration and HID class driver registration
-- **Peripheral abstraction**: MCU-agnostic enums in headers, HAL mapping in platform `.cpp` files
-
-## Acknowledgements
-
-- **GP2040-CE** — GPDriver/Manager design pattern inspiration
-  https://github.com/OpenStickCommunity/GP2040-CE
-- **Betaflight** — Cooperative scheduler, ISR structure, NVIC/atomic primitives
-  https://github.com/betaflight/betaflight
+| Library | Purpose |
+|---|---|
+| TinyUSB | USB device stack |
+| frozen | JSON parser behind `src/utils/json` (profile bodies) |
+| nanopb | protobuf codec for the wire |
+| mbedTLS | fetched, not linked |
+| ThetaGP.PB | the protocol schema (pinned) |
 
 ## License
 

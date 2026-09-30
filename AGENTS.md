@@ -182,9 +182,8 @@ cmake --build build
 ```
 
 Note: there is no separate test-API build. Every command — the diagnostic ones
-included — travels on the protocol in `protocol/ThetaGP.proto`; see
-`protocol/README.md` for the wire and for how the codec and the host bindings
-are generated.
+included — travels on the protocol defined in the `ThetaGP.PB` repository
+(`ThetaGP.proto`, with the wire in its `README.md`).
 
 ### Flashing
 
@@ -218,7 +217,8 @@ Logger outputs on UART1 (PA9 TX, PA10 RX) at 115200 baud. The CMSIS-DAP (DAPLink
 The CDC ACM virtual serial port is present in **every** build — the interface is
 unconditional in the USB descriptors and `CFG_TUD_CDC` is always 1. It carries
 binary protocol frames; the JSON text protocol it used to carry is gone. The
-wire and the schema are in `protocol/README.md` and `protocol/ThetaGP.proto`.
+wire and the schema live in the `ThetaGP.PB` repository, pinned by tag; the
+firmware's codec is generated from it into `src/pb/`.
 
 Plugged via the device's own USB interface (not the debug probe). The ttyACM
 number shifts across flashes; locate it via the stable symlink instead of a
