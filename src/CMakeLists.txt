@@ -118,7 +118,7 @@ set(THETAGP_PB_DIR "${CMAKE_SOURCE_DIR}/lib/ThetaGP.PB")
 
 set(PROTO_SCHEMAS
     # The one protocol template, from the pinned schema checkout.
-    "${THETAGP_PB_DIR}/ThetaGP.proto"
+    "${THETAGP_PB_DIR}/protocol/ThetaGP.proto"
 )
 # The generated pair lands under src/pb/ and is ignored by git.
 set(PROTO_OUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pb")
@@ -237,6 +237,61 @@ else()
         endforeach()
         message(STATUS "Generated ${PROTO_PB_OUTPUTS_TEXT}")
     endif()
+endif()
+
+# =============================================================================
+# Gamepad Enums (configure-time)
+# =============================================================================
+# The gamepad enums are generated from the schema repository's enums/enums.proto,
+# so the C++ and the wire share one definition of each value. Written into
+# src/pb/ and ignored, like the codec above.
+set(ENUMS_H "${CMAKE_CURRENT_SOURCE_DIR}/pb/enums.pb.h")
+set(ENUMS_PROTO "${THETAGP_PB_DIR}/enums/enums.proto")
+
+set(ENUMS_NEEDED FALSE)
+if(NOT EXISTS "${ENUMS_H}")
+    set(ENUMS_NEEDED TRUE)
+else()
+    file(SIZE "${ENUMS_H}" ENUMS_H_SIZE)
+    if(ENUMS_H_SIZE EQUAL 0 OR "${ENUMS_PROTO}" IS_NEWER_THAN "${ENUMS_H}")
+        set(ENUMS_NEEDED TRUE)
+    endif()
+endif()
+
+if(ENUMS_NEEDED)
+    if(NOT PYTHON3)
+        message(FATAL_ERROR
+            "src/pb/enums.pb.h is missing or older than "
+            "${ENUMS_PROTO}, and python3 was not found to generate it.")
+    endif()
+    message(STATUS "Generating src/pb/enums.pb.h ...")
+    execute_process(
+        COMMAND ${PYTHON3} "${THETAGP_PB_DIR}/generate.py" cpp-enums
+                --out "${ENUMS_H}"
+                --namespace "ThetaGP::Enums"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        RESULT_VARIABLE ENUMS_RESULT
+        OUTPUT_VARIABLE ENUMS_STDOUT
+        ERROR_VARIABLE ENUMS_STDERR
+    )
+    if(NOT ENUMS_STDOUT STREQUAL "")
+        message(STATUS "${ENUMS_STDOUT}")
+    endif()
+    if(NOT ENUMS_STDERR STREQUAL "")
+        message(STATUS "${ENUMS_STDERR}")
+    endif()
+    if(NOT ENUMS_RESULT EQUAL 0)
+        message(FATAL_ERROR
+            "generate.py cpp-enums exited ${ENUMS_RESULT}. It needs protoc on "
+            "PATH and a python-protobuf runtime.")
+    endif()
+    if(NOT EXISTS "${ENUMS_H}")
+        message(FATAL_ERROR
+            "generate.py cpp-enums exited 0 but ${ENUMS_H} is not there.")
+    endif()
+    message(STATUS "Generated src/pb/enums.pb.h")
+else()
+    message(STATUS "Gamepad enums: src/pb/enums.pb.h is up to date")
 endif()
 
 # =============================================================================

@@ -26,7 +26,7 @@
 
 // The sentinel a button slot with no key assigned carries.
 #include "gamepad/config/config_defaults.h"
-#include "gamepad/gamepad_enums.h"
+#include "pb/enums.pb.h"
 
 #include <cstddef>
 #include <cstring>

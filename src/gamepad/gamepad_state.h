@@ -26,7 +26,7 @@
 
 #pragma once
 
-#include "gamepad/gamepad_enums.h"
+#include "pb/enums.pb.h"
 #include <cstdint>
 
 /*
