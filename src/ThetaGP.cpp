@@ -49,18 +49,6 @@
 
 using namespace ThetaGP;
 
-namespace {
-
-// The USB interrupt hands over the bytes the host sent; the assembler holds
-// them until the command task takes a whole frame out of it.
-void onCdcRx(void *buffer, uint16_t length) {
-  Wire::Frame::getInstance().feed(
-      static_cast<const uint8_t *>(buffer), length,
-      Drivers::Device::SystemTimer::getInstance().getMillis());
-}
-
-} // namespace
-
 ThetaGamepad::ThetaGamepad() {}
 
 void ThetaGamepad::setup() {
@@ -99,9 +87,13 @@ void ThetaGamepad::setup() {
   // initialize configuration system (ProfileStore + ConfigManager)
   Gamepad::Config::ConfigManager::getInstance().init();
 
-  // The CDC command channel: the bytes the host sends reach the frame assembler
-  // and the command task answers them.
-  USB::USBDriver::getInstance().setCDCRxCallback(onCdcRx);
+  // The CDC command channel: the USB interrupt hands the bytes the host sent to
+  // the frame assembler, and the command task answers them.
+  USB::USBDriver::getInstance().setCDCRxCallback([](void *buffer, uint16_t length) {
+    Wire::Frame::getInstance().feed(
+        static_cast<const uint8_t *>(buffer), length,
+        Drivers::Device::SystemTimer::getInstance().getMillis());
+  });
 }
 
 void ThetaGamepad::bootup() {
