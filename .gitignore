@@ -27,6 +27,7 @@ lib/ArduinoJson
 lib/frozen
 lib/lvgl
 lib/nanopb
+lib/ThetaGP.PB
 
 /agent/
 *.jsonl
@@ -34,11 +35,10 @@ lib/nanopb
 *example*
 
 # Generated protocol output
-# Patterns and not one line per generated name: every schema under protocol/
-# generates a pair of that shape beside it, so adding a schema does not add a
-# line here.
-protocol/*.pb.c
-protocol/*.pb.h
+# The codec of the pinned schema is written here by the configure step, and
+# nothing derived from the schema is tracked: the schema itself lives in its own
+# repository (ThetaGP.PB).
+src/pb/
 configs/config_keys.gen.h
 
 

@@ -22,36 +22,16 @@ cmake_minimum_required(VERSION 3.22)
 # =============================================================================
 # Generators (configure-time)
 # =============================================================================
-# The interpreter the two generation steps below run in: the config key table
-# and the protobuf codecs.
+# The interpreter the generation steps below run in.
 find_program(PYTHON3 python3)
 
 # =============================================================================
 # Config Key Table (configure-time)
 # =============================================================================
-# configs/config_keys.toml declares the fields of the config store, and
-# scripts/config/gen_config_keys.py turns that declaration into the C++ table
-# the firmware compiles: configs/config_keys.gen.h. It sits beside its
-# declaration, the firmware reaches it as "configs/config_keys.gen.h"
-# (config_store.cpp, key_table.cpp), and it is ignored (.gitignore) like the
-# generated protocol files above: the repository carries the declaration, and
-# nothing derived from it.
-#
-# The step is not part of the protocol line — it reads no protocol source and
-# no protocol artifact — and it is its own block here for that reason.
-#
-# A stale header is worse than a missing one: it carries the position, type and
-# range of every field, and a profile body is read and written through it, so a
-# table left behind by an earlier declaration compiles and lies about what the
-# store holds. This step is therefore a gate and not a warning, and it runs
-# whenever the header is missing or older than either of its two inputs — the
-# declaration and this generator. Those two files are the whole of what decides
-# the header's bytes, so a header newer than both is current and is left alone,
-# which is also what keeps the file (and the timestamp it records) stable
-# across configure runs.
-#
-# PYTHON3 comes from the find_program() above, the same one the protobuf step
-# below uses.
+# configs/config_keys.toml declares the config store's fields; the generator
+# turns it into the header the firmware includes. A stale header would compile
+# and lie about the store, so a missing or older one is regenerated — a gate,
+# not a warning.
 set(CONFIG_KEYS_TOML "${CMAKE_SOURCE_DIR}/configs/config_keys.toml")
 set(CONFIG_KEYS_GENERATOR "${CMAKE_SOURCE_DIR}/scripts/config/gen_config_keys.py")
 set(CONFIG_KEYS_H "${CMAKE_SOURCE_DIR}/configs/config_keys.gen.h")
@@ -72,9 +52,7 @@ else()
     if(NOT EXISTS "${CONFIG_KEYS_H}")
         set(CONFIG_KEYS_NEEDED TRUE)
     else()
-        # An empty header is not a current one either: a write that was cut
-        # short leaves zero bytes at that name and a fresh timestamp, which the
-        # comparisons below read as newer than both inputs.
+        # An empty header with a fresh timestamp is not current.
         file(SIZE "${CONFIG_KEYS_H}" CONFIG_KEYS_H_SIZE)
         if(CONFIG_KEYS_H_SIZE EQUAL 0)
             set(CONFIG_KEYS_NEEDED TRUE)
@@ -131,54 +109,21 @@ endif()
 # =============================================================================
 # Protobuf Codec Generation (configure-time)
 # =============================================================================
-# PROTO_SCHEMAS names the schemas of the protobuf frontend. The list is the whole
-# manifest: it drives the generation call below and the source list at the
-# bottom of this file, so a schema is added in one place and its codec is
-# generated and compiled without a second edit. Each schema is read by
-# protoc and by the nanopb generator of the checkout lib/CMakeLists.txt fetches, through a
-# python-protobuf runtime, and yields the pair named after it — <stem>.pb.c and
-# <stem>.pb.h, written to PROTO_OUT_DIR. Both files are generated here and
-# ignored (.gitignore), like every file the step above writes: the repository
-# carries the schemas and this build file, and nothing derived from them.
-#
-# A build environment therefore needs protoc on PATH, the fetched lib/nanopb
-# checkout, and an interpreter that can import google.protobuf — or, for an
-# interpreter that cannot, a site-packages directory holding it named by
-# $PROTOBUF_PYTHONPATH.
-#
-# The step runs only when some pair is missing, empty or older than some input,
-# so a worktree that already carries the pairs configures on a machine without
-# that toolchain. The criterion is one decision for the whole set: any input
-# newer than any output regenerates every pair. A pair is not a function of its
-# own schema alone — one schema may be imported by another, and the schema
-# carries a second input beside it — and a set half of which was regenerated
-# would compile a mix of two schema revisions.
-#
-# The second input is the .options file: nanopb reads <stem>.options from the
-# directory of the schema it is generating for, so a bound that file adds,
-# changes or drops decides the pair as much as the .proto's own text does. A
-# freshness decision that compared the schemas alone would take a pair for
-# current after an .options edit and compile the older codec — reading a schema
-# revision nobody declared is exactly what this step exists to prevent. Both
-# lists are compared below; an .options file that is not there is not an input.
-#
-# It is a configure step and not a build rule because the source list below
-# names each .pb.c: generating the pairs in this pass is what makes those files
-# exist before the first build runs.
-#
-# Unlike the step above, a failure here stops the configure. A warning is not a
-# gate: a build that quietly kept an older codec beside a changed schema would
-# compile a protocol nobody declared.
-set(PROTO_SCHEMAS
-    # The one protocol template. The list drives generation and the source list
-    # below, so a schema is named here once and nowhere else.
-    "${CMAKE_SOURCE_DIR}/protocol/ThetaGP.proto"
-)
-set(PROTO_OUT_DIR "${CMAKE_SOURCE_DIR}/protocol")
+# The schema is its own repository, pinned by tag and fetched by lib/CMakeLists.txt.
+# Its generator writes the .pb.c/.pb.h pair the firmware compiles into src/pb/; a
+# pair that is missing, empty or older than the schema or its .options file is
+# regenerated, and a failure stops the configure rather than compiling a stale
+# codec.
+set(THETAGP_PB_DIR "${CMAKE_SOURCE_DIR}/lib/ThetaGP.PB")
 
-# The generated files, in manifest order: PROTO_PB_SOURCES is the .pb.c of each
-# schema for the source list, PROTO_PB_OUTPUTS is both files of every pair for
-# the freshness checks below.
+set(PROTO_SCHEMAS
+    # The one protocol template, from the pinned schema checkout.
+    "${THETAGP_PB_DIR}/ThetaGP.proto"
+)
+# The generated pair lands under src/pb/ and is ignored by git.
+set(PROTO_OUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pb")
+
+# The .pb.c/.pb.h of each schema, in manifest order.
 set(PROTO_PB_SOURCES "")
 set(PROTO_PB_OUTPUTS "")
 foreach(PROTO_SCHEMA IN LISTS PROTO_SCHEMAS)
@@ -197,10 +142,7 @@ foreach(PROTO_SCHEMA IN LISTS PROTO_SCHEMAS)
                                  "${PROTO_OUT_DIR}/${PROTO_SCHEMA_STEM}.pb.h")
 endforeach()
 
-# The inputs whose timestamps decide the freshness below: each schema and, where
-# it is there, the .options file beside it. PROTO_OPTIONS is gathered from the
-# schema paths rather than written out, so an .options file added next to a
-# schema is an input of that schema without a second edit here.
+# Freshness inputs: each schema and the .options file beside it, when present.
 set(PROTO_INPUTS ${PROTO_SCHEMAS})
 foreach(PROTO_SCHEMA IN LISTS PROTO_SCHEMAS)
     get_filename_component(PROTO_SCHEMA_DIR "${PROTO_SCHEMA}" DIRECTORY)
@@ -224,9 +166,7 @@ else()
         if(NOT EXISTS "${PROTO_PB_OUTPUT}")
             set(PROTO_PB_NEEDED TRUE)
         else()
-            # An empty file is not a generated one: a write that was cut short
-            # leaves zero bytes at that name and a fresh timestamp, and the
-            # comparisons below would take it for newer than every schema.
+            # An empty file with a fresh timestamp is not a generated one.
             file(SIZE "${PROTO_PB_OUTPUT}" PROTO_PB_OUTPUT_SIZE)
             if(PROTO_PB_OUTPUT_SIZE EQUAL 0)
                 set(PROTO_PB_NEEDED TRUE)
@@ -248,14 +188,14 @@ else()
             "A generated protobuf codec (${PROTO_PB_OUTPUTS_TEXT}) is missing, "
             "empty or older than one of ${PROTO_INPUTS_TEXT}, and python3 was "
             "not found to generate them. Install python3, or run "
-            "scripts/gen_proto_pb.py in an environment that has protoc and "
+            "${THETAGP_PB_DIR}/generate.py in an environment that has protoc and "
             "python-protobuf and configure from that worktree.")
     else()
         message(STATUS "Generating ${PROTO_PB_OUTPUTS_TEXT} from ${PROTO_SCHEMAS_TEXT} ...")
         execute_process(
-            COMMAND ${PYTHON3} "${CMAKE_SOURCE_DIR}/scripts/gen_proto_pb.py"
-                    --protos ${PROTO_SCHEMAS}
-                    --out-dir "${PROTO_OUT_DIR}"
+            COMMAND ${PYTHON3} "${THETAGP_PB_DIR}/generate.py" c
+                    --nanopb "${CMAKE_SOURCE_DIR}/lib/nanopb"
+                    --out "${PROTO_OUT_DIR}"
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
             RESULT_VARIABLE PROTO_PB_RESULT
             OUTPUT_VARIABLE PROTO_PB_STDOUT
@@ -270,7 +210,7 @@ else()
         if(NOT PROTO_PB_RESULT EQUAL 0)
             message(FATAL_ERROR
                 "Generating the protobuf codecs failed: "
-                "scripts/gen_proto_pb.py exited ${PROTO_PB_RESULT}. Its output "
+                "${THETAGP_PB_DIR}/generate.py exited ${PROTO_PB_RESULT}. Its output "
                 "is printed above. It needs protoc on PATH, the fetched "
                 "lib/nanopb checkout, and a python-protobuf runtime — install "
                 "one, or point $PROTOBUF_PYTHONPATH (or the script's "
@@ -280,7 +220,7 @@ else()
         foreach(PROTO_PB_OUTPUT IN LISTS PROTO_PB_OUTPUTS)
             if(NOT EXISTS "${PROTO_PB_OUTPUT}")
                 message(FATAL_ERROR
-                    "scripts/gen_proto_pb.py exited 0 but "
+                    "${THETAGP_PB_DIR}/generate.py exited 0 but "
                     "${PROTO_PB_OUTPUT} is not there. The generator is the only "
                     "writer of that file, and it is either named in the source "
                     "list below or included by the sources that are — a build "
@@ -289,7 +229,7 @@ else()
             file(SIZE "${PROTO_PB_OUTPUT}" PROTO_PB_OUTPUT_SIZE)
             if(PROTO_PB_OUTPUT_SIZE EQUAL 0)
                 message(FATAL_ERROR
-                    "scripts/gen_proto_pb.py exited 0 but "
+                    "${THETAGP_PB_DIR}/generate.py exited 0 but "
                     "${PROTO_PB_OUTPUT} is empty. A file of zero bytes is not a "
                     "generated codec, and the next configure would take it for "
                     "current on its timestamp alone.")
@@ -303,7 +243,7 @@ endif()
 # Source Files
 # =============================================================================
 
-# Collect all source files in src directory
+# All sources under src/.
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.c"
@@ -313,10 +253,8 @@ file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS
 # =============================================================================
 # TinyUSB Configuration
 # =============================================================================
-# TinyUSB log level. The value lives in src/conf/ThetaGP_Config.h so that all
-# configuration sits in one file. The library cannot see that header, so the
-# build reads the value here and forwards it as CFG_TUSB_DEBUG: 1 means verbose
-# (level 3), 0 means silent.
+# THETAGP_CFG_USB_DBG (in ThetaGP_Config.h) as CFG_TUSB_DEBUG: 1 -> verbose (3),
+# 0 -> silent.
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/conf/ThetaGP_Config.h" _thetagp_usb_dbg
      REGEX "^#define[ \t]+THETAGP_CFG_USB_DBG[ \t]+([0-9]+)")
 if(_thetagp_usb_dbg MATCHES "[ \t]([0-9]+)$" AND NOT CMAKE_MATCH_1 STREQUAL "0")
@@ -340,8 +278,7 @@ if(BOARD_MCU_SERIES STREQUAL "STM32H7")
     )
 endif()
 
-# Suppress TinyUSB upstream source warnings (flexible array members, volatile ops)
-# These come from TinyUSB headers included by our .cpp files, not from .c sources
+# Silence TinyUSB upstream warnings that reach our C++ translation units.
 foreach(TUSB_FILE ${TINYUSB_SOURCES})
     get_filename_component(TUSB_EXT "${TUSB_FILE}" EXT)
     if(TUSB_EXT STREQUAL ".cpp" OR TUSB_EXT STREQUAL ".cc")
@@ -349,7 +286,6 @@ foreach(TUSB_FILE ${TINYUSB_SOURCES})
             COMPILE_FLAGS "-Wno-volatile -Wno-pedantic")
     endif()
 endforeach()
-# Project-wide: same warnings from TinyUSB headers pulled into C++ translation units
 add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wno-volatile>")
 add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wno-pedantic>")
 
@@ -362,12 +298,11 @@ set(MBEDTLS_PATH "${CMAKE_SOURCE_DIR}/lib/mbedtls")
 set(MBEDTLS_SRC_PATH "${MBEDTLS_PATH}/library")
 set(MBEDTLS_INC_PATH "${MBEDTLS_PATH}/include")
 
-# MbedTLS core sources
 file(GLOB MBEDTLS_SOURCES
     "${MBEDTLS_SRC_PATH}/*.c"
 )
 
-# Exclude files that don't work on embedded STM32
+# Files that do not build on bare-metal STM32.
 list(FILTER MBEDTLS_SOURCES EXCLUDE REGEX ".*net_sockets\\.c")
 list(FILTER MBEDTLS_SOURCES EXCLUDE REGEX ".*entropy_poll\\.c")
 list(FILTER MBEDTLS_SOURCES EXCLUDE REGEX ".*timing\\.c")
@@ -398,11 +333,7 @@ target_sources(${CMAKE_PROJECT_NAME}
     ${TINYUSB_SOURCES}
     ${PLATFORM_PERIPHERAL_SOURCES}
 
-    # The generated protobuf codecs: one .pb.c per schema of PROTO_SCHEMAS
-    # above. They sit beside their schemas under protocol/ and not under src/,
-    # so the GLOB above does not reach them and the manifest names them here.
-    # Generated at configure time and ignored: see the step above and
-    # protocol/README.md.
+    # The generated protobuf codec, written under src/pb/ and ignored.
     ${PROTO_PB_SOURCES}
 
     # ${MBEDTLS_SOURCES}
@@ -437,20 +368,16 @@ target_compile_definitions(${CMAKE_PROJECT_NAME}
     # MBEDTLS_CONFIG_FILE="${MBEDTLS_CONFIG_FILE}"
     # ${MBEDTLS_DEFS}
 
-    # Source root for the logger's path shortening; a build path, not a
-    # behaviour parameter.
+    # Source root for the logger's path shortening.
     THETAGP_SRC_PATH="${CMAKE_SOURCE_DIR}"
 
     BOARD_IDENTIFIER="${BOARD_IDENTIFIER}"
     BOARD_NAME="${BOARD_NAME}"
 
-    # The firmware version sys.get_fw_version reports, taken from the one place
-    # the build names it (the top-level CMakeLists). A source that spelled its
-    # own copy would report a version the build had moved past.
+    # The version sys.get_fw_version reports, from the top-level CMakeLists.
     THETAGP_FW_VERSION="${THETAGP_VERSION}"
 )
 
-# Set output directory and link script
 set_target_properties(${CMAKE_PROJECT_NAME}
     PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"

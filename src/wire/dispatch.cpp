@@ -13,7 +13,7 @@
 #include "conf/ThetaGP_Config.h"
 #include "pb_decode.h"
 #include "pb_encode.h"
-#include "protocol/ThetaGP.pb.h"
+#include "pb/ThetaGP.pb.h"
 
 namespace ThetaGP::Wire {
 

@@ -749,7 +749,7 @@ def parse_args(argv):
         prog="thetagp.py",
         description="Read, write and watch the ThetaGP CDC protocol: frames "
                     "as ADR-0007 section 3.1 defines them, payloads as the "
-                    "schemas of protocol/ define them.")
+                    "schemas of the protocol define them.")
     common = common_parser()
     parser.add_argument("--bindings", default=DEFAULT_BINDINGS_DIR, metavar="DIR",
                         help="the generated bindings (default: build/proto_py/)")

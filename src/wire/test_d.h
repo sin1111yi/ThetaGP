@@ -7,7 +7,7 @@
 #include <cstdint>
 
 #include "conf/ThetaGP_Config.h"
-#include "protocol/ThetaGP.pb.h"
+#include "pb/ThetaGP.pb.h"
 
 namespace ThetaGP::Wire {
 

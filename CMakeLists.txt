@@ -103,28 +103,17 @@ add_subdirectory(src)
 # Generated artifacts
 # =============================================================================
 
-# The configure step writes into the source tree in three places: the board
-# configuration generator, the protobuf codec generator, and the configuration
-# key table generator. Everything but the board configuration is ignored (see
-# .gitignore), and none of it is removed by the build system's own clean target,
-# which only knows about build/. This target removes the ignored ones so the next
-# configure writes them again.
+# The configure step writes generated files into the source tree; the build
+# system's own clean does not remove them, so this target does.
 set(THETAGP_GENERATED_ARTIFACTS
     "${CMAKE_SOURCE_DIR}/configs/config_keys.gen.h"
+    "${CMAKE_SOURCE_DIR}/src/pb"
     "${CMAKE_BINARY_DIR}/proto_py"
 )
-
-# One pair per schema, so a schema added to the list in src/CMakeLists.txt is
-# covered here as soon as the tree is configured again.
-file(GLOB THETAGP_GENERATED_PROTO_PAIRS CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/protocol/*.pb.c"
-    "${CMAKE_SOURCE_DIR}/protocol/*.pb.h")
-
-list(APPEND THETAGP_GENERATED_ARTIFACTS ${THETAGP_GENERATED_PROTO_PAIRS})
 
 add_custom_target(clean-generated
     COMMAND ${CMAKE_COMMAND} -E rm -rf ${THETAGP_GENERATED_ARTIFACTS}
     COMMAND ${CMAKE_COMMAND} -E echo
             "Removed the generated protocol artifacts, the configuration key table and the host bindings"
-    COMMENT "Cleaning the generated artifacts under protocol/ and configs/"
+    COMMENT "Cleaning the generated artifacts under src/pb/ and configs/"
     VERBATIM)

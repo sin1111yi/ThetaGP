@@ -64,7 +64,7 @@ list reply is sized for the list it writes.
 
 The declaration is separate from the protocol spec, and this emitter reads only
 its own TOML: a row names the consumer's field, and the spec may not know the
-consumer (protocol/README.md, design principles).
+consumer (the protocol's own design principles).
 
 A factory default is declared here and emitted beside the table, so the
 firmware's store starts from this declaration's own `default` column and the two
@@ -90,7 +90,7 @@ CONFIG_KEYS_PATH = "configs/config_keys.toml"
 # Where the generated header is written, relative to the repository root. It
 # sits beside the declaration it comes from, and the build reaches it as
 # "configs/config_keys.gen.h" — the repository root is on the include path, the
-# same way "protocol/ThetaGP.pb.h" is reached.
+# same way "pb/ThetaGP.pb.h" is reached.
 CONFIG_KEYS_OUT = "configs/config_keys.gen.h"
 
 # A declared type and the KeyType of the table. `bool` travels as a byte, which
