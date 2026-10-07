@@ -185,8 +185,8 @@
 // refresh task runs; the effect period is how long one full cycle of the
 // animation takes, which the frame interval comes out of as periodUs /
 // FRAME_COUNT. The frame interval has to cover at least one task period, or the
-// task cannot show every frame it advances through (led_effect_task.cpp asserts
-// it at compile time).
+// task cannot show every frame it advances through (rgb_strip.cpp asserts it at
+// compile time).
 #ifndef THETAGP_CFG_LED_TASK_PERIOD_US
 #define THETAGP_CFG_LED_TASK_PERIOD_US 10000UL         // 100 Hz
 #endif

@@ -5,7 +5,7 @@ mcu            = "STM32H743xx"
 mcu_series     = "STM32H7"
 chip           = "STM32H743VI"
 
-[led0]
+[led.run0]
 pin        = "PD8"
 active_low = false
 

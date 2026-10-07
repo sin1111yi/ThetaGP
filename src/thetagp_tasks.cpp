@@ -28,7 +28,7 @@
 
 #include "gamepad/gamepad.h"
 #include "drivers/device/system_timer.h"
-#include "drivers/led/led_effect.h"
+#include "drivers/device/rgb_strip/rgb_strip.h"
 #include "task_manager.h"
 
 #include "tusb.h"
@@ -174,9 +174,11 @@ void ThetaGP::ThetaGamepad::registerTasks(void) {
                             TaskPriority::Realtime);
   TaskManager::registerTask("COMM", "CMD_PROC", taskCmdProc,
                             TASK_PERIOD_HZ(20), TaskPriority::Medium);
-  // The strip is cosmetic: its render is long enough to matter against the
-  // report tick, so it runs below every task that carries input.
-  TaskManager::registerTask("LED", "EFFECT", Drivers::Led::ledEffectTask,
+#ifdef BDCFG_LED_RGB_STRIP_PIN
+  // The strip is cosmetic; sending a frame holds the CPU long enough to matter
+  // against the report tick, so it runs below every task that carries input.
+  TaskManager::registerTask("LED", "EFFECT", Drivers::Device::RgbStrip::task,
                             TASK_PERIOD_US(THETAGP_CFG_LED_TASK_PERIOD_US),
                             TaskPriority::Low);
+#endif
 }

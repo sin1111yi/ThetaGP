@@ -34,6 +34,7 @@
 #include "drivers/device/device_manager.h"
 #include "drivers/device/flash/flash_base.h"
 #include "drivers/device/keypad.h"
+#include "drivers/device/rgb_strip/rgb_strip.h"
 #include "drivers/device/run_led.h"
 #include "drivers/device/system_timer.h"
 #include "drivers/gp_emulator/gp_emulator_manager.h"
@@ -69,6 +70,10 @@ void ThetaGamepad::setup() {
 #if THETAGP_CFG_HAS_FLASH
   (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::FlashBase::getInstance());
+#endif
+#ifdef BDCFG_LED_RGB_STRIP_PIN
+  (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
+      &Drivers::Device::RgbStrip::getInstance());
 #endif
 
   Drivers::Device::DeviceManager::getInstance().initDevices();

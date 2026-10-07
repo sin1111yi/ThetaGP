@@ -5,9 +5,14 @@ mcu            = "STM32H743xx"
 mcu_series     = "STM32H7"
 chip           = "STM32H743VI"
 
-[led0]
+[led.run0]
 pin        = "PC0"
 active_low = true
+
+[led.rgb_strip]
+pin    = "PE14"
+source = "TIM1_CH4"
+number = 8
 
 [keypad]
 drive_mode  = "scan_matrix"

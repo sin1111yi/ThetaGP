@@ -13,7 +13,7 @@ import tomllib
 
 from config import (
     validate_config,
-    gen_pin_lines,
+    gen_led_lines,
     gen_keypad_lines,
     gen_usb_lines,
     gen_uart_lines,
@@ -118,8 +118,9 @@ def main() -> None:
 
     bi = cfg.get("board_info", {})
 
-    print("[INFO] Generating pin macros...", file=sys.stderr)
-    pin_lines = gen_pin_lines(cfg)
+    print("[INFO] Generating LED macros...", file=sys.stderr)
+    led_lines = gen_led_lines(cfg.get("led"))
+    print(f"[INFO]   LEDs: {len(led_lines)} macros generated", file=sys.stderr)
 
     print("[INFO] Generating keypad macros...", file=sys.stderr)
     keypad_lines = gen_keypad_lines(cfg.get("keypad"))
@@ -145,7 +146,7 @@ def main() -> None:
 
     header_content = assemble_header(
         bi.get("mcu_series", ""), bi,
-        pin_lines, keypad_lines, usb_lines, uart_lines, spi_lines,
+        led_lines, keypad_lines, usb_lines, uart_lines, spi_lines,
         flash_lines,
     )
     cmake_content = generate_cmake(bi, target)

@@ -8,6 +8,7 @@ from .generators import (
     FLASH_CHIP_MAP,
     KEYPAD_ACTIVE_MODE_MAP,
     KEYPAD_DRIVE_MODE_MAP,
+    LED_TIMER_CHANNEL_MAP,
     MCU_HEADER_MAP,
     SPI_PERIPHERAL_ENUM_MAP,
     UART_PERIPHERAL_ENUM_MAP,
@@ -52,6 +53,11 @@ USB_REPORT_RATE_CEILING_HZ = USB_SPEED_CEILING_HZ  # the generator's table, not 
 # generator answers with the switch alone.
 VALID_FLASH_CHIPS = {"none"} | set(FLASH_CHIP_MAP)
 
+VALID_LED_SOURCES = set(LED_TIMER_CHANNEL_MAP)
+
+# Pixels one strip may carry; the driver's encode buffer is sized from it.
+MAX_LED_PIXELS = 64
+
 # The firmware's instance enums (uart_bus.h, spi_bus.h) carry exactly the
 # entries in those maps: UART1–UART8 have no LPUART, SPI1–SPI6 have no SPI7.
 VALID_UART_PERIPHERALS = set(UART_PERIPHERAL_ENUM_MAP)
@@ -65,6 +71,7 @@ def validate_config(cfg: dict) -> list[str]:
     errors: list[str] = []
 
     _validate_board_info(cfg.get("board_info", {}), errors)
+    _validate_led(cfg.get("led"), errors)
     _validate_keypad(cfg.get("keypad", {}), errors)
     _validate_usb(cfg.get("usb", {}), errors)
     _validate_bus(cfg.get("bus", {}), errors)
@@ -92,6 +99,49 @@ def _validate_board_info(bi: dict, errors: list[str]) -> None:
             "board_info.identifier must contain only alphanumeric characters "
             "and underscores"
         )
+
+
+# ── led ──────────────────────────────────────────────────────────────────────
+
+def _validate_led(led: dict | None, errors: list[str]) -> None:
+    if led is None:
+        return
+    if not isinstance(led, dict) or not led:
+        errors.append("led must hold at least one LED table")
+        return
+
+    for name, entry in led.items():
+        prefix = f"led.{name}"
+        if not isinstance(entry, dict):
+            errors.append(f"{prefix} must be a table")
+            continue
+
+        pin = entry.get("pin")
+        if pin is None:
+            errors.append(f"{prefix}.pin is required")
+        else:
+            err = validate_pin_format(pin)
+            if err:
+                errors.append(f"{prefix}.pin: {err}")
+
+        # A source makes the table a strip, which declares its pixel count.
+        if "source" in entry:
+            if entry["source"] not in VALID_LED_SOURCES:
+                errors.append(
+                    f"Invalid {prefix}.source '{entry['source']}'. "
+                    f"Valid values: {', '.join(sorted(VALID_LED_SOURCES))}"
+                )
+            number = entry.get("number")
+            if number is None:
+                errors.append(f"{prefix}.number is required for a strip")
+            elif isinstance(number, bool) or not isinstance(number, int):
+                errors.append(f"{prefix}.number must be an integer")
+            elif not 1 <= number <= MAX_LED_PIXELS:
+                errors.append(
+                    f"{prefix}.number must be between 1 and {MAX_LED_PIXELS}"
+                )
+        elif "active_low" in entry and not isinstance(entry["active_low"], bool):
+            errors.append(f"{prefix}.active_low must be a boolean")
 
 
 # ── keypad ───────────────────────────────────────────────────────────────────

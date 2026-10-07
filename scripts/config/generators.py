@@ -38,6 +38,12 @@ SPI_PERIPHERAL_ENUM_MAP = {f"SPI{i}": f"SpiInstance::Spi{i}" for i in range(1, 7
 
 FLASH_CHIP_MAP = {"w25qxx": "W25QXX"}
 
+# Timer channels a strip's data line can come out of, keyed by the source a
+# board declares: each entry names a TimerChannel in timer.h.
+LED_TIMER_CHANNEL_MAP = {
+    "TIM1_CH4": "TimerChannel::Tim1Ch4",
+}
+
 
 def lookup_value(mapping: dict[str, str], label: str, value,
                  what: str = "firmware value") -> str:
@@ -66,22 +72,42 @@ def lookup_peripheral(enum_map: dict[str, str], bus: str, index: int,
                         entry["peripheral"], what="firmware instance")
 
 
-# ── Pin lines (LED, misc) ────────────────────────────────────────────────────
+# ── LEDs ─────────────────────────────────────────────────────────────────────
 
-def gen_pin_lines(cfg: dict) -> list[str]:
-    """Generate pin macro lines for non-keypad, non-usb keys (LED etc.)."""
+def gen_led_lines(led: dict | None) -> list[str]:
+    """Generate the macro lines for the LEDs a board declares.
+
+    A table that names a source is a strip; one without a source is a single
+    LED on its own GPIO.
+    """
+    if not led:
+        return []
+
     lines: list[str] = []
-    for key in cfg:
-        if key in ("keypad", "usb", "bus", "flash", "board_info"):
-            continue
-        val = cfg[key]
-        if isinstance(val, dict) and "pin" in val:
-            lines.append(generate_pin_macro(f"BDCFG_{key.upper()}_PIN", val["pin"]))
-            if "active_low" in val:
-                lines.append(
-                    f"#define {'BDCFG_' + key.upper() + '_ACTIVE_LOW':<28} "
-                    f"{'true' if val['active_low'] else 'false'}"
+    for name in sorted(led):
+        entry = led[name]
+        prefix = f"BDCFG_LED_{name.upper()}"
+        pin = entry.get("pin")
+        if pin is None:
+            raise ValueError(f"led.{name}.pin is required")
+
+        lines.append(generate_pin_macro(f"{prefix}_PIN", pin))
+
+        if "source" in entry:
+            channel = lookup_value(LED_TIMER_CHANNEL_MAP, f"led.{name}.source",
+                                   entry["source"], what="timer channel")
+            count = entry.get("number")
+            if count is None:
+                raise ValueError(
+                    f"led.{name}.number is required for a strip"
                 )
+            lines.append(f"#define {prefix + '_SOURCE':<28} {channel}")
+            lines.append(f"#define {prefix + '_NUMBER':<28} {count}")
+        elif "active_low" in entry:
+            lines.append(
+                f"#define {prefix + '_ACTIVE_LOW':<28} "
+                f"{'true' if entry['active_low'] else 'false'}"
+            )
     return lines
 
 
@@ -364,7 +390,7 @@ def gen_flash_lines(flash: dict | None) -> list[str]:
 def assemble_header(
     mcu_series: str,
     board_info: dict,
-    pin_lines: list[str],
+    led_lines: list[str],
     keypad_lines: list[str],
     usb_lines: list[str],
     uart_lines: list[str],
@@ -403,7 +429,7 @@ def assemble_header(
     # lookup above.
     content += f"\n{mcu_header}\n\n"
 
-    for line in pin_lines:
+    for line in led_lines:
         content += line + "\n"
 
     if keypad_lines:

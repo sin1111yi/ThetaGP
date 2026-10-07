@@ -72,28 +72,46 @@ chip = "w25qxx"
 | `mcu_series` | string | One of: `STM32H7`, `STM32F4`, `STM32F1`. |
 | `chip` | string | probe-rs target name for flashing, emitted as `BOARD_CHIP` — e.g. `STM32H743VI`. This is the probe-rs target, not ST's orderable part number: `STM32H743VITx` is rejected by probe-rs. Optional; empty means "fill this in before flashing". |
 
-### Pin macros — optional
+### `[led.<name>]` — optional
 
-Any top-level key with a `pin` field (except `keypad`, `usb`, `bus`, `flash`,
-`board_info`) generates a pin macro:
+Each table under `led` is one LED, and its name is the binding the firmware
+looks the macros up by: `run0` is the run LED, `rgb_strip` is the strip.
+
+A table with a `source` is a strip — a timer channel carrying a bit stream, and
+the number of pixels it drives:
 
 ```toml
-[led0]
-pin        = "PC0"
-active_low = false
+[led.rgb_strip]
+pin    = "PE14"
+source = "TIM1_CH4"
+number = 6
+```
 
-[led1]
-pin        = "PC1"
+Generates:
+
+```c
+#define BDCFG_LED_RGB_STRIP_PIN      {Port::PortE, Pin::Pin14}
+#define BDCFG_LED_RGB_STRIP_SOURCE   TimerChannel::Tim1Ch4
+#define BDCFG_LED_RGB_STRIP_NUMBER   6
+```
+
+`source` is one of the timer channels the platform brings up, which is
+`TIM1_CH4` today. `number` is 1–64 pixels.
+
+A table without one is a single LED on its own GPIO, which may also declare
+`active_low`:
+
+```toml
+[led.run0]
+pin        = "PC0"
 active_low = true
 ```
 
 Generates:
 
 ```c
-#define BDCFG_LED0_PIN               {Port::PortC, Pin::Pin0}
-#define BDCFG_LED0_ACTIVE_LOW        false
-#define BDCFG_LED1_PIN               {Port::PortC, Pin::Pin1}
-#define BDCFG_LED1_ACTIVE_LOW        true
+#define BDCFG_LED_RUN0_PIN           {Port::PortC, Pin::Pin0}
+#define BDCFG_LED_RUN0_ACTIVE_LOW    true
 ```
 
 Pin strings use `P<port><pin>` format: `PA0`–`PI15`. Port letters are A–I.

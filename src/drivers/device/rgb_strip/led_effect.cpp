@@ -20,13 +20,12 @@
  */
 
 // The colour and animation arithmetic. Nothing platform-specific is reachable
-// from here: no memory-region macro, no driver, no configuration. A host
-// compiler builds this translation unit as it stands, which is what lets
-// scripts/test/test_led_effect.py drive the firmware's own render on the host.
+// from here: no memory-region macro, no driver, no configuration, so a host
+// compiler builds this translation unit as it stands.
 
-#include "drivers/led/led_effect.h"
+#include "drivers/device/rgb_strip/led_effect.h"
 
-namespace ThetaGP::Drivers::Led {
+namespace ThetaGP::Drivers::Device::LedEffect {
 namespace {
 
 // The wheel in six sectors of 256 hue units, each a ramp on one channel: the
@@ -75,17 +74,12 @@ Rgb hueToRgb(uint16_t hue) {
   return Rgb{channel[Green], channel[Red], channel[Blue]};
 }
 
-void ledEffectRender(Rgb *out, uint8_t keyCount, uint32_t periodUs,
-                     uint16_t phaseOffset) {
-  // The rainbow's hue advance is HUE_CYCLE / FRAME_COUNT per frame whatever
-  // cycle the caller spans, so the period is not read here.
-  static_cast<void>(periodUs);
-
-  if (keyCount == 0) {
+void render(Rgb *out, uint8_t ledCount, uint16_t phaseOffset) {
+  if (ledCount == 0) {
     return;
   }
 
-  const uint16_t keyStep = static_cast<uint16_t>(HUE_CYCLE / keyCount);
+  const uint16_t ledStep = static_cast<uint16_t>(HUE_CYCLE / ledCount);
 
   for (uint8_t frame = 0; frame < FRAME_COUNT; ++frame) {
     // Multiplied before divided: a per-frame increment would carry the
@@ -93,16 +87,15 @@ void ledEffectRender(Rgb *out, uint8_t keyCount, uint32_t periodUs,
     const uint16_t frameHue =
         static_cast<uint16_t>((frame * HUE_CYCLE) / FRAME_COUNT);
 
-    for (uint8_t led = 0; led < keyCount; ++led) {
+    for (uint8_t led = 0; led < ledCount; ++led) {
       const uint16_t hue =
-          static_cast<uint16_t>(phaseOffset + led * keyStep + frameHue);
-      out[frame * keyCount + led] = hueToRgb(hue);
+          static_cast<uint16_t>(phaseOffset + led * ledStep + frameHue);
+      out[frame * ledCount + led] = hueToRgb(hue);
     }
   }
 }
 
-void ledEffectAdvance(LedEffectClock &clock, uint32_t deltaUs,
-                      uint32_t periodUs) {
+void advance(Clock &clock, uint32_t deltaUs, uint32_t periodUs) {
   const uint32_t frameIntervalUs = periodUs / FRAME_COUNT;
   if (frameIntervalUs == 0) {
     return;
@@ -115,4 +108,6 @@ void ledEffectAdvance(LedEffectClock &clock, uint32_t deltaUs,
   }
 }
 
-} // namespace ThetaGP::Drivers::Led
+} // namespace ThetaGP::Drivers::Device::LedEffect
+
+
