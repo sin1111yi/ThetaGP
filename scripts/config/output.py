@@ -281,6 +281,8 @@ def bus_lines(kind: str, descriptor: list, defaults: dict):
         for j, row in enumerate(rendered):
             out.line(f"        {row}" + (", \\" if j < last else ""))
 
+    emit.__name__ = f"bus_lines[{kind}]"
+    emit.__name__ = f"bus_lines[{kind}]"
     return emit
 
 
