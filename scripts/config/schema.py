@@ -59,11 +59,11 @@ def _group(row: dict) -> Group:
     return Group((field, value), items, row.get("note", ""))
 
 
-def _emitter(row: dict):
-    if "factory" in row:
-        args = {k: v for k, v in row.items() if k != "factory"}
-        return _callable(row["factory"])(**args)
-    return _callable(row["name"]) if isinstance(row, dict) else _callable(row)
+def _emitter(row):
+    if isinstance(row, dict) and "kind" in row:
+        held = {k: v for k, v in row.items() if k != "kind"}
+        return getattr(engine, row["kind"])(**held)
+    return _callable(row)
 
 
 def _table(row: dict) -> Table:

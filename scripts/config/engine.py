@@ -11,6 +11,8 @@ table, a report rate bound to the link speed — declares its checks and its
 lines in output.py. A row still names them, so a field is spelled once.
 """
 
+import re
+
 from .pin_utils import pin_array_lines, pin_struct, validate_pin_format
 from .tables import (BUTTON_SUFFIXES, MAX_BUTTON_INDEX, MAX_KEY_INDEX,
                      MAX_KEYPAD_BUTTONS, MAX_KEYPAD_KEYS, NO_KEY,
@@ -458,6 +460,68 @@ class Rate(Field):
                 f"tick cannot land on exactly {value} times per second."
             )
         return errors
+
+
+
+class Descriptor:
+    """The lines a bus table carries.
+
+    Its enable lines, the count of the entries that bind a name to an instance,
+    the bindings themselves, and the descriptor table the drivers index. `name`
+    is what the bus is called in the macros it writes; `template` is one row of
+    that table, where `{field}` stands for the value the row of that field
+    renders as, a field left out falling to `defaults` — `@field` takes the
+    value another field of the same entry carries.
+    """
+
+    def __init__(self, name: str, template: str, defaults: dict):
+        self.name = name
+        self.template = template
+        self.defaults = defaults
+
+    def __call__(self, out, entries, table) -> None:
+        entries = entries or []
+
+        for i in range(len(entries)):
+            out.line(flag_line(f"BDCFG_USE_{self.name}_{i + 1}", pad=True))
+
+        # Only an entry that names both a binding and a peripheral becomes a
+        # bus instance, and the descriptor table carries exactly those, in this
+        # order: the instance number — and with it BUS_<name>_<n> — is a
+        # position here, not a position in the board's own array.
+        bound = [entry for entry in entries
+                 if entry.get("bind") and entry.get("peripheral")]
+        if not bound:
+            return
+
+        out.line("")
+        out.line(f"#define BDCFG_USE_{self.name}_COUNT {len(bound)}")
+        out.line("")
+
+        for j, entry in enumerate(bound):
+            out.line(macro_line(f"BDCFG_{entry['bind'].upper()}_{self.name}",
+                                f"BUS_{self.name}_{j + 1}"))
+
+        rendered: list[str] = []
+        for entry in bound:
+            values = {row.name: row.render(entry[row.name], entry)
+                      for row, _ in rows(table.items, entry) if row.name in entry}
+            for field, default in self.defaults.items():
+                if field not in values:
+                    values[field] = (
+                        values[default[1:]]
+                        if isinstance(default, str) and default.startswith("@")
+                        else str(default)
+                    )
+            rendered.append(re.sub(r"\{(\w+)\}",
+                                   lambda at: str(values[at.group(1)]),
+                                   self.template))
+
+        out.line("")
+        out.line(macro_line(f"BDCFG_{self.name}_DESC_DATA", "\\"))
+        last = len(rendered) - 1
+        for j, row in enumerate(rendered):
+            out.line(f"        {row}" + (", \\" if j < last else ""))
 
 
 class Group:

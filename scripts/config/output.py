@@ -6,9 +6,7 @@ driver indexes, a report rate is held to the link it travels on: each of those
 names its checks and its lines here, and the schema's row points at them.
 """
 
-import re
-
-from .engine import flag_line, macro_line, rows
+from .engine import flag_line
 from .tables import (
     BUTTON_SUFFIXES,
     FLASH_CHIP_MAP,
@@ -53,81 +51,6 @@ LICENSE = (
 
 
 # ── Buses ────────────────────────────────────────────────────────────────────
-
-def render_descriptor(template: str, values: dict) -> str:
-    """One descriptor row, from the template the table declares.
-
-    `{field}` stands for the value that field renders as; every other brace is
-    the row's own, so a template spells the nested braces a descriptor carries
-    without escaping anything.
-    """
-    return re.sub(r"\{(\w+)\}", lambda at: str(values[at.group(1)]), template)
-
-
-def bus_lines(kind: str, template: str, defaults: dict):
-    """The macros a bus table carries.
-
-    Its enable lines, the count of the entries that bind a name to an
-    instance, the bindings themselves, and the descriptor table the drivers
-    index. `template` is one descriptor row: `{field}` is the value the row of
-    that field renders as, a field left out falling to `defaults`, where
-    `@name` takes the value another field of the same entry carries.
-    """
-
-    def emit(out, held, table) -> None:
-        entries = held or []
-
-        for i in range(len(entries)):
-            out.line(flag_line(f"BDCFG_USE_{kind}_{i + 1}", pad=True))
-
-        # Only an entry that names both a binding and a peripheral becomes a
-        # bus instance, and the descriptor table carries exactly those, in this
-        # order: the instance number — and with it BUS_<kind>_<n> — is a
-        # position here, not a position in the board's own array.
-        bound = [
-            entry for entry in entries
-            if entry.get("bind") and entry.get("peripheral")
-        ]
-        if not bound:
-            return
-
-        out.line("")
-        out.line(f"#define BDCFG_USE_{kind}_COUNT {len(bound)}")
-        out.line("")
-
-        for j, entry in enumerate(bound):
-            out.line(
-                macro_line(f"BDCFG_{entry['bind'].upper()}_{kind}",
-                           f"BUS_{kind}_{j + 1}")
-            )
-
-        rendered: list[str] = []
-        for entry in bound:
-            values = {
-                row.name: row.render(entry[row.name], entry)
-                for row, _ in rows(table.items, entry)
-                if row.name in entry
-            }
-            for name, default in defaults.items():
-                if name not in values:
-                    values[name] = (
-                        values[default[1:]]
-                        if isinstance(default, str) and default.startswith("@")
-                        else str(default)
-                    )
-            rendered.append(render_descriptor(template, values))
-
-        out.line("")
-        out.line(macro_line(f"BDCFG_{kind}_DESC_DATA", "\\"))
-        last = len(rendered) - 1
-        for j, row in enumerate(rendered):
-            out.line(f"        {row}" + (", \\" if j < last else ""))
-
-    emit.__name__ = f"bus_lines[{kind}]"
-    emit.__name__ = f"bus_lines[{kind}]"
-    emit.origin = {"factory": "bus_lines", "kind": kind, "template": template,
-                   "defaults": dict(defaults)}
-    return emit
 
 
 # ── Flash ────────────────────────────────────────────────────────────────────

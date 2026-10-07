@@ -104,8 +104,10 @@ def sections() -> list[str]:
             out.append("firmware looks its macros up by.")
             out.append("")
         if table.lines is not None:
-            out.append(f"Validation and the lines are `{table.lines.__name__}`'s: the")
-            out.append("fields below are held to the rules, not emitted one by one.")
+            bus = getattr(table.lines, "name", None)
+            who = f"the {bus} bus's" if bus else f"`{table.lines.__name__}`'s"
+            out.append(f"Validation and the lines are {who}: the fields below are")
+            out.append("held to the rules, not emitted one by one.")
             out.append("")
 
         rows = []

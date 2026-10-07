@@ -57,8 +57,8 @@ firmware looks its macros up by.
 
 ## `[bus.uart]`
 
-Validation and the lines are `bus_lines[UART]`'s: the
-fields below are held to the rules, not emitted one by one.
+Validation and the lines are the UART bus's: the fields below are
+held to the rules, not emitted one by one.
 
 | Field | Accepts | When | Required | Becomes |
 |-------|---------|------|----------|---------|
@@ -70,8 +70,8 @@ fields below are held to the rules, not emitted one by one.
 
 ## `[bus.spi]`
 
-Validation and the lines are `bus_lines[SPI]`'s: the
-fields below are held to the rules, not emitted one by one.
+Validation and the lines are the SPI bus's: the fields below are
+held to the rules, not emitted one by one.
 
 | Field | Accepts | When | Required | Becomes |
 |-------|---------|------|----------|---------|
@@ -84,8 +84,8 @@ fields below are held to the rules, not emitted one by one.
 
 ## `[flash]`
 
-Validation and the lines are `lines_flash`'s: the
-fields below are held to the rules, not emitted one by one.
+Validation and the lines are `lines_flash`'s: the fields below are
+held to the rules, not emitted one by one.
 
 | Field | Accepts | When | Required | Becomes |
 |-------|---------|------|----------|---------|

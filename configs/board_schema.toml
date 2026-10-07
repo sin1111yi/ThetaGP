@@ -213,8 +213,8 @@ path = ["bus", "uart"]
 kind = "array"
 
 [table.lines]
-factory = "bus_lines"
-kind = "UART"
+kind = "Descriptor"
+name = "UART"
 template = "{{peripheral}, {tx}, {rx}, {baud}}"
 defaults = { rx = "@tx", baud = 115200 }
 
@@ -252,8 +252,8 @@ path = ["bus", "spi"]
 kind = "array"
 
 [table.lines]
-factory = "bus_lines"
-kind = "SPI"
+kind = "Descriptor"
+name = "SPI"
 template = "{{peripheral}, {{sclk}, {mosi}, {miso}}, {ncs}}"
 defaults = {  }
 

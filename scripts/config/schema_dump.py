@@ -90,13 +90,15 @@ def emit_group(lines: list[str], group) -> None:
 
 
 def emit_emitter(lines: list[str], key: str, callable_) -> None:
-    origin = getattr(callable_, "origin", None)
-    if origin is None:
+    kind = type(callable_).__name__
+    if not hasattr(engine, kind):
         lines.append(f"{key} = {value(func_name(callable_))}")
         return
     lines.append("")
     lines.append(f"[table.{key}]")
-    for name, held in origin.items():
+    lines.append(f'kind = "{kind}"')
+    for name in ("name", "template", "defaults"):
+        held = getattr(callable_, name)
         if isinstance(held, dict):
             inside = ", ".join(f"{k} = {value(v)}" for k, v in held.items())
             lines.append(f"{name} = {{ {inside} }}")
