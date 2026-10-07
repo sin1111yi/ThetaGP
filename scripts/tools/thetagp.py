@@ -14,7 +14,26 @@ from typing import NoReturn
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
 
-DEFAULT_BINDINGS_DIR = os.path.join(REPO_ROOT, "build", "proto_py")
+BINDINGS_DIR_NAME = "proto_py"
+
+def default_bindings_dir():
+    """Where the configure wrote the host bindings.
+
+    The configure writes them into the build directory it was given, and build/
+    is the one this project is configured into; a build directory of another
+    name carries one of its own. The newest of them is the answer, because the
+    build configured last wrote its bindings last, and a reply has to be read by
+    the schema that build was built against.
+    """
+    written = [os.path.join(directory, "ThetaGP_pb2.py")
+               for directory in glob.glob(os.path.join(REPO_ROOT, "build*",
+                                                       BINDINGS_DIR_NAME))]
+    written = [path for path in written if os.path.isfile(path)]
+    if not written:
+        return os.path.join(REPO_ROOT, "build", BINDINGS_DIR_NAME)
+    return os.path.dirname(max(written, key=os.path.getmtime))
+
+DEFAULT_BINDINGS_DIR = default_bindings_dir()
 
 FRAME_PAYLOAD_MAX = 1024        # ADR-0007 section 3.5, FRAME_PAYLOAD_MAX
 FRAME_PREFIX_MAX_BYTES = 2
@@ -750,7 +769,7 @@ def common_parser():
     """The flags every subcommand takes, so they may follow the subcommand."""
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--bindings", default=argparse.SUPPRESS, metavar="DIR",
-                        help="the generated bindings and their manifest")
+                        help="the generated bindings")
     parser.add_argument("--json", action="store_true", default=argparse.SUPPRESS,
                         help="one JSON object per decoded frame (JSON lines) "
                              "instead of the readable dump")
@@ -764,7 +783,9 @@ def parse_args(argv):
                     "schemas of the protocol define them.")
     common = common_parser()
     parser.add_argument("--bindings", default=DEFAULT_BINDINGS_DIR, metavar="DIR",
-                        help="the generated bindings (default: build/proto_py/)")
+                        help="the generated bindings (default: the newest "
+                             "build*/proto_py/, which is where the configure "
+                             "wrote them)")
     parser.add_argument("--json", action="store_true",
                         help="one JSON object per decoded frame (JSON lines) "
                              "instead of the readable dump")

@@ -69,14 +69,29 @@ def scheme_from_cmake():
              "--protos" % CMAKE_LISTS, 2)
     return paths
 
+def inside_work_tree(path):
+    """True when the path is the work tree itself or something under it."""
+    root = os.path.abspath(REPO_ROOT)
+    return os.path.commonpath([root, os.path.abspath(path)]) == root
+
 def git_ignores(path):
-    """True, False, or None when git cannot answer (no git, or not a work tree)."""
+    """True, False, or None when git cannot answer (no git, not a work tree, or
+    a path outside it).
+
+    A path outside the work tree is one no commit of this repository holds, so
+    git is not asked whether this repository ignores it: None says that, and
+    False keeps saying "inside the tree, and this repository would commit it" --
+    the caller reads the two apart, which is what lets it name a directory
+    outside the tree as somewhere the bindings may go.
+    """
     if shutil.which("git") is None:
         return None
     probe = subprocess.run(["git", "-C", REPO_ROOT, "rev-parse",
                             "--is-inside-work-tree"],
                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     if probe.returncode != 0:
+        return None
+    if not inside_work_tree(path):
         return None
     check = subprocess.run(["git", "-C", REPO_ROOT, "check-ignore", "-q", "--",
                             os.path.relpath(path, REPO_ROOT)],
