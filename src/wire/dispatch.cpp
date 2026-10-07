@@ -129,6 +129,9 @@ uint16_t Dispatch::answer(const uint8_t *payload, uint16_t length,
         case ThetaGP_Request_config_set_key_tag:
             ConfigDomain::setKey(request, reply);
             break;
+        case ThetaGP_Request_config_list_keys_tag:
+            ConfigDomain::listKeys(reply);
+            break;
         case ThetaGP_Request_sys_get_usage_tag:
             SysDomain::usage(reply);
             break;

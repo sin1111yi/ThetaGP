@@ -26,18 +26,25 @@
 namespace ThetaGP::Wire {
 
 // The configuration domain: the keys the key table exposes, read and written
-// one at a time. Every arm answers the key it reached, so a host pairing
+// one at a time and listed so a host can ask which ones this firmware carries.
+// Every arm answers the key it reached, so a host pairing
 // replies with requests sees which field moved.
 class ConfigDomain {
 public:
-  // The value of the key the request names, as a number, or the refusal that
-  // says the key is unknown or holds a run this arm does not carry.
+  // The value of the key the request names: a number for a scalar key, a run of
+  // elements for an array key, or the refusal that says the key is one this
+  // firmware does not expose.
   static void getKey(const ThetaGP_Request &request, ThetaGP_Reply &reply);
 
   // Writes the value the request carries into the key it names, held to the
-  // range that key declares. The reply carries the key and nothing of the
-  // value: what a read answers is where the value is read back.
+  // range and the element count that key declares. The reply carries the key
+  // and nothing of the value: a read is where the value is read back.
   static void setKey(const ThetaGP_Request &request, ThetaGP_Reply &reply);
+
+  // One entry per key the control protocol accepts, in the table's order, each
+  // with the range the key holds and whether a write reaches it only at the
+  // next boot.
+  static void listKeys(ThetaGP_Reply &reply);
 };
 
 } // namespace ThetaGP::Wire
