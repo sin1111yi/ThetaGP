@@ -83,9 +83,21 @@ class Arms:
                            if name not in self.request_by_name}
 
     def arm_for_command(self, command):
+        """The arm a name names.
+
+        A command is <domain>.<name>, as in sys.ping. An arm a body's write
+        continues in carries no command of its own -- the answer to it is the
+        success arm of the request that opened the write -- so it is named by
+        its own arm name, as in profile_put_end.
+        """
+        if command in self.continuations:
+            number, message = self.continuations[command]
+            return number, message, command
         if command.count(".") != 1:
-            fail("%r is not a command name: a command is <domain>.<name>, as "
-                 "in sys.ping" % command, EXIT_USAGE)
+            fail("%r is neither a command nor an arm: a command is "
+                 "<domain>.<name>, as in sys.ping, and an arm a body's write "
+                 "continues in is named by its own name, as in profile_put_end"
+                 % command, EXIT_USAGE)
         if command not in self.commands:
             fail("no command %r in the protocol. It declares: %s"
                  % (command, ", ".join(sorted(self.commands))), EXIT_USAGE)
@@ -642,7 +654,7 @@ def cmd_send(args):
     payload, arm_name, arm_number, arm_message, number = build_request(
         args.command, args.fields, bindings, arms)
     frame = report_frame(payload, arm_name, arm_number, arm_message,
-                         arms.command_of_arm(arm_name) or args.command, number)
+                         arms.command_of_arm(arm_name), number)
     if args.dry_run:
         print("dry run: nothing was written to a port")
         return EXIT_OK
@@ -720,9 +732,9 @@ def cmd_commands(args):
               % (command, number, message, reply_number, reply_message))
     for arm_name, (number, message) in sorted(arms.continuations.items(),
                                               key=lambda item: item[1][0]):
-        print("  %-24s request arm %2d  %-18s a body's write continues in it; "
-              "it belongs to no command (section 4.4a rule 6)"
-              % ("(no command)", number, message))
+        print("  %-24s request arm %2d  %-18s no command of its own: a body's "
+              "write continues in it, and this arm name is what sends it "
+              "(section 4.4a rule 6)" % (arm_name, number, message))
     for arm_name, (number, message) in sorted(arms.reply_only.items(),
                                               key=lambda item: item[1][0]):
         print("  %-24s reply arm %2d  %-18s no request arm of that name: the "
@@ -791,8 +803,11 @@ def parse_args(argv):
 
     send = subparsers.add_parser(
         "send", parents=[common],
-        help="build one frame from a command name and write it out")
-    send.add_argument("command", help="the command, as in sys.ping")
+        help="build one frame from a command, or from an arm a body's write "
+             "continues in, and write it out")
+    send.add_argument("command",
+                      help="the command, as in sys.ping, or the name of an arm "
+                           "a body's write continues in, as in profile_put_end")
     send.add_argument("fields", nargs="*", metavar="field=value",
                       help="the arm's fields; numbers take 0x too, bytes take "
                            "hex, repeated scalars take commas, a nested "
