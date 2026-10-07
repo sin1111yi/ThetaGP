@@ -50,6 +50,7 @@
 //   led effect path
 //     THETAGP_CFG_LED_TASK_PERIOD_US        10000   refresh task period
 //     THETAGP_CFG_LED_EFFECT_PERIOD_US      1000000 one animation cycle
+//     THETAGP_CFG_LED_BRIGHTNESS_LIMIT      0.25    share of full-scale colour
 //   config-layer defaults (see the blocks for units and meanings)
 //     SOCD_MODE 4      FOUR_WAY_MODE 0   DPAD_MODE 0
 //     INV_X/Y/RX/RY 0  SWAP_STICKS 0
@@ -202,4 +203,12 @@
 #endif
 #ifndef THETAGP_CFG_LED_EFFECT_PERIOD_US
 #define THETAGP_CFG_LED_EFFECT_PERIOD_US 1000000UL     // 1 s per cycle, 20 ms per frame
+#endif
+
+// The share of full-scale colour the strip is driven at, as a fraction: 1.0
+// leaves a rendered channel as it is, 0.25 caps it at a quarter. It is applied
+// where a frame is spelled as the wire's bits, so the animation itself keeps
+// rendering at full scale.
+#ifndef THETAGP_CFG_LED_BRIGHTNESS_LIMIT
+#define THETAGP_CFG_LED_BRIGHTNESS_LIMIT 0.25f
 #endif

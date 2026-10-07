@@ -58,6 +58,16 @@ constexpr uint16_t kResetSlots =
 constexpr uint16_t kSlotCount =
     static_cast<uint16_t>(LED_COUNT * kBitsPerPixel) + kResetSlots;
 
+// The config's brightness limit in 1/256ths, so the scaling below stays
+// integer.
+constexpr uint32_t kBrightnessQ8 =
+    static_cast<uint32_t>(THETAGP_CFG_LED_BRIGHTNESS_LIMIT * 256.0f);
+
+uint8_t limited(uint8_t value) {
+  const uint32_t scaled = (value * kBrightnessQ8) >> 8;
+  return static_cast<uint8_t>(scaled > 255U ? 255U : scaled);
+}
+
 // One duty per bit slot, zero-filled. AXI SRAM (COMMON_ZERO_INIT): the DMA
 // reads it.
 COMMON_ZERO_INIT uint16_t s_slots[kSlotCount];
@@ -128,14 +138,20 @@ bool RgbStrip::send(const LedEffect::Rgb *frame) {
 
 void RgbStrip::encode(const LedEffect::Rgb *frame) {
   // A pixel is three bytes in the order the wire carries them — green, red,
-  // blue, most significant bit first.
+  // blue, most significant bit first — each taken down to the configured
+  // share of full scale.
   const uint8_t *pixels = reinterpret_cast<const uint8_t *>(frame);
   uint16_t slot = 0;
 
   for (uint8_t pixel = 0; pixel < LED_COUNT; ++pixel) {
     const uint8_t *channels = &pixels[pixel * 3];
+    uint8_t share[3];
+    for (uint8_t channel = 0; channel < 3; ++channel) {
+      share[channel] = limited(channels[channel]);
+    }
+
     for (uint8_t bit = 0; bit < kBitsPerPixel; ++bit) {
-      const uint8_t set = (channels[bit / 8] >> (7 - (bit % 8))) & 1;
+      const uint8_t set = (share[bit / 8] >> (7 - (bit % 8))) & 1;
       s_slots[slot++] = set != 0 ? _oneDuty : _zeroDuty;
     }
   }
