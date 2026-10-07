@@ -259,13 +259,13 @@ exposed = false
 doc = "LED saturation"
 
 [[field]]
-name = "led.spd"
+name = "led.rgb.hz"
 type = "u8"
-min = 0
-max = 255
-default = 128
-exposed = false
-doc = "LED effect speed"
+min = 1
+max = 100
+default = 10
+exposed = true
+doc = "RGB strip refresh rate in Hz"
 
 [[field]]
 name = "cal.lx_c"

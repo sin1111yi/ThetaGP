@@ -54,8 +54,8 @@ struct Clock {
   uint8_t frame = 0;
 };
 
-// A tick adds deltaUs and shows a new frame every periodUs / FRAME_COUNT; the
+// A tick adds deltaUs and shows a new frame once it covers frameIntervalUs; the
 // remainder it leaves is spent on the tick after it, so frames do not drift.
-void advance(Clock &clock, uint32_t deltaUs, uint32_t periodUs);
+void advance(Clock &clock, uint32_t deltaUs, uint32_t frameIntervalUs);
 
 } // namespace ThetaGP::Drivers::Device::LedEffect

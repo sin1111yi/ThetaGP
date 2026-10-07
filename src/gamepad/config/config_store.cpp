@@ -97,6 +97,57 @@ static void profileDomain(const KeyEntry &entry, char *dst, size_t cap) {
   dst[copy] = '\0';
 }
 
+// How many segments a domain has: `led` names one object, `led.rgb` names one
+// inside it.
+static size_t domainDepth(const char *domain) {
+  size_t depth = domain[0] != '\0' ? 1 : 0;
+  for (const char *at = domain; *at != '\0'; ++at) {
+    if (*at == '.') {
+      ++depth;
+    }
+  }
+  return depth;
+}
+
+// The segments from the front that two domains share, counted in whole
+// segments: `led` and `led.rgb` share one, `led` and `ledx` none.
+static size_t sharedSegments(const char *a, const char *b) {
+  size_t at = 0;
+  while (a[at] != '\0' && b[at] != '\0' && a[at] == b[at]) {
+    ++at;
+  }
+  if (at == 0 || (a[at] != '\0' && a[at] != '.')) {
+    return 0;
+  }
+  size_t shared = 1;
+  for (size_t i = 0; i < at; ++i) {
+    if (a[i] == '.') {
+      ++shared;
+    }
+  }
+  return shared;
+}
+
+// The segment of a domain at `index`, copied into dst.
+static void domainSegment(const char *domain, size_t index, char *dst,
+                          size_t cap) {
+  const char *start = domain;
+  for (size_t seen = 0; seen < index; ++seen) {
+    start = std::strchr(start, '.');
+    if (start == nullptr) {
+      dst[0] = '\0';
+      return;
+    }
+    ++start;
+  }
+  const char *end = std::strchr(start, '.');
+  const size_t len =
+      end != nullptr ? static_cast<size_t>(end - start) : std::strlen(start);
+  const size_t copy = len < cap - 1 ? len : cap - 1;
+  std::memcpy(dst, start, copy);
+  dst[copy] = '\0';
+}
+
 // ── parseProfile() ──
 // Reads a profile body into the store, and answers whether it was read. A body
 // of a version this firmware does not read is refused as a whole: nothing of it
@@ -199,23 +250,34 @@ uint16_t serializeProfile(const ConfigStore &cfg, char *dst, uint16_t cap) {
   const KeyEntry *const table = keyTable();
   const uint8_t count = keyTableCount();
 
-  // The object being written, empty until the first field opens one.
-  char open[16] = "";
+  // The objects being written, as the domain the fields before this one named:
+  // a field of `led` and a field of `led.rgb` share the `led` object, so the
+  // walk keeps open as many objects as the domain has segments and closes the
+  // ones the next domain does not name again.
+  constexpr size_t kMaxDomain = 24;
+  char previous[kMaxDomain] = "";
+  size_t open = 0;
   bool firstInObject = true;
 
   for (uint8_t i = 0; i < count; ++i) {
     const KeyEntry &entry = table[i];
-    char domain[16];
+    char domain[kMaxDomain];
     profileDomain(entry, domain, sizeof(domain));
 
-    if (std::strcmp(domain, open) != 0) {
-      if (open[0] != '\0') {
-        doc.printf("}");
-      }
-      doc.printf(",%Q:{", domain);
-      std::snprintf(open, sizeof(open), "%s", domain);
+    const size_t shared = sharedSegments(previous, domain);
+    const size_t depth = domainDepth(domain);
+
+    for (size_t segment = open; segment > shared; --segment) {
+      doc.printf("}");
+    }
+    for (size_t segment = shared; segment < depth; ++segment) {
+      char name[kMaxDomain];
+      domainSegment(domain, segment, name, sizeof(name));
+      doc.printf(",%Q:{", name);
       firstInObject = true;
     }
+    std::snprintf(previous, sizeof(previous), "%s", domain);
+    open = depth;
 
     if (!firstInObject) {
       doc.printf(",");
@@ -238,7 +300,7 @@ uint16_t serializeProfile(const ConfigStore &cfg, char *dst, uint16_t cap) {
     }
   }
 
-  if (open[0] != '\0') {
+  for (size_t segment = open; segment > 0; --segment) {
     doc.printf("}");
   }
   doc.printf("}"); // close root

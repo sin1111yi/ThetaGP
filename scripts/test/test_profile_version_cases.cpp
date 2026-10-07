@@ -66,11 +66,11 @@ void check(bool ok, const char *what) {
 // Profile 0 of the board this was written against, 504 bytes, as read back by
 // profile.get. Every domain object sits inside map, and the body still carries
 // usb and sys objects whose fields the store no longer has.
-constexpr const char *kBodyV1 = R"json({"ver":1,"map":{"socd":0,"four_way":0,"dpad":0,"inv_x":0,"inv_y":0,"inv_rx":0,"inv_ry":0,"swap":0,"btn_map":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31],"stick":{"lx_dz":0,"ly_dz":0,"rx_dz":0,"ry_dz":0,"lx_sens":128,"ly_sens":128,"rx_sens":128,"ry_sens":128,"curve":0,"ema":0},"trig":{"lt_dz":0,"rt_dz":0},"usb":{"poll":1},"led":{"bri":50,"mode":1,"hue":0,"sat":255,"spd":50},"sys":{"log":1,"deb_samp":3,"deb_thr":5},"cal":{"lx_c":0,"ly_c":0,"rx_c":0,"ry_c":0}})json";
+constexpr const char *kBodyV1 = R"json({"ver":1,"map":{"socd":0,"four_way":0,"dpad":0,"inv_x":0,"inv_y":0,"inv_rx":0,"inv_ry":0,"swap":0,"btn_map":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31],"stick":{"lx_dz":0,"ly_dz":0,"rx_dz":0,"ry_dz":0,"lx_sens":128,"ly_sens":128,"rx_sens":128,"ry_sens":128,"curve":0,"ema":0},"trig":{"lt_dz":0,"rt_dz":0},"usb":{"poll":1},"led":{"bri":50,"mode":1,"hue":0,"sat":255,"rgb":{"hz":50}},"sys":{"log":1,"deb_samp":3,"deb_thr":5},"cal":{"lx_c":0,"ly_c":0,"rx_c":0,"ry_c":0}})json";
 
 // Profile 3 of the same board, 447 bytes: the shape the firmware writes today,
 // with the domains at the top level.
-constexpr const char *kBodyV2 = R"json({"ver":2,"map":{"socd":0,"four_way":0,"dpad":0,"inv_x":0,"inv_y":0,"inv_rx":0,"inv_ry":0,"swap":0,"btn_map":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]},"stick":{"lx_dz":0,"ly_dz":0,"rx_dz":0,"ry_dz":0,"lx_sens":128,"ly_sens":128,"rx_sens":128,"ry_sens":128,"curve":0,"ema":0},"trig":{"lt_dz":0,"rt_dz":0},"led":{"bri":63,"mode":1,"hue":0,"sat":255,"spd":50},"cal":{"lx_c":0,"ly_c":0,"rx_c":0,"ry_c":0}})json";
+constexpr const char *kBodyV2 = R"json({"ver":2,"map":{"socd":0,"four_way":0,"dpad":0,"inv_x":0,"inv_y":0,"inv_rx":0,"inv_ry":0,"swap":0,"btn_map":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]},"stick":{"lx_dz":0,"ly_dz":0,"rx_dz":0,"ry_dz":0,"lx_sens":128,"ly_sens":128,"rx_sens":128,"ry_sens":128,"curve":0,"ema":0},"trig":{"lt_dz":0,"rt_dz":0},"led":{"bri":63,"mode":1,"hue":0,"sat":255,"rgb":{"hz":50}},"cal":{"lx_c":0,"ly_c":0,"rx_c":0,"ry_c":0}})json";
 
 // A body whose version this firmware does not read, carrying values a field of
 // the store could hold: what a refusal has to keep out is exactly these.
@@ -128,7 +128,7 @@ int main() {
           "the dead zone comes from map.stick.lx_dz, not the default 512");
     check(cfg.bri == 50, "the brightness comes from map.led.bri, not 128");
     check(cfg.mode == 1, "the LED mode comes from map.led.mode, not 0");
-    check(cfg.spd == 50, "the LED speed comes from map.led.spd, not 128");
+    check(cfg.hz == 50, "the strip rate comes from led.rgb.hz, not 10");
     check(cfg.hue == 0, "the hue comes from map.led.hue, not the default 180");
     check(cfg.lx_sens == 128, "the sensitivity comes from map.stick.lx_sens");
     check(cfg.socd == 0, "the SOCD mode comes from map.socd, not the default 4");

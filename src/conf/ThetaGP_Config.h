@@ -49,8 +49,8 @@
 //     THETAGP_CFG_KEYPAD_SCAN_HZ            32000
 //   led effect path
 //     THETAGP_CFG_LED_TASK_PERIOD_US        10000   refresh task period
-//     THETAGP_CFG_LED_EFFECT_PERIOD_US      1000000 one animation cycle
 //     THETAGP_CFG_LED_BRIGHTNESS_LIMIT      0.25    share of full-scale colour
+//     THETAGP_CFG_LED_TRAILING_PIXELS       4       black pixels after the strip's
 //   config-layer defaults (see the blocks for units and meanings)
 //     SOCD_MODE 4      FOUR_WAY_MODE 0   DPAD_MODE 0
 //     INV_X/Y/RX/RY 0  SWAP_STICKS 0
@@ -192,17 +192,14 @@
 #endif
 
 // ── LED effect path ──
-// The strip's animation runs off two periods. The task period is how often the
-// refresh task runs; the effect period is how long one full cycle of the
-// animation takes, which the frame interval comes out of as periodUs /
-// FRAME_COUNT. The frame interval has to cover at least one task period, or the
-// task cannot show every frame it advances through (rgb_strip.cpp asserts it at
-// compile time).
+// The strip's refresh rate is the config key `led.hz`, in frames a second: a
+// frame is what the strip is sent, and the animation cycle FRAME_COUNT frames
+// long takes FRAME_COUNT / led.hz seconds. The task period below is how often
+// the refresh task runs, and one frame has to cover at least one tick of it, or
+// the task cannot show every frame it advances through — rgb_strip.cpp asserts
+// that at compile time against the fastest rate the key accepts.
 #ifndef THETAGP_CFG_LED_TASK_PERIOD_US
 #define THETAGP_CFG_LED_TASK_PERIOD_US 10000UL         // 100 Hz
-#endif
-#ifndef THETAGP_CFG_LED_EFFECT_PERIOD_US
-#define THETAGP_CFG_LED_EFFECT_PERIOD_US 1000000UL     // 1 s per cycle, 20 ms per frame
 #endif
 
 // The share of full-scale colour the strip is driven at, as a fraction: 1.0
@@ -211,4 +208,13 @@
 // rendering at full scale.
 #ifndef THETAGP_CFG_LED_BRIGHTNESS_LIMIT
 #define THETAGP_CFG_LED_BRIGHTNESS_LIMIT 0.25f
+#endif
+
+// The chips a frame drives past the strip's own, every bit of one a zero: they
+// stand for chips wired beyond the ones a board lights, so those go dark
+// instead of holding what they latched, and the chip at the end of the chain
+// has clocks after its own data to latch on. Each costs 30 us of a 100 ms
+// frame.
+#ifndef THETAGP_CFG_LED_TRAILING_PIXELS
+#define THETAGP_CFG_LED_TRAILING_PIXELS 4
 #endif

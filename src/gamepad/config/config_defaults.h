@@ -161,7 +161,7 @@ constexpr ConfigStore makeDefaults() {
   cfg.mode = kKeyDefaultMode;
   cfg.hue  = kKeyDefaultHue;
   cfg.sat  = kKeyDefaultSat;
-  cfg.spd  = kKeyDefaultSpd;
+  cfg.hz   = kKeyDefaultHz;
 
   // ── Calibration ──
   cfg.lx_c = kKeyDefaultLxC;

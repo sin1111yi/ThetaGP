@@ -26,6 +26,8 @@
 
 #include "build_info.h"
 #include "conf/ThetaGP_Config.h"
+#include "configs/config_keys.gen.h"
+#include "gamepad/config/config_manager.h"
 
 #include "utils/log/log.h"
 
@@ -56,7 +58,20 @@ constexpr uint8_t kBitsPerPixel = 24;
 constexpr uint16_t kResetSlots =
     static_cast<uint16_t>((kResetNs + kBitPeriodNs - 1) / kBitPeriodNs);
 constexpr uint16_t kSlotCount =
-    static_cast<uint16_t>(LED_COUNT * kBitsPerPixel) + kResetSlots;
+    static_cast<uint16_t>((LED_COUNT + THETAGP_CFG_LED_TRAILING_PIXELS) *
+                          kBitsPerPixel) + kResetSlots;
+
+// The rate a frame reaches the strip at, in Hz: the value of the config key
+// that carries it, gone back to the declaration's default for a store that
+// never carried one.
+uint32_t refreshRateHz() {
+  const uint8_t hz = Gamepad::Config::ConfigManager::getInstance().config().hz;
+  return hz > 0 ? hz : static_cast<uint32_t>(Gamepad::Config::kKeyDefaultHz);
+}
+
+// The interval one frame is shown for, in microseconds: what a tick of the task
+// is spent on before the next frame is due.
+uint32_t frameIntervalUs() { return 1000000UL / refreshRateHz(); }
 
 // The config's brightness limit in 1/256ths, so the scaling below stays
 // integer.
@@ -83,12 +98,13 @@ uint32_t s_lastTickUs = 0;
 
 constexpr uint16_t kStartHue = 0; // red
 
-// A frame has to stay up for at least one tick of the task that advances it.
-static_assert(THETAGP_CFG_LED_EFFECT_PERIOD_US / LedEffect::FRAME_COUNT >=
+// A frame has to stay up for at least one tick of the task that advances the
+// frames: the shortest one is the fastest rate the config key accepts.
+static_assert(1000000 / Gamepad::Config::keyEntry(Gamepad::Config::ConfigKey::Hz).maxVal >=
                   THETAGP_CFG_LED_TASK_PERIOD_US,
-              "one frame has to cover at least one tick of the task that "
-              "advances the frames: lengthen THETAGP_CFG_LED_EFFECT_PERIOD_US "
-              "or shorten THETAGP_CFG_LED_TASK_PERIOD_US");
+              "the fastest LED refresh rate has to cover at least one tick of "
+              "the task that advances the frames: lower the key's ceiling or "
+              "shorten THETAGP_CFG_LED_TASK_PERIOD_US");
 
 } // namespace
 
@@ -108,6 +124,12 @@ void RgbStrip::init() {
   // The first tick advances the animation by the time since boot started here.
   s_lastTickUs = SystemTimer::getInstance().getMillis() * 1000U;
   _initialized = true;
+
+  // The pixels this drives have to be the ones wired: a strip longer than the
+  // count is driven leaves its far end holding what it latched before.
+  LOG_INFO("rgb strip: %u pixels at %lu Hz refresh",
+           static_cast<uint32_t>(LED_COUNT),
+           static_cast<uint32_t>(refreshRateHz()));
 }
 
 void RgbStrip::task(uint32_t currentTimeUs) {
@@ -118,7 +140,7 @@ void RgbStrip::task(uint32_t currentTimeUs) {
 
   const uint32_t deltaUs = currentTimeUs - s_lastTickUs;
   s_lastTickUs = currentTimeUs;
-  LedEffect::advance(s_clock, deltaUs, THETAGP_CFG_LED_EFFECT_PERIOD_US);
+  LedEffect::advance(s_clock, deltaUs, frameIntervalUs());
 
   // A tick that lands on the frame already on the line has nothing to send; a
   // sequence the strip is still reading leaves the frame for the tick after.
@@ -143,6 +165,11 @@ void RgbStrip::encode(const LedEffect::Rgb *frame) {
   const uint8_t *pixels = reinterpret_cast<const uint8_t *>(frame);
   uint16_t slot = 0;
 
+  // The chips wired past the ones this board lights are handed a black pixel
+  // each: a chip a frame never reaches holds whatever it latched, and the chip
+  // at the end of the chain wants clocks after its own data to latch on.
+  const uint16_t trailing = THETAGP_CFG_LED_TRAILING_PIXELS * kBitsPerPixel;
+
   for (uint8_t pixel = 0; pixel < LED_COUNT; ++pixel) {
     const uint8_t *channels = &pixels[pixel * 3];
     uint8_t share[3];
@@ -154,6 +181,10 @@ void RgbStrip::encode(const LedEffect::Rgb *frame) {
       const uint8_t set = (share[bit / 8] >> (7 - (bit % 8))) & 1;
       s_slots[slot++] = set != 0 ? _oneDuty : _zeroDuty;
     }
+  }
+
+  for (uint16_t i = 0; i < trailing; ++i) {
+    s_slots[slot++] = _zeroDuty;
   }
 
   for (uint16_t i = 0; i < kResetSlots; ++i) {

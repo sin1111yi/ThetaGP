@@ -63,7 +63,10 @@ struct ConfigStore {
   uint8_t mode;
   uint16_t hue;
   uint8_t sat;
-  uint8_t spd;
+
+  // ── RGB strip settings ──
+  // Key `led.rgb.hz`: the frames a second the strip is refreshed at.
+  uint8_t hz;
 
   // ── Calibration ──
   int16_t lx_c;

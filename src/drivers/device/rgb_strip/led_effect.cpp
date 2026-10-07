@@ -95,8 +95,7 @@ void render(Rgb *out, uint8_t ledCount, uint16_t phaseOffset) {
   }
 }
 
-void advance(Clock &clock, uint32_t deltaUs, uint32_t periodUs) {
-  const uint32_t frameIntervalUs = periodUs / FRAME_COUNT;
+void advance(Clock &clock, uint32_t deltaUs, uint32_t frameIntervalUs) {
   if (frameIntervalUs == 0) {
     return;
   }
