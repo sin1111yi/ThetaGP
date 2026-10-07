@@ -30,7 +30,7 @@
 #include "utils/log/log.h"
 
 // A board without a strip declares no such table.
-#if defined(BDCFG_LED_RGB_STRIP_PIN)
+#if THETAGP_CFG_HAS_RGB_STRIP
 
 using namespace ThetaGP::Drivers::Peripheral;
 using namespace ThetaGP::Drivers::Peripheral::GPIO;
@@ -147,4 +147,4 @@ void RgbStrip::encode(const LedEffect::Rgb *frame) {
 
 } // namespace ThetaGP::Drivers::Device
 
-#endif // BDCFG_LED_RGB_STRIP_PIN
+#endif // THETAGP_CFG_HAS_RGB_STRIP

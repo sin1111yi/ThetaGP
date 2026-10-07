@@ -174,7 +174,7 @@ void ThetaGP::ThetaGamepad::registerTasks(void) {
                             TaskPriority::Realtime);
   TaskManager::registerTask("COMM", "CMD_PROC", taskCmdProc,
                             TASK_PERIOD_HZ(20), TaskPriority::Medium);
-#ifdef BDCFG_LED_RGB_STRIP_PIN
+#if THETAGP_CFG_HAS_RGB_STRIP
   // The strip is cosmetic; sending a frame holds the CPU long enough to matter
   // against the report tick, so it runs below every task that carries input.
   TaskManager::registerTask("LED", "EFFECT", Drivers::Device::RgbStrip::task,

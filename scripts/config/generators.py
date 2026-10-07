@@ -74,16 +74,24 @@ def lookup_peripheral(enum_map: dict[str, str], bus: str, index: int,
 
 # ── LEDs ─────────────────────────────────────────────────────────────────────
 
+# The strip table's name: it is the binding the firmware looks the strip's
+# macros up by, and its presence is what the presence switch reports.
+LED_STRIP_TABLE = "rgb_strip"
+
+
 def gen_led_lines(led: dict | None) -> list[str]:
     """Generate the macro lines for the LEDs a board declares.
 
     A table that names a source is a strip; one without a source is a single
-    LED on its own GPIO.
+    LED on its own GPIO. The strip's presence is a switch, as the flash chip's
+    is: a board that declares no strip table states 0.
     """
-    if not led:
-        return []
+    led = led or {}
+    lines: list[str] = [
+        f"#define {'BDCFG_HAS_RGB_STRIP':<28} "
+        f"{'1' if LED_STRIP_TABLE in led else '0'}"
+    ]
 
-    lines: list[str] = []
     for name in sorted(led):
         entry = led[name]
         prefix = f"BDCFG_LED_{name.upper()}"

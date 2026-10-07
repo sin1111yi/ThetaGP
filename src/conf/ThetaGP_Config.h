@@ -167,6 +167,16 @@
 #endif
 #endif
 
+// ── RGB strip presence ──
+// Whether the board carries a strip, read the way the flash chip's presence
+// is: the board config always states it, as BDCFG_HAS_RGB_STRIP, 0 for a board
+// that declares no strip table and 1 for a board that declares one.
+#ifndef THETAGP_CFG_HAS_RGB_STRIP
+#ifdef BDCFG_HAS_RGB_STRIP
+#define THETAGP_CFG_HAS_RGB_STRIP BDCFG_HAS_RGB_STRIP
+#endif
+#endif
+
 // ── Keypad scan path ──
 // Matrix scan rate. One scan callback walks every drive line, so a single key
 // is sampled at this rate. The filter commits a level change from the same

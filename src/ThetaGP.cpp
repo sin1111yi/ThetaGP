@@ -71,7 +71,7 @@ void ThetaGamepad::setup() {
   (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::FlashBase::getInstance());
 #endif
-#ifdef BDCFG_LED_RGB_STRIP_PIN
+#if THETAGP_CFG_HAS_RGB_STRIP
   (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::RgbStrip::getInstance());
 #endif

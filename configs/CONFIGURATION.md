@@ -114,6 +114,11 @@ Generates:
 #define BDCFG_LED_RUN0_ACTIVE_LOW    true
 ```
 
+The strip's presence is a switch, `BDCFG_HAS_RGB_STRIP`, which the firmware
+reads as `THETAGP_CFG_HAS_RGB_STRIP`: a board that declares no `rgb_strip`
+table states 0, and the build drops the whole chain — the strip's device and
+the effect behind it.
+
 Pin strings use `P<port><pin>` format: `PA0`–`PI15`. Port letters are A–I.
 
 ### `[keypad]` — required
