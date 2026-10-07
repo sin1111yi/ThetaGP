@@ -8,7 +8,6 @@
 .pytest_cache
 .commit_tmp
 
-.clangd
 .clang-tidy
 .reasonix
 
@@ -40,6 +39,10 @@ lib/ThetaGP.PB
 # repository (ThetaGP.PB).
 src/pb/
 configs/config_keys.gen.h
+
+# The language server reads the toolchain's include search list from here; the
+# configure step writes it, so it is not tracked either.
+.clangd
 
 
 .codegraph

@@ -108,12 +108,14 @@ add_subdirectory(src)
 set(THETAGP_GENERATED_ARTIFACTS
     "${CMAKE_SOURCE_DIR}/configs/config_keys.gen.h"
     "${CMAKE_SOURCE_DIR}/src/pb"
+    "${CMAKE_SOURCE_DIR}/.clangd"
     "${CMAKE_BINARY_DIR}/proto_py"
 )
 
 add_custom_target(clean-generated
     COMMAND ${CMAKE_COMMAND} -E rm -rf ${THETAGP_GENERATED_ARTIFACTS}
     COMMAND ${CMAKE_COMMAND} -E echo
-            "Removed the generated protocol artifacts, the configuration key table and the host bindings"
+            "Removed the generated protocol artifacts, the configuration key table, "
+            "the language server configuration and the host bindings"
     COMMENT "Cleaning the generated artifacts under src/pb/ and configs/"
     VERBATIM)

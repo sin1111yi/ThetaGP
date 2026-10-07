@@ -35,7 +35,9 @@ lib/        third-party, fetched at configure time
 ```
 
 Board configuration is TOML under `configs/<TARGET>/BoardConfig.toml`; see
-`configs/CONFIGURATION.md` for the fields.
+`configs/CONFIGURATION.md` for the fields. The configure step also writes
+`.clangd` with the toolchain's include search list, which the compilation
+database does not carry.
 
 ## Dependencies
 

@@ -95,3 +95,23 @@ set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} --specs=nano.specs")
 set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} -Wl,-Map=${THETAGP_PROJECT_NAME}.map -Wl,--gc-sections -Wl,--no-warn-rwx-segments")
 set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} -Wl,--start-group -lstdc++ -lsupc++ -Wl,--end-group")
 set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} -Wl,--print-memory-usage")
+
+# =============================================================================
+# Language Server Configuration
+# =============================================================================
+
+# The compilation database carries the project's own -I paths but not the
+# toolchain's, so the compiler's include search list is written to .clangd for
+# the editor to read.
+execute_process(
+    COMMAND ${PYTHON3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/generate_clangd.py
+        --compiler ${CMAKE_CXX_COMPILER}
+        --flags "${TARGET_CPU_FLAGS}"
+        --out ${CMAKE_SOURCE_DIR}/.clangd
+    RESULT_VARIABLE CLANGD_GEN_RESULT
+)
+
+if(NOT CLANGD_GEN_RESULT EQUAL 0)
+    message(WARNING "Failed to generate .clangd; the language server keeps "
+                    "the configuration it already has.")
+endif()
