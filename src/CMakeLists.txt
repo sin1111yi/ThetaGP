@@ -295,6 +295,93 @@ else()
 endif()
 
 # =============================================================================
+# Host bindings (configure-time)
+# =============================================================================
+# The same schema the codec above comes from, generated for the host tools under
+# scripts/tools/ (protoc's python plugin). Nothing in a firmware build reads
+# them, so a machine without protoc or a python-protobuf runtime builds the
+# firmware anyway and is told what the tools are missing: this step reports and
+# the configure goes on, where the codec above stops the configure outright.
+if(PROTO_SCHEMAS)
+    set(PROTO_PY_DIR "${CMAKE_BINARY_DIR}/proto_py")
+    set(PROTO_PY_OUTPUTS "")
+    foreach(PROTO_SCHEMA IN LISTS PROTO_SCHEMAS)
+        get_filename_component(PROTO_SCHEMA_STEM "${PROTO_SCHEMA}" NAME_WE)
+        list(APPEND PROTO_PY_OUTPUTS
+             "${PROTO_PY_DIR}/${PROTO_SCHEMA_STEM}_pb2.py")
+    endforeach()
+    string(REPLACE ";" ", " PROTO_PY_OUTPUTS_TEXT "${PROTO_PY_OUTPUTS}")
+
+    set(PROTO_PY_NEEDED FALSE)
+    foreach(PROTO_PY_OUTPUT IN LISTS PROTO_PY_OUTPUTS)
+        if(NOT EXISTS "${PROTO_PY_OUTPUT}")
+            set(PROTO_PY_NEEDED TRUE)
+        else()
+            file(SIZE "${PROTO_PY_OUTPUT}" PROTO_PY_OUTPUT_SIZE)
+            if(PROTO_PY_OUTPUT_SIZE EQUAL 0)
+                set(PROTO_PY_NEEDED TRUE)
+            endif()
+        endif()
+    endforeach()
+    # The bindings read the schema and nothing else: the .options file beside it
+    # bounds the C codec's fields and says nothing to protoc's python plugin.
+    foreach(PROTO_SCHEMA IN LISTS PROTO_SCHEMAS)
+        foreach(PROTO_PY_OUTPUT IN LISTS PROTO_PY_OUTPUTS)
+            if("${PROTO_SCHEMA}" IS_NEWER_THAN "${PROTO_PY_OUTPUT}")
+                set(PROTO_PY_NEEDED TRUE)
+            endif()
+        endforeach()
+    endforeach()
+
+    if(NOT PROTO_PY_NEEDED)
+        message(STATUS "Host bindings: ${PROTO_PY_OUTPUTS_TEXT} are up to date")
+    elseif(NOT PYTHON3)
+        message(WARNING
+            "The host bindings (${PROTO_PY_OUTPUTS_TEXT}) are missing, empty or "
+            "older than ${PROTO_SCHEMAS_TEXT}, and python3 was not found to "
+            "generate them. A firmware build does not need them; the tools under "
+            "scripts/tools/ do.")
+    else()
+        message(STATUS "Generating ${PROTO_PY_OUTPUTS_TEXT} from ${PROTO_SCHEMAS_TEXT} ...")
+        execute_process(
+            COMMAND ${PYTHON3} "${CMAKE_SOURCE_DIR}/scripts/gen_proto_py.py"
+                    --protos ${PROTO_SCHEMAS}
+                    --out-dir "${PROTO_PY_DIR}"
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            RESULT_VARIABLE PROTO_PY_RESULT
+            OUTPUT_VARIABLE PROTO_PY_STDOUT
+            ERROR_VARIABLE PROTO_PY_STDERR
+        )
+        if(NOT PROTO_PY_STDOUT STREQUAL "")
+            message(STATUS "${PROTO_PY_STDOUT}")
+        endif()
+        if(NOT PROTO_PY_STDERR STREQUAL "")
+            message(STATUS "${PROTO_PY_STDERR}")
+        endif()
+        if(NOT PROTO_PY_RESULT EQUAL 0)
+            message(WARNING
+                "Generating the host bindings failed: "
+                "scripts/gen_proto_py.py exited ${PROTO_PY_RESULT}. Its output is "
+                "printed above, and a firmware build does not need them. Run that "
+                "script in an environment that has protoc and a python-protobuf "
+                "runtime — or point $PROTOBUF_PYTHONPATH at a site-packages "
+                "directory that holds google/protobuf — before using the tools "
+                "under scripts/tools/.")
+        else()
+            foreach(PROTO_PY_OUTPUT IN LISTS PROTO_PY_OUTPUTS)
+                if(NOT EXISTS "${PROTO_PY_OUTPUT}")
+                    message(WARNING
+                        "scripts/gen_proto_py.py exited 0 but ${PROTO_PY_OUTPUT} "
+                        "is not there: the tools under scripts/tools/ would read "
+                        "the bindings of an older schema.")
+                endif()
+            endforeach()
+            message(STATUS "Generated ${PROTO_PY_OUTPUTS_TEXT}")
+        endif()
+    endif()
+endif()
+
+# =============================================================================
 # Source Files
 # =============================================================================
 

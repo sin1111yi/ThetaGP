@@ -27,7 +27,14 @@ def fail(message, code) -> NoReturn:
     sys.exit(code)
 
 def scheme_from_cmake():
-    """The schemas src/CMakeLists.txt names in PROTO_SCHEMAS, as basenames."""
+    """The schemas src/CMakeLists.txt names in PROTO_SCHEMAS, as paths under the
+    repository root.
+
+    A schema is named there as "<variable>/<path>", and the variables are set
+    earlier in the same file relative to the source tree: the schema is fetched
+    into a directory of its own, so where it sits is one of that file's
+    variables and not a fixed path.
+    """
     try:
         with open(CMAKE_LISTS, "r", encoding="utf-8") as handle:
             text = handle.read()
@@ -40,11 +47,27 @@ def scheme_from_cmake():
              "--protos" % CMAKE_LISTS, 2)
 
     body = re.sub(r"#[^\n]*", "", match.group(1))
-    paths = re.findall(r'\$\{CMAKE_SOURCE_DIR\}/([^"\s)]+\.proto)', body)
+
+    # The directories the block can lean on, each one a path under the tree.
+    directories = {"CMAKE_SOURCE_DIR": ""}
+    for name, tail in re.findall(
+            r'\bset\(\s*([A-Za-z_]\w*)\s+"\$\{CMAKE_SOURCE_DIR\}/([^"]*)"\s*\)',
+            text):
+        directories[name] = tail
+
+    paths = []
+    for name, tail in re.findall(r'\$\{([A-Za-z_]\w*)\}/([^"\s)]+\.proto)',
+                                 body):
+        if name not in directories:
+            fail("PROTO_SCHEMAS in %s names a schema under ${%s}, and no "
+                 "set(... \"${CMAKE_SOURCE_DIR}/...\") in that file says where "
+                 "that is: name the schemas with --protos"
+                 % (CMAKE_LISTS, name), 2)
+        paths.append(os.path.join(directories[name], tail))
     if not paths:
         fail("PROTO_SCHEMAS in %s names no .proto file: name the schemas with "
              "--protos" % CMAKE_LISTS, 2)
-    return [os.path.basename(path) for path in paths]
+    return paths
 
 def git_ignores(path):
     """True, False, or None when git cannot answer (no git, or not a work tree)."""
@@ -126,8 +149,8 @@ def main(argv):
         schemas = [path if os.path.isabs(path) else os.path.join(REPO_ROOT, path)
                    for path in args.protos]
     else:
-        schemas = [os.path.join(REPO_ROOT, "protocol", name)
-                   for name in scheme_from_cmake()]
+        schemas = [os.path.join(REPO_ROOT, path)
+                   for path in scheme_from_cmake()]
 
     missing = [path for path in schemas if not os.path.isfile(path)]
     if missing:
