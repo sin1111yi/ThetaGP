@@ -71,6 +71,12 @@ if(NOT CONFIG_GEN_RESULT EQUAL 0)
     message(FATAL_ERROR "Failed to generate board configuration. Check the error messages above.")
 endif()
 
+# The generator runs here, at configure time, so a change to the board's own
+# declaration has to bring the configure back: without this, a build after an
+# edit compiles the macros of the declaration before it.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${CMAKE_SOURCE_DIR}/configs/${TARGET}/BoardConfig.toml)
+
 include(${CMAKE_SOURCE_DIR}/configs/${TARGET}/board_config.cmake)
 
 # First include toolchain settings to get THETAGP_TOOLCHAIN_PREFIX and THETAGP_MIN_VERSION
