@@ -17,9 +17,14 @@
 
 #pragma once
 
+#include "drivers/peripherals/gpio.h"
 #include "drivers/peripherals/nvic_exti.h"
 
 #include <cstdint>
+
+namespace ThetaGP::Drivers::Peripheral::DMA {
+class DmaChannel;
+}
 
 namespace ThetaGP::Drivers::Peripheral::TIMER {
 
@@ -57,6 +62,13 @@ enum class TriggerEvent {
   OC4Ref,
 };
 
+// A timer channel an output can come out of, named as a board wires it. The
+// platform brings the channel up; what the output carries is the caller's.
+enum class TimerChannel : uint8_t {
+  Tim1Ch4,
+  None = 0xFF,
+};
+
 class HardwareTimer {
 private:
   struct TimerState {
@@ -73,6 +85,12 @@ private:
 
   TimerCallbackFunc _callback;
 
+  // PWM output state: the channel the board wired, the DMA stream its duty
+  // values reach the compare register by, and the carrier's period in ticks.
+  DMA::DmaChannel *_pwmDma = nullptr;
+  TimerChannel _pwmChannel = TimerChannel::None;
+  uint16_t _periodTicks = 0;
+
   void enableClock() const;
   uint32_t getTimerClock() const;
   void calculatePrescalerAndPeriod(uint32_t frequency);
@@ -80,7 +98,6 @@ private:
 public:
   HardwareTimer();
   HardwareTimer(Instance instance);
-
   void config(Instance instance, uint32_t frequency);
   void config(Instance instance, uint32_t frequency,
               NVIC_EXTI::NvicPriority prio);
@@ -100,6 +117,22 @@ public:
   void init();
   void start();
   void stop();
+
+  // ── PWM output ──
+  // Brings `channel` up on `pin` as a PWM output whose carrier runs at
+  // `frequency`, ready for the duty values startSequence() hands over.
+  bool initPwm(TimerChannel channel, const GPIO::PinDesc &pin,
+               uint32_t frequency);
+
+  // The ticks one carrier period spans: a duty is a number of them.
+  [[nodiscard]] uint16_t periodTicks() const { return _periodTicks; }
+
+  // Writes the first duty to the compare register and transfers the rest, one
+  // per period, by DMA. False if the channel is not up, the count does not fit
+  // the caller's buffer, or a sequence is still running.
+  bool startSequence(const uint16_t *duties, uint16_t count);
+
+  [[nodiscard]] bool isBusy() const;
 
   void *getContext() const { return _context; }
 
