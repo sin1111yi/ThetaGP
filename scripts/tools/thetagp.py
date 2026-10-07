@@ -15,6 +15,10 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
 
 BINDINGS_DIR_NAME = "proto_py"
+# The digest of the schema the bindings were generated from, written beside
+# them, and the checkout those bindings are held against by default.
+MANIFEST_NAME = "proto_schema.sha256.json"
+DEFAULT_SCHEMA_DIR = os.path.join(REPO_ROOT, "lib", "ThetaGP.PB", "protocol")
 
 def default_bindings_dir():
     """Where the configure wrote the host bindings.
@@ -47,6 +51,7 @@ EXIT_OK = 0
 EXIT_FRAME = 1
 EXIT_USAGE = 2
 EXIT_DEPENDENCY = 3
+EXIT_SCHEMA = 4
 EXIT_IO = 5
 
 PROTOBUF_PYTHONPATH_ENV = "PROTOBUF_PYTHONPATH"
@@ -314,8 +319,61 @@ def protobuf_hint(what):
                else os.path.join(SUGGESTED_VENV, "lib", "pythonX.Y",
                                  "site-packages")))
 
-def require_bindings(bindings_dir):
-    """The runtime and the generated bindings, or a hard failure."""
+def sha256_of(path):
+    with open(path, "rb") as handle:
+        return hashlib.sha256(handle.read()).hexdigest()
+
+def verify_schema(bindings_dir, schema_dir):
+    """Hold the schema to the digest the bindings carry.
+
+    A board answers with the schema of its own build and the bindings know one
+    revision: a mismatch reads a reply into fields it does not have, and
+    nothing about the reply says so. Every way the two can disagree is a
+    refusal -- bindings carrying no digest, a schema that does not hash to it,
+    one it names and is not there, and one the directory holds and it does not
+    name -- so a decode is a decode of the schema it claims, or no decode.
+    """
+    manifest_path = os.path.join(bindings_dir, MANIFEST_NAME)
+    if not os.path.isfile(manifest_path):
+        fail("%s carries no %s, so the schema behind it is unknown: these "
+             "bindings were generated before the digest was written beside "
+             "them. Generate them again:\n  python3 scripts/gen_proto_py.py"
+             % (bindings_dir, MANIFEST_NAME), EXIT_DEPENDENCY)
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as handle:
+            manifest = json.load(handle)
+        named = {entry["name"]: entry["sha256"]
+                 for entry in manifest["schemas"]}
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        fail("%s does not read as a digest of the schema (%s)"
+             % (manifest_path, error), EXIT_DEPENDENCY)
+
+    if not os.path.isdir(schema_dir):
+        fail("the schema is not in %s: name the directory the bindings were "
+             "generated from with --schema-dir" % schema_dir, EXIT_DEPENDENCY)
+
+    for name in sorted(named):
+        path = os.path.join(schema_dir, name)
+        if not os.path.isfile(path):
+            fail("%s names %s and it is not in %s: the schema has shrunk"
+                 % (manifest_path, name, schema_dir), EXIT_SCHEMA)
+        now = sha256_of(path)
+        if now != named[name]:
+            fail("%s has changed: the bindings were generated from %s and it "
+                 "hashes to %s now" % (name, named[name], now), EXIT_SCHEMA)
+
+    for name in sorted(os.listdir(schema_dir)):
+        if name.endswith(".proto") and name not in named:
+            fail("%s has grown: %s is in %s and %s does not name it"
+                 % (schema_dir, name, schema_dir, manifest_path), EXIT_SCHEMA)
+
+def require_bindings(bindings_dir, schema_dir=None):
+    """The runtime and the generated bindings, or a hard failure.
+
+    The bindings are held to the schema they carry the digest of before they
+    are imported: a run that read a reply by the wrong revision of the schema
+    reads it into the wrong fields, and nothing about the reply says so.
+    """
     try:
         import google.protobuf  # noqa: F401  (the probe is the point)
         from google.protobuf import descriptor as descriptor_module
@@ -323,6 +381,7 @@ def require_bindings(bindings_dir):
     except ImportError:
         fail(protobuf_hint("python-protobuf is not importable"),
              EXIT_DEPENDENCY)
+    verify_schema(bindings_dir, schema_dir or DEFAULT_SCHEMA_DIR)
     if bindings_dir not in sys.path:
         sys.path.insert(0, bindings_dir)
     try:
@@ -432,7 +491,7 @@ def decode_events(events, half, kind, bindings, arms, as_json):
     return ok
 
 def cmd_decode(args):
-    bindings = require_bindings(args.bindings)
+    bindings = require_bindings(args.bindings, args.schema_dir)
     arms = Arms(bindings.request)
     if args.file:
         try:
@@ -512,7 +571,7 @@ def watch_port(args, kind, on_frame, deadline=None, count=None):
     return seen, assembler
 
 def cmd_watch(args):
-    bindings = require_bindings(args.bindings)
+    bindings = require_bindings(args.bindings, args.schema_dir)
     arms = Arms(bindings.request)
 
     def on_frame(payload, index):
@@ -668,7 +727,7 @@ def report_frame(payload, arm_name, arm_number, arm_message, command=None,
     return frame
 
 def cmd_send(args):
-    bindings = require_bindings(args.bindings)
+    bindings = require_bindings(args.bindings, args.schema_dir)
     arms = Arms(bindings.request)
     payload, arm_name, arm_number, arm_message, number = build_request(
         args.command, args.fields, bindings, arms)
@@ -690,7 +749,7 @@ def cmd_send(args):
     return EXIT_OK
 
 def cmd_ping(args):
-    bindings = require_bindings(args.bindings)
+    bindings = require_bindings(args.bindings, args.schema_dir)
     arms = Arms(bindings.request)
     port = open_port(args)
     try:
@@ -738,7 +797,7 @@ def cmd_ping(args):
 
 def cmd_commands(args):
     """Print the command-to-arm mapping."""
-    bindings = require_bindings(args.bindings)
+    bindings = require_bindings(args.bindings, args.schema_dir)
     arms = Arms(bindings.request)
     print("%d commands, %d request arms, %d reply arms, read from the "
           "generated descriptors"
@@ -769,7 +828,10 @@ def common_parser():
     """The flags every subcommand takes, so they may follow the subcommand."""
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--bindings", default=argparse.SUPPRESS, metavar="DIR",
-                        help="the generated bindings")
+                        help="the generated bindings, and the digest of the "
+                             "schema they carry")
+    parser.add_argument("--schema-dir", default=argparse.SUPPRESS, metavar="DIR",
+                        help="the schema the bindings are held to")
     parser.add_argument("--json", action="store_true", default=argparse.SUPPRESS,
                         help="one JSON object per decoded frame (JSON lines) "
                              "instead of the readable dump")
@@ -785,7 +847,11 @@ def parse_args(argv):
     parser.add_argument("--bindings", default=DEFAULT_BINDINGS_DIR, metavar="DIR",
                         help="the generated bindings (default: the newest "
                              "build*/proto_py/, which is where the configure "
-                             "wrote them)")
+                             "wrote them); the digest written beside them says "
+                             "which schema they describe")
+    parser.add_argument("--schema-dir", default=DEFAULT_SCHEMA_DIR, metavar="DIR",
+                        help="the schema the bindings are held to, by the "
+                             "digest they carry (default: %(default)s)")
     parser.add_argument("--json", action="store_true",
                         help="one JSON object per decoded frame (JSON lines) "
                              "instead of the readable dump")

@@ -2,6 +2,7 @@
 
 import argparse
 import glob
+import hashlib
 import json
 import os
 import os.path
@@ -18,6 +19,11 @@ DEFAULT_OUT_DIR = os.path.join(REPO_ROOT, "build", "proto_py")
 
 PROTOBUF_PYTHONPATH_ENV = "PROTOBUF_PYTHONPATH"
 SUGGESTED_VENV = os.path.join(os.path.expanduser("~"), ".venvs", "thetagp-tools")
+
+# The digest of the schema the bindings beside it were generated from. The tool
+# that reads them holds the schema to it, so this file is what tells a run that
+# the reply it is about to read belongs to the schema it was read by.
+MANIFEST_NAME = "proto_schema.sha256.json"
 
 def eprint(*parts):
     print(*parts, file=sys.stderr)
@@ -97,6 +103,34 @@ def git_ignores(path):
                             os.path.relpath(path, REPO_ROOT)],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return check.returncode == 0
+
+def write_manifest(schemas, out_dir):
+    """Write the digest of each schema beside the bindings generated from it.
+
+    A schema is one revision of a package the board also carries, and the
+    bindings are generated from one revision while a host may hold another:
+    reading a reply is then a claim about which revision read it. The manifest
+    is what a run holds that claim to, and the tool refuses a schema that does
+    not hash to it. Names are basenames, because a set of schemas is one
+    directory read against one include path, and the entries are sorted so two
+    runs over the same bytes write the same file.
+    """
+    entries = []
+    combined = hashlib.sha256()
+    for path in sorted(schemas, key=os.path.basename):
+        with open(path, "rb") as handle:
+            data = handle.read()
+        combined.update(data)
+        entries.append({"name": os.path.basename(path),
+                        "sha256": hashlib.sha256(data).hexdigest()})
+
+    manifest = {"schemas": entries, "combined_sha256": combined.hexdigest()}
+    with open(os.path.join(out_dir, MANIFEST_NAME), "w",
+              encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    print("digest  %s: %d schema(s), combined %s"
+          % (MANIFEST_NAME, len(entries), manifest["combined_sha256"][:16]))
 
 def pythonpath_entries():
     raw = os.environ.get(PROTOBUF_PYTHONPATH_ENV, "")
@@ -220,6 +254,11 @@ def main(argv):
 
     print("bindings in %s (git ignores this directory: %s)"
           % (out_dir, "yes" if ignored else "not checked"))
+
+    # Beside the bindings they were generated from: a host that reads them
+    # holds the schema to this, and a schema it does not describe is refused
+    # rather than read into the wrong fields.
+    write_manifest(schemas, out_dir)
 
     report = protobuf_report()
     if report is None:
