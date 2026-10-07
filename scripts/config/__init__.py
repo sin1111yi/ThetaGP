@@ -1,45 +1,19 @@
 """
-ThetaGP board config library — TOML validation and C macro generation.
+ThetaGP board config library — the table a board's declaration is read
+against, and the walks that hold it to that table and turn it into the board's
+header and CMake variables.
 """
 
-from .pin_utils import (
-    PORT_MAP,
-    validate_pin_format,
-    parse_pin,
-    generate_pin_macro,
-    generate_pin_struct,
-    generate_pin_array_macro,
-)
-from .validators import validate_config
-from .generators import (
-    MCU_HEADER_MAP,
-    LED_TIMER_CHANNEL_MAP,
-    gen_led_lines,
-    gen_keypad_lines,
-    gen_usb_lines,
-    gen_uart_lines,
-    gen_spi_lines,
-    gen_flash_lines,
-    assemble_header,
-    generate_cmake,
-)
+from .engine import Emission, Table, emit, validate
+from .output import assemble_cmake, assemble_header
+from .schema import BOARD_SCHEMA
 
 __all__ = [
-    "PORT_MAP",
-    "validate_pin_format",
-    "parse_pin",
-    "generate_pin_macro",
-    "generate_pin_struct",
-    "generate_pin_array_macro",
-    "validate_config",
-    "MCU_HEADER_MAP",
-    "LED_TIMER_CHANNEL_MAP",
-    "gen_led_lines",
-    "gen_keypad_lines",
-    "gen_usb_lines",
-    "gen_uart_lines",
-    "gen_spi_lines",
-    "gen_flash_lines",
+    "BOARD_SCHEMA",
+    "Emission",
+    "Table",
+    "emit",
+    "validate",
+    "assemble_cmake",
     "assemble_header",
-    "generate_cmake",
 ]

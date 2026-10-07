@@ -17,8 +17,9 @@ identifier     = "MyBoard"
 name           = "MyBoard Rev.A"
 mcu            = "STM32H743xx"
 mcu_series     = "STM32H7"
+chip           = "STM32H743VI"
 
-[led0]
+[led.run0]
 pin        = "PC0"
 active_low = false
 
@@ -70,7 +71,7 @@ chip = "w25qxx"
 | `name` | string | Human-readable board name. Reaches the host: it is the USB product string, the HID serial hash and the `board` field of `sys.get_fw_version`. |
 | `mcu` | string | MCU part number, e.g. `STM32H743xx`. |
 | `mcu_series` | string | One of: `STM32H7`, `STM32F4`, `STM32F1`. |
-| `chip` | string | probe-rs target name for flashing, emitted as `BOARD_CHIP` — e.g. `STM32H743VI`. This is the probe-rs target, not ST's orderable part number: `STM32H743VITx` is rejected by probe-rs. Optional; empty means "fill this in before flashing". |
+| `chip` | string | probe-rs target name for flashing, emitted as `BOARD_CHIP` — e.g. `STM32H743VI`. This is the probe-rs target, not ST's orderable part number: `STM32H743VITx` is rejected by probe-rs. Required, and a board with no chip of its own states this one and declares `[flash] chip = "none"`. |
 
 ### `[led.<name>]` — optional
 

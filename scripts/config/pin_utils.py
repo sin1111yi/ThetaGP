@@ -1,5 +1,8 @@
 """
-ThetaGP pin parsing and C macro generation utilities.
+ThetaGP pin parsing and C spelling.
+
+A pin is written in a board's declaration as a string — PA9, PE14 — and is
+spelled in the header as the port and pin constants a driver takes.
 """
 
 # Port map for pin strings (PA0 → Port::PortA, Pin::Pin0)
@@ -30,26 +33,26 @@ def parse_pin(pin_str: str) -> tuple[str, str]:
     return PORT_MAP[port_char], f"Pin::Pin{pin_num}"
 
 
-def generate_pin_macro(name: str, pin_str: str) -> str:
-    """Generate a single pin #define macro."""
-    port, pin = parse_pin(pin_str)
-    return f"#define {name:<28} {{{port}, {pin}}}"
+def pin_of(entry) -> str | None:
+    """The pin a list entry names, written as a string or as a table."""
+    if isinstance(entry, dict):
+        return entry.get("pin")
+    return entry
 
 
-def generate_pin_struct(pin_str: str) -> str:
-    """Generate pin struct initializer (no #define prefix)."""
+def pin_struct(pin_str: str) -> str:
+    """A pin as the port and pin constants it names."""
     port, pin = parse_pin(pin_str)
     return f"{{{port}, {pin}}}"
 
 
-def generate_pin_array_macro(macro_name: str, pins: list[dict]) -> str:
-    """Generate multi-line pin array #define macro."""
+def pin_array_lines(macro_name: str, pins: list) -> str:
+    """A list of pins as one macro spanning its entries."""
     lines = [f"#define {macro_name} \\"]
-    count = len(pins)
-    for i, pin_entry in enumerate(pins):
-        port, pin = parse_pin(pin_entry["pin"])
-        line = f"    {{{port}, {pin}}}"
-        if i < count - 1:
+    last = len(pins) - 1
+    for i, entry in enumerate(pins):
+        line = f"    {pin_struct(pin_of(entry))}"
+        if i < last:
             line += ", \\"
         lines.append(line)
     return "\n".join(lines)

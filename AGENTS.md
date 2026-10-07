@@ -447,7 +447,10 @@ BoardConfig macros (`BDCFG_SPI_*`, `BDCFG_LOGGER_UART`, etc.) are generated from
 ### Pipeline
 
 ```
-BoardConfig.toml → scripts/generate_config.py → BoardConfig.h + board_config.cmake
+BoardConfig.toml
+  → scripts/config/schema.py     one row per field: its rules and its macro
+  → scripts/generate_config.py   holds the declaration to that table
+  → BoardConfig.h + board_config.cmake
 ```
 
 ### Configuration layers
@@ -483,15 +486,27 @@ as a firmware default of 1000 Hz and a board may raise it with
 
 ### Adding a new peripheral
 
-1. Add config data to `configs/<target>/BoardConfig.toml` under the appropriate `bus` key
-2. Add generator logic to `scripts/generate_config.py` following the existing pattern (see `gen_uart_lines()` or `gen_spi_lines()`)
+1. Declare it in `scripts/config/schema.py`: a `Table` for the peripheral, and
+   one row per field naming the kind that holds its rules (`Pin`, `Int`,
+   `Enum`, `Preset`, …) and the macro it becomes. `scripts/config/tables.py`
+   carries the value tables a declared value is mapped through — a value
+   outside its table names nothing the firmware has, so it is rejected rather
+   than defaulted.
+2. Where a peripheral's lines are not one per field — a descriptor table the
+   drivers index, a key matrix — write the checks and the lines in
+   `scripts/config/output.py` and name them on the table's row.
+3. Add the board's data to `configs/<target>/BoardConfig.toml`.
+4. `cmake -B build -DTARGET=<T>` runs the generator, which holds the
+   declaration to the table before anything is built: a value outside its
+   table, a missing required field or a bus that binds nothing is reported
+   there, with the path of the field it is about.
 
 ### Macro naming convention
 
 - Instance names use underscores to avoid HAL macro conflicts: `SPI_2` not `SPI2`, `UART_1` not `UART1`
 - Bind prefix + underscore suffix pattern: `LOGGER_UART`, `FLASH_SPI`
 - A bind macro names a bus instance by index: `BDCFG_LOGGER_UART` → `BUS_UART_1` → the instance the driver receives. The pin fields live in the generated descriptor tables, not in per-pin macros.
-- The macros the board config generates carry the `BDCFG_` prefix (`BDCFG_SPEED_HS`, `BDCFG_KEYPAD_*`, `BDCFG_LED0_*`, `BDCFG_UART_*`, `BDCFG_SPI_*`, `BDCFG_LOGGER_UART`, `BDCFG_FLASH_SPI`, `BDCFG_HAS_FLASH`, …); the firmware layer bridges them into the `THETAGP_CFG_*` names the software reads
+- The macros the board config generates carry the `BDCFG_` prefix (`BDCFG_SPEED_HS`, `BDCFG_KEYPAD_*`, `BDCFG_LED_*`, `BDCFG_UART_*`, `BDCFG_SPI_*`, `BDCFG_LOGGER_UART`, `BDCFG_FLASH_SPI`, `BDCFG_HAS_FLASH`, …); the firmware layer bridges them into the `THETAGP_CFG_*` names the software reads
 
 ### UART example (BoardConfig.toml)
 

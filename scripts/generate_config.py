@@ -2,8 +2,7 @@
 """
 ThetaGP Board Configuration Generator
 
-Reads BoardConfig.toml and produces BoardConfig.h + board_config.cmake
-with byte-identical output compared to the original Lua pipeline.
+Reads BoardConfig.toml and produces BoardConfig.h + board_config.cmake.
 """
 
 import argparse
@@ -11,22 +10,8 @@ import os
 import sys
 import tomllib
 
-from config import (
-    validate_config,
-    gen_led_lines,
-    gen_keypad_lines,
-    gen_usb_lines,
-    gen_uart_lines,
-    gen_spi_lines,
-    gen_flash_lines,
-    assemble_header,
-    generate_cmake,
-)
+from config import BOARD_SCHEMA, assemble_cmake, assemble_header, emit, validate
 
-
-# =============================================================================
-# Config loading & normalization
-# =============================================================================
 
 def load_config(target: str, source_dir: str) -> dict:
     """Load BoardConfig.toml for a target."""
@@ -42,50 +27,6 @@ def load_config(target: str, source_dir: str) -> dict:
     )
     sys.exit(1)
 
-
-def _normalize_pin_array(pins: list) -> list[dict]:
-    if not pins:
-        return []
-    if isinstance(pins[0], str):
-        return [{"pin": p} for p in pins]
-    return pins
-
-
-def _normalize_key_map(km):
-    if isinstance(km, list):
-        if not km:
-            return {"columns": 0, "data": []}
-        columns = len(km[0])
-        data = []
-        for row in km:
-            data.extend(row)
-        return {"columns": columns, "data": data}
-    return km
-
-
-def normalize_config(cfg: dict) -> dict:
-    """Convert TOML shorthand forms to canonical internal representation."""
-    kp = cfg.get("keypad", {})
-    for key in ("drive_pins", "sense_pins", "direct_pins"):
-        if key in kp:
-            kp[key] = _normalize_pin_array(kp[key])
-    if "key_map" in kp:
-        kp["key_map"] = _normalize_key_map(kp["key_map"])
-
-    # button_map: 2-D array → {int: str}, or string-keyed dict → {int: str}
-    bm = kp.get("button_map", {})
-    if isinstance(bm, list):
-        kp["button_map"] = {int(e[0]): e[1] for e in bm if isinstance(e, list) and len(e) >= 2}
-    elif bm:
-        kp["button_map"] = {(int(k) if isinstance(k, str) else k): v for k, v in bm.items()}
-
-    cfg["keypad"] = kp
-    return cfg
-
-
-# =============================================================================
-# Main
-# =============================================================================
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="ThetaGP Board Config Generator")
@@ -105,10 +46,9 @@ def main() -> None:
 
     print(f"[INFO] Loading configuration for target: {target}", file=sys.stderr)
     cfg = load_config(target, source_dir)
-    cfg = normalize_config(cfg)
 
     print("[INFO] Validating configuration...", file=sys.stderr)
-    errors = validate_config(cfg)
+    errors = validate(BOARD_SCHEMA, cfg)
     if errors:
         print("[ERROR] Configuration validation failed:", file=sys.stderr)
         for e in errors:
@@ -116,40 +56,14 @@ def main() -> None:
         sys.exit(1)
     print("[INFO] Configuration validation passed", file=sys.stderr)
 
-    bi = cfg.get("board_info", {})
+    print("[INFO] Generating macros...", file=sys.stderr)
+    emitted = emit(BOARD_SCHEMA, cfg)
+    for table, group in zip(BOARD_SCHEMA, emitted.groups):
+        if group:
+            print(f"[INFO]   {table.where}: {len(group)} lines", file=sys.stderr)
 
-    print("[INFO] Generating LED macros...", file=sys.stderr)
-    led_lines = gen_led_lines(cfg.get("led"))
-    print(f"[INFO]   LEDs: {len(led_lines)} macros generated", file=sys.stderr)
-
-    print("[INFO] Generating keypad macros...", file=sys.stderr)
-    keypad_lines = gen_keypad_lines(cfg.get("keypad"))
-    print(f"[INFO]   Keypad: {len(keypad_lines)} macros generated", file=sys.stderr)
-
-    print("[INFO] Generating USB macros...", file=sys.stderr)
-    usb_lines = gen_usb_lines(cfg.get("usb"))
-    print(f"[INFO]   USB: {len(usb_lines)} macros generated", file=sys.stderr)
-
-    bus = cfg.get("bus")
-
-    print("[INFO] Generating UART macros...", file=sys.stderr)
-    uart_lines = gen_uart_lines(bus)
-    print(f"[INFO]   UART: {len(uart_lines)} macros generated", file=sys.stderr)
-
-    print("[INFO] Generating SPI flash macros...", file=sys.stderr)
-    spi_lines = gen_spi_lines(bus)
-    print(f"[INFO]   SPI flash: {len(spi_lines)} macros generated", file=sys.stderr)
-
-    print("[INFO] Generating flash chip macros...", file=sys.stderr)
-    flash_lines = gen_flash_lines(cfg.get("flash"))
-    print(f"[INFO]   Flash: {len(flash_lines)} macros generated", file=sys.stderr)
-
-    header_content = assemble_header(
-        bi.get("mcu_series", ""), bi,
-        led_lines, keypad_lines, usb_lines, uart_lines, spi_lines,
-        flash_lines,
-    )
-    cmake_content = generate_cmake(bi, target)
+    header_content = assemble_header(emitted)
+    cmake_content = assemble_cmake(emitted, target)
 
     header_path = os.path.join(source_dir, "configs", target, "BoardConfig.h")
     cmake_path = os.path.join(source_dir, "configs", target, "board_config.cmake")
