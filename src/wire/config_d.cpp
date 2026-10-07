@@ -64,6 +64,21 @@ static_assert(Gamepad::Config::kKeyTableMaxNameLen <
                   sizeof(((ThetaGP_ConfigKeyEntry *)nullptr)->key),
               "config list: a key name outgrows the reply's own buffer");
 
+// The key table's types and the shapes the wire names for them line up member
+// for member, which is what makes the cast in listKeys total: a type added on
+// either side fails the build rather than reaching a host as a shape the
+// schema does not carry.
+static_assert(static_cast<int>(KeyType::U8) ==
+                      ThetaGP_ConfigKeyType_CONFIG_KEY_U8 &&
+                  static_cast<int>(KeyType::U16) ==
+                      ThetaGP_ConfigKeyType_CONFIG_KEY_U16 &&
+                  static_cast<int>(KeyType::I16) ==
+                      ThetaGP_ConfigKeyType_CONFIG_KEY_I16 &&
+                  static_cast<int>(KeyType::U8Array) ==
+                      ThetaGP_ConfigKeyType_CONFIG_KEY_U8_ARRAY,
+              "config list: the key table's types and the wire's shapes do not "
+              "line up");
+
 // The key name an accepted arm answers with: the name the row spells, which is
 // the name the request named.
 void writeKey(char *out, size_t cap, const KeyEntry &entry) {
@@ -208,6 +223,7 @@ void ConfigDomain::listKeys(ThetaGP_Reply &reply) {
     row.min = entry.minVal;
     row.max = entry.maxVal;
     row.reboot = (entry.flags & kKeyFlagRequiresReboot) != 0;
+    row.type = static_cast<ThetaGP_ConfigKeyType>(entry.type);
     ++listed;
   }
   ok.keys_count = static_cast<pb_size_t>(listed);

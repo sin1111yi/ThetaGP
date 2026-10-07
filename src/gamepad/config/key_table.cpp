@@ -76,6 +76,20 @@ static_assert(fieldsTileTheStore(),
               "key table: the rows do not add up to ConfigStore — a field the "
               "table does not carry has no name and no profile path");
 
+// Every row carries one of the key types, and none of them the sentinel that
+// closes the enum. A row of no type is a field no value travels for, and the
+// wire has no shape to name it by.
+constexpr bool rowsCarryAType() {
+  for (const KeyEntry &entry : kKeyTable) {
+    if (entry.type == KeyType::Count) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static_assert(rowsCarryAType(), "key table: a row carries no key type");
+
 // The rows of one domain are adjacent, which is what a profile body walks: the
 // writer opens the object a row names, writes the fields of that object and
 // closes it when a row of another domain arrives. A domain that came back after
