@@ -362,7 +362,7 @@ def _entries(table: Table, held, errors: list[str], declared_order: bool = False
     rules are the question, and in name order when its lines are, that being
     the order the header lists them.
     """
-    if table.kind is MAP:
+    if table.kind == MAP:
         if held is None:
             return []
         if not isinstance(held, dict) or not held:
@@ -379,7 +379,7 @@ def _entries(table: Table, held, errors: list[str], declared_order: bool = False
                 found.append((held[name], f"{table.where}.{name}", name))
         return found
 
-    if table.kind is ARRAY:
+    if table.kind == ARRAY:
         if held is None:
             return []
         if not isinstance(held, list):

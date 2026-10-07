@@ -284,6 +284,8 @@ def bus_lines(kind: str, template: str, defaults: dict):
 
     emit.__name__ = f"bus_lines[{kind}]"
     emit.__name__ = f"bus_lines[{kind}]"
+    emit.origin = {"factory": "bus_lines", "kind": kind, "template": template,
+                   "defaults": dict(defaults)}
     return emit
 
 

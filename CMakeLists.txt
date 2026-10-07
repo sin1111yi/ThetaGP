@@ -75,7 +75,8 @@ endif()
 # declaration has to bring the configure back: without this, a build after an
 # edit compiles the macros of the declaration before it.
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-    ${CMAKE_SOURCE_DIR}/configs/${TARGET}/BoardConfig.toml)
+    ${CMAKE_SOURCE_DIR}/configs/${TARGET}/BoardConfig.toml
+    ${CMAKE_SOURCE_DIR}/configs/board_schema.toml)
 
 include(${CMAKE_SOURCE_DIR}/configs/${TARGET}/board_config.cmake)
 
