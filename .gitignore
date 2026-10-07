@@ -34,7 +34,7 @@ lib/ThetaGP.PB
 *example*
 
 # Generated protocol output
-# The codec of the pinned schema is written here by the configure step, and
+# The codec of the schema is written here by the configure step, and
 # nothing derived from the schema is tracked: the schema itself lives in its own
 # repository (ThetaGP.PB).
 src/pb/

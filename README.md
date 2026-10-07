@@ -41,8 +41,8 @@ database does not carry.
 
 ## Dependencies
 
-Declared in `lib/CMakeLists.txt` and fetched at configure. Branch-tracking
-libraries are checked once a day; the protocol schema is pinned to a tag.
+Declared in `lib/CMakeLists.txt` and fetched at configure. Every dependency
+follows its branch and is checked once a day.
 
 | Library | Purpose |
 |---|---|
@@ -50,7 +50,7 @@ libraries are checked once a day; the protocol schema is pinned to a tag.
 | frozen | JSON parser behind `src/utils/json` (profile bodies) |
 | nanopb | protobuf codec for the wire |
 | mbedTLS | fetched, not linked |
-| ThetaGP.PB | the protocol schema (pinned) |
+| ThetaGP.PB | the protocol schema |
 
 ## License
 

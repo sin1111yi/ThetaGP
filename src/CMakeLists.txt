@@ -109,7 +109,7 @@ endif()
 # =============================================================================
 # Protobuf Codec Generation (configure-time)
 # =============================================================================
-# The schema is its own repository, pinned by tag and fetched by lib/CMakeLists.txt.
+# The schema is its own repository, fetched by lib/CMakeLists.txt.
 # Its generator writes the .pb.c/.pb.h pair the firmware compiles into src/pb/; a
 # pair that is missing, empty or older than the schema or its .options file is
 # regenerated, and a failure stops the configure rather than compiling a stale
@@ -117,7 +117,7 @@ endif()
 set(THETAGP_PB_DIR "${CMAKE_SOURCE_DIR}/lib/ThetaGP.PB")
 
 set(PROTO_SCHEMAS
-    # The one protocol template, from the pinned schema checkout.
+    # The one protocol template, from the schema checkout.
     "${THETAGP_PB_DIR}/protocol/ThetaGP.proto"
 )
 # The generated pair lands under src/pb/ and is ignored by git.
