@@ -12,6 +12,9 @@ lines in output.py. A row still names them, so a field is spelled once.
 """
 
 from .pin_utils import pin_array_lines, pin_struct, validate_pin_format
+from .tables import (BUTTON_SUFFIXES, MAX_BUTTON_INDEX, MAX_KEY_INDEX,
+                     MAX_KEYPAD_BUTTONS, MAX_KEYPAD_KEYS, NO_KEY,
+                     USB_SPEED_CEILING_HZ)
 
 # A row's presence, for a group that applies when a field is there or not.
 PRESENT = object()
@@ -266,6 +269,195 @@ class Custom(Field):
             super().emit(out, value, macro, entry)
         else:
             self.lines(out, value, macro, entry)
+
+
+
+class Matrix(Field):
+    """A key matrix: the drive x sense grid of key indices a keypad samples.
+
+    The grid is read as a whole — its shape against the pins it is read with,
+    and the keys it may name — and written as rows of indices beside the range
+    they need a mask for. `drive` and `sense` name the fields of the same table
+    the grid is held against; `index_macro` and `mask_macro` name the macros
+    that range is written to.
+    """
+
+    def __init__(self, name, *, drive: str, sense: str, index_macro: str,
+                 mask_macro: str, **kwargs):
+        super().__init__(name, **kwargs)
+        self.drive = drive
+        self.sense = sense
+        self.index_macro = index_macro
+        self.mask_macro = mask_macro
+
+    def check(self, value, path, entry):
+        drive = len(entry.get(self.drive) or [])
+        sense = len(entry.get(self.sense) or [])
+        # A pin list that is missing is its own row's to report: without both
+        # of them there is no shape to hold the grid to.
+        if not drive or not sense:
+            return []
+
+        errors: list[str] = []
+        if drive * sense > MAX_KEYPAD_KEYS:
+            errors.append(
+                f"Total keys ({drive * sense}) cannot exceed {MAX_KEYPAD_KEYS} "
+                f"(drive={drive}, sense={sense})"
+            )
+        if not isinstance(value, list):
+            errors.append(f"{path} must be an array of rows")
+            return errors
+        if len(value) != drive:
+            errors.append(
+                f"{path} has {len(value)} rows, expected {drive} "
+                f"({self.drive} count)"
+            )
+        for r, row in enumerate(value):
+            if not isinstance(row, list):
+                errors.append(f"{path} row {r} must be an array")
+                continue
+            if len(row) != sense:
+                errors.append(
+                    f"{path} row {r} has {len(row)} columns, expected {sense}"
+                )
+            for c, key in enumerate(row):
+                if key is None or key == NO_KEY:
+                    continue
+                if not isinstance(key, int) or key < 0 or key > MAX_KEY_INDEX:
+                    errors.append(
+                        f"{path}[{r}][{c}] must be 0-{MAX_KEY_INDEX} or 0xFF "
+                        f"(got {key})"
+                    )
+        return errors
+
+    def emit(self, out, value, macro, entry):
+        drive = len(entry[self.drive])
+        sense = len(entry[self.sense])
+
+        out.line("")
+        out.line(f"#define {self.macro} \\")
+
+        highest = 0
+        for r in range(drive):
+            cells = []
+            for c in range(sense):
+                key = value[r][c]
+                if key is None:
+                    key = NO_KEY
+                if key != NO_KEY and key > highest:
+                    highest = key
+                cells.append(f"{key:3d}")
+            row = ", ".join(cells)
+            out.line(f"    {{{row}}}" + ("" if r == drive - 1 else ", \\"))
+
+        out.line("")
+        out.line("")
+        out.line(macro_line(self.index_macro, highest))
+        out.line(macro_line(self.mask_macro, (highest + 32) // 32))
+
+
+class PairList(Field):
+    """Pairs of an index and a name, one line each, as a keypad's button map.
+
+    `line` names the macro the pairs are written to and `prefix` what each name
+    is prefixed with; the indices and the names are held to the ranges the
+    board configuration carries for them.
+    """
+
+    def __init__(self, name, *, line: str, prefix: str, **kwargs):
+        super().__init__(name, **kwargs)
+        self.line = line
+        self.mask_prefix = prefix
+
+    def check(self, value, path, entry):
+        if not isinstance(value, list):
+            return [f"{path} must be an array of [index, button_name] pairs"]
+        if not value:
+            return [f"{path} must have at least 1 entry"]
+        if len(value) > MAX_KEYPAD_BUTTONS:
+            return [f"{path} cannot exceed {MAX_KEYPAD_BUTTONS} entries"]
+
+        errors: list[str] = []
+        seen: set[int] = set()
+        for i, item in enumerate(value):
+            if not isinstance(item, list) or len(item) < 2:
+                errors.append(f"{path}[{i}] must be [index, button_name]")
+                continue
+            index, name = item[0], item[1]
+            if not isinstance(index, int) or index < 0 or index > MAX_BUTTON_INDEX:
+                errors.append(
+                    f"{path}[{i}] index {index} must be a number "
+                    f"0-{MAX_BUTTON_INDEX}"
+                )
+            if index in seen:
+                errors.append(f"{path}[{i}] duplicate index {index}")
+            seen.add(index)
+            if not isinstance(name, str):
+                errors.append(
+                    f"{path}[{i}] button name must be a string, "
+                    f"got {type(name).__name__}"
+                )
+            elif name.upper() not in BUTTON_SUFFIXES:
+                errors.append(
+                    f"{path}[{i}] '{name}' is not a valid button. "
+                    f"Valid examples: B1, L1, S1, UP"
+                )
+        return errors
+
+    def emit(self, out, value, macro, entry):
+        out.line("")
+        out.line(f"#define {self.line} \\")
+
+        pairs = sorted((item[0], item[1]) for item in value)
+        last = len(pairs) - 1
+        for i, (index, name) in enumerate(pairs):
+            mask = f"{self.mask_prefix}{name.upper()}"
+            out.line(f"    {{{index}, {mask:<20}}}" + ("" if i == last else ", \\"))
+
+        out.line("")
+
+
+class Rate(Field):
+    """The reports a second a link carries: what the speed it declares allows.
+
+    A rate is held against the speed of the same table, and the message names
+    what every speed can poll at.
+    """
+
+    def check(self, value, path, entry):
+        if isinstance(value, bool) or not isinstance(value, int):
+            return [f"{path} must be a number (got {value!r})"]
+        if value <= 0:
+            return [f"{path} must be positive (got {value})"]
+
+        errors: list[str] = []
+        speed = entry.get("speed")
+        if isinstance(speed, str):
+            ceiling = USB_SPEED_CEILING_HZ.get(speed)
+            if ceiling is None:
+                errors.append(
+                    f"usb.speed '{speed}' has no report-rate ceiling in the "
+                    f"generator's table, so the rate cannot be checked against "
+                    f"it"
+                )
+            elif value > ceiling:
+                limits = ", ".join(
+                    f"{name} polls at most {limit} times per second"
+                    for name, limit in sorted(USB_SPEED_CEILING_HZ.items())
+                )
+                errors.append(
+                    f"{path} is {value} but usb.speed '{speed}' polls the "
+                    f"interrupt endpoint at most {ceiling} times per second, so "
+                    f"the key must not exceed {ceiling}: {limits}"
+                )
+        if 1000000 % value != 0:
+            errors.append(
+                f"{path} is {value}, which does not divide 1000000. The task "
+                f"period is a whole number of microseconds "
+                f"(1000000/{value} truncated to {1000000 // value} us), so the "
+                f"tick cannot land on exactly {value} times per second."
+            )
+        return errors
 
 
 class Group:

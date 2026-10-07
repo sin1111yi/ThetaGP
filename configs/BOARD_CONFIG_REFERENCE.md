@@ -42,10 +42,10 @@ firmware looks its macros up by.
 | `active_mode` | one of: `high`, `low`, `none` |  |  | `BDCFG_KEYPAD_ACTIVE_MODE` |
 | `drive_pins` | a list of 1 to 8 pins | for scan_matrix | yes | — |
 | `sense_pins` | a list of 1 to 8 pins | for scan_matrix | yes | — |
-| `key_map` | `check_key_map` holds it | for scan_matrix |  | `lines_key_map`'s lines |
+| `key_map` | — | for scan_matrix |  | `BDCFG_KEYPAD_KEY_MAP` |
 | `direct_pins` | a list of 1 to 8 pins | for io_direct | yes | — |
 | `spi_chips` | an integer, 1 to 4 | for spi_74hc165 | yes | `BDCFG_KEYPAD_SPI_CHIPS` |
-| `button_map` | `check_button_map` holds it |  |  | `lines_button_map`'s lines |
+| `button_map` | — |  |  | `BDCFG_KEYPAD_BUTTON_MAP` and the rows beside it |
 
 ## `[usb]`
 
@@ -53,7 +53,7 @@ firmware looks its macros up by.
 |-------|---------|------|----------|---------|
 | `hw_periph` | one of: `ULPI`, `USB1`, `USB2` |  |  | `BDCFG_IF_<value>` |
 | `speed` | one of: `full_speed`, `high_speed` |  |  | `BDCFG_SPEED_<value>` |
-| `wired_report_hz` | `check_report_rate` holds it |  |  | `BDCFG_REPORT_RATE_HZ` |
+| `wired_report_hz` | — |  |  | `BDCFG_REPORT_RATE_HZ` |
 
 ## `[bus.uart]`
 

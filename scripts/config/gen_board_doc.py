@@ -60,6 +60,9 @@ def accepted(field) -> str:
     if isinstance(field, engine.Named):
         values = ", ".join(f"`{v}`" for v in sorted(field.table))
         return f"one of: {values}"
+    summary = getattr(field, "summary", None)
+    if summary:
+        return summary
     if isinstance(field, engine.Custom):
         checks = getattr(field, "checks", None)
         return f"`{checks.__name__}` holds it" if checks else "a value of its own"
@@ -78,6 +81,10 @@ def becomes(field, table) -> str:
         return f"`{macro}`"
     if prefix:
         return f"`{prefix}<value>`"
+    for key in ("line", "index_macro"):
+        held = getattr(field, key, None)
+        if held:
+            return f"`{held}` and the rows beside it"
     if isinstance(field, engine.Custom):
         lines = getattr(field, "lines", None)
         if lines is None:

@@ -146,9 +146,12 @@ note = "for scan_matrix"
 
   [[table.item.field]]
   name = "key_map"
-  kind = "Custom"
-  checks = "check_key_map"
-  lines = "lines_key_map"
+  kind = "Matrix"
+  drive = "drive_pins"
+  sense = "sense_pins"
+  macro = "BDCFG_KEYPAD_KEY_MAP"
+  index_macro = "BDCFG_KEYPAD_MAX_KEY_INDEX"
+  mask_macro = "BDCFG_KEYPAD_MASK_ARRAY_SIZE"
 
 [[table.item]]
 item = "group"
@@ -178,9 +181,9 @@ note = "for spi_74hc165"
 [[table.item]]
 item = "field"
 name = "button_map"
-kind = "Custom"
-checks = "check_button_map"
-lines = "lines_button_map"
+kind = "PairList"
+line = "BDCFG_KEYPAD_BUTTON_MAP"
+prefix = "GAMEPAD_MASK_"
 
 [[table]]
 path = ["usb"]
@@ -202,8 +205,7 @@ prefix = "BDCFG_SPEED_"
 [[table.item]]
 item = "field"
 name = "wired_report_hz"
-kind = "Custom"
-checks = "check_report_rate"
+kind = "Rate"
 macro = "BDCFG_REPORT_RATE_HZ"
 
 [[table]]
