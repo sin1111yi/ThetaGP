@@ -427,7 +427,9 @@ bool HardwareTimer::initPwm(TimerChannel channel, const GPIO::PinDesc &pin,
 
   LL_TIM_OC_SetMode(timer, map->llChannel, LL_TIM_OCMODE_PWM1);
   LL_TIM_OC_SetPolarity(timer, map->llChannel, LL_TIM_OCPOLARITY_HIGH);
-  LL_TIM_OC_EnablePreload(timer, map->llChannel);
+  // The duty is written through, not preloaded: a sequence hands the compare
+  // register its first value with the counter standing still, and a write held
+  // back until an update event would leave that period on the value before it.
   setCompare(timer, channel, 0);
   LL_TIM_CC_EnableChannel(timer, map->llChannel);
   LL_TIM_EnableDMAReq_UPDATE(timer);
@@ -469,16 +471,17 @@ bool HardwareTimer::startSequence(const uint16_t *duties, uint16_t count) {
 
   TIM_TypeDef *timer = timerInstance[static_cast<size_t>(map->instance)];
 
-  // The first duty reaches the compare register before the counter runs, so the
-  // sequence opens on it instead of on a stale low period; the DMA is armed
-  // after that event, so the request it raises finds no transfer to start. The
-  // transfer then carries the duties after the first, one per period. An update
-  // request fires whatever the compare register holds, so a zero-duty tail
-  // reaches the channel too.
+  // The pin follows the compare register as soon as the register is written, so
+  // a write made while the counter stands still spends every instruction until
+  // the counter starts as high time, and the bit it is for comes out long
+  // enough to read as the other one. The order below keeps that window to the
+  // counter's own start: the DMA is armed first — the compare register is
+  // written through rather than preloaded, so the duty lands in the period it
+  // is for — and the update flag is cleared so the request the transfer waits
+  // on is the counter's own first period. The transfer then carries the duties
+  // after the first, one per period.
   LL_TIM_DisableCounter(timer);
-  LL_TIM_SetCounter(timer, 0);
-  setCompare(timer, _pwmChannel, duties[0]);
-  LL_TIM_GenerateEvent_UPDATE(timer);
+  LL_TIM_ClearFlag_UPDATE(timer);
 
   const Result started =
       _pwmDma->start(static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&duties[1])),
@@ -488,6 +491,8 @@ bool HardwareTimer::startSequence(const uint16_t *duties, uint16_t count) {
     return false;
   }
 
+  LL_TIM_SetCounter(timer, 0);
+  setCompare(timer, _pwmChannel, duties[0]);
   LL_TIM_EnableCounter(timer);
   return true;
 }
