@@ -6,6 +6,8 @@ driver indexes, a report rate is held to the link it travels on: each of those
 names its checks and its lines here, and the schema's row points at them.
 """
 
+import re
+
 from .engine import flag_line, macro_line, rows
 from .tables import (
     BUTTON_SUFFIXES,
@@ -211,25 +213,24 @@ def check_report_rate(value, path: str, entry: dict) -> list[str]:
 
 # ── Buses ────────────────────────────────────────────────────────────────────
 
-def descriptor_row(parts: list, values: dict) -> str:
-    """One descriptor row; a nested list names the braces within it."""
-    return "{" + ", ".join(_part(part, values) for part in parts) + "}"
+def render_descriptor(template: str, values: dict) -> str:
+    """One descriptor row, from the template the table declares.
+
+    `{field}` stands for the value that field renders as; every other brace is
+    the row's own, so a template spells the nested braces a descriptor carries
+    without escaping anything.
+    """
+    return re.sub(r"\{(\w+)\}", lambda at: str(values[at.group(1)]), template)
 
 
-def _part(part, values: dict) -> str:
-    if isinstance(part, list):
-        return "{" + ", ".join(str(values[name]) for name in part) + "}"
-    return str(values[part])
-
-
-def bus_lines(kind: str, descriptor: list, defaults: dict):
+def bus_lines(kind: str, template: str, defaults: dict):
     """The macros a bus table carries.
 
     Its enable lines, the count of the entries that bind a name to an
     instance, the bindings themselves, and the descriptor table the drivers
-    index. The descriptor spells each entry's fields through the rows the
-    table declares, a field left out falling to `defaults` — `@name` takes the
-    value another field of the same entry carries.
+    index. `template` is one descriptor row: `{field}` is the value the row of
+    that field renders as, a field left out falling to `defaults`, where
+    `@name` takes the value another field of the same entry carries.
     """
 
     def emit(out, held, table) -> None:
@@ -273,7 +274,7 @@ def bus_lines(kind: str, descriptor: list, defaults: dict):
                         if isinstance(default, str) and default.startswith("@")
                         else str(default)
                     )
-            rendered.append(descriptor_row(descriptor, values))
+            rendered.append(render_descriptor(template, values))
 
         out.line("")
         out.line(macro_line(f"BDCFG_{kind}_DESC_DATA", "\\"))

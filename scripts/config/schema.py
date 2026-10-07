@@ -130,7 +130,7 @@ BOARD_SCHEMA: list[Table] = [
         Int("baud", 1),
     ], lines=bus_lines(
         "UART",
-        descriptor=["peripheral", "tx", "rx", "baud"],
+        template="{{peripheral}, {tx}, {rx}, {baud}}",
         defaults={"rx": "@tx", "baud": DEFAULT_BAUD},
     )),
 
@@ -143,7 +143,7 @@ BOARD_SCHEMA: list[Table] = [
         Pin("ncs", required=True),
     ], lines=bus_lines(
         "SPI",
-        descriptor=["peripheral", ["sclk", "mosi", "miso"], "ncs"],
+        template="{{peripheral}, {{sclk}, {mosi}, {miso}}, {ncs}}",
         defaults={},
     )),
 
