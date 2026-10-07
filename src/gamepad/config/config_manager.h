@@ -49,6 +49,11 @@ public:
    * defaults. */
   bool readProfileBody(uint16_t profileId);
 
+  /** Replace the configuration in effect with the compiled-in defaults, touching
+   * no storage: writing the result out is saveProfile's job, so the profile the
+   * configuration belongs to is not changed by this. */
+  void factoryReset();
+
   /** Write the configuration in effect to the profile it belongs to, which is
    * the profile the store carries as active: read from the store as the call
    * starts, once, and the one id the whole call stands on.

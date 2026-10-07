@@ -157,6 +157,11 @@ bool ConfigManager::readProfileBody(uint16_t profileId) {
   return ok;
 }
 
+// The compiled defaults are the reset's whole effect: nothing is read from the
+// flash and nothing is written to it, so the body the device persists is left
+// where it was and a save is what puts these values there.
+void ConfigManager::factoryReset() { _config = kConfigDefaults; }
+
 // ── saveProfile() ──
 // The body this save replaces, read back before the write: a save that does not
 // carry a key of it over says so instead of dropping it in silence.
@@ -276,6 +281,10 @@ bool ConfigManager::loadProfile(uint16_t) { return false; }
 // onto: the configuration stays at the compiled defaults it was initialized
 // with.
 bool ConfigManager::readProfileBody(uint16_t) { return false; }
+
+// No storage to write to either, which is what the reset does anyway: the
+// compiled defaults replace the configuration in effect and nothing else moves.
+void ConfigManager::factoryReset() { _config = kConfigDefaults; }
 
 bool ConfigManager::saveProfile(uint32_t *droppedKeys) {
   // No storage to write to, so no body is replaced and nothing can be left

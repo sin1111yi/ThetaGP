@@ -25,9 +25,15 @@
 #include <cstdint>
 #include <cstdio>
 
+#include "conf/ThetaGP_Config.h" // THETAGP_CFG_HAS_FLASH, the switch the body arms branch on
 #include "gamepad/config/config_manager.h"
 #include "gamepad/config/key_table.h"
 #include "wire/dispatch.h"
+
+#if THETAGP_CFG_HAS_FLASH
+#include "wire/flash.h"     // Flash::active(), the flash stream's hold on the staging buffer
+#include "wire/profile_d.h" // ProfileTransfer::busy(), a body transfer's hold on it
+#endif
 
 namespace ThetaGP::Wire {
 
@@ -82,6 +88,21 @@ const KeyEntry *requestedKey(const char *name, ThetaGP_Reply &reply) {
   }
   return entry;
 }
+
+#if THETAGP_CFG_HAS_FLASH
+// The refusal owed to an arm that reads or writes a body while a body's bytes
+// are spoken for: the flash stream holds the one staging buffer a save
+// serializes into and a load reads into, and so does a body's own transfer. No
+// reason is added to the code, because a reason naming the same fact would be
+// the code again.
+bool refusedWhileBodyBusy(ThetaGP_Reply &reply) {
+  if (!Flash::active() && !ProfileTransfer::busy()) {
+    return false;
+  }
+  writeFailure(reply, ThetaGP_ErrorCode_ERR_BUSY, ThetaGP_Reason_REASON_NONE);
+  return true;
+}
+#endif
 
 } // namespace
 
@@ -191,6 +212,86 @@ void ConfigDomain::listKeys(ThetaGP_Reply &reply) {
   }
   ok.keys_count = static_cast<pb_size_t>(listed);
   ok.count = listed;
+}
+
+void ConfigDomain::save(ThetaGP_Reply &reply) {
+#if THETAGP_CFG_HAS_FLASH
+  if (refusedWhileBodyBusy(reply)) {
+    return;
+  }
+
+  ConfigManager &config = ConfigManager::getInstance();
+
+  // The factory profile is the board's baseline and the configuration layer
+  // refuses to write it: the refusal names the state the device is in rather
+  // than a write that was never attempted.
+  if (config.activeProfileId() == 0) {
+    writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_STATE,
+                 ThetaGP_Reason_REASON_ACTIVE_PROFILE_IS_FACTORY);
+    return;
+  }
+
+  // What the write does not carry over from the body it replaced. A save that
+  // carried every key over reports no count at all, which is what the reply's
+  // own optional field is for.
+  uint32_t droppedKeys = 0;
+  if (!config.saveProfile(&droppedKeys)) {
+    writeFailure(reply, ThetaGP_ErrorCode_ERR_INTERNAL,
+                 ThetaGP_Reason_REASON_PROFILE_SAVE_FAILED);
+    return;
+  }
+
+  reply.which_kind = ThetaGP_Reply_config_save_tag;
+  ThetaGP_ConfigSaveOk &ok = reply.kind.config_save;
+  ok.persisted = true;
+  if (droppedKeys != 0) {
+    ok.has_dropped_keys = true;
+    ok.dropped_keys = droppedKeys;
+  }
+#else
+  // No storage to write to: the values stay in effect for this session only,
+  // and the answer says so. It is a fact of the reply rather than a failure of
+  // the arm, and a save that wrote nothing has nothing to have left behind.
+  reply.which_kind = ThetaGP_Reply_config_save_tag;
+  reply.kind.config_save.persisted = false;
+#endif
+}
+
+void ConfigDomain::load(ThetaGP_Reply &reply) {
+#if THETAGP_CFG_HAS_FLASH
+  if (refusedWhileBodyBusy(reply)) {
+    return;
+  }
+
+  ConfigManager &config = ConfigManager::getInstance();
+
+  // The read is the profile the configuration belongs to and not a move onto
+  // one: the active profile is where the read was handed it. The configuration
+  // starts from the compiled defaults, so a body this firmware cannot read
+  // leaves the device on those defaults and is answered as a read that failed.
+  if (!config.readProfileBody(config.activeProfileId())) {
+    writeFailure(reply, ThetaGP_ErrorCode_ERR_INTERNAL,
+                 ThetaGP_Reason_REASON_PROFILE_LOAD_FAILED);
+    return;
+  }
+
+  reply.which_kind = ThetaGP_Reply_config_load_tag;
+#else
+  // No storage to read from: the arm names a facility this board does not carry
+  // rather than reporting a read that failed.
+  writeFailure(reply, ThetaGP_ErrorCode_ERR_NOT_SUPPORTED,
+               ThetaGP_Reason_REASON_NO_PERSISTENT_STORAGE);
+#endif
+}
+
+void ConfigDomain::factoryReset(ThetaGP_Reply &reply) {
+  ConfigManager::getInstance().factoryReset();
+
+  // The reset writes nothing: what the device persists is left where it was,
+  // and a host that wants the defaults to outlive the power cycle follows the
+  // reset with a save. The answer carries that as persisted false.
+  reply.which_kind = ThetaGP_Reply_config_factory_reset_tag;
+  reply.kind.config_factory_reset.persisted = false;
 }
 
 } // namespace ThetaGP::Wire

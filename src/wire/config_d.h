@@ -26,8 +26,9 @@
 namespace ThetaGP::Wire {
 
 // The configuration domain: the keys the key table exposes, read and written
-// one at a time and listed so a host can ask which ones this firmware carries.
-// Every arm answers the key it reached, so a host pairing
+// one at a time and listed so a host can ask which ones this firmware carries,
+// plus the three arms that move the whole configuration through the profile it
+// belongs to. Every key arm answers the key it reached, so a host pairing
 // replies with requests sees which field moved.
 class ConfigDomain {
 public:
@@ -45,6 +46,20 @@ public:
   // with the range the key holds and whether a write reaches it only at the
   // next boot.
   static void listKeys(ThetaGP_Reply &reply);
+
+  // Write the configuration in effect to the profile it belongs to. A board
+  // with no storage chip answers persisted false rather than refusing: the
+  // values are in effect, they just do not outlive the power cycle.
+  static void save(ThetaGP_Reply &reply);
+
+  // Read the profile the configuration belongs to back over it, starting from
+  // the compiled-in defaults. The profile the configuration belongs to is not
+  // changed by it.
+  static void load(ThetaGP_Reply &reply);
+
+  // Replace the configuration in effect with the compiled-in defaults, writing
+  // nothing to persistent storage: writing it out is save's job.
+  static void factoryReset(ThetaGP_Reply &reply);
 };
 
 } // namespace ThetaGP::Wire
