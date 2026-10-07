@@ -7,6 +7,7 @@
 #include <cstring>
 
 #include "wire/flash.h"
+#include "wire/config_d.h"
 #include "wire/profile_d.h"
 #include "wire/sys_d.h"
 #include "wire/test_d.h"
@@ -121,6 +122,12 @@ uint16_t Dispatch::answer(const uint8_t *payload, uint16_t length,
             break;
         case ThetaGP_Request_sys_get_task_info_tag:
             SysDomain::taskInfo(request, reply);
+            break;
+        case ThetaGP_Request_config_get_key_tag:
+            ConfigDomain::getKey(request, reply);
+            break;
+        case ThetaGP_Request_config_set_key_tag:
+            ConfigDomain::setKey(request, reply);
             break;
         case ThetaGP_Request_sys_get_usage_tag:
             SysDomain::usage(reply);
