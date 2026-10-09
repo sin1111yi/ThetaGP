@@ -42,6 +42,15 @@ extern "C" {
 
 #define FORCED_TYPE_CONV(type, var) ((type)(var))
 
+// The two halves of a descriptor field, in the width the field is written at:
+// each takes the low or the high half of a value of that many bits, so a
+// 16-bit field is LSB16 then MSB16 and a 32-bit one is LSB32 then MSB32 (each
+// of those two halves being 16 bits wide themselves).
+#define LSB16(n)                    ((n) & 0xFF)
+#define MSB16(n)                    (((n) >> 8) & 0xFF)
+#define LSB32(n)                    ((n) & 0xFFFF)
+#define MSB32(n)                    (((n) >> 16) & 0xFFFF)
+
 #define __TOSTRING(x)               #x
 #define TOSTRING(x)                 __TOSTRING(x)
 

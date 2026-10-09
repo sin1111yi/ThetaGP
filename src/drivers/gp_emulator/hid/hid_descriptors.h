@@ -27,6 +27,8 @@
 #pragma once
 
 #include "BoardConfig.h"
+#include "utils/utils.h"
+
 #include <stdint.h>
 
 #define HID_ENDPOINT_SIZE 64
@@ -52,9 +54,6 @@
 #define CDC_NOTIFICATION_ENDPOINT 2
 #define CDC_DATA_IN_ENDPOINT   3
 #define CDC_DATA_OUT_ENDPOINT  4
-
-#define LSB(n)            (n & 255)
-#define MSB(n)            ((n >> 8) & 255)
 
 // HAT report (4 bits)
 #define HID_HAT_UP        0x00
@@ -110,8 +109,8 @@ static uint8_t hid_device_descriptor[] = {
     0,                 // bDeviceSubClass
     0,                 // bDeviceProtocol
     HID_ENDPOINT_SIZE, // bMaxPacketSize0
-    LSB(VENDOR_ID),
-    MSB(VENDOR_ID), // idVendor
+    LSB16(VENDOR_ID),
+    MSB16(VENDOR_ID), // idVendor
     0x00,
     0x01, // idProduct placeholder — patched at runtime
     0x00,

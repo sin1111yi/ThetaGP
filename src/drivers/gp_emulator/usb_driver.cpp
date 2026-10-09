@@ -98,8 +98,8 @@ void USBDriver::init() {
   p += CDC_IFACE_SIZE;
 
   s_config_size = static_cast<uint16_t>(p - s_config_descriptor);
-  s_config_descriptor[2] = LSB(s_config_size);
-  s_config_descriptor[3] = MSB(s_config_size);
+  s_config_descriptor[2] = LSB16(s_config_size);
+  s_config_descriptor[3] = MSB16(s_config_size);
 
   _drivers[0] = *driver->get_class_driver();
 
