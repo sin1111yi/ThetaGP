@@ -67,6 +67,12 @@ extern "C" {
 #define RAM_D2_DATA   __attribute__((section(".ram_d2_data")))
 #define RAM_D3_DATA   __attribute__((section(".ram_d3_data")))
 
+// ── Unique device ID ──
+// The chip's 96-bit serial number, read one 32-bit word at a time. A platform
+// without one reads zero.
+#define DEVICE_UID_WORD(index) \
+  (*((const volatile uint32_t *)(UID_BASE + 4u * (index))))
+
 #else
 
 // Non-H7 fallback: all section attrs are no-ops
@@ -78,6 +84,9 @@ extern "C" {
 #define RAM_BSS
 #define RAM_D2_DATA
 #define RAM_D3_DATA
+
+// No serial number: every word reads zero.
+#define DEVICE_UID_WORD(index) (0u)
 
 #endif
 

@@ -23,6 +23,7 @@
 #include "drivers/gp_emulator/ps4/ps4_descriptors.h"
 #include "drivers/gp_emulator/shared/driver_helper.h"
 
+#include "build_info.h"
 #include "gamepad/gamepad.h"
 
 #include "tusb.h"
@@ -49,6 +50,19 @@ void PS4Driver::initialize() {
   // what the device reports between touches.
   report.touch[0] = PS4_TOUCH_LIFTED;
   report.touch[4] = PS4_TOUCH_LIFTED;
+
+  // The controller's MAC: the board hash's four bytes, then the chip serial's
+  // low 16 bits. The first byte is made a locally administered unicast one.
+  const uint32_t board = GPEmulator::get_string_hash_u32(BOARD_NAME);
+  ps4_feature_mac[0] = static_cast<uint8_t>(board);
+  ps4_feature_mac[1] = static_cast<uint8_t>(board >> 8);
+  ps4_feature_mac[2] = static_cast<uint8_t>(board >> 16);
+  ps4_feature_mac[3] = static_cast<uint8_t>(board >> 24);
+  const uint16_t serial = static_cast<uint16_t>(DEVICE_UID_WORD(0));
+  ps4_feature_mac[4] = static_cast<uint8_t>(serial);
+  ps4_feature_mac[5] = static_cast<uint8_t>(serial >> 8);
+  ps4_feature_mac[0] =
+      static_cast<uint8_t>((ps4_feature_mac[0] & 0xFC) | 0x02);
 
   class_driver = {
 #if CFG_TUSB_DEBUG >= 2
