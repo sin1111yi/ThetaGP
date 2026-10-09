@@ -305,7 +305,7 @@ doc = "RY center offset"
 
 [[field]]
 name = "usb.input_mode"
-type = "u16"
+type = "u8"
 min = 0
 max = 255
 default = 14
