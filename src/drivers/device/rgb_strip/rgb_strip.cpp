@@ -66,7 +66,7 @@ constexpr uint16_t kSlotCount =
 // never carried one.
 uint32_t refreshRateHz() {
   const uint8_t hz = Gamepad::Config::ConfigManager::getInstance().config().led.rgb.hz;
-  return hz > 0 ? hz : static_cast<uint32_t>(Gamepad::Config::kKeyDefaultHz);
+  return hz > 0 ? hz : static_cast<uint32_t>(Gamepad::Config::kKeyDefaultLedRgbHz);
 }
 
 // The interval one frame is shown for, in microseconds: what a tick of the task
@@ -100,7 +100,7 @@ constexpr uint16_t kStartHue = 0; // red
 
 // A frame has to stay up for at least one tick of the task that advances the
 // frames: the shortest one is the fastest rate the config key accepts.
-static_assert(1000000 / Gamepad::Config::keyEntry(Gamepad::Config::ConfigKey::Hz).maxVal >=
+static_assert(1000000 / Gamepad::Config::keyEntry(Gamepad::Config::ConfigKey::LedRgbHz).maxVal >=
                   THETAGP_CFG_LED_TASK_PERIOD_US,
               "the fastest LED refresh rate has to cover at least one tick of "
               "the task that advances the frames: lower the key's ceiling or "

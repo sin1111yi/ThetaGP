@@ -117,9 +117,9 @@ int main() {
     Json doc;
     doc.parse(body, static_cast<int>(len));
 
-    const KeyEntry &socd = keyEntry(ConfigKey::Socd);
-    const KeyEntry &fourWay = keyEntry(ConfigKey::FourWay);
-    const KeyEntry &btnMap = keyEntry(ConfigKey::BtnMap);
+    const KeyEntry &socd = keyEntry(ConfigKey::MapSocd);
+    const KeyEntry &fourWay = keyEntry(ConfigKey::MapFourWay);
+    const KeyEntry &btnMap = keyEntry(ConfigKey::MapBtnMap);
 
     check(doc.getInt(socd.key, kNoValue) == kConfigDefaults.map.socd,
           "the SOCD mode key's path reads the value the field holds");
@@ -144,9 +144,9 @@ int main() {
     const int socdWanted = 2;
     const int fourWayWanted = 1;
     std::snprintf(body, sizeof(body), "{ver:2,map:{%s:%d,%s:%d,%s:[0,0]}}",
-                  profileLeafName(keyEntry(ConfigKey::Socd)), socdWanted,
-                  profileLeafName(keyEntry(ConfigKey::FourWay)), fourWayWanted,
-                  profileLeafName(keyEntry(ConfigKey::BtnMap)));
+                  profileLeafName(keyEntry(ConfigKey::MapSocd)), socdWanted,
+                  profileLeafName(keyEntry(ConfigKey::MapFourWay)), fourWayWanted,
+                  profileLeafName(keyEntry(ConfigKey::MapBtnMap)));
     // The array's slots beyond the two the body carries take the sentinel.
     ConfigStore cfg = kConfigDefaults;
     parseProfile(body, static_cast<uint32_t>(std::strlen(body)), &cfg);

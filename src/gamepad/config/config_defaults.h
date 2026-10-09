@@ -131,44 +131,44 @@ constexpr ConfigStore makeDefaults() {
   for (uint8_t slot = 0; slot < kBtnMapSlots; ++slot) {
     cfg.map.btn_map[slot] = kBtnMap[slot];
   }
-  cfg.map.socd     = kKeyDefaultSocd;
-  cfg.usb.input_mode = kKeyDefaultInputMode;
-  cfg.map.four_way = kKeyDefaultFourWay;
-  cfg.map.dpad     = kKeyDefaultDpad;
-  cfg.map.inv_x    = kKeyDefaultInvX;
-  cfg.map.inv_y    = kKeyDefaultInvY;
-  cfg.map.inv_rx   = kKeyDefaultInvRx;
-  cfg.map.inv_ry   = kKeyDefaultInvRy;
-  cfg.map.swap     = kKeyDefaultSwap;
+  cfg.map.socd     = kKeyDefaultMapSocd;
+  cfg.usb.input_mode = kKeyDefaultUsbInputMode;
+  cfg.map.four_way = kKeyDefaultMapFourWay;
+  cfg.map.dpad     = kKeyDefaultMapDpad;
+  cfg.map.inv_x    = kKeyDefaultMapInvX;
+  cfg.map.inv_y    = kKeyDefaultMapInvY;
+  cfg.map.inv_rx   = kKeyDefaultMapInvRx;
+  cfg.map.inv_ry   = kKeyDefaultMapInvRy;
+  cfg.map.swap     = kKeyDefaultMapSwap;
 
   // ── Stick settings ──
-  cfg.stick.lx_dz   = kKeyDefaultLxDz;
-  cfg.stick.ly_dz   = kKeyDefaultLyDz;
-  cfg.stick.rx_dz   = kKeyDefaultRxDz;
-  cfg.stick.ry_dz   = kKeyDefaultRyDz;
-  cfg.stick.lx_sens = kKeyDefaultLxSens;
-  cfg.stick.ly_sens = kKeyDefaultLySens;
-  cfg.stick.rx_sens = kKeyDefaultRxSens;
-  cfg.stick.ry_sens = kKeyDefaultRySens;
-  cfg.stick.curve   = kKeyDefaultCurve;
-  cfg.stick.ema     = kKeyDefaultEma;
+  cfg.stick.lx_dz   = kKeyDefaultStickLxDz;
+  cfg.stick.ly_dz   = kKeyDefaultStickLyDz;
+  cfg.stick.rx_dz   = kKeyDefaultStickRxDz;
+  cfg.stick.ry_dz   = kKeyDefaultStickRyDz;
+  cfg.stick.lx_sens = kKeyDefaultStickLxSens;
+  cfg.stick.ly_sens = kKeyDefaultStickLySens;
+  cfg.stick.rx_sens = kKeyDefaultStickRxSens;
+  cfg.stick.ry_sens = kKeyDefaultStickRySens;
+  cfg.stick.curve   = kKeyDefaultStickCurve;
+  cfg.stick.ema     = kKeyDefaultStickEma;
 
   // ── Trigger settings ──
-  cfg.trig.lt_dz = kKeyDefaultLtDz;
-  cfg.trig.rt_dz = kKeyDefaultRtDz;
+  cfg.trig.lt_dz = kKeyDefaultTrigLtDz;
+  cfg.trig.rt_dz = kKeyDefaultTrigRtDz;
 
   // ── LED settings ──
-  cfg.led.bri  = kKeyDefaultBri;
-  cfg.led.mode = kKeyDefaultMode;
-  cfg.led.hue  = kKeyDefaultHue;
-  cfg.led.sat  = kKeyDefaultSat;
-  cfg.led.rgb.hz   = kKeyDefaultHz;
+  cfg.led.bri  = kKeyDefaultLedBri;
+  cfg.led.mode = kKeyDefaultLedMode;
+  cfg.led.hue  = kKeyDefaultLedHue;
+  cfg.led.sat  = kKeyDefaultLedSat;
+  cfg.led.rgb.hz   = kKeyDefaultLedRgbHz;
 
   // ── Calibration ──
-  cfg.cal.lx_c = kKeyDefaultLxC;
-  cfg.cal.ly_c = kKeyDefaultLyC;
-  cfg.cal.rx_c = kKeyDefaultRxC;
-  cfg.cal.ry_c = kKeyDefaultRyC;
+  cfg.cal.lx_c = kKeyDefaultCalLxC;
+  cfg.cal.ly_c = kKeyDefaultCalLyC;
+  cfg.cal.rx_c = kKeyDefaultCalRxC;
+  cfg.cal.ry_c = kKeyDefaultCalRyC;
 
   return cfg;
 }

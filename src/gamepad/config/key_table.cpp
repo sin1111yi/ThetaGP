@@ -196,7 +196,7 @@ static_assert(listedEntriesWithinLimits(),
 // The SOCD mode holds a SOCDMode enumerator, so that enum bounds the key's
 // range. The two are held together here, so an enumerator added to the enum
 // either widens the declared range or fails this build.
-static_assert(keyEntry(ConfigKey::Socd).maxVal ==
+static_assert(keyEntry(ConfigKey::MapSocd).maxVal ==
                   static_cast<int32_t>(Enums::SOCDMode::Count) - 1,
               "key table: the SOCD mode key does not cover the SOCD modes");
 

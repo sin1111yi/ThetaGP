@@ -227,7 +227,7 @@ def validate_config_keys(keys: dict) -> None:
     if not fields:
         fail("ERROR: config keys — the declaration carries no field")
 
-    leaves: Dict[str, str] = {}
+    names: Dict[str, str] = {}
     for index, field in enumerate(fields):
         name = field.get("name")
         where = f"field {index}"
@@ -242,14 +242,14 @@ def validate_config_keys(keys: dict) -> None:
                 f"dropped, so it is refused here")
         if not domain:
             problems.append(f"{where}: name carries an empty domain")
-        if not leaf.isidentifier():
-            problems.append(f"{where}: leaf {leaf!r} is not a C++ identifier")
-        elif leaf in leaves:
+        if not all(segment.isidentifier() for segment in name.split(".")):
+            problems.append(f"{where}: {name!r} is not a C++ name")
+        elif key_name(name) in names:
             problems.append(
-                f"{where}: leaf {leaf!r} is already the name of {leaves[leaf]} — "
-                f"one leaf is one field, and the table spells both")
+                f"{where}: {name!r} is already the name of {names[key_name(name)]} "
+                f"— a name is one field, and the table spells it twice")
         else:
-            leaves[leaf] = name
+            names[key_name(name)] = name
 
         type_name = field.get("type")
         if type_name not in TYPE_MAP:
@@ -300,9 +300,17 @@ def validate_config_keys(keys: dict) -> None:
         fail(*[f"ERROR: config keys — {problem}" for problem in problems])
 
 
-def enum_name(leaf: str) -> str:
-    """The enumerator a leaf is named by: every `_`-separated word capitalised."""
-    return "".join(word[:1].upper() + word[1:] for word in leaf.split("_") if word)
+def enum_name(segment: str) -> str:
+    """One segment of a name, capitalised: every `_`-separated word."""
+    return "".join(word[:1].upper() + word[1:] for word in segment.split("_")
+                   if word)
+
+
+def key_name(name: str) -> str:
+    """The C++ name a key is spelled by: every segment of its name -- the
+    domains it sits in and the field's own leaf -- capitalised and joined, so
+    two keys of different domains may be spelled with the same leaf."""
+    return "".join(enum_name(segment) for segment in name.split("."))
 
 
 def flag_expression(field: dict) -> str:
@@ -362,11 +370,12 @@ def gen_config_keys(keys: dict, out: Optional[Path] = None,
     w("namespace ThetaGP::Gamepad::Config {")
     w()
     w("// Where a field sits in the table below, in table order. An enumerator is")
-    w("// the field's name without its domain, so the code names the row of a field")
-    w("// by the field: position and row come from one declaration and cannot drift.")
+    w("// the field's whole name, its domains and its leaf capitalised together, so")
+    w("// two fields of different domains may share a leaf: position and row come")
+    w("// from one declaration and cannot drift.")
     w("enum class ConfigKey : uint8_t {")
     for field in fields:
-        w(f"  {enum_name(field['name'].rsplit('.', 1)[1])},")
+        w(f"  {key_name(field['name'])},")
     w("  Count,")
     w("};")
     w()
@@ -377,21 +386,18 @@ def gen_config_keys(keys: dict, out: Optional[Path] = None,
     for field in fields:
         if field.get("default") == DEFAULT_FROM_BOARD:
             continue
-        leaf = field["name"].rsplit(".", 1)[1]
-        w(f"inline constexpr int32_t kKeyDefault{enum_name(leaf)} = "
+        w(f"inline constexpr int32_t kKeyDefault{key_name(field['name'])} = "
           f"{field['default']};")
     w()
     w("// Every field of the store, in the order the declaration lists them. A")
     w("// field's name is the whole identity of that field: what a caller sends")
     w("// (config.get_key, config.set_key, config.list_keys) and the path a profile")
     w("// body carries for it are one string, and the leaf a body writes is its last")
-    w("// segment. The code side of the field is that segment too, which is what")
-    w("// offsetof below spells. A row the protocol accepts carries")
-    w("// kKeyFlagExposed; the rest are carried by a profile and reached by no")
-    w("// command.")
+    w("// segment. The offset below is that same name spelled into the store's own")
+    w("// nesting. A row the protocol accepts carries kKeyFlagExposed; the rest are")
+    w("// carried by a profile and reached by no command.")
     w("inline constexpr KeyEntry kKeyTable[] = {")
     for field in fields:
-        leaf = field["name"].rsplit(".", 1)[1]
         type_name = field["type"]
         count = field.get("count", 1)
         w(f"    // {field['name']} — {field['doc']}")
