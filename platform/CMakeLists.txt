@@ -17,69 +17,83 @@
 # If not, see <https://www.gnu.org/licenses/>.
 ]]
 
-cmake_minimum_required(VERSION 3.22)
-
 # =============================================================================
-# Platform Path Configuration
+# Platform Selection
 # =============================================================================
-set(PLATFORM_PATH "")
-
+# Everything this layer states about the platform it builds for -- the tree its
+# own files live in, the vendor drivers it is built against, the macros those
+# drivers are compiled with and the include directories that carry their headers
+# -- is decided in this one block. The rest of the file reads what it sets and
+# does not know which platform it is.
 if(BOARD_MCU_SERIES STREQUAL "STM32H7")
     set(PLATFORM_PATH "${CMAKE_CURRENT_SOURCE_DIR}/STM32")
     set(PLATFORM_MCU_PREFIX "stm32h7")
     set(PLATFORM_MCU_NAME_PREFIX "STM32H7")
     set(PLATFORM_VENDOR "ST")
+
+    # The vendor driver tree and the CMSIS tree beside it.
+    set(PLATFORM_DRIVER_PATH
+        "${CMAKE_SOURCE_DIR}/lib/Drivers/${PLATFORM_MCU_NAME_PREFIX}xx_HAL_Driver")
+    set(PLATFORM_DRIVER_INC_PATH "${PLATFORM_DRIVER_PATH}/Inc")
+    set(PLATFORM_DRIVER_SRC_PATH "${PLATFORM_DRIVER_PATH}/Src")
+    set(PLATFORM_CMSIS_PATH "${CMAKE_SOURCE_DIR}/lib/Drivers/CMSIS")
+
+    # The macros this platform's drivers and headers are compiled with, beside
+    # the board's own identifiers in COMPILE_DEFS below.
+    set(PLATFORM_COMPILE_DEFS
+        USE_PWR_LDO_SUPPLY
+        USE_HAL_DRIVER
+        USE_FULL_LL_DRIVER
+    )
+
+    # The include directories that carry this platform's headers, ahead of the
+    # board's and the project's own.
+    set(PLATFORM_INCLUDE_DIRS
+        "${PLATFORM_DRIVER_INC_PATH}"
+        "${PLATFORM_CMSIS_PATH}/Include"
+        "${PLATFORM_CMSIS_PATH}/Device/${PLATFORM_VENDOR}/${BOARD_MCU_SERIES}/Include"
+        "${PLATFORM_CMSIS_PATH}/Device/${PLATFORM_VENDOR}/${PLATFORM_MCU_NAME_PREFIX}xx/Include"
+    )
 else()
-    message(FATAL_ERROR "Unsupported MCU series: ${BOARD_MCU_SERIES}. Only STM32H7 is supported currently.")
+    message(FATAL_ERROR
+        "Unsupported MCU series: ${BOARD_MCU_SERIES}. Only STM32H7 is supported "
+        "currently.")
+endif()
+
+if(NOT EXISTS "${PLATFORM_DRIVER_PATH}")
+    message(FATAL_ERROR
+        "The ${BOARD_MCU_SERIES} driver tree is not there: "
+        "${PLATFORM_DRIVER_PATH}. lib/CMakeLists.txt fetches it — configure "
+        "once where it can be fetched, or restore it by hand.")
 endif()
 
 # =============================================================================
 # Startup File and Link Script
 # =============================================================================
+# Both are named by the board's MCU, so a board states which MCU it is and this
+# resolves the pair under the platform's own tree.
 string(TOLOWER "startup_${BOARD_MCU}" STARTUP_FILE_BASE_NAME)
 string(TOUPPER "${BOARD_MCU}_FLASH" LINK_SCRIPT_BASE_NAME)
 
 set(STARTUP_FILE "${PLATFORM_PATH}/startup/${STARTUP_FILE_BASE_NAME}.s")
 set(LINKSCRIPT_FILE "${PLATFORM_PATH}/link/${LINK_SCRIPT_BASE_NAME}.ld")
 
-if(NOT EXISTS "${STARTUP_FILE}")
-    message(FATAL_ERROR "Startup file not found: ${STARTUP_FILE}")
-endif()
-
-if(NOT EXISTS "${LINKSCRIPT_FILE}")
-    message(FATAL_ERROR "Link script not found: ${LINKSCRIPT_FILE}")
-endif()
-
-# =============================================================================
-# HAL Driver Paths
-# =============================================================================
-if(BOARD_MCU_SERIES STREQUAL "STM32H7")
-    set(DRIVER_PATH "${CMAKE_SOURCE_DIR}/lib/Drivers/${PLATFORM_MCU_NAME_PREFIX}xx_HAL_Driver")
-endif()
-
-set(DRIVER_INC_PATH "${DRIVER_PATH}/Inc")
-set(DRIVER_SRC_PATH "${DRIVER_PATH}/Src")
-set(CMSIS_PATH "${CMAKE_SOURCE_DIR}/lib/Drivers/CMSIS")
-
-# Vendor-specific middleware path
-if(PLATFORM_VENDOR STREQUAL "ST")
-    set(MIDDLEWARE_PATH "${CMAKE_SOURCE_DIR}/lib/Middlewares/${PLATFORM_VENDOR}")
-else()
-    set(MIDDLEWARE_PATH "${CMAKE_SOURCE_DIR}/lib/Middlewares")
-endif()
-
-if(NOT EXISTS "${DRIVER_PATH}")
-    message(FATAL_ERROR "Missing drivers for ${BOARD_MCU_SERIES}")
-endif()
+foreach(_platform_file IN ITEMS "${STARTUP_FILE}" "${LINKSCRIPT_FILE}")
+    if(NOT EXISTS "${_platform_file}")
+        message(FATAL_ERROR
+            "${_platform_file} is not there. A board names its MCU and this "
+            "resolves the startup file and the link script from that name — "
+            "add the missing one, or correct BOARD_MCU.")
+    endif()
+endforeach()
 
 # =============================================================================
 # Compile Definitions
 # =============================================================================
-
+# What the platform states above, beside the board's own identifiers. Every
+# target built against this layer carries the pair.
 set(COMPILE_DEFS
-    USE_PWR_LDO_SUPPLY
-    USE_HAL_DRIVER
-    USE_FULL_LL_DRIVER
+    ${PLATFORM_COMPILE_DEFS}
     ${BOARD_MCU}
     ${BOARD_MCU_SERIES}
 )
@@ -87,60 +101,43 @@ set(COMPILE_DEFS
 # =============================================================================
 # Collect Source Files
 # =============================================================================
-
-# HAL driver sources (exclude templates)
-file(GLOB DRIVER_SOURCES LIST_DIRECTORIES FALSE CONFIGURE_DEPENDS "${DRIVER_SRC_PATH}/*.c")
-list(FILTER DRIVER_SOURCES EXCLUDE REGEX ".*template.*")
-
-# Middleware sources (exclude templates)
-file(GLOB_RECURSE MIDDLEWARE_SOURCES "${MIDDLEWARE_PATH}/*.c")
-list(FILTER MIDDLEWARE_SOURCES EXCLUDE REGEX ".*template.*")
-
-# Platform system sources
 set(SYSTEM_PATH "${PLATFORM_PATH}/system")
 
-# Common system files (all MCU)
+# The vendor driver sources. The templates are not built.
+file(GLOB DRIVER_SOURCES LIST_DIRECTORIES FALSE CONFIGURE_DEPENDS
+     "${PLATFORM_DRIVER_SRC_PATH}/*.c")
+list(FILTER DRIVER_SOURCES EXCLUDE REGEX ".*template.*")
+
+# The system files every platform carries, then the ones under this platform's
+# own name and the ones under its target-specific name.
 set(SYSTEM_SOURCES
     "${SYSTEM_PATH}/syscalls.c"
     "${SYSTEM_PATH}/sysmem.c"
 )
-
-# MCU series-specific files in system directory (match files containing PLATFORM_MCU_PREFIX)
-file(GLOB SYSTEM_MCU_SOURCES "${SYSTEM_PATH}/*${PLATFORM_MCU_PREFIX}*")
+file(GLOB SYSTEM_MCU_SOURCES CONFIGURE_DEPENDS
+     "${SYSTEM_PATH}/*${PLATFORM_MCU_PREFIX}*")
 list(APPEND SYSTEM_SOURCES ${SYSTEM_MCU_SOURCES})
 
-# Target-specific files (match files containing PLATFORM_MCU_PREFIX)
-set(TARGET_PATH "${SYSTEM_PATH}/target")
-file(GLOB TARGET_SOURCES "${TARGET_PATH}/*${PLATFORM_MCU_PREFIX}*")
+file(GLOB TARGET_SOURCES CONFIGURE_DEPENDS
+     "${SYSTEM_PATH}/target/*${PLATFORM_MCU_PREFIX}*")
 list(APPEND SYSTEM_SOURCES ${TARGET_SOURCES})
 
-# Platform peripheral implementations
-file(GLOB_RECURSE PLATFORM_PERIPHERAL_SOURCES CONFIGURE_DEPENDS "${PLATFORM_PATH}/peripherals/*.cpp" "${PLATFORM_PATH}/peripherals/*.c")
+# The platform layer's own peripheral implementations.
+file(GLOB_RECURSE PLATFORM_PERIPHERAL_SOURCES CONFIGURE_DEPENDS
+     "${PLATFORM_PATH}/peripherals/*.cpp"
+     "${PLATFORM_PATH}/peripherals/*.c")
 
 # =============================================================================
 # Include Directories
 # =============================================================================
-
-# Board config header path
-set(BOARD_CONFIG_PATH "${CMAKE_SOURCE_DIR}/configs/${TARGET}")
-
+# The platform's own, then the board's configuration directory and the project's
+# sources, which the platform layer includes by their repository-relative paths.
 set(INCLUDE_DIRS
-    "${DRIVER_INC_PATH}"
-    "${CMSIS_PATH}/Include"
-    "${CMSIS_PATH}/Device/${PLATFORM_VENDOR}/${BOARD_MCU_SERIES}/Include"
+    ${PLATFORM_INCLUDE_DIRS}
     "${SYSTEM_PATH}"
-    "${BOARD_CONFIG_PATH}"
+    "${CMAKE_SOURCE_DIR}/configs/${TARGET}"
     "${CMAKE_SOURCE_DIR}/src"
 )
-
-# Vendor-specific middleware include directories
-if(PLATFORM_VENDOR STREQUAL "ST")
-    list(APPEND INCLUDE_DIRS
-        "${CMSIS_PATH}/Device/${PLATFORM_VENDOR}/${PLATFORM_MCU_NAME_PREFIX}xx/Include"
-    )
-endif()
-
-list(APPEND INCLUDE_DIRS "${SYSTEM_PATH}")
 
 # =============================================================================
 # Link Script Configuration
@@ -148,23 +145,29 @@ list(APPEND INCLUDE_DIRS "${SYSTEM_PATH}")
 set(PLATFORM_LINK_SCRIPT "${LINKSCRIPT_FILE}" CACHE INTERNAL "Linker script path")
 
 # =============================================================================
-# Add Platform Library
+# Platform Targets
 # =============================================================================
+# PlatformBase is what everything built here is compiled with: the include
+# directories above and the definitions above. PlatformDriver is the platform's
+# own compiled C sources -- the vendor drivers, the system files and the startup
+# file -- and is linked into the executable.
 add_library(PlatformBase INTERFACE)
 target_include_directories(PlatformBase INTERFACE ${INCLUDE_DIRS})
 target_compile_definitions(PlatformBase INTERFACE ${COMPILE_DEFS})
 
-add_library(HalDriver OBJECT)
-target_sources(HalDriver
+add_library(PlatformDriver OBJECT)
+target_sources(PlatformDriver
     PRIVATE
     ${DRIVER_SOURCES}
     ${SYSTEM_SOURCES}
     ${STARTUP_FILE}
 )
-target_link_libraries(HalDriver
-    PUBLIC
-    PlatformBase
-)
+target_link_libraries(PlatformDriver PUBLIC PlatformBase)
 
-# Platform peripheral implementations (added to main executable in src/CMakeLists.txt)
-set(PLATFORM_PERIPHERAL_SOURCES ${PLATFORM_PERIPHERAL_SOURCES} PARENT_SCOPE)
+# The peripheral implementations are C++ that reaches into the project's own
+# headers and through them into the USB stack only the executable carries, so
+# they are compiled as part of the executable rather than as objects of their
+# own: this target carries the list, and linking it puts the sources there.
+add_library(PlatformPeripherals INTERFACE)
+target_sources(PlatformPeripherals INTERFACE ${PLATFORM_PERIPHERAL_SOURCES})
+target_link_libraries(PlatformPeripherals INTERFACE PlatformBase)

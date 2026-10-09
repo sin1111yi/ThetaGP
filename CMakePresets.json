@@ -1,0 +1,68 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 4,
+    "minor": 0,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "BoringTechH743",
+      "displayName": "BoringTechH743 (Debug)",
+      "description": "The main development board, with its external flash, debug build",
+      "binaryDir": "${sourceDir}/build/BoringTechH743",
+      "cacheVariables": {
+        "TARGET": "BoringTechH743",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "BoringTechH743-release",
+      "displayName": "BoringTechH743 (Release)",
+      "description": "The main development board, with its external flash, release build",
+      "binaryDir": "${sourceDir}/build/BoringTechH743-release",
+      "cacheVariables": {
+        "TARGET": "BoringTechH743",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "ThetaGPH7",
+      "displayName": "ThetaGPH7 (Debug)",
+      "description": "The secondary board, which carries no external flash, debug build",
+      "binaryDir": "${sourceDir}/build/ThetaGPH7",
+      "cacheVariables": {
+        "TARGET": "ThetaGPH7",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "ThetaGPH7-release",
+      "displayName": "ThetaGPH7 (Release)",
+      "description": "The secondary board, which carries no external flash, release build",
+      "binaryDir": "${sourceDir}/build/ThetaGPH7-release",
+      "cacheVariables": {
+        "TARGET": "ThetaGPH7",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "BoringTechH743",
+      "configurePreset": "BoringTechH743"
+    },
+    {
+      "name": "BoringTechH743-release",
+      "configurePreset": "BoringTechH743-release"
+    },
+    {
+      "name": "ThetaGPH7",
+      "configurePreset": "ThetaGPH7"
+    },
+    {
+      "name": "ThetaGPH7-release",
+      "configurePreset": "ThetaGPH7-release"
+    }
+  ]
+}

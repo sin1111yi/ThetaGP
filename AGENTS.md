@@ -172,14 +172,18 @@ Before any operation, query files in this order:
 
 ```bash
 # Build
-cmake -B build -DTARGET=BoringTechH743
-cmake --build build
+cmake --preset BoringTechH743
+cmake --build --preset BoringTechH743
 
 # Reconfigure after a protocol change: the codec beside the schema is
 # regenerated then, which needs protoc and the nanopb generator
-cmake -B build -DTARGET=BoringTechH743
-cmake --build build
+cmake --preset BoringTechH743
+cmake --build --preset BoringTechH743
 ```
+
+The presets are declared in `CMakePresets.json`, one per board with a
+`-release` variant, and each keeps its build tree under `build/<preset>/`.
+Configuring by hand with `-DTARGET=<board>` is equivalent.
 
 Note: there is no separate test-API build. Every command — the diagnostic ones
 included — travels on the protocol defined in the `ThetaGP.PB` repository
@@ -190,7 +194,7 @@ included — travels on the protocol defined in the `ThetaGP.PB` repository
 **Use `BOARD_CHIP`, which holds the probe-rs target name.**
 
 ```bash
-probe-rs download --chip ${BOARD_CHIP} build/ThetaGP_*.elf
+probe-rs download --chip ${BOARD_CHIP} build/<preset>/ThetaGP_*.elf
 probe-rs reset --chip ${BOARD_CHIP}
 ```
 
@@ -496,7 +500,7 @@ as a firmware default of 1000 Hz and a board may raise it with
    drivers index, a key matrix — write the checks and the lines in
    `scripts/config/output.py` and name them on the table's row.
 3. Add the board's data to `configs/<target>/BoardConfig.toml`.
-4. `cmake -B build -DTARGET=<T>` runs the generator, which holds the
+4. `cmake --preset <board>` (or `-DTARGET=<T>`) runs the generator, which holds the
    declaration to the table before anything is built: a value outside its
    table, a missing required field or a bus that binds nothing is reported
    there, with the path of the field it is about.

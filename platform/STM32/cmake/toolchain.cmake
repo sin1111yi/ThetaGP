@@ -83,18 +83,16 @@ set(CMAKE_CXX_FLAGS_RELEASE_INIT "-Os -g0")
 # =============================================================================
 # Linker Flags
 # =============================================================================
-
-set(CMAKE_C_LINK_FLAGS_INIT "${COMMON_FLAGS}")
-set(CMAKE_C_LINK_FLAGS "${CMAKE_C_LINK_FLAGS} --specs=nano.specs")
-set(CMAKE_C_LINK_FLAGS "${CMAKE_C_LINK_FLAGS} -Wl,-Map=${THETAGP_PROJECT_NAME}.map -Wl,--gc-sections -Wl,--no-warn-rwx-segments")
-set(CMAKE_C_LINK_FLAGS "${CMAKE_C_LINK_FLAGS} -Wl,--start-group -lc -lm -Wl,--end-group")
-set(CMAKE_C_LINK_FLAGS "${CMAKE_C_LINK_FLAGS} -Wl,--print-memory-usage")
-
-set(CMAKE_CXX_LINK_FLAGS_INIT "${COMMON_FLAGS}")
-set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} --specs=nano.specs")
-set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} -Wl,-Map=${THETAGP_PROJECT_NAME}.map -Wl,--gc-sections -Wl,--no-warn-rwx-segments")
-set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} -Wl,--start-group -lstdc++ -lsupc++ -Wl,--end-group")
-set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} -Wl,--print-memory-usage")
+# What every executable of this toolchain is linked with: the target's own
+# flags, the nano C library, the map, the section options and the usage report.
+# The standard libraries are not named here -- the compiler driver adds the
+# ones its link language needs after the objects, which is where a reference
+# can still pull a member out of them.
+set(CMAKE_EXE_LINKER_FLAGS_INIT "${COMMON_FLAGS} --specs=nano.specs")
+string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " -Wl,-Map=${THETAGP_PROJECT_NAME}.map")
+string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " -Wl,--gc-sections")
+string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " -Wl,--no-warn-rwx-segments")
+string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " -Wl,--print-memory-usage")
 
 # =============================================================================
 # Language Server Configuration
@@ -102,9 +100,10 @@ set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} -Wl,--print-memory-usage")
 
 # The compilation database carries the project's own -I paths but not the
 # toolchain's, so the compiler's include search list is written to .clangd for
-# the editor to read.
+# the editor to read. PYTHON3 is found by the top-level CMakeLists before this
+# file is included.
 execute_process(
-    COMMAND ${PYTHON3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/generate_clangd.py
+    COMMAND ${PYTHON3} ${CMAKE_SOURCE_DIR}/scripts/generate_clangd.py
         --compiler ${CMAKE_CXX_COMPILER}
         --flags "${TARGET_CPU_FLAGS}"
         --out ${CMAKE_SOURCE_DIR}/.clangd

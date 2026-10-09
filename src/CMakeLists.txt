@@ -17,13 +17,14 @@
 # If not, see <https://www.gnu.org/licenses/>.
 ]]
 
-cmake_minimum_required(VERSION 3.22)
-
 # =============================================================================
-# Generators (configure-time)
+# Generation (configure-time)
 # =============================================================================
-# The interpreter the generation steps below run in.
-find_program(PYTHON3 python3)
+# The steps below share one shape: outputs that must exist, be non-empty and be
+# no older than the inputs they came from, and a command that writes them when
+# they are not. That shape is stated once by the top-level CMakeLists, as
+# thetagp_generation_needed, thetagp_run_generator and
+# thetagp_generated_outputs_ok, which also finds the interpreter they run in.
 
 # =============================================================================
 # Config Key Table (configure-time)
@@ -36,74 +37,47 @@ set(CONFIG_KEYS_TOML "${CMAKE_SOURCE_DIR}/configs/config_keys.toml")
 set(CONFIG_KEYS_GENERATOR "${CMAKE_SOURCE_DIR}/scripts/config/gen_config_keys.py")
 set(CONFIG_KEYS_H "${CMAKE_SOURCE_DIR}/configs/config_keys.gen.h")
 
-if(NOT EXISTS "${CONFIG_KEYS_TOML}")
-    message(FATAL_ERROR
-        "configs/config_keys.toml (the config key declaration) is not there. "
-        "It is a tracked file and the only source of configs/config_keys.gen.h, "
-        "which config_store.cpp and key_table.cpp include — restore it, then "
-        "configure again.")
-elseif(NOT EXISTS "${CONFIG_KEYS_GENERATOR}")
-    message(FATAL_ERROR
-        "scripts/config/gen_config_keys.py is not there. It is the only writer "
-        "of configs/config_keys.gen.h, which the firmware includes — restore "
-        "it, then configure again.")
-else()
-    set(CONFIG_KEYS_NEEDED FALSE)
-    if(NOT EXISTS "${CONFIG_KEYS_H}")
-        set(CONFIG_KEYS_NEEDED TRUE)
-    else()
-        # An empty header with a fresh timestamp is not current.
-        file(SIZE "${CONFIG_KEYS_H}" CONFIG_KEYS_H_SIZE)
-        if(CONFIG_KEYS_H_SIZE EQUAL 0)
-            set(CONFIG_KEYS_NEEDED TRUE)
-        elseif("${CONFIG_KEYS_TOML}" IS_NEWER_THAN "${CONFIG_KEYS_H}"
-           OR "${CONFIG_KEYS_GENERATOR}" IS_NEWER_THAN "${CONFIG_KEYS_H}")
-            set(CONFIG_KEYS_NEEDED TRUE)
-        endif()
-    endif()
-
-    if(NOT CONFIG_KEYS_NEEDED)
-        message(STATUS "Config key table: configs/config_keys.gen.h is up to date")
-    elseif(NOT PYTHON3)
+foreach(_config_keys_input IN ITEMS "${CONFIG_KEYS_TOML}" "${CONFIG_KEYS_GENERATOR}")
+    if(NOT EXISTS "${_config_keys_input}")
         message(FATAL_ERROR
-            "configs/config_keys.gen.h is missing or older than "
-            "configs/config_keys.toml, and python3 was not found to generate "
-            "it. Install python3, or run "
-            "python3 scripts/config/gen_config_keys.py in a worktree that has "
-            "it and configure from there.")
-    else()
-        message(STATUS "Generating configs/config_keys.gen.h from configs/config_keys.toml ...")
-        execute_process(
-            COMMAND ${PYTHON3} "${CONFIG_KEYS_GENERATOR}"
-            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-            RESULT_VARIABLE CONFIG_KEYS_RESULT
-            OUTPUT_VARIABLE CONFIG_KEYS_STDOUT
-            ERROR_VARIABLE CONFIG_KEYS_STDERR
-        )
-        if(NOT CONFIG_KEYS_STDOUT STREQUAL "")
-            message(STATUS "${CONFIG_KEYS_STDOUT}")
-        endif()
-        if(NOT CONFIG_KEYS_STDERR STREQUAL "")
-            message(STATUS "${CONFIG_KEYS_STDERR}")
-        endif()
-        if(NOT CONFIG_KEYS_RESULT EQUAL 0)
-            message(FATAL_ERROR
-                "Generating the config key table failed: "
-                "scripts/config/gen_config_keys.py exited ${CONFIG_KEYS_RESULT}. "
-                "Its output is printed above, and it names the field it could "
-                "not carry. Fix configs/config_keys.toml (the declaration), or "
-                "run the generator on its own to iterate: "
-                "python3 scripts/config/gen_config_keys.py --dry-run")
-        endif()
-        if(NOT EXISTS "${CONFIG_KEYS_H}")
-            message(FATAL_ERROR
-                "scripts/config/gen_config_keys.py exited 0 but "
-                "configs/config_keys.gen.h is not there. The generator is the "
-                "only writer of that header and the firmware includes it — a "
-                "build cannot compile a file that does not exist.")
-        endif()
-        message(STATUS "Generated configs/config_keys.gen.h")
+            "${_config_keys_input} is not there, and it is the only source of "
+            "configs/config_keys.gen.h, which config_store.cpp and key_table.cpp "
+            "include — restore it, then configure again.")
     endif()
+endforeach()
+
+thetagp_generation_needed(CONFIG_KEYS_NEEDED
+    INPUTS "${CONFIG_KEYS_TOML}" "${CONFIG_KEYS_GENERATOR}"
+    OUTPUTS "${CONFIG_KEYS_H}")
+
+if(NOT CONFIG_KEYS_NEEDED)
+    message(STATUS "Config key table: configs/config_keys.gen.h is up to date")
+elseif(NOT PYTHON3)
+    message(FATAL_ERROR
+        "configs/config_keys.gen.h is missing or older than "
+        "configs/config_keys.toml, and python3 was not found to generate it. "
+        "Install python3, or run python3 scripts/config/gen_config_keys.py in a "
+        "worktree that has it and configure from there.")
+else()
+    message(STATUS "Generating configs/config_keys.gen.h from configs/config_keys.toml ...")
+    thetagp_run_generator(CONFIG_KEYS_RESULT ${PYTHON3} "${CONFIG_KEYS_GENERATOR}")
+    if(NOT CONFIG_KEYS_RESULT EQUAL 0)
+        message(FATAL_ERROR
+            "Generating the config key table failed: "
+            "scripts/config/gen_config_keys.py exited ${CONFIG_KEYS_RESULT}. Its "
+            "output is printed above, and it names the field it could not carry. "
+            "Fix configs/config_keys.toml (the declaration), or run the generator "
+            "on its own to iterate: "
+            "python3 scripts/config/gen_config_keys.py --dry-run")
+    endif()
+    thetagp_generated_outputs_ok(CONFIG_KEYS_OK "${CONFIG_KEYS_H}")
+    if(NOT CONFIG_KEYS_OK)
+        message(FATAL_ERROR
+            "scripts/config/gen_config_keys.py exited 0 but "
+            "configs/config_keys.gen.h is not there or is empty. The generator "
+            "is the only writer of that header and the firmware includes it.")
+    endif()
+    message(STATUS "Generated configs/config_keys.gen.h")
 endif()
 
 # =============================================================================
@@ -135,18 +109,19 @@ foreach(PROTO_SCHEMA IN LISTS PROTO_SCHEMAS)
             "generation call and the source list below are built from that same "
             "list — restore the schema, or take the line out of the list.")
     endif()
-    get_filename_component(PROTO_SCHEMA_STEM "${PROTO_SCHEMA}" NAME_WE)
+    cmake_path(GET PROTO_SCHEMA STEM PROTO_SCHEMA_STEM)
     set(PROTO_PB_C "${PROTO_OUT_DIR}/${PROTO_SCHEMA_STEM}.pb.c")
     list(APPEND PROTO_PB_SOURCES "${PROTO_PB_C}")
     list(APPEND PROTO_PB_OUTPUTS "${PROTO_PB_C}"
                                  "${PROTO_OUT_DIR}/${PROTO_SCHEMA_STEM}.pb.h")
 endforeach()
 
-# Freshness inputs: each schema and the .options file beside it, when present.
-set(PROTO_INPUTS ${PROTO_SCHEMAS})
+# Freshness inputs: each schema, the generator that reads them, and the
+# .options file beside a schema when present.
+set(PROTO_INPUTS ${PROTO_SCHEMAS} "${THETAGP_PB_DIR}/generate.py")
 foreach(PROTO_SCHEMA IN LISTS PROTO_SCHEMAS)
-    get_filename_component(PROTO_SCHEMA_DIR "${PROTO_SCHEMA}" DIRECTORY)
-    get_filename_component(PROTO_SCHEMA_STEM "${PROTO_SCHEMA}" NAME_WE)
+    cmake_path(GET PROTO_SCHEMA PARENT_PATH PROTO_SCHEMA_DIR)
+    cmake_path(GET PROTO_SCHEMA STEM PROTO_SCHEMA_STEM)
     set(PROTO_OPTIONS "${PROTO_SCHEMA_DIR}/${PROTO_SCHEMA_STEM}.options")
     if(EXISTS "${PROTO_OPTIONS}")
         list(APPEND PROTO_INPUTS "${PROTO_OPTIONS}")
@@ -161,25 +136,9 @@ string(REPLACE ";" ", " PROTO_INPUTS_TEXT "${PROTO_INPUTS}")
 if(NOT PROTO_SCHEMAS)
     message(STATUS "No protobuf schema is listed — skipping the protobuf codecs")
 else()
-    set(PROTO_PB_NEEDED FALSE)
-    foreach(PROTO_PB_OUTPUT IN LISTS PROTO_PB_OUTPUTS)
-        if(NOT EXISTS "${PROTO_PB_OUTPUT}")
-            set(PROTO_PB_NEEDED TRUE)
-        else()
-            # An empty file with a fresh timestamp is not a generated one.
-            file(SIZE "${PROTO_PB_OUTPUT}" PROTO_PB_OUTPUT_SIZE)
-            if(PROTO_PB_OUTPUT_SIZE EQUAL 0)
-                set(PROTO_PB_NEEDED TRUE)
-            endif()
-        endif()
-    endforeach()
-    foreach(PROTO_INPUT IN LISTS PROTO_INPUTS)
-        foreach(PROTO_PB_OUTPUT IN LISTS PROTO_PB_OUTPUTS)
-            if("${PROTO_INPUT}" IS_NEWER_THAN "${PROTO_PB_OUTPUT}")
-                set(PROTO_PB_NEEDED TRUE)
-            endif()
-        endforeach()
-    endforeach()
+    thetagp_generation_needed(PROTO_PB_NEEDED
+        INPUTS ${PROTO_INPUTS}
+        OUTPUTS ${PROTO_PB_OUTPUTS})
 
     if(NOT PROTO_PB_NEEDED)
         message(STATUS "Protobuf codecs: ${PROTO_PB_OUTPUTS_TEXT} are up to date")
@@ -192,49 +151,29 @@ else()
             "python-protobuf and configure from that worktree.")
     else()
         message(STATUS "Generating ${PROTO_PB_OUTPUTS_TEXT} from ${PROTO_SCHEMAS_TEXT} ...")
-        execute_process(
-            COMMAND ${PYTHON3} "${THETAGP_PB_DIR}/generate.py" c
-                    --nanopb "${CMAKE_SOURCE_DIR}/lib/nanopb"
-                    --out "${PROTO_OUT_DIR}"
-            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-            RESULT_VARIABLE PROTO_PB_RESULT
-            OUTPUT_VARIABLE PROTO_PB_STDOUT
-            ERROR_VARIABLE PROTO_PB_STDERR
-        )
-        if(NOT PROTO_PB_STDOUT STREQUAL "")
-            message(STATUS "${PROTO_PB_STDOUT}")
-        endif()
-        if(NOT PROTO_PB_STDERR STREQUAL "")
-            message(STATUS "${PROTO_PB_STDERR}")
-        endif()
+        thetagp_run_generator(PROTO_PB_RESULT
+            ${PYTHON3} "${THETAGP_PB_DIR}/generate.py" c
+            --nanopb "${CMAKE_SOURCE_DIR}/lib/nanopb"
+            --out "${PROTO_OUT_DIR}")
         if(NOT PROTO_PB_RESULT EQUAL 0)
             message(FATAL_ERROR
                 "Generating the protobuf codecs failed: "
-                "${THETAGP_PB_DIR}/generate.py exited ${PROTO_PB_RESULT}. Its output "
-                "is printed above. It needs protoc on PATH, the fetched "
+                "${THETAGP_PB_DIR}/generate.py exited ${PROTO_PB_RESULT}. Its "
+                "output is printed above. It needs protoc on PATH, the fetched "
                 "lib/nanopb checkout, and a python-protobuf runtime — install "
                 "one, or point $PROTOBUF_PYTHONPATH (or the script's "
                 "--protobuf-path) at a site-packages directory that holds "
                 "google/protobuf.")
         endif()
-        foreach(PROTO_PB_OUTPUT IN LISTS PROTO_PB_OUTPUTS)
-            if(NOT EXISTS "${PROTO_PB_OUTPUT}")
-                message(FATAL_ERROR
-                    "${THETAGP_PB_DIR}/generate.py exited 0 but "
-                    "${PROTO_PB_OUTPUT} is not there. The generator is the only "
-                    "writer of that file, and it is either named in the source "
-                    "list below or included by the sources that are — a build "
-                    "cannot compile a file that does not exist.")
-            endif()
-            file(SIZE "${PROTO_PB_OUTPUT}" PROTO_PB_OUTPUT_SIZE)
-            if(PROTO_PB_OUTPUT_SIZE EQUAL 0)
-                message(FATAL_ERROR
-                    "${THETAGP_PB_DIR}/generate.py exited 0 but "
-                    "${PROTO_PB_OUTPUT} is empty. A file of zero bytes is not a "
-                    "generated codec, and the next configure would take it for "
-                    "current on its timestamp alone.")
-            endif()
-        endforeach()
+        thetagp_generated_outputs_ok(PROTO_PB_OK ${PROTO_PB_OUTPUTS})
+        if(NOT PROTO_PB_OK)
+            message(FATAL_ERROR
+                "${THETAGP_PB_DIR}/generate.py exited 0 but one of "
+                "${PROTO_PB_OUTPUTS_TEXT} is not there or is empty. The "
+                "generator is the only writer of those files, and the sources "
+                "below include them — a build cannot compile a file that does "
+                "not exist.")
+        endif()
         message(STATUS "Generated ${PROTO_PB_OUTPUTS_TEXT}")
     endif()
 endif()
@@ -248,50 +187,33 @@ endif()
 set(ENUMS_H "${CMAKE_CURRENT_SOURCE_DIR}/pb/enums.pb.h")
 set(ENUMS_PROTO "${THETAGP_PB_DIR}/enums/enums.proto")
 
-set(ENUMS_NEEDED FALSE)
-if(NOT EXISTS "${ENUMS_H}")
-    set(ENUMS_NEEDED TRUE)
-else()
-    file(SIZE "${ENUMS_H}" ENUMS_H_SIZE)
-    if(ENUMS_H_SIZE EQUAL 0 OR "${ENUMS_PROTO}" IS_NEWER_THAN "${ENUMS_H}")
-        set(ENUMS_NEEDED TRUE)
-    endif()
-endif()
+thetagp_generation_needed(ENUMS_NEEDED
+    INPUTS "${ENUMS_PROTO}" "${THETAGP_PB_DIR}/generate.py"
+    OUTPUTS "${ENUMS_H}")
 
-if(ENUMS_NEEDED)
-    if(NOT PYTHON3)
-        message(FATAL_ERROR
-            "src/pb/enums.pb.h is missing or older than "
-            "${ENUMS_PROTO}, and python3 was not found to generate it.")
-    endif()
+if(NOT ENUMS_NEEDED)
+    message(STATUS "Gamepad enums: src/pb/enums.pb.h is up to date")
+elseif(NOT PYTHON3)
+    message(FATAL_ERROR
+        "src/pb/enums.pb.h is missing or older than ${ENUMS_PROTO}, and python3 "
+        "was not found to generate it.")
+else()
     message(STATUS "Generating src/pb/enums.pb.h ...")
-    execute_process(
-        COMMAND ${PYTHON3} "${THETAGP_PB_DIR}/generate.py" cpp-enums
-                --out "${ENUMS_H}"
-                --namespace "ThetaGP::Enums"
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        RESULT_VARIABLE ENUMS_RESULT
-        OUTPUT_VARIABLE ENUMS_STDOUT
-        ERROR_VARIABLE ENUMS_STDERR
-    )
-    if(NOT ENUMS_STDOUT STREQUAL "")
-        message(STATUS "${ENUMS_STDOUT}")
-    endif()
-    if(NOT ENUMS_STDERR STREQUAL "")
-        message(STATUS "${ENUMS_STDERR}")
-    endif()
+    thetagp_run_generator(ENUMS_RESULT
+        ${PYTHON3} "${THETAGP_PB_DIR}/generate.py" cpp-enums
+        --out "${ENUMS_H}" --namespace "ThetaGP::Enums")
     if(NOT ENUMS_RESULT EQUAL 0)
         message(FATAL_ERROR
             "generate.py cpp-enums exited ${ENUMS_RESULT}. It needs protoc on "
             "PATH and a python-protobuf runtime.")
     endif()
-    if(NOT EXISTS "${ENUMS_H}")
+    thetagp_generated_outputs_ok(ENUMS_OK "${ENUMS_H}")
+    if(NOT ENUMS_OK)
         message(FATAL_ERROR
-            "generate.py cpp-enums exited 0 but ${ENUMS_H} is not there.")
+            "generate.py cpp-enums exited 0 but ${ENUMS_H} is not there or is "
+            "empty.")
     endif()
     message(STATUS "Generated src/pb/enums.pb.h")
-else()
-    message(STATUS "Gamepad enums: src/pb/enums.pb.h is up to date")
 endif()
 
 # =============================================================================
@@ -306,32 +228,20 @@ if(PROTO_SCHEMAS)
     set(PROTO_PY_DIR "${CMAKE_BINARY_DIR}/proto_py")
     set(PROTO_PY_OUTPUTS "")
     foreach(PROTO_SCHEMA IN LISTS PROTO_SCHEMAS)
-        get_filename_component(PROTO_SCHEMA_STEM "${PROTO_SCHEMA}" NAME_WE)
+        cmake_path(GET PROTO_SCHEMA STEM PROTO_SCHEMA_STEM)
         list(APPEND PROTO_PY_OUTPUTS
              "${PROTO_PY_DIR}/${PROTO_SCHEMA_STEM}_pb2.py")
     endforeach()
     string(REPLACE ";" ", " PROTO_PY_OUTPUTS_TEXT "${PROTO_PY_OUTPUTS}")
 
-    set(PROTO_PY_NEEDED FALSE)
-    foreach(PROTO_PY_OUTPUT IN LISTS PROTO_PY_OUTPUTS)
-        if(NOT EXISTS "${PROTO_PY_OUTPUT}")
-            set(PROTO_PY_NEEDED TRUE)
-        else()
-            file(SIZE "${PROTO_PY_OUTPUT}" PROTO_PY_OUTPUT_SIZE)
-            if(PROTO_PY_OUTPUT_SIZE EQUAL 0)
-                set(PROTO_PY_NEEDED TRUE)
-            endif()
-        endif()
-    endforeach()
-    # The bindings read the schema and nothing else: the .options file beside it
-    # bounds the C codec's fields and says nothing to protoc's python plugin.
-    foreach(PROTO_SCHEMA IN LISTS PROTO_SCHEMAS)
-        foreach(PROTO_PY_OUTPUT IN LISTS PROTO_PY_OUTPUTS)
-            if("${PROTO_SCHEMA}" IS_NEWER_THAN "${PROTO_PY_OUTPUT}")
-                set(PROTO_PY_NEEDED TRUE)
-            endif()
-        endforeach()
-    endforeach()
+    # The bindings read the schema through the script that writes them; the
+    # .options file beside the schema bounds the C codec's fields and says
+    # nothing to protoc's python plugin.
+    set(PROTO_PY_INPUTS ${PROTO_SCHEMAS}
+        "${CMAKE_SOURCE_DIR}/scripts/gen_proto_py.py")
+    thetagp_generation_needed(PROTO_PY_NEEDED
+        INPUTS ${PROTO_PY_INPUTS}
+        OUTPUTS ${PROTO_PY_OUTPUTS})
 
     if(NOT PROTO_PY_NEEDED)
         message(STATUS "Host bindings: ${PROTO_PY_OUTPUTS_TEXT} are up to date")
@@ -343,21 +253,10 @@ if(PROTO_SCHEMAS)
             "scripts/tools/ do.")
     else()
         message(STATUS "Generating ${PROTO_PY_OUTPUTS_TEXT} from ${PROTO_SCHEMAS_TEXT} ...")
-        execute_process(
-            COMMAND ${PYTHON3} "${CMAKE_SOURCE_DIR}/scripts/gen_proto_py.py"
-                    --protos ${PROTO_SCHEMAS}
-                    --out-dir "${PROTO_PY_DIR}"
-            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-            RESULT_VARIABLE PROTO_PY_RESULT
-            OUTPUT_VARIABLE PROTO_PY_STDOUT
-            ERROR_VARIABLE PROTO_PY_STDERR
-        )
-        if(NOT PROTO_PY_STDOUT STREQUAL "")
-            message(STATUS "${PROTO_PY_STDOUT}")
-        endif()
-        if(NOT PROTO_PY_STDERR STREQUAL "")
-            message(STATUS "${PROTO_PY_STDERR}")
-        endif()
+        thetagp_run_generator(PROTO_PY_RESULT
+            ${PYTHON3} "${CMAKE_SOURCE_DIR}/scripts/gen_proto_py.py"
+            --protos ${PROTO_SCHEMAS}
+            --out-dir "${PROTO_PY_DIR}")
         if(NOT PROTO_PY_RESULT EQUAL 0)
             message(WARNING
                 "Generating the host bindings failed: "
@@ -368,14 +267,14 @@ if(PROTO_SCHEMAS)
                 "directory that holds google/protobuf — before using the tools "
                 "under scripts/tools/.")
         else()
-            foreach(PROTO_PY_OUTPUT IN LISTS PROTO_PY_OUTPUTS)
-                if(NOT EXISTS "${PROTO_PY_OUTPUT}")
-                    message(WARNING
-                        "scripts/gen_proto_py.py exited 0 but ${PROTO_PY_OUTPUT} "
-                        "is not there: the tools under scripts/tools/ would read "
-                        "the bindings of an older schema.")
-                endif()
-            endforeach()
+            thetagp_generated_outputs_ok(PROTO_PY_OK ${PROTO_PY_OUTPUTS})
+            if(NOT PROTO_PY_OK)
+                message(WARNING
+                    "scripts/gen_proto_py.py exited 0 but one of "
+                    "${PROTO_PY_OUTPUTS_TEXT} is not there or is empty: the tools "
+                    "under scripts/tools/ would read the bindings of an older "
+                    "schema.")
+            endif()
             message(STATUS "Generated ${PROTO_PY_OUTPUTS_TEXT}")
         endif()
     endif()
@@ -391,6 +290,10 @@ file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cc"
 )
+
+# The protocol pair under pb/ is generated and named among the target's own
+# sources below; taking it out of the glob keeps it from being named twice.
+list(FILTER SRC_FILES EXCLUDE REGEX "/pb/")
 
 # =============================================================================
 # TinyUSB Configuration
@@ -420,14 +323,9 @@ if(BOARD_MCU_SERIES STREQUAL "STM32H7")
     )
 endif()
 
-# Silence TinyUSB upstream warnings that reach our C++ translation units.
-foreach(TUSB_FILE ${TINYUSB_SOURCES})
-    get_filename_component(TUSB_EXT "${TUSB_FILE}" EXT)
-    if(TUSB_EXT STREQUAL ".cpp" OR TUSB_EXT STREQUAL ".cc")
-        set_source_files_properties(${TUSB_FILE} PROPERTIES
-            COMPILE_FLAGS "-Wno-volatile -Wno-pedantic")
-    endif()
-endforeach()
+# TinyUSB's headers reach the project's own C++ translation units and warn
+# there, so the two warnings they raise are turned off for every C++ source of
+# this directory.
 add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wno-volatile>")
 add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wno-pedantic>")
 
@@ -473,7 +371,6 @@ target_sources(${CMAKE_PROJECT_NAME}
     PRIVATE
     ${SRC_FILES}
     ${TINYUSB_SOURCES}
-    ${PLATFORM_PERIPHERAL_SOURCES}
 
     # The generated protobuf codec, written under src/pb/ and ignored.
     ${PROTO_PB_SOURCES}
@@ -494,15 +391,14 @@ target_include_directories(${CMAKE_PROJECT_NAME}
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
     PRIVATE
-    HalDriver
+    PlatformDriver
+    PlatformPeripherals
     frozen
     nanopb
 )
 
 target_compile_definitions(${CMAKE_PROJECT_NAME}
     PRIVATE
-    ${PLATFORM_COMPILE_DEFS}
-
     CFG_TUSB_MCU=OPT_MCU_${BOARD_MCU_SERIES}
     CFG_TUSB_CONFIG_FILE="${TINYUSB_CONFIG_FILE}"
     CFG_TUSB_DEBUG=${TINYUSB_DEBUG_LEVEL}
@@ -524,7 +420,13 @@ set_target_properties(${CMAKE_PROJECT_NAME}
     PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
     LINK_DEPENDS ${PLATFORM_LINK_SCRIPT}
-    LINK_FLAGS "-T${PLATFORM_LINK_SCRIPT}"
 )
+
+# The link script reaches the compiler driver as one option, `-T<path>`.
+# Passing it to the linker as two -- `-Wl,-T,<path>`, which the `LINKER:-T,<path>`
+# prefix produces -- links the full C library instead of the nano one the
+# `--specs=nano.specs` in the toolchain asks for, and the image grows by about
+# 3.5 KB. This is deliberately the driver form, not the linker form.
+target_link_options(${CMAKE_PROJECT_NAME} PRIVATE "-T${PLATFORM_LINK_SCRIPT}")
 
 

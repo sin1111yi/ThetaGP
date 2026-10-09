@@ -17,12 +17,16 @@ board. No RTOS, no dynamic allocation.
 ## Quick Start
 
 ```bash
-cmake -B build -DTARGET=BoringTechH743   # fetches dependencies
-cmake --build build
-probe-rs run --chip <CHIP> build/ThetaGP_*.elf
+cmake --preset BoringTechH743   # configures, and fetches dependencies
+cmake --build --preset BoringTechH743
+probe-rs run --chip <CHIP> build/BoringTechH743/ThetaGP_*.elf
 ```
 
-Needs CMake 3.22+, `arm-none-eabi-gcc`, Python 3.11+ and probe-rs.
+`CMakePresets.json` declares one preset per board — `BoringTechH743` and
+`ThetaGPH7` — each with a `-release` variant, and puts each build tree under
+`build/<preset>/`. Configuring by hand with `-DTARGET=<board>` is equivalent.
+
+Needs CMake 4.0+, `arm-none-eabi-gcc`, Python 3.11+ and probe-rs.
 
 ## Layout
 
