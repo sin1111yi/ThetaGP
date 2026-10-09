@@ -24,59 +24,29 @@ cmake_minimum_required(VERSION 3.22)
 # =============================================================================
 
 # Project version
-set(THETAGP_VERSION_MAJOR 0)
-set(THETAGP_VERSION_MINOR 1)
-set(THETAGP_VERSION_PATCH 1)
-set(THETAGP_VERSION "${THETAGP_VERSION_MAJOR}.${THETAGP_VERSION_MINOR}.${THETAGP_VERSION_PATCH}")
+# Project version: the tag the worktree is on, as `git describe` writes it --
+# the tag itself on a release, and the tag it is past with the commits since and
+# the commit otherwise, with `-dirty` when the worktree holds changes no commit
+# does. There is no number of its own beside the tag: a worktree no tag names is
+# the commit it is, and a build without git says so rather than claiming one.
+set(THETAGP_VERSION "unknown")
 
-if(NOT DEFINED TARGET)
-    message(FATAL_ERROR "TARGET is not defined, please specify the target platform (e.g. -DTARGET=...)")
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(COMMAND ${GIT_EXECUTABLE} describe --tags --always --dirty
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_VARIABLE THETAGP_GIT_DESCRIBE
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET RESULT_VARIABLE THETAGP_GIT_DESCRIBE_RESULT)
+    if(THETAGP_GIT_DESCRIBE_RESULT EQUAL 0)
+        string(REGEX REPLACE "^v" "" THETAGP_VERSION "${THETAGP_GIT_DESCRIBE}")
+    endif()
 endif()
 
-if(NOT DEFINED CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
-    set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type (e.g. Debug, Release, RelWithDebInfo)" FORCE)
-endif()
-
-# Configuration lives in src/conf/ThetaGP_Config.h. The build adds no override
-# for it: src/CMakeLists.txt reads the one value a library needs (the TinyUSB log
-# level) straight from that file.
-
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    message(WARNING "Logging enabled (Debug build) — each log call adds ~100us delay. "
-                    "This may affect real-time performance of the 1kHz gamepad loop. "
-                    "Set -DCMAKE_BUILD_TYPE=Release to disable.")
-endif()
-
-# Project name with version
+# The artifact's name: the project, the board the binary is for, the revision
+# the version names -- a tag on a release, the commit it is otherwise -- and the
+# kind of build. A flashed binary can be told from another by its name alone.
 set(THETAGP_PROJECT_NAME "ThetaGP_${TARGET}_${THETAGP_VERSION}_${CMAKE_BUILD_TYPE}")
-
-set(ENV{TARGET} "${TARGET}")
-set(ENV{THETAGP_SOURCE_DIR} "${CMAKE_SOURCE_DIR}")
-
-# Generate board configuration (Python 3.11+ required for tomllib)
-find_program(PYTHON3_EXECUTABLE NAMES python3 python)
-if(NOT PYTHON3_EXECUTABLE)
-    message(FATAL_ERROR "Python 3 not found. Please install Python 3.11+.")
-endif()
-
-execute_process(
-    COMMAND ${PYTHON3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/generate_config.py
-        --target ${TARGET}
-        --source-dir ${CMAKE_SOURCE_DIR}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    RESULT_VARIABLE CONFIG_GEN_RESULT
-)
-
-if(NOT CONFIG_GEN_RESULT EQUAL 0)
-    message(FATAL_ERROR "Failed to generate board configuration. Check the error messages above.")
-endif()
-
-# The generator runs here, at configure time, so a change to the board's own
-# declaration has to bring the configure back: without this, a build after an
-# edit compiles the macros of the declaration before it.
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-    ${CMAKE_SOURCE_DIR}/configs/${TARGET}/BoardConfig.toml
-    ${CMAKE_SOURCE_DIR}/configs/board_schema.toml)
 
 include(${CMAKE_SOURCE_DIR}/configs/${TARGET}/board_config.cmake)
 
@@ -89,7 +59,6 @@ endif()
 
 project(${THETAGP_PROJECT_NAME}
     LANGUAGES C CXX ASM
-    VERSION ${THETAGP_VERSION}
 )
 
 set(CMAKE_C_STANDARD 23)
