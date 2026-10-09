@@ -303,3 +303,12 @@ default = 0
 exposed = false
 doc = "RY center offset"
 
+[[field]]
+name = "usb.input_mode"
+type = "u16"
+min = 0
+max = 255
+default = 14
+exposed = true
+flags = ["reboot"]
+doc = "Input mode the USB device reports (4 = DualShock 4, 14 = generic HID)"

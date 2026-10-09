@@ -68,6 +68,10 @@ struct ConfigStore {
   // Key `led.rgb.hz`: the frames a second the strip is refreshed at.
   uint8_t hz;
 
+  // ── USB settings ──
+  // Key `usb.input_mode`: the mode the device reports as.
+  uint16_t input_mode;
+
   // ── Calibration ──
   int16_t lx_c;
   int16_t ly_c;

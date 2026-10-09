@@ -25,7 +25,7 @@
 
 namespace ThetaGP::Drivers::GPEmulator {
 
-enum class InputMode : uint8_t { None = 0, Config, HID, Count };
+enum class InputMode : uint8_t { None = 0, Config, HID, PS4, Count };
 
 class GPEmulatorManager {
 public:
@@ -38,6 +38,11 @@ public:
   }
 
   [[nodiscard]] GPEmulator *getEmulator() { return emulator; }
+
+  // The mode the configuration asks for, as the mode this layer knows: a value
+  // no driver answers is the generic HID device, which is what a board that
+  // never set the key reports as.
+  static InputMode inputModeFromConfig();
   void setup(InputMode mode);
   [[nodiscard]] InputMode getInputMode() { return inputMode; }
   [[nodiscard]] bool isConfigMode() { return (inputMode == InputMode::Config); }

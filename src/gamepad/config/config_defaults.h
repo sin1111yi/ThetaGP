@@ -132,6 +132,7 @@ constexpr ConfigStore makeDefaults() {
     cfg.btn_map[slot] = kBtnMap[slot];
   }
   cfg.socd     = kKeyDefaultSocd;
+  cfg.input_mode = kKeyDefaultInputMode;
   cfg.four_way = kKeyDefaultFourWay;
   cfg.dpad     = kKeyDefaultDpad;
   cfg.inv_x    = kKeyDefaultInvX;

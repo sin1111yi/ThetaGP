@@ -80,10 +80,6 @@ void ThetaGamepad::setup() {
 
   Drivers::Device::RunLed::getInstance().setEffect(
       Drivers::Device::RunLed::Effect::DoubleFlash);
-  // setup GP drivers
-  Drivers::GPEmulator::GPEmulatorManager::getInstance().setup(
-      Drivers::GPEmulator::InputMode::HID);
-
   // setup gamepad
   Gamepad::Gamepad::getInstance().setup();
   Gamepad::Gamepad::getInstance().registerKeypadDevice(
@@ -91,6 +87,11 @@ void ThetaGamepad::setup() {
 
   // initialize configuration system (ProfileStore + ConfigManager)
   Gamepad::Config::ConfigManager::getInstance().init();
+
+  // setup GP drivers: the USB device is built from the mode the configuration
+  // asks for, which is why it is set up after the configuration is read.
+  Drivers::GPEmulator::GPEmulatorManager::getInstance().setup(
+      Drivers::GPEmulator::GPEmulatorManager::inputModeFromConfig());
 
   // The CDC command channel: the USB interrupt hands the bytes the host sent to
   // the frame assembler, and the command task answers them.
