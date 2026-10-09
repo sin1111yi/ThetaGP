@@ -33,7 +33,7 @@ namespace ThetaGP::Drivers::GPEmulator {
 
 InputMode GPEmulatorManager::inputModeFromConfig() {
   const uint8_t asked =
-      Gamepad::Config::ConfigManager::getInstance().config().input_mode;
+      Gamepad::Config::ConfigManager::getInstance().config().usb.input_mode;
   return asked == static_cast<uint8_t>(Enums::InputMode::INPUT_MODE_PS4)
              ? InputMode::PS4
              : InputMode::HID;

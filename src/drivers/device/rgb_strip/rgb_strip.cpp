@@ -65,7 +65,7 @@ constexpr uint16_t kSlotCount =
 // that carries it, gone back to the declaration's default for a store that
 // never carried one.
 uint32_t refreshRateHz() {
-  const uint8_t hz = Gamepad::Config::ConfigManager::getInstance().config().hz;
+  const uint8_t hz = Gamepad::Config::ConfigManager::getInstance().config().led.rgb.hz;
   return hz > 0 ? hz : static_cast<uint32_t>(Gamepad::Config::kKeyDefaultHz);
 }
 

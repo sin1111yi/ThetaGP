@@ -121,9 +121,9 @@ int main() {
     const KeyEntry &fourWay = keyEntry(ConfigKey::FourWay);
     const KeyEntry &btnMap = keyEntry(ConfigKey::BtnMap);
 
-    check(doc.getInt(socd.key, kNoValue) == kConfigDefaults.socd,
+    check(doc.getInt(socd.key, kNoValue) == kConfigDefaults.map.socd,
           "the SOCD mode key's path reads the value the field holds");
-    check(doc.getInt(fourWay.key, kNoValue) == kConfigDefaults.four_way,
+    check(doc.getInt(fourWay.key, kNoValue) == kConfigDefaults.map.four_way,
           "the four way key's path reads the value the field holds");
 
     const int arrLen = doc.getArrLen(btnMap.key);
@@ -131,7 +131,7 @@ int main() {
     bool same = arrLen == 32;
     for (int i = 0; same && i < 32; i++) {
       same =
-          doc.getArrInt(btnMap.key, i, kNoValue) == kConfigDefaults.btn_map[i];
+          doc.getArrInt(btnMap.key, i, kNoValue) == kConfigDefaults.map.btn_map[i];
     }
     check(same, "every element the path names holds what the field holds");
   }
@@ -150,13 +150,13 @@ int main() {
     // The array's slots beyond the two the body carries take the sentinel.
     ConfigStore cfg = kConfigDefaults;
     parseProfile(body, static_cast<uint32_t>(std::strlen(body)), &cfg);
-    check(cfg.socd == socdWanted,
+    check(cfg.map.socd == socdWanted,
           "the SOCD mode field takes the value the body carries");
-    check(cfg.four_way == fourWayWanted,
+    check(cfg.map.four_way == fourWayWanted,
           "the four way field takes the value the body carries");
-    check(cfg.btn_map[0] == 0 && cfg.btn_map[1] == 0,
+    check(cfg.map.btn_map[0] == 0 && cfg.map.btn_map[1] == 0,
           "the array's elements take the values the body carries");
-    check(cfg.btn_map[31] == 0xFF,
+    check(cfg.map.btn_map[31] == 0xFF,
           "the array's slots the body does not reach take the sentinel");
   }
 
@@ -165,10 +165,10 @@ int main() {
   {
     char body[kBodyCap] = {};
     std::snprintf(body, sizeof(body), "{ver:2,map:{map.socd:%d}}",
-                  (kConfigDefaults.socd + 1) % 2);
+                  (kConfigDefaults.map.socd + 1) % 2);
     ConfigStore cfg = kConfigDefaults;
     parseProfile(body, static_cast<uint32_t>(std::strlen(body)), &cfg);
-    check(cfg.socd == kConfigDefaults.socd,
+    check(cfg.map.socd == kConfigDefaults.map.socd,
           "a body naming the whole name leaves the field at its default");
   }
 

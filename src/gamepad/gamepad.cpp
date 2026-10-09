@@ -81,7 +81,7 @@ void Gamepad::read() {
   // Process all 32 physical keys
   for (uint8_t i = 0; i < 32; i++) {
     if (keypadMask & (1U << i)) {
-      uint8_t buttonIndex = _cfg->btn_map[i];
+      uint8_t buttonIndex = _cfg->map.btn_map[i];
       if (buttonIndex != 0xFF) {
         _processing.raw.buttons |= (1U << buttonIndex);
 

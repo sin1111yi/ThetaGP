@@ -313,6 +313,23 @@ def flag_expression(field: dict) -> str:
     return " | ".join(names) if names else "0"
 
 
+def store_offset(name):
+    """Where a key's field starts in the store, as a C++ expression.
+
+    A field sits in the domain its name is written under, so its byte is the
+    domain's offset inside the store plus its own offset inside that domain,
+    one step per segment of the name: `led.rgb.hz` is `offsetof(ConfigStore,
+    led) + offsetof(Led, rgb) + offsetof(Rgb, hz)`. The domain types are the
+    segments in CamelCase, which is what config_store.h declares them as.
+    """
+    segments = name.split(".")
+    terms = ["offsetof(ConfigStore, %s)" % segments[0]]
+    for step in range(1, len(segments)):
+        terms.append("offsetof(%s, %s)" % (segments[step - 1].capitalize(),
+                                           segments[step]))
+    return " + ".join(terms)
+
+
 def gen_config_keys(keys: dict, out: Optional[Path] = None,
                     source_path: str = CONFIG_KEYS_PATH) -> str:
     """The config key table the firmware compiles, as C++.
@@ -378,7 +395,7 @@ def gen_config_keys(keys: dict, out: Optional[Path] = None,
         type_name = field["type"]
         count = field.get("count", 1)
         w(f"    // {field['name']} — {field['doc']}")
-        w(f'    {{"{field["name"]}", offsetof(ConfigStore, {leaf}), '
+        w(f'    {{"{field["name"]}", {store_offset(field["name"])}, '
           f"KeyType::{TYPE_MAP[type_name]},")
         w(f"     {count}, {field['min']}, {field['max']}, {flag_expression(field)}}},")
     w("};")

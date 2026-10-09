@@ -70,7 +70,7 @@ constexpr const char *kBodyV1 = R"json({"ver":1,"map":{"socd":0,"four_way":0,"dp
 
 // Profile 3 of the same board, 447 bytes: the shape the firmware writes today,
 // with the domains at the top level.
-constexpr const char *kBodyV2 = R"json({"ver":2,"map":{"socd":0,"four_way":0,"dpad":0,"inv_x":0,"inv_y":0,"inv_rx":0,"inv_ry":0,"swap":0,"btn_map":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]},"stick":{"lx_dz":0,"ly_dz":0,"rx_dz":0,"ry_dz":0,"lx_sens":128,"ly_sens":128,"rx_sens":128,"ry_sens":128,"curve":0,"ema":0},"trig":{"lt_dz":0,"rt_dz":0},"led":{"bri":63,"mode":1,"hue":0,"sat":255,"rgb":{"hz":50}},"cal":{"lx_c":0,"ly_c":0,"rx_c":0,"ry_c":0}})json";
+constexpr const char *kBodyV2 = R"json({"ver":2,"map":{"socd":0,"four_way":0,"dpad":0,"inv_x":0,"inv_y":0,"inv_rx":0,"inv_ry":0,"swap":0,"btn_map":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]},"stick":{"lx_dz":0,"ly_dz":0,"rx_dz":0,"ry_dz":0,"lx_sens":128,"ly_sens":128,"rx_sens":128,"ry_sens":128,"curve":0,"ema":0},"trig":{"lt_dz":0,"rt_dz":0},"led":{"bri":63,"mode":1,"hue":0,"sat":255,"rgb":{"hz":50}},"cal":{"lx_c":0,"ly_c":0,"rx_c":0,"ry_c":0},"usb":{"input_mode":14}})json";
 
 // A body whose version this firmware does not read, carrying values a field of
 // the store could hold: what a refusal has to keep out is exactly these.
@@ -84,9 +84,9 @@ constexpr const char *kBodyNoVersion = R"json({"map":{"socd":0,"stick":{"lx_dz":
 // is told apart from one it left alone.
 ConfigStore markedStore() {
   ConfigStore cfg = kConfigDefaults;
-  cfg.lx_dz = 1234;
-  cfg.bri = 77;
-  cfg.lx_c = -99;
+  cfg.stick.lx_dz = 1234;
+  cfg.led.bri = 77;
+  cfg.cal.lx_c = -99;
   return cfg;
 }
 
@@ -124,15 +124,15 @@ int main() {
     // Each value below is one the old body carries and the compiled default
     // does not: a reader that fetched the current paths would leave the field
     // at the default and these would differ.
-    check(cfg.lx_dz == 0,
+    check(cfg.stick.lx_dz == 0,
           "the dead zone comes from map.stick.lx_dz, not the default 512");
-    check(cfg.bri == 50, "the brightness comes from map.led.bri, not 128");
-    check(cfg.mode == 1, "the LED mode comes from map.led.mode, not 0");
-    check(cfg.hz == 50, "the strip rate comes from led.rgb.hz, not 10");
-    check(cfg.hue == 0, "the hue comes from map.led.hue, not the default 180");
-    check(cfg.lx_sens == 128, "the sensitivity comes from map.stick.lx_sens");
-    check(cfg.socd == 0, "the SOCD mode comes from map.socd, not the default 4");
-    check(cfg.btn_map[0] == 0 && cfg.btn_map[31] == 31,
+    check(cfg.led.bri == 50, "the brightness comes from map.led.bri, not 128");
+    check(cfg.led.mode == 1, "the LED mode comes from map.led.mode, not 0");
+    check(cfg.led.rgb.hz == 50, "the strip rate comes from led.rgb.hz, not 10");
+    check(cfg.led.hue == 0, "the hue comes from map.led.hue, not the default 180");
+    check(cfg.stick.lx_sens == 128, "the sensitivity comes from map.stick.lx_sens");
+    check(cfg.map.socd == 0, "the SOCD mode comes from map.socd, not the default 4");
+    check(cfg.map.btn_map[0] == 0 && cfg.map.btn_map[31] == 31,
           "the button map comes from map.btn_map");
   }
 
@@ -141,8 +141,8 @@ int main() {
     ConfigStore cfg = kConfigDefaults;
     check(parseProfile(kBodyV2, bodyLen(kBodyV2), &cfg),
           "a version 2 body is read");
-    check(cfg.bri == 63, "the brightness comes from led.bri, not 128");
-    check(cfg.lx_dz == 0, "the dead zone comes from stick.lx_dz, not 512");
+    check(cfg.led.bri == 63, "the brightness comes from led.bri, not 128");
+    check(cfg.stick.lx_dz == 0, "the dead zone comes from stick.lx_dz, not 512");
   }
 
   std::printf("-- 3. what the writer makes of the body it read --\n");
@@ -166,7 +166,7 @@ int main() {
           "a body read under version 1 is written as the current version");
     check(std::strstr(migrated, "\"stick\":{\"lx_dz\":0,") != nullptr,
           "the migrated body carries the old body's values in the new shape");
-    check(std::strstr(migrated, "\"usb\"") == nullptr &&
+    check(
               std::strstr(migrated, "\"sys\"") == nullptr,
           "the objects the store no longer carries are not written back");
   }
@@ -176,14 +176,14 @@ int main() {
     ConfigStore cfg = markedStore();
     check(!parseProfile(kBodyFuture, bodyLen(kBodyFuture), &cfg),
           "a version 3 body is refused");
-    check(cfg.lx_dz == 1234 && cfg.bri == 77 && cfg.lx_c == -99,
+    check(cfg.stick.lx_dz == 1234 && cfg.led.bri == 77 && cfg.cal.lx_c == -99,
           "no field of a refused body was written");
 
     ConfigStore zero = markedStore();
     const char *kVersionZero = R"json({"ver":0,"stick":{"lx_dz":4095}})json";
     check(!parseProfile(kVersionZero, bodyLen(kVersionZero), &zero),
           "a version 0 body is refused");
-    check(zero.lx_dz == 1234, "no field of it was written either");
+    check(zero.stick.lx_dz == 1234, "no field of it was written either");
   }
 
   std::printf("-- 5. a body with no version is the oldest shape --\n");
@@ -191,8 +191,8 @@ int main() {
     ConfigStore cfg = kConfigDefaults;
     check(parseProfile(kBodyNoVersion, bodyLen(kBodyNoVersion), &cfg),
           "a body carrying no version is read");
-    check(cfg.lx_dz == 0, "its fields are read at the oldest shape's paths");
-    check(cfg.bri == 50, "and its later fields are read there too");
+    check(cfg.stick.lx_dz == 0, "its fields are read at the oldest shape's paths");
+    check(cfg.led.bri == 50, "and its later fields are read there too");
   }
 
   std::printf("-- 6. a value outside the range a row declares --\n");
@@ -200,9 +200,9 @@ int main() {
     const char *kOutOfRange = R"json({"ver":2,"map":{"dpad":5},"led":{"bri":250}})json";
     ConfigStore cfg = kConfigDefaults;
     (void)parseProfile(kOutOfRange, bodyLen(kOutOfRange), &cfg);
-    check(cfg.dpad == kConfigDefaults.dpad,
+    check(cfg.map.dpad == kConfigDefaults.map.dpad,
           "a D-pad mode outside 0..2 leaves the field at its default");
-    check(cfg.bri == 250, "a brightness inside its range is stored");
+    check(cfg.led.bri == 250, "a brightness inside its range is stored");
   }
 
   std::printf("%d checks, %d failed\n", g_ran, g_failed);
