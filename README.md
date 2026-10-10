@@ -17,7 +17,8 @@ board. No RTOS, no dynamic allocation.
 ## Quick Start
 
 ```bash
-git submodule update --init      # the protocol schema, pinned to a tag
+git submodule update --init      # the protocol schema
+git submodule update --remote    # to the newest schema on its main
 cmake --preset BoringTechH743   # configures, and fetches dependencies
 cmake --build --preset BoringTechH743
 probe-rs run --chip <CHIP> build/BoringTechH743/ThetaGP_*.elf
@@ -37,7 +38,7 @@ platform/   MCU ports (STM32H7)
 scripts/    build tooling and host tools
 src/        firmware: wire/ (protocol), drivers/, gamepad/, utils/
 lib/        third-party, fetched at configure time; the protocol schema is the
-            submodule lib/ThetaGP.PB, pinned to a tag
+            submodule lib/ThetaGP.PB, following its main
 ```
 
 Board configuration is TOML under `configs/<TARGET>/BoardConfig.toml`; see
@@ -48,9 +49,9 @@ database does not carry.
 ## Dependencies
 
 Declared in `lib/CMakeLists.txt` and fetched at configure. Every dependency
-follows its branch and is checked once a day — except the protocol schema, which
-is the submodule at `lib/ThetaGP.PB` pinned to a tag: it is the contract the
-host toolkit speaks as well, so it stays at one version on both sides.
+follows its branch and is checked once a day — the protocol schema included: it
+is the submodule at `lib/ThetaGP.PB`, on the schema repository's `main`, and it
+is the contract the host toolkit speaks as well, so both sides carry one commit.
 
 | Library | Purpose |
 |---|---|

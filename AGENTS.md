@@ -185,9 +185,11 @@ The presets are declared in `CMakePresets.json`, one per board with a
 `-release` variant, and each keeps its build tree under `build/<preset>/`.
 Configuring by hand with `-DTARGET=<board>` is equivalent.
 
-The protocol schema is the submodule at `lib/ThetaGP.PB`, pinned to the tag the
-host toolkit pins as well. Run `git submodule update --init` once per clone; a
-configure whose submodule is not initialized is refused by name.
+The protocol schema is the submodule at `lib/ThetaGP.PB`, which follows the
+`main` branch of the schema repository; the host toolkit's submodule follows the
+same branch, so both sides carry one commit. Run `git submodule update --init`
+once per clone, and `git submodule update --remote` to move to the newest
+schema; a configure whose submodule is not initialized is refused by name.
 
 Note: there is no separate test-API build. Every command — the diagnostic ones
 included — travels on the protocol defined in the `ThetaGP.PB` repository
@@ -225,7 +227,7 @@ Logger outputs on UART1 (PA9 TX, PA10 RX) at 115200 baud. The CMSIS-DAP (DAPLink
 The CDC ACM virtual serial port is present in **every** build — the interface is
 unconditional in the USB descriptors and `CFG_TUD_CDC` is always 1. It carries
 binary protocol frames; the JSON text protocol it used to carry is gone. The
-wire and the schema live in the `ThetaGP.PB` repository, pinned by tag; the
+wire and the schema live in the `ThetaGP.PB` repository, on its `main`; the
 firmware's codec is generated from it into `src/pb/`.
 
 Plugged via the device's own USB interface (not the debug probe). The ttyACM
