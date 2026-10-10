@@ -114,10 +114,13 @@ static const uint8_t ps4_string_language[] = { 0x09, 0x04 };
 static const uint8_t ps4_string_manufacturer[] = "Sony Interactive Entertainment";
 static const uint8_t ps4_string_product[] = "Wireless Controller";
 static const uint8_t ps4_string_version[] = "1.00";
+// The command channel's interface is part of every configuration this device
+// presents, so the string it names belongs to this set as well as the HID one.
+static const uint8_t ps4_string_cdc[] = "ThetaGamepad Virtual Com Port";
 
 static const uint8_t *ps4_string_descriptors[] = {
     ps4_string_language, ps4_string_manufacturer, ps4_string_product,
-    ps4_string_version,
+    ps4_string_version, ps4_string_cdc,
 };
 
 static const uint8_t ps4_device_descriptor[] = {

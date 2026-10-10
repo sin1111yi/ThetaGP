@@ -211,6 +211,14 @@ bool PS4Driver::vendor_control_xfer_cb(uint8_t rhport, uint8_t stage,
 
 const uint16_t *PS4Driver::get_descriptor_string_cb(uint8_t index,
                                                     uint16_t langid) {
+  constexpr uint16_t kStringCount =
+      sizeof(ps4_string_descriptors) / sizeof(ps4_string_descriptors[0]);
+  // A host may name an index this set does not carry: past the last entry
+  // there is no string to read, and the request is answered as unsupported
+  // rather than read past the table's end.
+  if (index >= kStringCount) {
+    return nullptr;
+  }
   char *value = (char *)ps4_string_descriptors[index];
   return getStringDescriptor(value, index);
 }
