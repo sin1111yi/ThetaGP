@@ -158,8 +158,16 @@ bool PS4Driver::process(void *gamepad) {
 uint16_t PS4Driver::get_report(uint8_t report_id, hid_report_type_t report_type,
                                uint8_t *buffer, uint16_t reqlen) {
   if (report_type != HID_REPORT_TYPE_FEATURE) {
-    std::memcpy(buffer, &report, sizeof(report));
-    return sizeof(report);
+    // The report the device sends carries its id in the first byte and the
+    // wire puts that byte in front of what this answers with, so the payload
+    // starts after it and is no longer than the caller asked for.
+    const uint8_t *payload_bytes = reinterpret_cast<const uint8_t *>(&report) + 1;
+    uint16_t size = static_cast<uint16_t>(sizeof(report) - 1);
+    if (size > reqlen) {
+      size = reqlen;
+    }
+    std::memcpy(buffer, payload_bytes, size);
+    return size;
   }
 
   const uint8_t *payload = nullptr;

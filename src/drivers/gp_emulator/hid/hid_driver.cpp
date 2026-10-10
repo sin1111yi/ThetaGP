@@ -163,9 +163,14 @@ uint16_t HIDDriver::get_report(uint8_t report_id, hid_report_type_t report_type,
                                uint8_t *buffer, uint16_t reqlen) {
   UNUSED(report_id);
   UNUSED(report_type);
-  UNUSED(reqlen);
-  memcpy(buffer, &hidReport, sizeof(HIDReport));
-  return sizeof(HIDReport);
+  // The report is answered in as much of itself as the caller asked for: one
+  // longer than the request is a frame the device sends past what was read.
+  uint16_t size = static_cast<uint16_t>(sizeof(HIDReport));
+  if (size > reqlen) {
+    size = reqlen;
+  }
+  memcpy(buffer, &hidReport, size);
+  return size;
 }
 
 void HIDDriver::set_report(uint8_t report_id, hid_report_type_t report_type,
