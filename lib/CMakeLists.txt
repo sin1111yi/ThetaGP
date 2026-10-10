@@ -144,12 +144,16 @@ thetagp_fetch_dep(nanopb
     "${CMAKE_SOURCE_DIR}/lib/nanopb"
 )
 
-# The protocol schema follows its main line, like the other dependencies.
-thetagp_fetch_dep(ThetaGP_PB
-    git@github.com:sin1111yi/ThetaGP.PB.git
-    "main"
-    "${CMAKE_SOURCE_DIR}/lib/ThetaGP.PB"
-)
+# The protocol schema is a submodule pinned to a tag, not a dependency that
+# follows a branch: it is the contract this firmware and the host toolkit both
+# speak, so it stays at one version rather than moving under them. The pin is
+# the submodule's commit; this checks only that the checkout is there.
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/lib/ThetaGP.PB/protocol/ThetaGP.proto")
+    message(FATAL_ERROR
+        "The protocol schema submodule is not initialized: "
+        "lib/ThetaGP.PB/protocol/ThetaGP.proto is not there. Run "
+        "`git submodule update --init lib/ThetaGP.PB`, then configure again.")
+endif()
 
 # frozen: lightweight JSON parser/generator (C)
 add_library(frozen STATIC

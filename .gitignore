@@ -26,7 +26,6 @@ lib/ArduinoJson
 lib/frozen
 lib/lvgl
 lib/nanopb
-lib/ThetaGP.PB
 
 /agent/
 *.jsonl
@@ -35,8 +34,8 @@ lib/ThetaGP.PB
 
 # Generated protocol output
 # The codec of the schema is written here by the configure step, and
-# nothing derived from the schema is tracked: the schema itself lives in its own
-# repository (ThetaGP.PB).
+# nothing derived from the schema is tracked: the schema itself is the submodule
+# at lib/ThetaGP.PB, pinned to a tag.
 src/pb/
 configs/config_keys.gen.h
 

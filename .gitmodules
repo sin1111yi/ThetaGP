@@ -1,0 +1,3 @@
+[submodule "lib/ThetaGP.PB"]
+	path = lib/ThetaGP.PB
+	url = git@github.com:sin1111yi/ThetaGP.PB.git

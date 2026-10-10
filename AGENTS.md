@@ -185,6 +185,10 @@ The presets are declared in `CMakePresets.json`, one per board with a
 `-release` variant, and each keeps its build tree under `build/<preset>/`.
 Configuring by hand with `-DTARGET=<board>` is equivalent.
 
+The protocol schema is the submodule at `lib/ThetaGP.PB`, pinned to the tag the
+host toolkit pins as well. Run `git submodule update --init` once per clone; a
+configure whose submodule is not initialized is refused by name.
+
 Note: there is no separate test-API build. Every command — the diagnostic ones
 included — travels on the protocol defined in the `ThetaGP.PB` repository
 (`ThetaGP.proto`, with the wire in its `README.md`).
