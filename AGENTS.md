@@ -236,13 +236,15 @@ hardcoded node:
 ls -l /dev/serial/by-id/usb-ThetaGamepad*if01*
 # e.g. usb-ThetaGamepad_BoringTechH743-if01 -> ../../ttyACM0
 
-# Ping over the protocol: builds the request, checks the reply's number
-python3 scripts/tools/thetagp.py ping --port /dev/ttyACM0
-
-# Encode a request, or read a frame, without a board
-python3 scripts/tools/thetagp.py send sys.ping --dry-run
-python3 scripts/tools/thetagp.py decode 051a00900207b300
+# The host side is the toolkit: its MCP server carries the device as tools --
+# `ping`, `version`, `keys`, `get_key`, `profiles`, `snapshot`, `send` (an arm by
+# name) and `decode` (a frame's bytes) -- and a board is asked from there.
+cargo run --release -p thetagp-mcp -- --port /dev/ttyACM0   # from the toolkit
+cargo run --release -p thetagp-mcp -- --simulated           # with no board
 ```
+
+This repository carries no host tool of its own: the protocol's host side is the
+toolkit, so there is one of it and not two.
 
 The two suites under `scripts/test/` guard the configuration-key emitter
 (`scripts/config/gen_config_keys.py`), where a wrong key name, type, range or

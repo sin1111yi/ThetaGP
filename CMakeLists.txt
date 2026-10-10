@@ -202,13 +202,12 @@ set(THETAGP_GENERATED_ARTIFACTS
     "${CMAKE_SOURCE_DIR}/configs/${TARGET}/board_config.cmake"
     "${CMAKE_SOURCE_DIR}/src/pb"
     "${CMAKE_SOURCE_DIR}/.clangd"
-    "${CMAKE_BINARY_DIR}/proto_py"
 )
 
 add_custom_target(clean-generated
     COMMAND ${CMAKE_COMMAND} -E rm -rf ${THETAGP_GENERATED_ARTIFACTS}
     COMMAND ${CMAKE_COMMAND} -E echo
             "Removed the board configuration, the config key table, the protocol "
-            "sources, the language server configuration and the host bindings"
+            "sources and the language server configuration"
     COMMENT "Cleaning the generated artifacts under configs/ and src/pb/"
     VERBATIM)
