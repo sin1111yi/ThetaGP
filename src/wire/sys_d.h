@@ -16,6 +16,12 @@ public:
     static void fwVersion(ThetaGP_Reply &reply);
     static void reset(ThetaGP_Reply &reply);
 
+    // Whether a reset has been asked for and the reply to it has been built but
+    // not yet answered on the wire. sys.reset asks for one; the command task
+    // resets the device once that reply is out of the CDC's FIFO, because a
+    // reset takes the wire down with it.
+    static bool resetRequested();
+
     // The arm the firmware declares and does not serve: the reply is the
     // refusal that says so.
     static void enterDfu(ThetaGP_Reply &reply);

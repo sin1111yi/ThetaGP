@@ -33,6 +33,11 @@ void copyText(char *out, size_t capacity, const char *text) {
 
 constexpr const char *kFirmwareVersion = THETAGP_FW_VERSION;
 
+// A reset asked for by sys.reset. The reply is built where the arm is answered
+// and the reset is performed by the command task once the reply has left, so
+// the host reads the answer rather than a wire that went down under it.
+static bool s_resetRequested = false;
+
 constexpr size_t kMaxRegions =
     static_cast<size_t>(Util::MemInfo::RegionId::Count);
 
@@ -70,7 +75,10 @@ void SysDomain::fwVersion(ThetaGP_Reply &reply) {
 
 void SysDomain::reset(ThetaGP_Reply &reply) {
     reply.which_kind = ThetaGP_Reply_sys_reset_tag;
+    s_resetRequested = true;
 }
+
+bool SysDomain::resetRequested() { return s_resetRequested; }
 
 void SysDomain::enterDfu(ThetaGP_Reply &reply) {
     writeFailure(reply, ThetaGP_ErrorCode_ERR_NOT_SUPPORTED,

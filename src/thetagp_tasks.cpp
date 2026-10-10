@@ -37,6 +37,7 @@
 
 #include "wire/frame.h"
 #include "wire/dispatch.h"
+#include "wire/sys_d.h"
 
 using namespace ThetaGP;
 using namespace ThetaGP::Gamepad;
@@ -150,6 +151,14 @@ FAST_CODE static void taskCmdProc(uint32_t currentTimeUs) {
     }
     queueFrame(framed);
     pumpCdcTx();
+  }
+
+  // A reset the host asked for is owed the wire before it takes the wire down:
+  // the frame is out of this task's hands and into the CDC's FIFO, so the reset
+  // waits until that FIFO is empty and the host has the reply.
+  if (Wire::SysDomain::resetRequested() && s_txLength == 0 &&
+      tud_cdc_n_write_available(0) == CFG_TUD_CDC_TX_BUFSIZE) {
+    NVIC_SystemReset();
   }
 
   // A stream's frames answer no frame of the host's, so they leave from here,
