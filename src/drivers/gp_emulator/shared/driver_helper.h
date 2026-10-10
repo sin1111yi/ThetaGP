@@ -32,13 +32,19 @@ static inline uint16_t *getStringDescriptor(const char *value, uint8_t index) {
   static uint16_t
       descriptorStringBuffer[128]; // Max 256 bytes, 127 unicode characters
   size_t charCount;
-  if (index == 0) // language always has a character count of 1
-    charCount = 1;
-  else {
-    charCount = strlen(value);
-    if (charCount > 127)
-      charCount = 127;
+  if (index == 0) {
+    // The language descriptor is not text: its two bytes are the one language
+    // id it carries, and it is the four bytes its header says it is.
+    auto *bytes = reinterpret_cast<uint8_t *>(descriptorStringBuffer);
+    bytes[0] = 4;
+    bytes[1] = 0x03;
+    bytes[2] = static_cast<uint8_t>(value[0]);
+    bytes[3] = static_cast<uint8_t>(value[1]);
+    return descriptorStringBuffer;
   }
+  charCount = strlen(value);
+  if (charCount > 127)
+    charCount = 127;
   // Fill descriptionStringBuffer[1] .. [32]
   for (uint8_t i = 0; i < charCount; i++)
     descriptorStringBuffer[i + 1] = value[i];
