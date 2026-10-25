@@ -22,6 +22,8 @@
 #include "drivers/gp_emulator/gp_emulator_manager.h"
 #include "drivers/gp_emulator/hid/hid_driver.h"
 #include "drivers/gp_emulator/ps4/ps4_driver.h"
+#include "drivers/gp_emulator/xinput/xinput_driver.h"
+#include "drivers/gp_emulator/xbone/xbone_driver.h"
 
 #include "gamepad/config/config_manager.h"
 #include "pb/enums.pb.h"
@@ -34,13 +36,26 @@ namespace ThetaGP::Drivers::GPEmulator {
 InputMode GPEmulatorManager::inputModeFromConfig() {
   const uint8_t asked =
       Gamepad::Config::ConfigManager::getInstance().config().usb.input_mode;
-  return asked == static_cast<uint8_t>(Enums::InputMode::INPUT_MODE_PS4)
-             ? InputMode::PS4
-             : InputMode::HID;
+  switch (static_cast<Enums::InputMode>(asked)) {
+  case Enums::InputMode::INPUT_MODE_XINPUT:
+    return InputMode::XInput;
+  case Enums::InputMode::INPUT_MODE_XBONE:
+    return InputMode::XboxOne;
+  case Enums::InputMode::INPUT_MODE_PS4:
+    return InputMode::PS4;
+  default:
+    return InputMode::HID;
+  }
 }
 
 void GPEmulatorManager::setup(InputMode mode) {
   switch (mode) {
+  case InputMode::XInput:
+    emulator = new XInputDriver();
+    break;
+  case InputMode::XboxOne:
+    emulator = new XboxOneDriver();
+    break;
   case InputMode::PS4:
     emulator = new PS4Driver();
     break;

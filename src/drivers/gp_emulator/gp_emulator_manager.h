@@ -25,7 +25,15 @@
 
 namespace ThetaGP::Drivers::GPEmulator {
 
-enum class InputMode : uint8_t { None = 0, Config, HID, PS4, Count };
+enum class InputMode : uint8_t {
+  None = 0,
+  Config,
+  HID,
+  PS4,
+  XInput,
+  XboxOne,
+  Count
+};
 
 class GPEmulatorManager {
 public:
