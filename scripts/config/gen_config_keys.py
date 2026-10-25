@@ -75,6 +75,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import re
 import sys
 import tomllib
 from datetime import datetime
@@ -119,6 +120,7 @@ TYPE_SIGNED = {"u8": False, "u16": False, "i16": True, "bool": False,
 # than dropped: a dropped `exposed` would leave the row in the table without its
 # flag, which no later check could see.
 FIELD_KEYS = {"name", "type", "count", "min", "max", "default", "exposed",
+              "enum",
               "flags", "doc"}
 
 # A declared flag and the constant the table carries it as.
@@ -403,7 +405,13 @@ def gen_config_keys(keys: dict, out: Optional[Path] = None,
         w(f"    // {field['name']} — {field['doc']}")
         w(f'    {{"{field["name"]}", {store_offset(field["name"])}, '
           f"KeyType::{TYPE_MAP[type_name]},")
-        w(f"     {count}, {field['min']}, {field['max']}, {flag_expression(field)}}},")
+        value_enum = field.get("enum", "")
+        if value_enum and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value_enum):
+            raise ConfigError(
+                f"{field['name']}: enum {value_enum!r} is not an identifier the "
+                f"schema could name")
+        w(f"     {count}, {field['min']}, {field['max']}, {flag_expression(field)},")
+        w(f'     "{value_enum}"}},')
     w("};")
     w()
     w("// The entry of a field, by the position the enum names.")

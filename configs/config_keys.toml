@@ -34,6 +34,7 @@ min = 0
 max = 4
 default = 4
 exposed = true
+enum = "SOCDMode"
 doc = "SOCD cleaning mode (0 UpPriority, 1 Neutral, 2 SecondInput, 3 FirstInput, 4 Bypass)"
 
 [[field]]
@@ -52,6 +53,7 @@ min = 0
 max = 2
 default = 0
 exposed = false
+enum = "DpadMode"
 doc = "D-pad routing (0 native d-pad, 1 left analog, 2 right analog)"
 
 [[field]]
@@ -61,6 +63,7 @@ min = 0
 max = 1
 default = 0
 exposed = false
+enum = "InvertMode"
 doc = "Left analog X polarity"
 
 [[field]]
@@ -70,6 +73,7 @@ min = 0
 max = 1
 default = 0
 exposed = false
+enum = "InvertMode"
 doc = "Left analog Y polarity"
 
 [[field]]
@@ -79,6 +83,7 @@ min = 0
 max = 1
 default = 0
 exposed = false
+enum = "InvertMode"
 doc = "Right analog X polarity"
 
 [[field]]
@@ -88,6 +93,7 @@ min = 0
 max = 1
 default = 0
 exposed = false
+enum = "InvertMode"
 doc = "Right analog Y polarity"
 
 [[field]]
@@ -112,6 +118,7 @@ max = 31
 default = "board"
 exposed = true
 flags = ["accepts_unmapped"]
+enum = "GamepadButton"
 doc = "Physical key to button bit index (255 = a key with no button)"
 
 [[field]]
@@ -311,4 +318,5 @@ max = 255
 default = 14
 exposed = true
 flags = ["reboot"]
+enum = "InputMode"
 doc = "Input mode the USB device reports (4 = DualShock 4, 14 = generic HID)"

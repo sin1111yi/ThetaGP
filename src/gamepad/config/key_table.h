@@ -46,6 +46,10 @@ struct KeyEntry {
   int32_t minVal;
   int32_t maxVal;
   uint8_t flags; // bit0: requiresReboot, bit1: acceptsUnmapped, bit2: exposed
+  // The schema enum the value is drawn from, by its name in the schema, or ""
+  // for a key whose value is a plain number. A host reads it to show the value
+  // by the name it stands for.
+  const char *valueEnum;
 };
 
 // flags bit0: a value reaches the key's field, and what the code reading that

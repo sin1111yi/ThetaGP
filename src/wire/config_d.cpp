@@ -225,6 +225,7 @@ void ConfigDomain::listKeys(ThetaGP_Reply &reply) {
     row.reboot = (entry.flags & kKeyFlagRequiresReboot) != 0;
     row.type = static_cast<ThetaGP_ConfigKeyType>(entry.type);
     row.count = entry.count;
+    std::snprintf(row.value_enum, sizeof row.value_enum, "%s", entry.valueEnum);
     ++listed;
   }
   ok.keys_count = static_cast<pb_size_t>(listed);
