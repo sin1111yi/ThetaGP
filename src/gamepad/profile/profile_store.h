@@ -230,6 +230,7 @@ private:
    * PROFILE_JSON_MAX bytes over from flash and the length scan stops at the
    * first 0x00 or 0xFF among them. */
   bool readBody(uint32_t address, uint8_t *buf, uint16_t *outLen);
+  bool writeBootMeta(uint16_t id, uint32_t address);
   uint16_t crc16BootMeta(const BootMeta *meta) const;
   void seqBeforeIncrement();
   bool scanBootMeta(uint16_t *outActiveId, uint32_t *outAddress);

@@ -80,6 +80,37 @@ uint16_t ProfileStore::crc16BootMeta(const BootMeta *meta) const {
   return Crc::crc16Ccitt(reinterpret_cast<const uint8_t *>(meta), 14);
 }
 
+// ── writeBootMeta() ──
+// Records the profile a reboot reads its configuration from: init() takes the
+// newest entry of the BootMeta ring, so every path that moves the body of the
+// profile the device runs from writes one. A body written without it is read
+// back only until the next reboot.
+
+bool ProfileStore::writeBootMeta(uint16_t id, uint32_t address) {
+  seqBeforeIncrement();
+
+  BootMeta bootMeta;
+  bootMeta.magic = BOOTMETA_MAGIC;
+  bootMeta.seq = ++_bootMetaSeq;
+  bootMeta.profileId = id;
+  bootMeta.address = address;
+  bootMeta.reserved = 0xFFFFFFFF;
+  bootMeta.crc16 = 0;
+  bootMeta.crc16 = crc16BootMeta(&bootMeta);
+
+  const uint32_t bootMetaSlot =
+      BOOTMETA_BASE + (ensureBootMetaSlot() * sizeof(BootMeta));
+  auto &flash = Drivers::Device::FlashBase::getInstance();
+  if (!flash.write(bootMetaSlot, reinterpret_cast<const uint8_t *>(&bootMeta),
+                   sizeof(BootMeta))) {
+    return false;
+  }
+
+  _activeProfileId = id;
+  _activeAddress = address;
+  return true;
+}
+
 // ── seqBeforeIncrement: check seq overflow before incrementing ──
 // When BootMeta or Address Ring seq hits 65535, Sector 0 is erased and
 // rebuilt with seq=1. This prevents uint16_t overflow that would cause
@@ -492,30 +523,13 @@ bool ProfileStore::createProfile(const char *json, uint16_t len,
     return false;
   }
 
-  seqBeforeIncrement();
-  _bootMetaSeq++;
-  BootMeta bootMeta;
-  bootMeta.magic = BOOTMETA_MAGIC;
-  bootMeta.seq = _bootMetaSeq;
-  bootMeta.profileId = id;
-  bootMeta.address = dataAddr;
-  bootMeta.reserved = 0xFFFFFFFF;
-  bootMeta.crc16 = 0;
-  bootMeta.crc16 = crc16BootMeta(&bootMeta);
-
-  uint32_t bootMetaSlot =
-      BOOTMETA_BASE + (ensureBootMetaSlot() * sizeof(BootMeta));
-  if (!flash.write(bootMetaSlot, reinterpret_cast<const uint8_t *>(&bootMeta),
-                   sizeof(BootMeta))) {
-    LOG_ERROR("ProfileStore: failed to write BootMeta");
-    return false;
-  }
-
   _profileAddresses[id] = dataAddr;
   _profileSeqs[id] = _addressRingSeq;
   _profileCount++;
-  _activeProfileId = id;
-  _activeAddress = dataAddr;
+  if (!writeBootMeta(id, dataAddr)) {
+    LOG_ERROR("ProfileStore: failed to write BootMeta");
+    return false;
+  }
 
   if (newId) {
     *newId = id;
@@ -586,8 +600,11 @@ bool ProfileStore::modifyProfile(uint16_t id, const char *json, uint16_t len) {
   _profileAddresses[id] = dataAddr;
   _profileSeqs[id] = _addressRingSeq;
 
-  if (_activeProfileId == id) {
-    _activeAddress = dataAddr;
+  // The body the device boots from moved, so the record that names it moves
+  // with it: without this a reboot reads the body this write replaced.
+  if (_activeProfileId == id && !writeBootMeta(id, dataAddr)) {
+    LOG_ERROR("ProfileStore: failed to write BootMeta for modify");
+    return false;
   }
 
   LOG_INFO("ProfileStore: modified profile %u at 0x%06lX", id, dataAddr);
@@ -642,22 +659,7 @@ bool ProfileStore::deleteProfile(uint16_t id) {
       _activeAddress = _profileAddresses[0];
     }
 
-    // Write BootMeta entry for fallback
-    seqBeforeIncrement();
-    _bootMetaSeq++;
-    BootMeta bootMeta;
-    bootMeta.magic = BOOTMETA_MAGIC;
-    bootMeta.seq = _bootMetaSeq;
-    bootMeta.profileId = 0;
-    bootMeta.address = _activeAddress;
-    bootMeta.reserved = 0xFFFFFFFF;
-    bootMeta.crc16 = 0;
-    bootMeta.crc16 = crc16BootMeta(&bootMeta);
-
-    uint32_t bootMetaSlot =
-        BOOTMETA_BASE + (ensureBootMetaSlot() * sizeof(BootMeta));
-    if (!flash.write(bootMetaSlot, reinterpret_cast<const uint8_t *>(&bootMeta),
-                     sizeof(BootMeta))) {
+    if (!writeBootMeta(0, _activeAddress)) {
       LOG_WARN("ProfileStore: fallback BootMeta write failed (non-critical)");
     }
   }
@@ -681,32 +683,12 @@ bool ProfileStore::selectProfile(uint16_t id) {
     return false;
   }
 
-  auto &flash = Drivers::Device::FlashBase::getInstance();
+  const uint32_t address = (id == 0) ? PROFILE0_ADDR : _profileAddresses[id];
 
-  uint32_t address = (id == 0) ? PROFILE0_ADDR : _profileAddresses[id];
-
-  // Write BootMeta entry
-  seqBeforeIncrement();
-  _bootMetaSeq++;
-  BootMeta bootMeta;
-  bootMeta.magic = BOOTMETA_MAGIC;
-  bootMeta.seq = _bootMetaSeq;
-  bootMeta.profileId = id;
-  bootMeta.address = address;
-  bootMeta.reserved = 0xFFFFFFFF;
-  bootMeta.crc16 = 0;
-  bootMeta.crc16 = crc16BootMeta(&bootMeta);
-
-  uint32_t bootMetaSlot =
-      BOOTMETA_BASE + (ensureBootMetaSlot() * sizeof(BootMeta));
-  if (!flash.write(bootMetaSlot, reinterpret_cast<const uint8_t *>(&bootMeta),
-                   sizeof(BootMeta))) {
+  if (!writeBootMeta(id, address)) {
     LOG_ERROR("ProfileStore: failed to write BootMeta for select");
     return false;
   }
-
-  _activeProfileId = id;
-  _activeAddress = address;
 
   LOG_INFO("ProfileStore: selected profile %u at 0x%06lX", id, address);
   return true;
