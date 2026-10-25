@@ -86,7 +86,7 @@ static_assert(fieldsTileTheStore(),
 // wire has no shape to name it by.
 constexpr bool rowsCarryAType() {
   for (const KeyEntry &entry : kKeyTable) {
-    if (entry.type == KeyType::Count) {
+    if (entry.type == static_cast<KeyType>(kKeyTypeCount)) {
       return false;
     }
   }
@@ -253,26 +253,26 @@ int32_t loadKeyElement(const ConfigStore &cfg, const KeyEntry &entry,
   const uint8_t *src = reinterpret_cast<const uint8_t *>(&cfg) + entry.offset +
                        static_cast<size_t>(index) * keyTypeWidth(entry.type);
   switch (entry.type) {
-  case KeyType::U8:
-  case KeyType::U8Array: {
+  case ThetaGP_ConfigKeyType_CONFIG_KEY_U8:
+  case ThetaGP_ConfigKeyType_CONFIG_KEY_U8_ARRAY: {
     uint8_t v = 0;
     memcpy(&v, src, sizeof(v));
     return v;
   }
-  case KeyType::U16: {
+  case ThetaGP_ConfigKeyType_CONFIG_KEY_U16: {
     uint16_t v = 0;
     memcpy(&v, src, sizeof(v));
     return v;
   }
-  case KeyType::I16: {
+  case ThetaGP_ConfigKeyType_CONFIG_KEY_I16: {
     int16_t v = 0;
     memcpy(&v, src, sizeof(v));
     return v;
   }
-  case KeyType::Count:
+  case static_cast<KeyType>(kKeyTypeCount):
     break;
   }
-  static_assert(static_cast<uint8_t>(KeyType::Count) == 4,
+  static_assert(static_cast<uint8_t>(static_cast<KeyType>(kKeyTypeCount)) == 4,
                 "key table: a key type added to the enum needs a branch here");
   return 0;
 }
@@ -286,26 +286,26 @@ void storeKeyElement(ConfigStore &cfg, const KeyEntry &entry, uint16_t index,
   uint8_t *dst = reinterpret_cast<uint8_t *>(&cfg) + entry.offset +
                  static_cast<size_t>(index) * keyTypeWidth(entry.type);
   switch (entry.type) {
-  case KeyType::U8:
-  case KeyType::U8Array: {
+  case ThetaGP_ConfigKeyType_CONFIG_KEY_U8:
+  case ThetaGP_ConfigKeyType_CONFIG_KEY_U8_ARRAY: {
     const uint8_t v = static_cast<uint8_t>(value);
     memcpy(dst, &v, sizeof(v));
     break;
   }
-  case KeyType::U16: {
+  case ThetaGP_ConfigKeyType_CONFIG_KEY_U16: {
     const uint16_t v = static_cast<uint16_t>(value);
     memcpy(dst, &v, sizeof(v));
     break;
   }
-  case KeyType::I16: {
+  case ThetaGP_ConfigKeyType_CONFIG_KEY_I16: {
     const int16_t v = static_cast<int16_t>(value);
     memcpy(dst, &v, sizeof(v));
     break;
   }
-  case KeyType::Count:
+  case static_cast<KeyType>(kKeyTypeCount):
     break;
   }
-  static_assert(static_cast<uint8_t>(KeyType::Count) == 4,
+  static_assert(static_cast<uint8_t>(static_cast<KeyType>(kKeyTypeCount)) == 4,
                 "key table: a key type added to the enum needs a branch here");
 }
 

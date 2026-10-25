@@ -198,7 +198,7 @@ bool parseProfile(const char *json, uint32_t len, ConfigStore *cfg) {
     char path[48];
     profilePath(entry, version, path, sizeof(path));
 
-    if (entry.type == KeyType::U8Array) {
+    if (entry.type == ThetaGP_ConfigKeyType_CONFIG_KEY_U8_ARRAY) {
       // A body that carries the array fills every element of the field: the
       // elements it does not reach take the unmapped sentinel, so a short array
       // cannot leave a stale tail behind. A body with no array leaves the field
@@ -285,7 +285,7 @@ uint16_t serializeProfile(const ConfigStore &cfg, char *dst, uint16_t cap) {
     firstInObject = false;
 
     const char *leaf = profileLeafName(entry);
-    if (entry.type == KeyType::U8Array) {
+    if (entry.type == ThetaGP_ConfigKeyType_CONFIG_KEY_U8_ARRAY) {
       doc.printf("%Q:[", leaf);
       for (uint8_t index = 0; index < entry.count; ++index) {
         if (index > 0) {

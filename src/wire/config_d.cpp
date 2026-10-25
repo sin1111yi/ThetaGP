@@ -68,13 +68,13 @@ static_assert(Gamepad::Config::kKeyTableMaxNameLen <
 // for member, which is what makes the cast in listKeys total: a type added on
 // either side fails the build rather than reaching a host as a shape the
 // schema does not carry.
-static_assert(static_cast<int>(KeyType::U8) ==
+static_assert(static_cast<int>(ThetaGP_ConfigKeyType_CONFIG_KEY_U8) ==
                       ThetaGP_ConfigKeyType_CONFIG_KEY_U8 &&
-                  static_cast<int>(KeyType::U16) ==
+                  static_cast<int>(ThetaGP_ConfigKeyType_CONFIG_KEY_U16) ==
                       ThetaGP_ConfigKeyType_CONFIG_KEY_U16 &&
-                  static_cast<int>(KeyType::I16) ==
+                  static_cast<int>(ThetaGP_ConfigKeyType_CONFIG_KEY_I16) ==
                       ThetaGP_ConfigKeyType_CONFIG_KEY_I16 &&
-                  static_cast<int>(KeyType::U8Array) ==
+                  static_cast<int>(ThetaGP_ConfigKeyType_CONFIG_KEY_U8_ARRAY) ==
                       ThetaGP_ConfigKeyType_CONFIG_KEY_U8_ARRAY,
               "config list: the key table's types and the wire's shapes do not "
               "line up");
@@ -131,7 +131,7 @@ void ConfigDomain::getKey(const ThetaGP_Request &request, ThetaGP_Reply &reply) 
   reply.which_kind = ThetaGP_Reply_config_get_key_tag;
   ThetaGP_ConfigGetKeyOk &ok = reply.kind.config_get_key;
 
-  if (entry->type == KeyType::U8Array) {
+  if (entry->type == ThetaGP_ConfigKeyType_CONFIG_KEY_U8_ARRAY) {
     // The run the key holds, read element by element at the row's offset. The
     // reply carries as many elements as the row declares and says so, so the
     // count and the elements never disagree.
@@ -157,7 +157,7 @@ void ConfigDomain::setKey(const ThetaGP_Request &request, ThetaGP_Reply &reply) 
   const ThetaGP_ConfigSetKey &requested = request.kind.config_set_key;
   ConfigStore &store = ConfigManager::getInstance().configMut();
 
-  if (entry->type == KeyType::U8Array) {
+  if (entry->type == ThetaGP_ConfigKeyType_CONFIG_KEY_U8_ARRAY) {
     if (requested.which_value != ThetaGP_ConfigSetKey_array_tag ||
         requested.value.array.elements_count != entry->count) {
       // The value is not a run of the length the key holds: the refusal names
@@ -223,7 +223,7 @@ void ConfigDomain::listKeys(ThetaGP_Reply &reply) {
     row.min = entry.minVal;
     row.max = entry.maxVal;
     row.reboot = (entry.flags & kKeyFlagRequiresReboot) != 0;
-    row.type = static_cast<ThetaGP_ConfigKeyType>(entry.type);
+    row.type = entry.type;
     row.count = entry.count;
     std::snprintf(row.value_enum, sizeof row.value_enum, "%s", entry.valueEnum);
     ++listed;

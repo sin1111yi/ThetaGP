@@ -22,6 +22,7 @@
 #pragma once
 
 #include "gamepad/config/config_store.h"
+#include "pb/ThetaGP.pb.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -31,7 +32,13 @@ namespace ThetaGP::Gamepad::Config {
 // How a value of a key travels on the wire. U8Array is a run of count bytes,
 // each one an element of its own. Count closes the list: it stands for no type,
 // and it is what holds the widths below to the same length as this enum.
-enum class KeyType : uint8_t { U8, U16, I16, U8Array, Count };
+// The shape a value travels in is the schema's own ConfigKeyType: the wire
+// carries that enum, and a local one would be a second spelling of the same
+// numbers. The table below is indexed by it.
+using KeyType = ThetaGP_ConfigKeyType;
+
+// One past the last shape; the schema declares no count of its own.
+inline constexpr uint8_t kKeyTypeCount = ThetaGP_ConfigKeyType_CONFIG_KEY_U8_ARRAY + 1;
 
 // One field of the store: its name, the field of ConfigStore it stands for, and
 // the values that field accepts. The name is the whole identity of the field —
@@ -79,7 +86,7 @@ constexpr bool isKeyExposed(const KeyEntry &entry) {
 // without a width here does not build.
 constexpr uint8_t kKeyTypeWidths[] = {1, 2, 2, 1};
 
-static_assert(sizeof(kKeyTypeWidths) == static_cast<size_t>(KeyType::Count),
+static_assert(sizeof(kKeyTypeWidths) == kKeyTypeCount,
               "key table: a key type carries no width");
 
 // Bytes one element of a value of this type takes. A type outside the enum

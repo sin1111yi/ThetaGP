@@ -97,11 +97,11 @@ CONFIG_KEYS_OUT = "configs/config_keys.gen.h"
 # A declared type and the KeyType of the table. `bool` travels as a byte, which
 # is what its range of 0..1 is checked against.
 TYPE_MAP = {
-    "u8": "U8",
-    "u16": "U16",
-    "i16": "I16",
-    "bool": "U8",
-    "u8_array": "U8Array",
+    "u8": "ThetaGP_ConfigKeyType_CONFIG_KEY_U8",
+    "u16": "ThetaGP_ConfigKeyType_CONFIG_KEY_U16",
+    "i16": "ThetaGP_ConfigKeyType_CONFIG_KEY_I16",
+    "bool": "ThetaGP_ConfigKeyType_CONFIG_KEY_U8",
+    "u8_array": "ThetaGP_ConfigKeyType_CONFIG_KEY_U8_ARRAY",
 }
 
 # Element width in bytes, by declared type. Held equal to the widths the
@@ -404,7 +404,7 @@ def gen_config_keys(keys: dict, out: Optional[Path] = None,
         count = field.get("count", 1)
         w(f"    // {field['name']} — {field['doc']}")
         w(f'    {{"{field["name"]}", {store_offset(field["name"])}, '
-          f"KeyType::{TYPE_MAP[type_name]},")
+          f"{TYPE_MAP[type_name]},")
         value_enum = field.get("enum", "")
         if value_enum and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value_enum):
             raise ConfigError(

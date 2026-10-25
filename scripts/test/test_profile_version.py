@@ -53,6 +53,9 @@ INCLUDES = [
     REPO_ROOT,
     os.path.join(REPO_ROOT, "src"),
     os.path.join(REPO_ROOT, "lib", "frozen"),
+    # The key table names the schema's own ConfigKeyType, so the protocol's
+    # generated header is on the path here as it is in the firmware.
+    os.path.join(REPO_ROOT, "lib", "nanopb"),
     # build_info.h carries the target's platform header and its board config;
     # the board headers are checked in with the board's own sources.
     os.path.join(REPO_ROOT, "platform", "STM32", "system"),
