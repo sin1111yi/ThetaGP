@@ -33,43 +33,38 @@
 
 namespace ThetaGP::Drivers::GPEmulator {
 
-InputMode GPEmulatorManager::inputModeFromConfig() {
+Enums::InputMode GPEmulatorManager::inputModeFromConfig() {
   const uint8_t asked =
       Gamepad::Config::ConfigManager::getInstance().config().usb.input_mode;
-  switch (static_cast<Enums::InputMode>(asked)) {
-  case Enums::InputMode::INPUT_MODE_XINPUT:
-    return InputMode::XInput;
-  case Enums::InputMode::INPUT_MODE_XBONE:
-    return InputMode::XboxOne;
-  case Enums::InputMode::INPUT_MODE_PS4:
-    return InputMode::PS4;
-  default:
-    return InputMode::HID;
-  }
+  return static_cast<Enums::InputMode>(asked);
 }
 
-void GPEmulatorManager::setup(InputMode mode) {
-  switch (mode) {
-  case InputMode::XInput:
-    emulator = new XInputDriver();
-    break;
-  case InputMode::XboxOne:
-    emulator = new XboxOneDriver();
-    break;
-  case InputMode::PS4:
-    emulator = new PS4Driver();
-    break;
-  case InputMode::HID:
-    emulator = new HIDDriver();
-    break;
-  default:
+void GPEmulatorManager::setup(Enums::InputMode mode) {
+  inputMode = mode;
+
+  // The configuration mode carries no device: the board is answered by the
+  // store alone, and no gamepad interface is offered.
+  if (mode == Enums::InputMode::INPUT_MODE_CONFIG) {
     return;
   }
 
-  if (emulator != nullptr) {
-    emulator->initialize();
+  switch (mode) {
+  case Enums::InputMode::INPUT_MODE_PS4:
+    emulator = new PS4Driver();
+    break;
+  case Enums::InputMode::INPUT_MODE_XINPUT:
+    emulator = new XInputDriver();
+    break;
+  case Enums::InputMode::INPUT_MODE_XBONE:
+    emulator = new XboxOneDriver();
+    break;
+  default:
+    // Every other declared mode is answered by the generic HID device.
+    emulator = new HIDDriver();
+    break;
   }
-  inputMode = mode;
+
+  emulator->initialize();
 
   USB::USBDriver::getInstance().init();
 

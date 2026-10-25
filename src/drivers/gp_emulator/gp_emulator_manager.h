@@ -22,18 +22,10 @@
 #pragma once
 
 #include "drivers/gp_emulator/gp_emulator.h"
+#include "pb/enums.pb.h"
 
 namespace ThetaGP::Drivers::GPEmulator {
 
-enum class InputMode : uint8_t {
-  None = 0,
-  Config,
-  HID,
-  PS4,
-  XInput,
-  XboxOne,
-  Count
-};
 
 class GPEmulatorManager {
 public:
@@ -47,18 +39,21 @@ public:
 
   [[nodiscard]] GPEmulator *getEmulator() { return emulator; }
 
-  // The mode the configuration asks for, as the mode this layer knows: a value
+  // The mode the configuration asks for, exactly as the schema declares it. The
+  // mapping from that value to the driver that answers it is setup()'s: a value
   // no driver answers is the generic HID device, which is what a board that
   // never set the key reports as.
-  static InputMode inputModeFromConfig();
-  void setup(InputMode mode);
-  [[nodiscard]] InputMode getInputMode() { return inputMode; }
-  [[nodiscard]] bool isConfigMode() { return (inputMode == InputMode::Config); }
+  static Enums::InputMode inputModeFromConfig();
+  void setup(Enums::InputMode mode);
+  [[nodiscard]] Enums::InputMode getInputMode() { return inputMode; }
+  [[nodiscard]] bool isConfigMode() {
+    return inputMode == Enums::InputMode::INPUT_MODE_CONFIG;
+  }
 
 private:
   GPEmulatorManager() = default;
   GPEmulator *emulator = nullptr;
-  InputMode inputMode = InputMode::None;
+  Enums::InputMode inputMode = Enums::InputMode::INPUT_MODE_GENERIC;
 };
 
 } // namespace ThetaGP::Drivers::GPEmulator
