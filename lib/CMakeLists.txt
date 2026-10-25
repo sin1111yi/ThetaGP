@@ -126,10 +126,14 @@ thetagp_fetch_dep(tinyusb
     "master"
     "${CMAKE_SOURCE_DIR}/lib/tinyusb"
 )
+# Pinned to the 3.6 LTS line: the 4.x series moved the cipher implementations
+# out to TF-PSA-Crypto, and the RSA API a gamepad's challenge is signed with is
+# in this one.
 thetagp_fetch_dep(mbedtls
     https://github.com/Mbed-TLS/mbedtls.git
-    "main"
+    "v3.6.6"
     "${CMAKE_SOURCE_DIR}/lib/mbedtls"
+    FIXED
 )
 thetagp_fetch_dep(frozen
     https://github.com/cesanta/frozen

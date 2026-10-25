@@ -270,33 +270,33 @@ set(TINYUSB_CONFIG_FILE "conf/tusb_config.h")
 # =============================================================================
 # MbedTLS Configuration
 # =============================================================================
+# Only the arithmetic a challenge signature needs: bignum, RSA with its PSS
+# padding, and message digests. The TLS and X.509 layers are not built, and
+# src/conf/mbedtls_config.h is what says which of them exist.
 set(MBEDTLS_PATH "${CMAKE_SOURCE_DIR}/lib/mbedtls")
 set(MBEDTLS_SRC_PATH "${MBEDTLS_PATH}/library")
 set(MBEDTLS_INC_PATH "${MBEDTLS_PATH}/include")
 
-file(GLOB MBEDTLS_SOURCES
-    "${MBEDTLS_SRC_PATH}/*.c"
+set(MBEDTLS_SOURCES
+    ${MBEDTLS_SRC_PATH}/asn1parse.c
+    ${MBEDTLS_SRC_PATH}/asn1write.c
+    ${MBEDTLS_SRC_PATH}/bignum.c
+    ${MBEDTLS_SRC_PATH}/bignum_core.c
+    ${MBEDTLS_SRC_PATH}/constant_time.c
+    ${MBEDTLS_SRC_PATH}/md.c
+    ${MBEDTLS_SRC_PATH}/oid.c
+    ${MBEDTLS_SRC_PATH}/platform.c
+    ${MBEDTLS_SRC_PATH}/platform_util.c
+    ${MBEDTLS_SRC_PATH}/rsa.c
+    ${MBEDTLS_SRC_PATH}/rsa_alt_helpers.c
+    ${MBEDTLS_SRC_PATH}/sha256.c
 )
 
-# Files that do not build on bare-metal STM32.
-list(FILTER MBEDTLS_SOURCES EXCLUDE REGEX ".*net_sockets\\.c")
-list(FILTER MBEDTLS_SOURCES EXCLUDE REGEX ".*entropy_poll\\.c")
-list(FILTER MBEDTLS_SOURCES EXCLUDE REGEX ".*timing\\.c")
-list(FILTER MBEDTLS_SOURCES EXCLUDE REGEX ".*padlock\\.c")
-list(FILTER MBEDTLS_SOURCES EXCLUDE REGEX ".*mps_trace\\.c")
-list(FILTER MBEDTLS_SOURCES EXCLUDE REGEX ".*mps_reader\\.c")
-list(FILTER MBEDTLS_SOURCES EXCLUDE REGEX ".*psa_crypto_driver_wrappers_no_static\\.c")
-list(FILTER MBEDTLS_SOURCES EXCLUDE REGEX ".*platform_util\\.c")
-list(FILTER MBEDTLS_SOURCES EXCLUDE REGEX ".*bignum_core\\.c")
-list(FILTER MBEDTLS_SOURCES EXCLUDE REGEX ".*constant_time\\.c")
-list(FILTER MBEDTLS_SOURCES EXCLUDE REGEX ".*x509_crt\\.c")
+# The library is written to C99, and the project's own sources to C23: the
+# standard is set per source here rather than for the whole target.
+set_source_files_properties(${MBEDTLS_SOURCES} PROPERTIES C_STANDARD 11)
 
-set(MBEDTLS_CONFIG_FILE "build/mbedtls_config.h")
-set(MBEDTLS_DEFS
-    MBEDTLS_ARCH_IS_ARM32
-    MBEDTLS_CT_NO_ASM
-    MBEDTLS_NO_MLAE
-)
+set(MBEDTLS_CONFIG_FILE "conf/mbedtls_config.h")
 
 # =============================================================================
 # Executable Target
@@ -307,6 +307,7 @@ target_sources(${CMAKE_PROJECT_NAME}
     PRIVATE
     ${SRC_FILES}
     ${TINYUSB_SOURCES}
+    ${MBEDTLS_SOURCES}
 
     # The generated protobuf codec, written under src/pb/ and ignored.
     ${PROTO_PB_SOURCES}
@@ -319,10 +320,7 @@ target_include_directories(${CMAKE_PROJECT_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}
     ${TINYUSB_SRC_PATH}
-
-    # ${TINYUSB_SRC_PATH}/../lib/networking
-
-    # ${MBEDTLS_INC_PATH}
+    ${MBEDTLS_INC_PATH}
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
@@ -338,6 +336,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME}
     CFG_TUSB_MCU=OPT_MCU_${BOARD_MCU_SERIES}
     CFG_TUSB_CONFIG_FILE="${TINYUSB_CONFIG_FILE}"
     CFG_TUSB_DEBUG=${TINYUSB_DEBUG_LEVEL}
+    MBEDTLS_CONFIG_FILE="${MBEDTLS_CONFIG_FILE}"
 
     # MBEDTLS_CONFIG_FILE="${MBEDTLS_CONFIG_FILE}"
     # ${MBEDTLS_DEFS}
@@ -350,6 +349,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME}
 
     # The version sys.get_fw_version reports, from the top-level CMakeLists.
     THETAGP_FW_VERSION="${THETAGP_VERSION}"
+
 )
 
 set_target_properties(${CMAKE_PROJECT_NAME}

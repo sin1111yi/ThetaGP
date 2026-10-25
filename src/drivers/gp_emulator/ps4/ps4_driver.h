@@ -22,6 +22,7 @@
 #pragma once
 
 #include "drivers/gp_emulator/gp_emulator.h"
+#include "drivers/gp_emulator/ps4/ps4_auth.h"
 #include "drivers/gp_emulator/ps4/ps4_descriptors.h"
 
 #include "class/hid/hid.h"
@@ -60,6 +61,7 @@ public:
   USBListener *get_usb_auth_listener() override { return nullptr; }
 
 private:
+  Ps4Auth auth;
   PS4Report report = {};
   uint16_t timestamp = 0;
   uint8_t counter = 0;

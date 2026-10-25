@@ -76,9 +76,13 @@ void PS4Driver::initialize() {
       .xfer_cb = hidd_xfer_cb,
       .xfer_isr = nullptr,
       .sof = NULL};
+
+  auth.initialize();
 }
 
 bool PS4Driver::process(void *gamepad) {
+  auth.process();
+
   ThetaGP::Gamepad::Gamepad *gp =
       reinterpret_cast<ThetaGP::Gamepad::Gamepad *>(gamepad);
 
@@ -185,10 +189,12 @@ uint16_t PS4Driver::get_report(uint8_t report_id, hid_report_type_t report_type,
     payload = ps4_feature_version;
     size = sizeof(ps4_feature_version);
     break;
-  default:
-    // The authentication reports read as the state of a device that carries no
-    // signature: a host that asks for one is answered with nothing to sign.
-    return 0;
+  default: {
+    // The authentication reports go to the channel; a device with no key
+    // answers nothing, which a host reads as an unauthenticated controller.
+    const uint16_t answered = auth.getReport(report_id, buffer, reqlen);
+    return answered;
+  }
   }
 
   if (reqlen < size) {
@@ -200,7 +206,10 @@ uint16_t PS4Driver::get_report(uint8_t report_id, hid_report_type_t report_type,
 
 void PS4Driver::set_report(uint8_t report_id, hid_report_type_t report_type,
                            uint8_t const *buffer, uint16_t bufsize) {
-  (void)report_type;
+  if (report_type == HID_REPORT_TYPE_FEATURE) {
+    auth.setReport(report_id, buffer, bufsize);
+  }
+  (void)report_id;
   (void)buffer;
   (void)bufsize;
   // The device's own output reports carry a lightbar colour and a rumble level.
