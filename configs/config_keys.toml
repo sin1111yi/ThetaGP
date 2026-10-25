@@ -319,4 +319,4 @@ default = 14
 exposed = true
 flags = ["reboot"]
 enum = "InputMode"
-doc = "Input mode the USB device reports (4 = DualShock 4, 14 = generic HID)"
+doc = "Input mode the USB device reports: 0 XInput, 1 Switch, 2 PS3, 3 Keyboard, 4 DualShock 4, 5 Xbox One, 13 DualSense, 14 generic HID, 15 Switch Pro; a mode this build does not answer is set up as the generic HID device"
