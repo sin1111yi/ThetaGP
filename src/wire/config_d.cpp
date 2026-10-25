@@ -27,6 +27,7 @@
 
 #include "conf/ThetaGP_Config.h" // THETAGP_CFG_HAS_FLASH, the switch the body arms branch on
 #include "gamepad/config/config_manager.h"
+#include "BoardConfig.h"
 #include "gamepad/config/key_table.h"
 #include "wire/dispatch.h"
 
@@ -230,6 +231,9 @@ void ConfigDomain::listKeys(ThetaGP_Reply &reply) {
   }
   ok.keys_count = static_cast<pb_size_t>(listed);
   ok.count = listed;
+  // The remap table is written to the inputs the board wires; the elements
+  // past them are padding the store keeps for a board with more.
+  ok.inputs = static_cast<uint32_t>(BDCFG_KEYPAD_MAX_KEY_INDEX) + 1u;
 }
 
 void ConfigDomain::save(ThetaGP_Reply &reply) {
