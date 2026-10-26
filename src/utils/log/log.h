@@ -47,18 +47,6 @@ typedef enum {
 typedef void (*LogPrintFunc)(uint8_t *data, uint16_t len);
 typedef void (*LogDelayFunc)(uint32_t us);
 
-#if THETAGP_CFG_LOG_EN
-
-#if !defined(LOG_BUFFER_SIZE)
-#define LOG_BUFFER_SIZE 256
-#endif
-
-void LogInit(LogPrintFunc printFunc, LogDelayFunc delayFunc);
-
-// The threshold lines are written at: a line below it is dropped. It starts at
-// the level the build carries and a profile moves it.
-void LogSetLevel(LogLevel level);
-
 // The lines the logger keeps: the last ones it wrote, so a host that reads the
 // port late still sees what the firmware said. One line's text is at most
 // LOG_LINE_TEXT bytes, terminator included.
@@ -70,6 +58,18 @@ typedef struct {
 
 #define LOG_LINE_TEXT 96
 #define LOG_RING_LINES 16
+
+#if THETAGP_CFG_LOG_EN
+
+#if !defined(LOG_BUFFER_SIZE)
+#define LOG_BUFFER_SIZE 256
+#endif
+
+void LogInit(LogPrintFunc printFunc, LogDelayFunc delayFunc);
+
+// The threshold lines are written at: a line below it is dropped. It starts at
+// the level the build carries and a profile moves it.
+void LogSetLevel(LogLevel level);
 
 // The number of lines written since boot: a caller reads from the number it
 // holds up to this one.
