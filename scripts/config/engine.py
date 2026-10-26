@@ -222,18 +222,21 @@ class PinArray(Field):
     declaration has always allowed.
     """
 
-    def __init__(self, name, count_macro, list_macro, **kwargs):
+    def __init__(self, name, count_macro, list_macro, max_pins=MAX_PINS, **kwargs):
         super().__init__(name, **kwargs)
         self.count_macro = count_macro
         self.list_macro = list_macro
+        # The most pins this particular list takes: a bus wired with more than
+        # the default eight says how many it has.
+        self.max_pins = max_pins
 
     def check(self, value, path, entry):
         if not isinstance(value, list):
             return [f"{path} must be an array"]
         if not value:
             return [f"{path} must have at least 1 pin"]
-        if len(value) > MAX_PINS:
-            return [f"{path} cannot have more than {MAX_PINS} pins"]
+        if len(value) > self.max_pins:
+            return [f"{path} cannot have more than {self.max_pins} pins"]
 
         errors = []
         for i, item in enumerate(value):

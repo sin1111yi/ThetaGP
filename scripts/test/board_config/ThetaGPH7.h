@@ -54,8 +54,22 @@
 #define BDCFG_IF_ULPI
 #define BDCFG_SPEED_HS
 #define BDCFG_REPORT_RATE_HZ         8000
+#define BDCFG_ULPI_PIN_NUM           12
+#define BDCFG_ULPI_PINS \
+    {Port::PortA, Pin::Pin5}, \
+    {Port::PortC, Pin::Pin0}, \
+    {Port::PortC, Pin::Pin2}, \
+    {Port::PortC, Pin::Pin3}, \
+    {Port::PortA, Pin::Pin3}, \
+    {Port::PortB, Pin::Pin0}, \
+    {Port::PortB, Pin::Pin1}, \
+    {Port::PortB, Pin::Pin10}, \
+    {Port::PortB, Pin::Pin11}, \
+    {Port::PortB, Pin::Pin12}, \
+    {Port::PortB, Pin::Pin13}, \
+    {Port::PortB, Pin::Pin5}
 
-#define BDCFG_USE_UART_1
+#define BDCFG_USE_UART_1            
 
 #define BDCFG_USE_UART_COUNT 1
 

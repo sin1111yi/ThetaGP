@@ -33,6 +33,14 @@ hw_periph       = "ULPI"
 speed           = "high_speed"
 wired_report_hz = 8000
 
+# The PHY's twelve lines, in the order the ULPI port drives them:
+# CLK, STP, DIR, NXT, D0..D7.
+ulpi_pins = [
+    "PA5", "PC0", "PC2", "PC3",
+    "PA3", "PB0", "PB1", "PB10",
+    "PB11", "PB12", "PB13", "PB5",
+]
+
 [[bus.uart]]
 bind       = "logger"
 peripheral = "UART1"

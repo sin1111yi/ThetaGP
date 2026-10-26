@@ -54,6 +54,7 @@ firmware looks its macros up by.
 | `hw_periph` | one of: `ULPI`, `USB1`, `USB2` |  |  | `BDCFG_IF_<value>` |
 | `speed` | one of: `full_speed`, `high_speed` |  |  | `BDCFG_SPEED_<value>` |
 | `wired_report_hz` | — |  |  | `BDCFG_REPORT_RATE_HZ` |
+| `ulpi_pins` | a list of 1 to 12 pins |  |  | — |
 
 ## `[bus.uart]`
 

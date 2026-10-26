@@ -188,6 +188,10 @@ prefix = "GAMEPAD_MASK_"
 [[table]]
 path = ["usb"]
 
+# A board on the ULPI PHY is a high-speed board, and the PHY is wired with the
+# twelve lines the platform driver drives in the order it drives them.
+reports = "check_usb"
+
 [[table.item]]
 item = "field"
 name = "hw_periph"
@@ -207,6 +211,14 @@ item = "field"
 name = "wired_report_hz"
 kind = "Rate"
 macro = "BDCFG_REPORT_RATE_HZ"
+
+[[table.item]]
+item = "field"
+name = "ulpi_pins"
+kind = "PinArray"
+count_macro = "BDCFG_ULPI_PIN_NUM"
+list_macro = "BDCFG_ULPI_PINS"
+max_pins = 12
 
 [[table]]
 path = ["bus", "uart"]

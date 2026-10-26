@@ -38,22 +38,6 @@ using namespace ThetaGP::Drivers::Peripheral::USB;
 using namespace ThetaGP::Drivers::Peripheral::GPIO;
 
 #if defined(STM32H7)
-// ULPI pin descriptors, index corresponds to ULPI enum value
-static constexpr std::array<PinDesc, 12> ULPIPinDescs = {{
-    {Port::PortA, Pin::Pin5},  // CLK, PA5
-    {Port::PortC, Pin::Pin0},  // STP, PC0
-    {Port::PortC, Pin::Pin2},  // DIR, PC2_C
-    {Port::PortC, Pin::Pin3},  // NXT, PC3_C
-    {Port::PortA, Pin::Pin3},  // D0, PA3
-    {Port::PortB, Pin::Pin0},  // D1, PB0
-    {Port::PortB, Pin::Pin1},  // D2, PB1
-    {Port::PortB, Pin::Pin10}, // D3, PB10
-    {Port::PortB, Pin::Pin11}, // D4, PB11
-    {Port::PortB, Pin::Pin12}, // D5, PB12
-    {Port::PortB, Pin::Pin13}, // D6, PB13
-    {Port::PortB, Pin::Pin5},  // D7, PB5
-}};
-
 static constexpr std::array<PinDesc, 2> DpDmPinDescs = {{
     {Port::PortA, Pin::Pin12},
     {Port::PortA, Pin::Pin11},
@@ -99,7 +83,17 @@ HardwareUSB::HardwareUSB(USBSpeed speed, USBPeripheral peripheral) {
 }
 
 void HardwareUSB::initULPIPins() {
-#if defined(STM32H7)
+// Only a board that wires a PHY has the lines to drive: every other board
+// compiles this body to nothing.
+#if defined(STM32H7) && defined(BDCFG_ULPI_PINS)
+  // The twelve lines the board wired to the PHY, in the order the ULPI port
+  // drives them: the clock, the three handshakes, then the eight data bits.
+  static constexpr std::array<PinDesc, BDCFG_ULPI_PIN_NUM> ULPIPinDescs = {{
+      BDCFG_ULPI_PINS}};
+  static_assert(BDCFG_ULPI_PIN_NUM == 12,
+                "usb.ulpi_pins: the PHY is wired with twelve pins (CLK, STP, "
+                "DIR, NXT, D0..D7)");
+
   // Enable SYSCFG IO compensation cell for ULPI 60MHz signal integrity
   HAL_EnableCompensationCell();
 

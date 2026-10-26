@@ -112,6 +112,16 @@ extern "C" {
 #define CFG_TUSB_MEM_SECTION COMMON_ZERO_INIT
 #endif
 
+// High speed runs on the core with internal DMA: the core packetizes a transfer
+// itself, so a 512-byte packet costs the CPU nothing per byte. The buffers it
+// reads live in the AXI SRAM region the MPU marks non-cacheable, which is what
+// makes the transfer safe without cache maintenance.
+#if THETAGP_USB_HIGH_SPEED
+#ifndef CFG_TUD_DWC2_DMA_ENABLE
+#define CFG_TUD_DWC2_DMA_ENABLE 1
+#endif
+#endif
+
 #ifndef CFG_TUSB_MEM_ALIGN
 #define CFG_TUSB_MEM_ALIGN __attribute__((aligned(4)))
 #endif

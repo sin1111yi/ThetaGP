@@ -166,6 +166,7 @@ E1, E2, E3, E4, E5, E6, E7, E8
 | `hw_periph` | string | `USB1`, `USB2`, or `ULPI` |
 | `speed` | string | `high_speed` or `full_speed` |
 | `wired_report_hz` | int | Ceiling on the wired report rate in Hz — the gamepad task tick rate, not a constant packet stream: a report goes out only when the state differs from the last one. Optional; the firmware default is 1000. The link caps it (at most 1000 on `full_speed`, 8000 on `high_speed`), and it must divide 1000000 so the tick period is a whole number of microseconds. |
+| `ulpi_pins` | list | The twelve lines the PHY is wired with, in this order: `CLK`, `STP`, `DIR`, `NXT`, `D0`…`D7`. Required when `hw_periph = "ULPI"`, which also requires `speed = "high_speed"` — the external PHY is the high-speed path on this MCU. |
 
 ### `[[bus.uart]]` — optional, repeatable
 

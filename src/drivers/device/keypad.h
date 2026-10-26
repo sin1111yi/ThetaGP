@@ -92,15 +92,20 @@ struct KeypadConfig {
   static constexpr uint32_t RELEASE_MIN =
       Gamepad::Config::keyEntry(Gamepad::Config::ConfigKey::SysDebThr).minVal;
 
-  static_assert(PRESS_MAX * THETAGP_CFG_USB_REPORT_RATE_HZ <=
+  // A press is confirmed after PRESS_SAMPLES scans, and the confirmation has to
+  // complete inside one report period or a report tick misses it. A run longer
+  // than that window is held to it at use, so only the shortest value the row
+  // takes has to fit here: a board that runs its reports faster than it scans
+  // cannot honour a long debounce, and clamps it.
+  static_assert(PRESS_MIN * THETAGP_CFG_USB_REPORT_RATE_HZ <=
                     THETAGP_CFG_KEYPAD_SCAN_HZ,
                 "keypad: a press is committed only after PRESS_SAMPLES "
                 "consecutive scans of the pressed level, and every scan is a "
                 "decision point, so the confirmation takes PRESS_SAMPLES scan "
                 "periods. It has to complete inside one report period, or a "
-                "report tick can miss the confirmation entirely. Lower the "
-                "ceiling of sys.deb_samp, raise THETAGP_CFG_KEYPAD_SCAN_HZ, or "
-                "lower the board's [usb] wired_report_hz.");
+                "report tick can miss the confirmation entirely. Raise "
+                "THETAGP_CFG_KEYPAD_SCAN_HZ or lower the board's [usb] "
+                "wired_report_hz.");
 
   static_assert(RELEASE_MIN >= PRESS_MAX,
                 "keypad: the release range has to start at or above where the "

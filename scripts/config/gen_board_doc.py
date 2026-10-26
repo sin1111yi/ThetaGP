@@ -54,7 +54,7 @@ def accepted(field) -> str:
     if kind == "Pin":
         return "a pin, `P<port><n>` (`PA0`–`PI15`)"
     if kind == "PinArray":
-        return "a list of 1 to 8 pins"
+        return f"a list of 1 to {field.max_pins} pins"
     if kind == "Presence":
         return f"the board's own: a table named `{field.sub}`"
     if isinstance(field, engine.Named):

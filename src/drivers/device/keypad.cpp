@@ -87,7 +87,14 @@ void Keypad::scanCallback() {
   // for every pair the rows accept.
   const Gamepad::Config::Sys &sys =
       Gamepad::Config::ConfigManager::getInstance().config().sys;
-  const uint8_t pressSamples = sys.deb_samp;
+  // A press has to be confirmed inside one report period: a run longer than the
+  // scans one period holds is held to that many, whatever the body asks for.
+  constexpr uint8_t kPressInOneReport =
+      static_cast<uint8_t>(THETAGP_CFG_KEYPAD_SCAN_HZ /
+                           THETAGP_CFG_USB_REPORT_RATE_HZ);
+  const uint8_t asked = sys.deb_samp < kPressInOneReport ? sys.deb_samp
+                                                         : kPressInOneReport;
+  const uint8_t pressSamples = asked < 2 ? 2 : asked;
   const uint8_t releaseSamples =
       sys.deb_thr < pressSamples ? pressSamples : sys.deb_thr;
 

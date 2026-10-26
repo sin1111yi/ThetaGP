@@ -49,6 +49,36 @@ LICENSE = (
 
 # ── USB ──────────────────────────────────────────────────────────────────────
 
+# The lines a ULPI PHY is wired with, in the order the platform driver drives
+# them: the clock, the three handshakes, then the eight data bits.
+ULPI_PIN_NAMES = ("CLK", "STP", "DIR", "NXT",
+                  "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7")
+
+
+def check_usb(cfg: dict, errors: list[str]) -> None:
+    """A board on the ULPI PHY says so in full: high speed through it, and the
+    twelve lines it is wired with."""
+    usb = cfg.get("usb") or {}
+    if usb.get("hw_periph") != "ULPI":
+        return
+
+    speed = usb.get("speed")
+    if speed != "high_speed":
+        errors.append(
+            f"usb.hw_periph is 'ULPI' but usb.speed is '{speed}': the external "
+            "PHY is the high-speed path, so a board that declares it declares "
+            "speed = \"high_speed\""
+        )
+
+    pins = usb.get("ulpi_pins")
+    count = len(pins) if isinstance(pins, list) else 0
+    if count != len(ULPI_PIN_NAMES):
+        errors.append(
+            f"usb.hw_periph is 'ULPI' but usb.ulpi_pins declares {count} pins; "
+            f"the PHY is wired as {', '.join(ULPI_PIN_NAMES)} — twelve pins, "
+            "in that order"
+        )
+
 
 # ── Buses ────────────────────────────────────────────────────────────────────
 

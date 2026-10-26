@@ -77,10 +77,10 @@ void GPEmulatorManager::setup(Enums::InputMode mode) {
 #endif
   };
 
-#if THETAGP_USB_RHPORT == 0
+  // The DWC2 settings belong to whichever port the board declares: the full
+  // speed core and the high-speed one are configured the same way.
   tud_configure_dwc2_t cfg = CFG_TUD_CONFIGURE_DWC2_DEFAULT;
-  tud_configure(0, TUD_CFGID_DWC2, &cfg);
-#endif
+  tud_configure(THETAGP_USB_RHPORT, TUD_CFGID_DWC2, &cfg);
 
   tusb_init(THETAGP_USB_RHPORT, &dev_init);
 }
