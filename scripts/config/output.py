@@ -49,15 +49,9 @@ LICENSE = (
 
 # ── USB ──────────────────────────────────────────────────────────────────────
 
-# The lines a ULPI PHY is wired with, in the order the platform driver drives
-# them: the clock, the three handshakes, then the eight data bits.
-ULPI_PIN_NAMES = ("CLK", "STP", "DIR", "NXT",
-                  "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7")
-
-
 def check_usb(cfg: dict, errors: list[str]) -> None:
-    """A board on the ULPI PHY says so in full: high speed through it, and the
-    twelve lines it is wired with."""
+    """A board on the ULPI PHY says so in full: the speed the PHY is there for,
+    and the table that names the twelve lines it is wired with."""
     usb = cfg.get("usb") or {}
     if usb.get("hw_periph") != "ULPI":
         return
@@ -70,13 +64,11 @@ def check_usb(cfg: dict, errors: list[str]) -> None:
             "speed = \"high_speed\""
         )
 
-    pins = usb.get("ulpi_pins")
-    count = len(pins) if isinstance(pins, list) else 0
-    if count != len(ULPI_PIN_NAMES):
+    if not isinstance(usb.get("ulpi"), dict):
         errors.append(
-            f"usb.hw_periph is 'ULPI' but usb.ulpi_pins declares {count} pins; "
-            f"the PHY is wired as {', '.join(ULPI_PIN_NAMES)} — twelve pins, "
-            "in that order"
+            "usb.hw_periph is 'ULPI' but there is no [usb.ulpi] table: a board "
+            "on the PHY names the twelve lines it is wired with — clk, stp, "
+            "dir, nxt and d0..d7"
         )
 
 

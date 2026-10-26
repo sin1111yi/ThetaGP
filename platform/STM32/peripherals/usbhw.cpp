@@ -85,14 +85,14 @@ HardwareUSB::HardwareUSB(USBSpeed speed, USBPeripheral peripheral) {
 void HardwareUSB::initULPIPins() {
 // Only a board that wires a PHY has the lines to drive: every other board
 // compiles this body to nothing.
-#if defined(STM32H7) && defined(BDCFG_ULPI_PINS)
-  // The twelve lines the board wired to the PHY, in the order the ULPI port
-  // drives them: the clock, the three handshakes, then the eight data bits.
-  static constexpr std::array<PinDesc, BDCFG_ULPI_PIN_NUM> ULPIPinDescs = {{
-      BDCFG_ULPI_PINS}};
-  static_assert(BDCFG_ULPI_PIN_NUM == 12,
-                "usb.ulpi_pins: the PHY is wired with twelve pins (CLK, STP, "
-                "DIR, NXT, D0..D7)");
+#if defined(STM32H7) && defined(BDCFG_ULPI_CLK)
+  // The twelve lines the board wired to the PHY, each by the function the port
+  // drives it by: the clock, the three handshakes, then the eight data bits.
+  static constexpr std::array<PinDesc, 12> ULPIPinDescs = {{
+      BDCFG_ULPI_CLK, BDCFG_ULPI_STP, BDCFG_ULPI_DIR, BDCFG_ULPI_NXT,
+      BDCFG_ULPI_D0,  BDCFG_ULPI_D1,  BDCFG_ULPI_D2,  BDCFG_ULPI_D3,
+      BDCFG_ULPI_D4,  BDCFG_ULPI_D5,  BDCFG_ULPI_D6,  BDCFG_ULPI_D7,
+  }};
 
   // Enable SYSCFG IO compensation cell for ULPI 60MHz signal integrity
   HAL_EnableCompensationCell();

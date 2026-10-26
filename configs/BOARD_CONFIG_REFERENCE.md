@@ -54,7 +54,23 @@ firmware looks its macros up by.
 | `hw_periph` | one of: `ULPI`, `USB1`, `USB2` |  |  | `BDCFG_IF_<value>` |
 | `speed` | one of: `full_speed`, `high_speed` |  |  | `BDCFG_SPEED_<value>` |
 | `wired_report_hz` | — |  |  | `BDCFG_REPORT_RATE_HZ` |
-| `ulpi_pins` | a list of 1 to 12 pins |  |  | — |
+
+## `[usb.ulpi]`
+
+| Field | Accepts | When | Required | Becomes |
+|-------|---------|------|----------|---------|
+| `clk` | a pin, `P<port><n>` (`PA0`–`PI15`) |  | yes | `BDCFG_ULPI_CLK` |
+| `stp` | a pin, `P<port><n>` (`PA0`–`PI15`) |  | yes | `BDCFG_ULPI_STP` |
+| `dir` | a pin, `P<port><n>` (`PA0`–`PI15`) |  | yes | `BDCFG_ULPI_DIR` |
+| `nxt` | a pin, `P<port><n>` (`PA0`–`PI15`) |  | yes | `BDCFG_ULPI_NXT` |
+| `d0` | a pin, `P<port><n>` (`PA0`–`PI15`) |  | yes | `BDCFG_ULPI_D0` |
+| `d1` | a pin, `P<port><n>` (`PA0`–`PI15`) |  | yes | `BDCFG_ULPI_D1` |
+| `d2` | a pin, `P<port><n>` (`PA0`–`PI15`) |  | yes | `BDCFG_ULPI_D2` |
+| `d3` | a pin, `P<port><n>` (`PA0`–`PI15`) |  | yes | `BDCFG_ULPI_D3` |
+| `d4` | a pin, `P<port><n>` (`PA0`–`PI15`) |  | yes | `BDCFG_ULPI_D4` |
+| `d5` | a pin, `P<port><n>` (`PA0`–`PI15`) |  | yes | `BDCFG_ULPI_D5` |
+| `d6` | a pin, `P<port><n>` (`PA0`–`PI15`) |  | yes | `BDCFG_ULPI_D6` |
+| `d7` | a pin, `P<port><n>` (`PA0`–`PI15`) |  | yes | `BDCFG_ULPI_D7` |
 
 ## `[bus.uart]`
 

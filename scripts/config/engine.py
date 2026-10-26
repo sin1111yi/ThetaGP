@@ -652,7 +652,11 @@ def _entries(table: Table, held, errors: list[str], declared_order: bool = False
                 found.append((entry, f"{table.where}[{i}]", ""))
         return found
 
-    return [(held or {}, table.where, "")]
+    # A table the board left out has no entry to read: its required fields are
+    # the table's own business, and a board that wants them declares the table.
+    if held is None:
+        return []
+    return [(held, table.where, "")]
 
 
 def validate(schema: list[Table], cfg: dict) -> list[str]:

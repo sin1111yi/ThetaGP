@@ -33,13 +33,21 @@ hw_periph       = "ULPI"
 speed           = "high_speed"
 wired_report_hz = 8000
 
-# The PHY's twelve lines, in the order the ULPI port drives them:
-# CLK, STP, DIR, NXT, D0..D7.
-ulpi_pins = [
-    "PA5", "PC0", "PC2", "PC3",
-    "PA3", "PB0", "PB1", "PB10",
-    "PB11", "PB12", "PB13", "PB5",
-]
+# The twelve lines the PHY is wired with, each by the name the port drives it
+# by: the clock, the three handshakes, then the eight data bits.
+[usb.ulpi]
+clk = "PA5"
+stp = "PC0"
+dir = "PC2"
+nxt = "PC3"
+d0  = "PA3"
+d1  = "PB0"
+d2  = "PB1"
+d3  = "PB10"
+d4  = "PB11"
+d5  = "PB12"
+d6  = "PB13"
+d7  = "PB5"
 
 [[bus.uart]]
 bind       = "logger"

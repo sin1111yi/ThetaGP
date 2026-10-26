@@ -189,7 +189,7 @@ prefix = "GAMEPAD_MASK_"
 path = ["usb"]
 
 # A board on the ULPI PHY is a high-speed board, and the PHY is wired with the
-# twelve lines the platform driver drives in the order it drives them.
+# twelve lines the table below names.
 reports = "check_usb"
 
 [[table.item]]
@@ -212,13 +212,93 @@ name = "wired_report_hz"
 kind = "Rate"
 macro = "BDCFG_REPORT_RATE_HZ"
 
+# ── The ULPI PHY, when the board carries one ──
+[[table]]
+path = ["usb", "ulpi"]
+
 [[table.item]]
 item = "field"
-name = "ulpi_pins"
-kind = "PinArray"
-count_macro = "BDCFG_ULPI_PIN_NUM"
-list_macro = "BDCFG_ULPI_PINS"
-max_pins = 12
+name = "clk"
+kind = "Pin"
+required = true
+macro = "BDCFG_ULPI_CLK"
+
+[[table.item]]
+item = "field"
+name = "stp"
+kind = "Pin"
+required = true
+macro = "BDCFG_ULPI_STP"
+
+[[table.item]]
+item = "field"
+name = "dir"
+kind = "Pin"
+required = true
+macro = "BDCFG_ULPI_DIR"
+
+[[table.item]]
+item = "field"
+name = "nxt"
+kind = "Pin"
+required = true
+macro = "BDCFG_ULPI_NXT"
+
+[[table.item]]
+item = "field"
+name = "d0"
+kind = "Pin"
+required = true
+macro = "BDCFG_ULPI_D0"
+
+[[table.item]]
+item = "field"
+name = "d1"
+kind = "Pin"
+required = true
+macro = "BDCFG_ULPI_D1"
+
+[[table.item]]
+item = "field"
+name = "d2"
+kind = "Pin"
+required = true
+macro = "BDCFG_ULPI_D2"
+
+[[table.item]]
+item = "field"
+name = "d3"
+kind = "Pin"
+required = true
+macro = "BDCFG_ULPI_D3"
+
+[[table.item]]
+item = "field"
+name = "d4"
+kind = "Pin"
+required = true
+macro = "BDCFG_ULPI_D4"
+
+[[table.item]]
+item = "field"
+name = "d5"
+kind = "Pin"
+required = true
+macro = "BDCFG_ULPI_D5"
+
+[[table.item]]
+item = "field"
+name = "d6"
+kind = "Pin"
+required = true
+macro = "BDCFG_ULPI_D6"
+
+[[table.item]]
+item = "field"
+name = "d7"
+kind = "Pin"
+required = true
+macro = "BDCFG_ULPI_D7"
 
 [[table]]
 path = ["bus", "uart"]
