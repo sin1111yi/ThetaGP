@@ -11,13 +11,11 @@
 namespace ThetaGP::Wire {
 
 // The test domain's flash staging: the one run of flash bytes the domain holds
-// between frames. A read keeps the whole run there while the pieces of it are
-// sent out; a write collects its bytes there before they reach the chip. The
-// two directions are exclusive, because they are the two uses of the one
-// buffer, so a run on its way to the host and a run on its way to the chip are
-// never held at once.
+// between frames. A read keeps the whole run there while its pieces go out; a write
+// collects its bytes there before they reach the chip. The two directions are
+// exclusive, since they are the two uses of the one buffer.
 //
-// One frame is built per call, because the wire carries one frame at a time.
+// One frame is built per call.
 class Flash {
 public:
     // The bytes the one staging buffer holds, and the widest run it can carry:

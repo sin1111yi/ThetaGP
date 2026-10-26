@@ -464,15 +464,12 @@ bool HardwareTimer::startSequence(const uint16_t *duties, uint16_t count) {
 
   TIM_TypeDef *timer = timerInstance[static_cast<size_t>(map->instance)];
 
-  // The pin follows the compare register as soon as the register is written, so
-  // a write made while the counter stands still spends every instruction until
-  // the counter starts as high time, and the bit it is for comes out long
-  // enough to read as the other one. The order below keeps that window to the
-  // counter's own start: the DMA is armed first — the compare register is
-  // written through rather than preloaded, so the duty lands in the period it
-  // is for — and the update flag is cleared so the request the transfer waits
-  // on is the counter's own first period. The transfer then carries the duties
-  // after the first, one per period.
+  // The pin follows the compare register as soon as it is written, so a write made
+  // with the counter stopped holds the line for every instruction until the counter
+  // starts. The order below keeps that window to the counter's own start: the DMA is
+  // armed first, and the update flag is cleared so the transfer waits on the
+  // counter's first period. The transfer then carries the duties after the first,
+  // one per period.
   LL_TIM_DisableCounter(timer);
   LL_TIM_ClearFlag_UPDATE(timer);
 

@@ -66,14 +66,13 @@ public:
 
   // ── Parse: key comparison ──
 
-  // How many object keys `source` carries that this document does not. A key is
-  // the chain of names that reaches it, not the walker's spelling of a path: a
-  // key named `a.b` is not the `b` of `a`. Members an array holds are elements,
-  // not keys, and a repeated name is counted once for each occurrence.
+  // How many object keys `source` carries that this document does not. A key is the
+  // chain of names that reaches it, not the walker's spelling of a path, and an
+  // array's members are elements rather than keys. A repeated name counts once per
+  // occurrence.
   //
   // 0 also answers a comparison that has no answer: a body that does not parse
-  // whole, a name no lookup can be built from, or a chain deeper than the walker
-  // reaches. An incomplete count reports nothing rather than part of it.
+  // whole, a name no lookup can be built from, or a chain deeper than the walk.
   uint32_t missingKeyCount(const Json &source) const;
 
   // ── Write ──

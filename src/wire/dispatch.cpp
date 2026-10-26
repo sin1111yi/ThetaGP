@@ -171,15 +171,11 @@ uint16_t Dispatch::answer(const uint8_t *payload, uint16_t length,
                              ThetaGP_Reason_REASON_NONE);
                 break;
             }
-            // The profile domain's one entry, whatever arm the request names:
-            // the dispatch to the arm and the refusal owed to every arm that
-            // reads or writes a body while a body's bytes are spoken for both
-            // live there, judged once on the way in. No arm of the domain
-            // carries that refusal itself, so an arm added to the domain is
-            // routed here the same way and is refused with the rest. The
-            // frame's own bytes go with the request, because the field a
-            // staged body's piece arrives in is a callback field and is
-            // collected out of those bytes.
+            // The profile domain's one entry, whatever arm the request names: the
+            // dispatch to the arm and the refusal owed while the staging buffer is
+            // spoken for both live there, judged once on the way in. The frame's own
+            // bytes go with the request, because a staged piece arrives in a callback
+            // field and is collected out of them.
             switch (ProfileDomain::handle(payload, length, request, reply)) {
             case ProfileDomain::Answers::Reply:
                 break;
