@@ -7,9 +7,11 @@
 #include <cstdio>
 
 #include "wire/dispatch.h"
+#include "wire/frame.h"
 #include "conf/ThetaGP_Config.h"
 #include "gamepad/profile/profile_store.h"
 #include "task_manager.h"
+#include "utils/log/log.h"
 #include "utils/mem_info.h"
 
 namespace ThetaGP::Wire {
@@ -158,6 +160,47 @@ void SysDomain::usage(ThetaGP_Reply &reply) {
     }
     ok.region_count = count;
     ok.regions_count = static_cast<pb_size_t>(count);
+}
+
+// The whole reply has to leave in one frame: the lines it carries and the
+// fields around them are held here, so a wider log or a longer line fails the
+// build rather than timing a caller out.
+static_assert(sizeof(ThetaGP_SysGetLogOk) + 16 <= Frame::PAYLOAD_MAX,
+              "sys log: the reply does not fit one frame — fewer lines or "
+              "shorter text in lib/ThetaGP.PB/protocol/ThetaGP.options");
+
+void SysDomain::log(const ThetaGP_Request &request, ThetaGP_Reply &reply) {
+    reply.which_kind = ThetaGP_Reply_sys_get_log_tag;
+    ThetaGP_SysGetLogOk &ok = reply.kind.sys_get_log;
+
+    // The level the line was written at, as the wire numbers it: the logger's
+    // own values carry a channel bit the wire does not.
+    const auto wireLevel = [](uint8_t level) -> uint32_t {
+        if ((level & 0x80) != 0) {
+            return 3; // Debug and the interface channel
+        }
+        switch (level) {
+        case 1:
+            return 1; // Warn
+        case 2:
+            return 2; // Error
+        default:
+            return 0; // Info
+        }
+    };
+
+    LogLineView lines[8];
+    const uint32_t since = request.kind.sys_get_log.since;
+    const uint8_t count = LogRead(since, lines, static_cast<uint8_t>(8));
+
+    ok.total = LogTotal();
+    ok.lines_count = count;
+    for (uint8_t i = 0; i < count; ++i) {
+        ThetaGP_SysGetLogLine &line = ok.lines[i];
+        line.seq = lines[i].seq;
+        line.level = wireLevel(lines[i].level);
+        std::snprintf(line.text, sizeof line.text, "%s", lines[i].text);
+    }
 }
 
 } // namespace ThetaGP::Wire

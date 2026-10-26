@@ -144,6 +144,9 @@ uint16_t Dispatch::answer(const uint8_t *payload, uint16_t length,
         case ThetaGP_Request_sys_get_usage_tag:
             SysDomain::usage(reply);
             break;
+        case ThetaGP_Request_sys_get_log_tag:
+            SysDomain::log(request, reply);
+            break;
 #if THETAGP_CFG_HAS_FLASH
         case ThetaGP_Request_profile_status_tag:
         case ThetaGP_Request_profile_list_tag:

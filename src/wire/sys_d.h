@@ -33,6 +33,11 @@ public:
     // The device's own readings: the task load, the two flash accounts and one
     // entry per memory region.
     static void usage(ThetaGP_Reply &reply);
+
+    // The lines the logger kept, from the number the caller already holds: the
+    // firmware's own account of what it did, read off the wire instead of a
+    // serial port.
+    static void log(const ThetaGP_Request &request, ThetaGP_Reply &reply);
 };
 
 } // namespace ThetaGP::Wire

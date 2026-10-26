@@ -58,6 +58,27 @@ void LogInit(LogPrintFunc printFunc, LogDelayFunc delayFunc);
 // The threshold lines are written at: a line below it is dropped. It starts at
 // the level the build carries and a profile moves it.
 void LogSetLevel(LogLevel level);
+
+// The lines the logger keeps: the last ones it wrote, so a host that reads the
+// port late still sees what the firmware said. One line's text is at most
+// LOG_LINE_TEXT bytes, terminator included.
+typedef struct {
+  uint32_t seq;   // The line's number, counted from boot
+  uint8_t level;  // The LogLevel it was written at
+  const char *text;
+} LogLineView;
+
+#define LOG_LINE_TEXT 96
+#define LOG_RING_LINES 16
+
+// The number of lines written since boot: a caller reads from the number it
+// holds up to this one.
+uint32_t LogTotal(void);
+
+// Reads up to `max` lines into `out`, oldest first, starting after `since`.
+// Answers how many were written; a caller that is behind the ring is handed
+// what is still there.
+uint8_t LogRead(uint32_t since, LogLineView *out, uint8_t max);
 void LogPrint(LogLevel level, const char *file, uint16_t line,
               const char *format, va_list args);
 
@@ -85,6 +106,17 @@ static inline void _LOG(LogLevel level, const char *file, uint16_t line,
 static inline void LogInit(LogPrintFunc printFunc, LogDelayFunc delayFunc) {
     (void)printFunc;
     (void)delayFunc;
+}
+
+// A build with the logger compiled out wrote no line: the ring is empty, and a
+// caller is told so rather than linked against nothing.
+static inline uint32_t LogTotal(void) { return 0; }
+
+static inline uint8_t LogRead(uint32_t since, LogLineView *out, uint8_t max) {
+    (void)since;
+    (void)out;
+    (void)max;
+    return 0;
 }
 
 #define LOG_DEBUG(...) ((void)0)

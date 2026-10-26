@@ -34,6 +34,23 @@ FAST_DATA static LogLevel g_LogLevel
     = LOG_LV(Error);
 #endif
 
+// The ring the last lines are kept in. AXI SRAM (COMMON_ZERO_INIT): it is
+// written on the slow path and read only when a host asks.
+COMMON_ZERO_INIT static struct {
+  uint32_t seq;
+  uint8_t level;
+  char text[LOG_LINE_TEXT];
+} g_ring[LOG_RING_LINES];
+COMMON_ZERO_INIT static uint32_t g_written = 0;
+
+static void LogKeep(LogLevel level, const char *text) {
+  const uint32_t at = g_written % LOG_RING_LINES;
+  g_ring[at].seq = ++g_written;
+  g_ring[at].level = (uint8_t)level;
+  strncpy(g_ring[at].text, text, LOG_LINE_TEXT - 1);
+  g_ring[at].text[LOG_LINE_TEXT - 1] = '\0';
+}
+
 static const char *LogRelativePath(const char *file) {
   if (!g_RootPath || !*g_RootPath) {
     return file;
@@ -115,6 +132,11 @@ void LogPrint(LogLevel level, const char *file, uint16_t line,
     vsnprintf(buffer + prefix_len, sizeof(buffer) - prefix_len, format, args);
   }
 
+  // The line is kept before it is sent, and without the prefix the port wears:
+  // a reader that has the level already has no use for it repeated, and the
+  // room is better spent on the message.
+  LogKeep(level, buffer + (prefix_len > 0 ? prefix_len : 0));
+
   size_t len = strlen(buffer);
   if (len + 2 < sizeof(buffer)) {
     buffer[len++] = '\r';
@@ -127,6 +149,25 @@ void LogPrint(LogLevel level, const char *file, uint16_t line,
   }
 
   g_PrintCallback((uint8_t *)buffer, len);
+}
+
+uint32_t LogTotal(void) { return g_written; }
+
+uint8_t LogRead(uint32_t since, LogLineView *out, uint8_t max) {
+  uint8_t count = 0;
+  const uint32_t oldest = g_written > LOG_RING_LINES ? g_written - LOG_RING_LINES + 1 : 1;
+  uint32_t from = since + 1;
+  if (from < oldest) {
+    from = oldest;  // the lines before this one are gone
+  }
+  for (uint32_t seq = from; seq <= g_written && count < max; ++seq) {
+    const uint32_t at = (seq - 1) % LOG_RING_LINES;
+    out[count].seq = g_ring[at].seq;
+    out[count].level = g_ring[at].level;
+    out[count].text = g_ring[at].text;
+    ++count;
+  }
+  return count;
 }
 
 void LogInit(LogPrintFunc printFunc, LogDelayFunc delayFunc) {
