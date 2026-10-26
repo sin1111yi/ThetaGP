@@ -523,13 +523,12 @@ static void UARTx_IRQHandler(uint32_t uartIdx) {
     UARTx->ICR = icrMask;
   }
 
-  // ── Data transfer (ISR context) ──
-  // Calls huart->RxISR/TxISR (HAL internal function pointers initialized
-  // by HAL_UART_Init). These handle register-level data movement, FIFO,
-  // and buffer management. Direct register replication would be ~200 LoC.
+  // ── data transfer (ISR context) ──
+  // Calls huart->RxISR/TxISR, the function pointers HAL_UART_Init fills in: they
+  // move the data and manage the FIFO.
   //
-  // rxCallback/txCallback run in ISR context — keep them lightweight
-  // (no blocking, no allocation, no mutex).
+  // rxCallback/txCallback run in ISR context, so neither blocks, allocates nor
+  // takes a mutex.
 
   // ── Idle line detection (DMA variable-length read) ──
   // When IDLE is set and a DMA read is active, stop the DMA

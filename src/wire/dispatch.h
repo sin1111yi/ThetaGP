@@ -11,25 +11,19 @@
 
 namespace ThetaGP::Wire {
 
-// The refusal: the code names the class of refusal, the reason the fact in the
-// request that refused it, and the two numbers some reasons carry -- the ends
-// of the range a value fell outside of, for the reasons the schema annotates
-// that way. A reason that carries no numbers leaves both at zero, which is
-// what a number of zero encodes as. One function builds it, so a refusal
-// carries the same shape whichever arm answers it, and it sits with the
-// envelope, which is where the Error arm it fills is defined.
+// The refusal: the code names the class, the reason the fact in the request that
+// refused it, and the two numbers some reasons carry -- the ends of the range a
+// value fell outside of. A reason that carries none leaves both at zero. One
+// function builds it, so every arm answers with the same shape.
 void writeFailure(ThetaGP_Reply &reply, ThetaGP_ErrorCode code,
                   ThetaGP_Reason reason, uint32_t param1 = 0,
                   uint32_t param2 = 0);
 
-// Reads one request payload and writes the payload of its answer. The reply
-// carries the number of the request plus one, so a host pairs an answer with
-// the frame it sent and sees which of its frames were never answered.
+// Reads one request payload and writes the payload of its answer. The reply carries
+// the request's number plus one, so a host pairs an answer with the frame it sent.
 //
-// A payload that does not read as a message is answered with a transport
-// error, the same way the frame layer answers a frame it had to refuse. The
-// arms of one domain are answered by that domain's own unit; an arm no unit
-// answers is an error arm carrying ERR_UNKNOWN_CMD.
+// A payload that does not read as a message is answered with a transport error. An
+// arm no unit answers is an error arm carrying ERR_UNKNOWN_CMD.
 class Dispatch {
 public:
     static uint16_t answer(const uint8_t *payload, uint16_t length,

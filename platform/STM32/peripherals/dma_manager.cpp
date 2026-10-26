@@ -16,8 +16,6 @@
  *
  * If not, see <https://www.gnu.org/licenses/>.
  *
- * @file dma_manager.cpp
- * @brief DmaManager allocation implementation
  */
 
 #include "drivers/peripherals/dma_manager.h"
@@ -25,8 +23,7 @@
 using namespace ThetaGP::Drivers::Peripheral::DMA;
 
 DmaChannel *DmaManager::allocate(Controller ctrl, uint32_t requestId) {
-  // Determine bit range for the requested controller
-  // DMA1: bits 0-7, DMA2: bits 8-15
+  // Bits 0 to 7 are DMA1's streams and 8 to 15 DMA2's.
   const uint8_t shift =
       (ctrl == Controller::Dma1) ? 0 : 8;
   // Find first free stream in the controller's bit range

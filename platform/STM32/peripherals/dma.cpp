@@ -14,11 +14,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
- * @file dma.cpp
- * @brief DmaChannel implementation using LL (Low Layer) library.
- *
- * Pure LL-based DMA stream management. No HAL_DMA_Init or HAL_DMA_IRQHandler.
- * ISR dispatch is custom: entry → flag check/clear via LL → C callback.
+ * Pure LL-based DMA stream management: no HAL_DMA_Init and no
+ * HAL_DMA_IRQHandler. An interrupt enters, clears its flag through LL, and calls
+ * the channel's C callback.
  */
 
 #include "build_info.h"
