@@ -53,7 +53,7 @@ public:
   };
 
   constexpr Result() = default;
-  constexpr Result(Value v) : _value(v) {}
+  constexpr Result(Value v) { _value = v; }
 
   constexpr bool operator==(Value v) const { return _value == v; }
   constexpr bool operator!=(Value v) const { return _value != v; }

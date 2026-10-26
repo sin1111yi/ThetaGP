@@ -26,9 +26,9 @@ namespace ThetaGP::Drivers::Device {
 class Device {
 protected:
   bool _initialized = false;
-  const char *_name;
+  const char *_name = nullptr;
 
-  Device(const char *name) : _name(name) {}
+  explicit Device(const char *name) { _name = name; }
 
 public:
   virtual ~Device() = default;
