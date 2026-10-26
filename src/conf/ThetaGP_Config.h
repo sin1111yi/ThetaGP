@@ -51,14 +51,11 @@
 #endif
 
 // ── Logging ──
-// Logging is on in a debug build and compiled out of a release one.
+// Logging is on in a debug build and compiled out of a release one. The level is
+// the threshold the firmware writes at until a profile is read; the profile
+// carries its own as `sys.log`, one of the three levels it chooses among.
 //
-// The level is the threshold the firmware writes at until a profile is read;
-// the profile carries its own as `sys.log`. It names one of the three levels a
-// profile chooses among, because the logger pastes it into LOG_LV().
-//
-// Debug lines are a build switch rather than a threshold: a build that keeps
-// them writes every one.
+// Debug lines are a build switch rather than a threshold.
 #if defined(NDEBUG)
 #ifndef THETAGP_CFG_LOG_EN
 #define THETAGP_CFG_LOG_EN 0
@@ -89,10 +86,9 @@
 #endif
 
 // ── Command path ──
-// The rate the protocol's command task ticks at: the wait a caller pays per
-// frame on top of the wire's own. Its window spans a report period whenever it
-// is longer than one, and the report tick due inside it is not run twice after
-// it, so a faster report rate wants a slower command tick.
+// The rate the protocol's command task ticks at: the wait a caller pays per frame
+// on top of the wire's own. Its window spans a report period whenever it is longer
+// than one, so a faster report rate wants a slower command tick.
 #ifndef THETAGP_CFG_CMD_PROC_HZ
 #define THETAGP_CFG_CMD_PROC_HZ 100
 #endif
@@ -134,9 +130,8 @@
 #endif
 
 // ── Flash presence ──
-// Whether the board carries a flash chip, as BDCFG_HAS_FLASH states it. There is
-// no #else: a board config that states nothing leaves the macro undefined, and
-// an #ifdef reads that as absent rather than as 0.
+// Whether the board carries a flash chip, as BDCFG_HAS_FLASH states it. A board
+// config that states nothing leaves the macro undefined, which reads as absent.
 #ifndef THETAGP_CFG_HAS_FLASH
 #ifdef BDCFG_HAS_FLASH
 #define THETAGP_CFG_HAS_FLASH BDCFG_HAS_FLASH
@@ -164,9 +159,9 @@
 #endif
 
 // ── LED effect path ──
-// The strip's rate is the config key `led.rgb.hz`, in frames a second, and the
-// task period below is how often the refresh runs. One frame has to cover at
-// least one tick, which rgb_strip.cpp asserts at compile time.
+// The strip's rate is the config key `led.rgb.hz`, in frames a second; the task
+// period below is how often the refresh runs, and one frame covers at least one
+// tick.
 #ifndef THETAGP_CFG_LED_TASK_PERIOD_US
 #define THETAGP_CFG_LED_TASK_PERIOD_US 10000UL         // 100 Hz
 #endif
