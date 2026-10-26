@@ -105,6 +105,9 @@ public:
    * its only caller. Returns true when the flash holds a profile after the
    * call. */
   bool ensureFactoryProfile();
+  // Writes the factory body again from the compiled defaults when the one held
+  // is of an older format.
+  bool repairFactoryProfile();
 #endif
 
 private:

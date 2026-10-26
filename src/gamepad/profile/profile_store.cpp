@@ -461,6 +461,108 @@ bool ProfileStore::writeFactoryProfile(const char *json, uint16_t len) {
   return true;
 }
 
+bool ProfileStore::replaceFactoryProfile(const char *json, uint16_t len) {
+  LOG_INFO("ProfileStore: writeFactoryProfile, len=%u", len);
+
+  if (len == 0 || len > PROFILE_JSON_MAX) {
+    LOG_ERROR("ProfileStore: invalid profile length %u", len);
+    return false;
+  }
+
+  // The caller is replacing the body the flash holds: the store's record of it
+  // already exists and stays where it is, and the sector it sits in is erased
+  // first -- a NOR cell takes a write onto an erased one and nothing else.
+  auto &flash = Drivers::Device::FlashBase::getInstance();
+
+  if (!flash.eraseSector(PROFILE0_ADDR)) {
+    LOG_ERROR("ProfileStore: failed to erase Profile0 before replace");
+    return false;
+  }
+
+  if (!flash.write(PROFILE0_ADDR, reinterpret_cast<const uint8_t *>(json),
+                   len)) {
+    LOG_ERROR("ProfileStore: failed to write Profile0 primary");
+    return false;
+  }
+
+  if (!flash.eraseSector(PROFILE0_BACKUP)) {
+    LOG_ERROR("ProfileStore: failed to erase Profile0 backup sector");
+    return false;
+  }
+  if (!flash.write(PROFILE0_BACKUP, reinterpret_cast<const uint8_t *>(json),
+                   len)) {
+    LOG_ERROR("ProfileStore: failed to write Profile0 backup");
+    return false;
+  }
+
+  BootMeta meta;
+  meta.magic = BOOTMETA_MAGIC;
+  meta.seq = 1;
+  meta.profileId = 0;
+  meta.address = PROFILE0_ADDR;
+  meta.reserved = 0xFFFFFFFF;
+  meta.crc16 = 0;
+  meta.crc16 = crc16BootMeta(&meta);
+
+  if (!flash.write(BOOTMETA_BASE, reinterpret_cast<const uint8_t *>(&meta),
+                   sizeof(BootMeta))) {
+    LOG_ERROR("ProfileStore: failed to write BootMeta slot 0");
+    return false;
+  }
+
+  // ── Converge the cache onto the values the flash now holds ──
+  // Each field below is what a fresh scanBootMeta()/scanAddressRing() over this
+  // flash would produce; the two must not drift apart, or resetSector0() copies
+  // a seq the ring cannot see back into it (scanAddressRing() only accepts
+  // entry.seq > _profileSeqs[id], which starts at 0 — a _profileSeqs[0] left at
+  // 0 makes the entry written below invisible, dropping Profile0 out of
+  // _profileAddresses[] and out of profileCount).
+  _bootMetaSeq = 1;               // BootMeta slot 0: seq
+  _activeProfileId = 0;           // BootMeta slot 0: profileId
+  _activeAddress = PROFILE0_ADDR; // BootMeta slot 0: address
+
+  // The Address Ring entry that makes the body findable (scanAddressRing()
+  // reads the rings, not the fixed PROFILE0_ADDR).
+  AddressEntry addrEntry;
+  addrEntry.profileId = 0;
+  addrEntry.address = PROFILE0_ADDR;
+  addrEntry.seq = 1;
+
+  if (!flash.write(ADDR_RING_BASE,
+                   reinterpret_cast<const uint8_t *>(&addrEntry),
+                   sizeof(AddressEntry))) {
+    // The body and the BootMeta are on the flash, but the ring holds no entry
+    // for id 0 — which is exactly what a rescan of this flash reports, so the
+    // cache reports the same. The body stays readable either way:
+    // readProfile(0) reads the fixed PROFILE0_ADDR.
+    LOG_WARN("ProfileStore: failed to write Address entry for profile0");
+    _addressRingSeq = 0;
+    _profileAddresses[0] = 0;
+    _profileSeqs[0] = 0;
+  } else {
+    _addressRingSeq = 1;               // Address Ring slot 0: seq
+    _profileAddresses[0] = PROFILE0_ADDR; // Address Ring slot 0: address
+    _profileSeqs[0] = 1;               // Address Ring slot 0: seq
+  }
+
+  // profileCount is a property of the address map, not of the write above:
+  // recount it with the rule init() uses, so that entries the map still holds
+  // for other ids stay counted (the failed branch above clears id 0 only).
+  _profileCount = 0;
+  for (uint16_t i = 0; i <= PROFILE_MAX_ID; ++i) {
+    if (_profileAddresses[i] != 0) {
+      _profileCount++;
+    }
+  }
+
+  _nextAddr = findNextAddr();        // no flash field of its own: derived from
+                                     // the address map (Profile0 sits below
+                                     // USER_RING_BASE, so the head is free)
+
+  LOG_INFO("ProfileStore: factory profile written");
+  return true;
+}
+
 // ── createProfile() ──
 
 bool ProfileStore::createProfile(const char *json, uint16_t len,

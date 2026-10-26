@@ -181,6 +181,13 @@ public:
 
   /** Write factory default Profile0 (only when BootMeta Ring is empty). */
   bool writeFactoryProfile(const char *json, uint16_t len);
+  /**
+   * Writes the factory profile over the one the flash holds. The store keeps the
+   * factory body at a fixed address of its own, so a replace is the same write
+   * as the first one: it is for a body whose format is older than the format
+   * this firmware writes.
+   */
+  bool replaceFactoryProfile(const char *json, uint16_t len);
 
   /** Create a new user profile (finds next free ID, appends to User Ring). */
   bool createProfile(const char *json, uint16_t len, uint16_t *newId);

@@ -70,6 +70,9 @@ public:
         // An arm with no id of its own never names it, and every other opening
         // asks the store for a user profile.
         bool factory = false;
+        // The id the opening named: the profile a body replaces, or 0 for an
+        // arm that has one assigned.
+        uint16_t id = 0;
     };
 
     // Whether a body is being staged for the store: the bytes it has received

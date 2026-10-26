@@ -58,9 +58,6 @@ static_assert(detail::kBtnMapUnmapped == 0xFF,
 // A body of any other version is not read at all: its fields would be fetched
 // at paths that hold nothing, and every one of them would fall back to its
 // default in silence — the state this check exists to keep out.
-inline constexpr int kProfileVersion = 2;
-inline constexpr int kOldestReadableVersion = 1;
-
 // The value a field reads as when the body carries no such field. No row of the
 // key table accepts it as a value, which that table holds at compile time.
 constexpr int32_t kNoProfileValue = INT32_MIN;
@@ -238,7 +235,8 @@ bool parseProfile(const char *json, uint32_t len, ConfigStore *cfg) {
 // and closes when a row of another object arrives, which is why the rows of one
 // object are held adjacent in that table.
 
-uint16_t serializeProfile(const ConfigStore &cfg, char *dst, uint16_t cap) {
+uint16_t serializeProfile(const ConfigStore &cfg, const char *name, char *dst,
+                          uint16_t cap) {
   if (!dst || cap == 0) {
     return 0;
   }
@@ -246,6 +244,11 @@ uint16_t serializeProfile(const ConfigStore &cfg, char *dst, uint16_t cap) {
   Json doc;
   doc.beginWrite(dst, cap);
   doc.printf("{%Q:%d", "ver", kProfileVersion);
+  // The profile's name travels with its body: a save keeps the one the body it
+  // replaces carried, and a host renames a profile by writing a body back.
+  if (name != nullptr && name[0] != '\0') {
+    doc.printf(",%Q:%Q", "name", name);
+  }
 
   const KeyEntry *const table = keyTable();
   const uint8_t count = keyTableCount();

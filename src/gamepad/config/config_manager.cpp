@@ -86,6 +86,10 @@ bool ConfigManager::init() {
              "stays at the compiled defaults");
   }
 
+  // The factory body is kept in this firmware's format, and rewritten from the
+  // compiled defaults when the flash carries one of an older format.
+  (void)repairFactoryProfile();
+
   LOG_INFO("ConfigManager: init OK, active=%u count=%u", status.activeId,
            status.profileCount);
   return true;
@@ -106,7 +110,7 @@ bool ConfigManager::ensureFactoryProfile() {
   // a profile that an erase just removed, and Profile0 is by definition the
   // compiled-in baseline. cap is the size of the buffer, not a body limit.
   const uint16_t jsonLen = serializeProfile(
-      kConfigDefaults, reinterpret_cast<char *>(s_staging),
+      kConfigDefaults, "", reinterpret_cast<char *>(s_staging),
       static_cast<uint16_t>(PROFILE_STAGING_SIZE));
   if (jsonLen == 0) {
     LOG_ERROR("ConfigManager: factory Profile0 body does not fit the staging "
@@ -125,6 +129,39 @@ bool ConfigManager::ensureFactoryProfile() {
   _config = kConfigDefaults;
 
   LOG_INFO("ConfigManager: factory Profile0 written, %u bytes", jsonLen);
+  return true;
+}
+
+// The factory body is the compiled defaults, so it is kept in the format this
+// firmware writes: a body of an older format is written again from those
+// defaults. The body a device falls back to is then one a host can parse, and
+// the format it carries is the one every other body carries.
+bool ConfigManager::repairFactoryProfile() {
+  ProfileStore &store = ProfileStore::getInstance();
+
+  ProfileText held;
+  bool reads = store.readProfile(0, &held) && held.len > 0;
+  if (reads) {
+    Json body;
+    body.parse(held.data, static_cast<int>(held.len));
+    if (body.getInt("ver", kOldestReadableVersion) == kProfileVersion) {
+      return true;
+    }
+  }
+
+  const uint16_t jsonLen = serializeProfile(
+      kConfigDefaults, "", reinterpret_cast<char *>(s_staging),
+      static_cast<uint16_t>(PROFILE_STAGING_SIZE));
+  if (jsonLen == 0) {
+    LOG_ERROR("ConfigManager: the factory body does not fit the staging buffer");
+    return false;
+  }
+  if (!store.replaceFactoryProfile(reinterpret_cast<const char *>(s_staging),
+                                   jsonLen)) {
+    LOG_WARN("ConfigManager: the factory body was not rewritten");
+    return false;
+  }
+  LOG_INFO("ConfigManager: factory body rewritten, %u bytes", jsonLen);
   return true;
 }
 
@@ -196,9 +233,12 @@ bool ConfigManager::saveProfile(uint32_t *droppedKeys) {
   // that id. Its keys are looked up in the body about to be written rather
   // than in a list of the keys the serializer writes, so a key added to the
   // profile shape moves this count with it.
+  // The body being replaced is read whether or not the caller wants the count:
+  // its name is what the new body carries on, so a save does not rename a
+  // profile to nothing.
   bool haveReplaced = false;
   uint16_t replacedLen = 0;
-  if (droppedKeys) {
+  {
     ProfileText replaced;
     if (store.readProfile(activeId, &replaced) && replaced.len > 0) {
       // ProfileStore::readBody reports at most PROFILE_JSON_MAX bytes, one below
@@ -206,7 +246,7 @@ bool ConfigManager::saveProfile(uint32_t *droppedKeys) {
       replacedLen = replaced.len;
       memcpy(s_replaced, replaced.data, replacedLen);
       haveReplaced = true;
-    } else {
+    } else if (droppedKeys) {
       // Nothing to compare against. The write below still happens; what it does
       // not carry over stays unreported rather than reported as none.
       LOG_WARN("ConfigManager: the body being replaced could not be read; the "
@@ -214,11 +254,18 @@ bool ConfigManager::saveProfile(uint32_t *droppedKeys) {
     }
   }
 
+  char carriedName[kProfileNameMax] = {};
+  if (haveReplaced) {
+    Json replaced;
+    replaced.parse(reinterpret_cast<const char *>(s_replaced), replacedLen);
+    (void)replaced.getStrCopy("name", carriedName, sizeof(carriedName));
+  }
+
   // The whole staging buffer is offered, so the largest body the flash layer
   // accepts (PROFILE_JSON_MAX) still fits with its terminator. A length of 0
   // means the serializer produced no usable body — there is nothing to persist.
   const uint16_t jsonLen = serializeProfile(
-      _config, reinterpret_cast<char *>(s_staging),
+      _config, carriedName, reinterpret_cast<char *>(s_staging),
       static_cast<uint16_t>(PROFILE_STAGING_SIZE));
   if (jsonLen == 0) {
     LOG_ERROR("ConfigManager: nothing to save, serialization produced no body");

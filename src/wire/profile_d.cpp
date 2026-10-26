@@ -13,6 +13,7 @@
 #include "conf/ThetaGP_Config.h"
 #include "gamepad/config/config_manager.h"
 #include "gamepad/profile/profile_store.h"
+#include "utils/json/json.h"
 
 namespace ThetaGP::Wire {
 namespace {
@@ -311,6 +312,7 @@ bool ProfileTransfer::commit(uint16_t *newId) {
     // The profile the body is written to, decided by the frame that opened the
     // staging and read here because the staging is closed below.
     const bool factory = s_writeOpening.factory;
+    const uint16_t named = s_writeOpening.id;
 
     // The body is what the staging holds only when the whole of it is there: a
     // body short of the length its opening frame declared is a piece of a
@@ -327,15 +329,21 @@ bool ProfileTransfer::commit(uint16_t *newId) {
     // The store reads the bytes out of the staging buffer, which is why they
     // had to be spoken for until this call: this write is the last reader of
     // them. A body for the factory profile replaces the one the device falls
-    // back to and is written at the address that body sits at; every other
-    // body asks for a profile of its own, and the id it lands under is the
-    // store's to assign.
-    uint16_t id = 0;
-    const bool written = factory
-                             ? Gamepad::Profile::ProfileStore::getInstance()
-                                   .writeFactoryProfile(body, received)
-                             : Gamepad::Profile::ProfileStore::getInstance()
-                                   .createProfile(body, received, &id);
+    // back to and is written at the address that body sits at; a body an id
+    // opened replaces that profile's own; and an arm that named no id asks the
+    // store for one.
+    uint16_t id = named;
+    bool written = false;
+    if (factory) {
+        written = Gamepad::Profile::ProfileStore::getInstance()
+                      .writeFactoryProfile(body, received);
+    } else if (named != 0) {
+        written = Gamepad::Profile::ProfileStore::getInstance()
+                      .modifyProfile(named, body, received);
+    } else {
+        written = Gamepad::Profile::ProfileStore::getInstance()
+                      .createProfile(body, received, &id);
+    }
     if (written && newId != nullptr) {
         // The factory profile's id is the one the store writes no id for: it
         // is the fixed id that body is read back under.
@@ -362,6 +370,21 @@ using Gamepad::Profile::PROFILE_MAX_ID;
 using Gamepad::Profile::ProfileStatus;
 using Gamepad::Profile::ProfileStore;
 using Gamepad::Profile::ProfileText;
+
+// The name a profile's body carries, written into the entry's field: the body
+// is read here because the name travels in it, and a body that carries none
+// leaves the field empty.
+void readProfileName(ProfileStore &store, uint16_t id, char *out, size_t cap) {
+    out[0] = '\0';
+    ProfileText text;
+    if (!store.readProfile(id, &text) || text.len == 0) {
+        return;
+    }
+    Json body;
+    body.parse(text.data, static_cast<int>(text.len));
+    (void)body.getStrCopy("name", out, static_cast<int>(cap));
+}
+
 
 // The capacity of the list reply's entries array, as the generated message
 // declares it. The number is not restated here: the schema's field options
@@ -542,12 +565,12 @@ void ProfileDomain::list(ThetaGP_Reply &reply) {
     // carries its id whatever the ring holds.
     ok.profiles[0].id = 0;
     ok.profiles[0].active = (state.activeId == 0);
+    readProfileName(store, 0, ok.profiles[0].name, sizeof ok.profiles[0].name);
 
     // An entry stands for an id the store carries: the ids the address ring
     // holds, an id never used and one deleted staying out. Existence comes from
-    // the store's own map of those addresses, which is answered without reading
-    // a body -- so this arm reads no flash at all, and leaves whatever the
-    // store's staging buffer held exactly as it found it.
+    // the store's own map of those addresses. A profile's name is its body's,
+    // so an id that exists is read once here for it.
     pb_size_t count = 1;
     for (uint32_t id = 1; id <= PROFILE_MAX_ID; ++id) {
         if (!store.carriesProfile(static_cast<uint16_t>(id))) {
@@ -555,6 +578,8 @@ void ProfileDomain::list(ThetaGP_Reply &reply) {
         }
         ok.profiles[count].id = id;
         ok.profiles[count].active = (id == state.activeId);
+        readProfileName(store, static_cast<uint16_t>(id), ok.profiles[count].name,
+                        sizeof ok.profiles[count].name);
         ++count;
     }
     ok.profiles_count = count;
@@ -644,7 +669,7 @@ ProfileDomain::Answers ProfileDomain::create(const ThetaGP_Request &request,
     // body has been written -- and the id it is written under is the store's
     // to assign when it is.
     ProfileTransfer::beginWrite(static_cast<uint16_t>(total),
-                                {ThetaGP_Request_profile_create_tag, false});
+                                {ThetaGP_Request_profile_create_tag, false, 0});
     return Answers::Nothing;
 }
 
@@ -678,8 +703,8 @@ ProfileDomain::Answers ProfileDomain::start(const ThetaGP_Request &request,
     }
 
     ProfileTransfer::beginWrite(static_cast<uint16_t>(arm.total),
-                                {ThetaGP_Request_profile_start_tag,
-                                 arm.id == 0});
+                                {ThetaGP_Request_profile_start_tag, arm.id == 0,
+                                 static_cast<uint16_t>(arm.id)});
     return Answers::Nothing;
 }
 

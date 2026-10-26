@@ -142,6 +142,18 @@ bool parseProfile(const char *json, uint32_t len, ConfigStore *cfg);
 // the body would be longer than PROFILE_JSON_MAX, the most the flash layer
 // stores. A truncated body is never returned — 0 means "nothing to persist", so
 // a caller must not hand that length to the store.
-uint16_t serializeProfile(const ConfigStore &cfg, char *dst, uint16_t cap);
+// `name` is the profile's own name, written into the body beside the version;
+// an empty one writes none.
+// The longest name a profile body carries, terminator included: the length the
+// wire's profile entry reports.
+inline constexpr uint16_t kProfileNameMax = 25;
+
+// The version of the body format this firmware writes, and the oldest one it
+// still reads.
+inline constexpr int kProfileVersion = 2;
+inline constexpr int kOldestReadableVersion = 1;
+
+uint16_t serializeProfile(const ConfigStore &cfg, const char *name, char *dst,
+                          uint16_t cap);
 
 } // namespace ThetaGP::Gamepad::Config
