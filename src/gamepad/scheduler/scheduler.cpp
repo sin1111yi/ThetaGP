@@ -29,15 +29,11 @@
 
 namespace ThetaGP::Gamepad {
 
-// ============================================================================
-// Scheduler Constructor
-// ============================================================================
+// ── scheduler constructor ──
 
 Scheduler::Scheduler() = default;
 
-// ============================================================================
-// Scheduler Initialization
-// ============================================================================
+// ── scheduler initialization ──
 
 FAST_CODE void Scheduler::init() {
   schedLoopStartMinCycles = timer->microsToCycles(SCHED_START_LOOP_MIN_US);
@@ -66,9 +62,7 @@ FAST_CODE void Scheduler::init() {
   lastTargetCycles = timer->getCycleCounter();
 }
 
-// ============================================================================
-// Scheduler Run Loop
-// ============================================================================
+// ── scheduler run loop ──
 
 FAST_CODE void Scheduler::run() {
   uint32_t currentTimeUs = 0;
@@ -241,9 +235,7 @@ uint32_t Scheduler::getAndResetTotalExecutionTime() {
   return temp;
 }
 
-// ============================================================================
-// Time Comparison
-// ============================================================================
+// ── time comparison ──
 
 FAST_CODE int32_t Scheduler::cmpTimeCycles(uint32_t t1, uint32_t t2) {
   return static_cast<int32_t>(t1 - t2);
@@ -251,9 +243,7 @@ FAST_CODE int32_t Scheduler::cmpTimeCycles(uint32_t t1, uint32_t t2) {
 
 FAST_CODE int32_t Scheduler::cmpTimeUs(uint32_t t1, uint32_t t2) { return static_cast<int32_t>(t1 - t2); }
 
-// ============================================================================
-// Task Queue Management
-// ============================================================================
+// ── task queue management ──
 
 void Scheduler::queueClear() {
   std::memset(taskQueueArray, 0, sizeof(taskQueueArray));
@@ -320,9 +310,7 @@ FAST_CODE Task *Scheduler::queueFirst() {
 
 FAST_CODE Task *Scheduler::queueNext() { return taskQueueArray[++taskQueuePos]; }
 
-// ============================================================================
-// Task State Management
-// ============================================================================
+// ── task state management ──
 
 void Scheduler::ignoreTaskStateTime() {
   ignoreCurrentTaskExecRate = true;
@@ -345,9 +333,7 @@ uint32_t Scheduler::getNextStateTime() {
              : 0;
 }
 
-// ============================================================================
-// Task Execution
-// ============================================================================
+// ── task execution ──
 
 FAST_CODE uint32_t Scheduler::executeTask(Task *selectedTask, uint32_t currentTimeUs) {
   uint32_t taskExecutionTimeUs = 0;
@@ -417,9 +403,7 @@ void Scheduler::bindTimeBase(Drivers::Device::SystemTimer &t) {
     timer = &t;
 }
 
-// ============================================================================
-// Check Function Statistics
-// ============================================================================
+// ── check function statistics ──
 
 void Scheduler::getCheckFuncInfo(CheckFuncInfo *checkFuncInfo) {
   checkFuncInfo->maxExecutionTimeUs = checkFuncMaxExecutionTimeUs;
@@ -434,9 +418,7 @@ void Scheduler::resetCheckFunctionMaxExecutionTime() {
   checkFuncMaxExecutionTimeUs = 0;
 }
 
-// ============================================================================
-// Task Methods
-// ============================================================================
+// ── task methods ──
 
 void Task::resetStatistics() {
   anticipatedExecutionTime = 0;
