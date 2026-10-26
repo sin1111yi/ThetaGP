@@ -29,10 +29,7 @@ namespace ThetaGP::Drivers::Peripheral::DMA {
 class DmaChannel;
 }
 
-namespace ThetaGP {
-namespace Drivers {
-namespace Peripheral {
-namespace BUS {
+namespace ThetaGP::Drivers::Peripheral::BUS {
 
 enum class SpiInstance {
   Spi1,
@@ -124,7 +121,4 @@ private:
   bool _streamRxInc = false;
 };
 
-} // namespace BUS
-} // namespace Peripheral
-} // namespace Drivers
-} // namespace ThetaGP
+} // namespace ThetaGP::Drivers::Peripheral::BUS

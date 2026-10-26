@@ -187,11 +187,8 @@ private:
   static constexpr size_t MASK_ARRAY_SIZE = 1; // 32 keys = 1 uint32_t
   static constexpr size_t MAX_KEYS = 32;
 
-  // One key's committed state and the two run counters behind it: the number
-  // of consecutive samples that have opposed that state, one counter per
-  // direction. Any sample that agrees with the state clears both, so only an
-  // unbroken run of the opposite level can move the key, and the counter that
-  // crossed its threshold is reset on the crossing.
+  // One key's committed state and the two run counters behind it: the number of
+  // consecutive samples that have opposed that state, one counter per direction.
   struct KeySampler {
     uint8_t pressRun = 0;
     uint8_t releaseRun = 0;
@@ -226,25 +223,10 @@ private:
   volatile uint32_t _scanCyclesMax = 0;
   volatile uint64_t _scanCyclesSum = 0;
 
-  // ── Commit counters (ADR-0006 O-6) ──
-  // Two counters written only where a key's committed state changes, so the scan
-  // path pays nothing for them: the increments sit inside the two branches that
-  // already existed at the commit points, and a scan that commits nothing runs
-  // no compare, no stamp and no division on their behalf. They are what turns
-  // the filter's unverified bounce tolerance (ADR-0006 §8, KU-1) into a number
-  // read off the board: a lost tap leaves the count where it was, a double
-  // commit moves it twice for one physical action — a tap is one press commit
-  // plus one release commit.
-  //
-  // Lateness is in scans, not microseconds. One scan is one sample and one
-  // decision point, so the unit the filter works in is the count of them, and
-  // the readout converts (it holds the scan rate; the driver never divides).
-  // The value stamped is the run the key held when it crossed its threshold:
-  // the number of consecutive samples that opposed the committed state, the
-  // first of them being the sample the change was first seen in, the last being
-  // the one that commits. By construction that run is exactly the direction's
-  // threshold, so this is a bound the board confirms rather than a number that
-  // varies — see the report for what that does and does not buy.
+  // ── Commit counters ──
+  // The commits this keypad has made, and the longest run one took. Both are
+  // written only where a key's committed state changes, and the run is counted
+  // in scans: one scan is one sample and one decision point.
   volatile uint32_t _commitCount = 0;
   volatile uint8_t _maxCommitLatencyScans = 0;
 
@@ -277,10 +259,8 @@ public:
 
   bool isKeyPressed(uint8_t keyId) const;
 
-  // Readout of the scan-time counters above, in cycles. The snapshot is taken
-  // with the scan interrupt masked, so all four describe the same instant. The
-  // consumer converts: cyclesToMicros() for one reading, or its own division for
-  // a mean off sum_cycles, which is past what the 32-bit conversion takes.
+  // The scan-time counters above, in cycles, taken at one instant with the scan
+  // interrupt masked. The consumer converts them.
   struct ScanStats {
     uint32_t count;
     uint32_t last_cycles;

@@ -70,21 +70,13 @@ void Keypad::init() {
 }
 
 void Keypad::scanCallback() {
-  // Minimum measurement point: one read of the device layer's cycle counter at
-  // each end of the callback. SystemTimer is how the rest of the device layer
-  // takes time (the scheduler reads its clock the same way), and the keypad is a
-  // device, so it takes the time from the device-layer timer rather than from a
-  // peripheral register. The counter form is the one to use here: its tick is
-  // one CPU cycle, so a callback that lasts ten microseconds is measured to the
-  // cycle, while the microsecond clock would quantize it to ten steps and cost
-  // an atomic block and a division per read. Both ends are one read plus one
-  // call, and the host converts to microseconds where a conversion is wanted.
+  // One read of the device-layer cycle counter at each end of the callback: a
+  // tick is one CPU cycle, so the measurement is to the cycle and the host
+  // converts it where a conversion is wanted.
   const uint32_t startCycles = SystemTimer::getInstance().getCycleCounter();
 
-  // The pair a profile carries. Nothing in a body can make a release run
-  // shorter than a press run: the longer of the two is what the release
-  // threshold takes, so the properties the header holds at compile time hold
-  // for every pair the rows accept.
+  // The pair a profile carries. The longer of the two is what the release
+  // threshold takes.
   const Gamepad::Config::Sys &sys =
       Gamepad::Config::ConfigManager::getInstance().config().sys;
   // A press has to be confirmed inside one report period: a run longer than the
@@ -101,12 +93,9 @@ void Keypad::scanCallback() {
   uint32_t mask = 0;
   (this->*_readInput)(&mask);
 
-  // Per-scan decision, one key at a time, from the raw mask this scan read.
-  // A sample that agrees with a key's committed state clears both of its runs,
-  // so a run of the opposite level counts only while it stays unbroken and a
-  // burst shorter than the threshold that guards that direction leaves no trace
-  // at all. A run that reaches its threshold commits the level it counted and
-  // then starts over.
+  // One key at a time, from the raw mask this scan read: a sample that agrees
+  // with a key's committed state clears both of its runs, and a run that
+  // reaches its threshold commits the level it counted and starts over.
   uint32_t committedMask = 0;
 
   for (size_t i = 0; i < MAX_KEYS; i++) {
@@ -121,12 +110,8 @@ void Keypad::scanCallback() {
       s.releaseRun = 0;
       if (++s.pressRun >= pressSamples) {
         s.stableState = KeyState::Pressed;
-        // Commit point — press. The run that has just crossed its threshold is
-        // this commit's lateness in scans, so it is stamped while the counter
-        // still holds it. Both counters are written here and at the release
-        // commit below and nowhere else, so a scan that commits nothing pays
-        // nothing for them: no compare, no stamp, no division on the scan path
-        // (ADR-0006 O-6).
+        // Commit point, press: the run that crossed its threshold is stamped
+        // while the counter still holds it.
         _commitCount++;
         if (s.pressRun > _maxCommitLatencyScans) {
           _maxCommitLatencyScans = s.pressRun;
@@ -137,7 +122,7 @@ void Keypad::scanCallback() {
       s.pressRun = 0;
       if (++s.releaseRun >= releaseSamples) {
         s.stableState = KeyState::Released;
-        // Commit point — release, stamped the same way as the press one.
+        // Commit point, release, stamped as the press one is.
         _commitCount++;
         if (s.releaseRun > _maxCommitLatencyScans) {
           _maxCommitLatencyScans = s.releaseRun;
@@ -155,10 +140,7 @@ void Keypad::scanCallback() {
   // either the previous mask or this one, never a mixture of two keys.
   _pressedMask = committedMask;
 
-  // Raw cycles, kept unconverted so the counters hold the measurement at full
-  // resolution; the readout converts. The pair of stamps costs a few cycles and
-  // is not subtracted out — at this scale the measurement is about five thousand
-  // cycles, so the cost is well under a tenth of a percent of it.
+  // Raw cycles, kept unconverted; the readout converts.
   const uint32_t elapsedCycles = SystemTimer::getInstance().getCycleCounter() - startCycles;
   _scanCyclesLast = elapsedCycles;
   _scanCyclesSum += elapsedCycles;
@@ -178,10 +160,8 @@ void Keypad::getScanStats(ScanStats &out) const {
 }
 
 void Keypad::getCommitStats(CommitStats &out) const {
-  // One masked block for both fields, the same way the scan-time snapshot is
-  // taken: a commit landing between the two reads would otherwise be counted
-  // without its lateness stamped, or have its lateness stamped without the
-  // count. The block is in the reader, so the ISR keeps its cost.
+  // Both fields are read in one masked block, so the scan interrupt cannot
+  // land between them.
   ATOMIC_BLOCK(NVIC_PRIO_MAX) {
     out.count = _commitCount;
     out.max_latency_scans = _maxCommitLatencyScans;
@@ -245,11 +225,8 @@ void Keypad::initPins() {
 uint32_t Keypad::getPressed() const {
   UNUSED(this);
 #if THETAGP_CFG_KEY_TOGGLE_EN
-  // Test hook: flip one key bit per read. The gamepad tick reads this once, so
-  // the mask differs from the previous report on every tick. A free-running
-  // counter is used rather than a timer bit because the tick period is an even
-  // number of microseconds, which would keep a micros()-derived bit's parity
-  // from tick to tick.
+  // Test hook: one key bit flipped per read, so every report differs from the
+  // one before it.
   static uint32_t s_readCount = 0;
   return _pressedMask ^ ((++s_readCount & 1U) ? 0x1U : 0x2U);
 #else

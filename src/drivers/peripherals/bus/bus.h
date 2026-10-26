@@ -35,10 +35,7 @@
 
 #include "utils/types.h"
 
-namespace ThetaGP {
-namespace Drivers {
-namespace Peripheral {
-namespace BUS {
+namespace ThetaGP::Drivers::Peripheral::BUS {
 
 enum class Type { Uart, Spi, I2c };
 
@@ -97,7 +94,4 @@ protected:
   uint32_t _bufSize = 0;
 };
 
-} // namespace BUS
-} // namespace Peripheral
-} // namespace Drivers
-} // namespace ThetaGP
+} // namespace ThetaGP::Drivers::Peripheral::BUS

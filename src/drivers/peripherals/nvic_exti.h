@@ -31,7 +31,12 @@
 
 namespace ThetaGP::Drivers::Peripheral::NVIC_EXTI {
 
-using namespace Peripheral::GPIO;
+using GPIO::Gpio;
+using GPIO::Mode;
+using GPIO::Pin;
+using GPIO::PinDesc;
+using GPIO::PinState;
+using GPIO::Port;
 
 enum class NvicPriority : uint8_t {
   PriorityVeryHigh,

@@ -29,11 +29,7 @@
 
 #include <cstdint>
 
-namespace ThetaGP::Drivers::Peripheral {
-
-using namespace GPIO;
-
-namespace USB {
+namespace ThetaGP::Drivers::Peripheral::USB {
 
 enum class USBSpeed : uint8_t {
   UsbFullSpeed,
@@ -79,5 +75,4 @@ public:
   bool isInitialized() const { return _initialized; }
 };
 
-} // namespace USB
-} // namespace ThetaGP::Drivers::Peripheral
+} // namespace ThetaGP::Drivers::Peripheral::USB

@@ -51,71 +51,33 @@ static inline int32_t cmpTimeCycles(uint32_t a, uint32_t b) {
   return (int32_t)(a - b);
 }
 
-/*! \brief Return the current 32 bit timestamp value in microseconds for the
- * default timer instance
- *  \ingroup hardware_timer
- *
- * Returns the full 32 bits of the hardware timer. The \ref pico_time and other
- * functions rely on the fact that this value monotonically increases from power
- * up. As such it is expected that this value counts upwards and never wraps (we
- * apologize for introducing a potential year 5851444 bug).
- *
- * \return the 32 bit timestamp
- * \sa timer_time_us_32
- * */
+// The hardware timer's 32 bits of microseconds since power up.
 uint32_t time_us_32(void);
 
-/*! fn to_us_since_boot
- * \brief convert an absolute_time_t into a number of microseconds since boot.
- * \param t the absolute time to convert
- * \return a number of microseconds since boot, equivalent to t
- * \ingroup timestamp
- */
+// The microseconds since boot an absolute time stands for.
 static inline uint32_t to_us_since_boot(absolute_time_t t) { return t; }
 
-/*! fn update_us_since_boot
- * \brief update an absolute_time_t value to represent a given number of
- * microseconds since boot
- * \param t the absolute time value to update
- * \param us_since_boot the number of microseconds since boot to represent.
- * Note this should be representable as a signed 64 bit integer
- * \ingroup timestamp
- */
+// Sets an absolute time to a number of microseconds since boot.
 static inline void update_us_since_boot(absolute_time_t *t,
                                         uint32_t us_since_boot) {
   *t = us_since_boot;
 }
 
-/*! fn from_us_since_boot
- * \brief convert a number of microseconds since boot to an absolute_time_t
- * \param us_since_boot number of microseconds since boot
- * \return an absolute time equivalent to us_since_boot
- * \ingroup timestamp
- */
+// The absolute time of a number of microseconds since boot.
 static inline absolute_time_t from_us_since_boot(uint32_t us_since_boot) {
   absolute_time_t t;
   update_us_since_boot(&t, us_since_boot);
   return t;
 }
 
-/*! \brief Return a representation of the current time.
- * \ingroup timestamp
- *
- * Returns an opaque high fidelity representation of the current time sampled
- * during the call.
- *
- * \return the absolute time (now) of the hardware timer
- *
- * \sa absolute_time_t
- * \sa sleep_until()
- * \sa time_us_32()
- */
+// The current time.
 static inline absolute_time_t get_absolute_time(void) {
   absolute_time_t t;
   update_us_since_boot(&t, time_us_32());
   return t;
 }
 
+// Microseconds as milliseconds.
 static inline uint32_t us_to_ms(uint64_t us) {
   if (us >> 32u) {
     return (uint32_t)(us / 1000u);
@@ -124,13 +86,7 @@ static inline uint32_t us_to_ms(uint64_t us) {
   }
 }
 
-/*! fn to_ms_since_boot
- * \ingroup timestamp
- * \brief Convert a timestamp into a number of milliseconds since boot.
- * \param t an absolute_time_t value to convert
- * \return the number of milliseconds since boot represented by t
- * \sa to_us_since_boot()
- */
+// The milliseconds since boot an absolute time stands for.
 static inline uint32_t to_ms_since_boot(absolute_time_t t) {
   uint64_t us = to_us_since_boot(t);
   return us_to_ms(us);

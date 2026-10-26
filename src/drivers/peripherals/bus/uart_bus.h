@@ -29,10 +29,7 @@
 
 #include <cstdint>
 
-namespace ThetaGP {
-namespace Drivers {
-namespace Peripheral {
-namespace BUS {
+namespace ThetaGP::Drivers::Peripheral::BUS {
 
 enum class UartInstance {
 #if defined(STM32H7)
@@ -128,7 +125,4 @@ public:
   volatile bool _idleDetectionEnabled = false;
 };
 
-} // namespace BUS
-} // namespace Peripheral
-} // namespace Drivers
-} // namespace ThetaGP
+} // namespace ThetaGP::Drivers::Peripheral::BUS
