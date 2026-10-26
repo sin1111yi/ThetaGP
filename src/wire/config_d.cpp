@@ -224,6 +224,8 @@ void ConfigDomain::listKeys(ThetaGP_Reply &reply) {
     row.min = entry.minVal;
     row.max = entry.maxVal;
     row.reboot = (entry.flags & kKeyFlagRequiresReboot) != 0;
+    row.accepts_unmapped =
+        (entry.flags & Gamepad::Config::kKeyFlagAcceptsUnmapped) != 0;
     row.type = entry.type;
     row.count = entry.count;
     std::snprintf(row.value_enum, sizeof row.value_enum, "%s", entry.valueEnum);
