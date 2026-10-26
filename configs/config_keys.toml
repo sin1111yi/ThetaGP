@@ -119,7 +119,7 @@ default = "board"
 exposed = true
 flags = ["accepts_unmapped"]
 enum = "GamepadButton"
-doc = "Physical key to button bit index (255 = a key with no button)"
+doc = "Physical key to the button it feeds (0-31), or 255 for a key with no button"
 
 [[field]]
 name = "stick.lx_dz"

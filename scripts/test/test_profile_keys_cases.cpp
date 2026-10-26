@@ -73,7 +73,7 @@ constexpr uint16_t kBodyCap = 1024;
 constexpr int kNoValue = -123456;
 
 uint16_t writeDefaults(char *dst, uint16_t cap) {
-  return serializeProfile(kConfigDefaults, dst, cap);
+  return serializeProfile(kConfigDefaults, "", dst, cap);
 }
 
 // The firmware's logger hands a line to a callback the platform registers, and

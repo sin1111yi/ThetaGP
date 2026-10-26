@@ -93,7 +93,7 @@ ConfigStore markedStore() {
 // The text of a serialized body, blanked when the writer refuses.
 void bodyText(const ConfigStore &cfg, char *dst, uint16_t cap) {
   std::memset(dst, 0, cap);
-  (void)serializeProfile(cfg, dst, cap);
+  (void)serializeProfile(cfg, "", dst, cap);
 }
 
 uint16_t bodyLen(const char *body) {
