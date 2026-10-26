@@ -140,10 +140,15 @@
 // ── Command path ──
 // The rate the protocol's command task ticks at. A reply is framed and handed
 // to the CDC on one of these ticks, so the period is the wait a caller pays for
-// every frame on top of the wire's own: at 1 kHz a command's round trip is a
-// couple of milliseconds, where a 50 ms tick made it fifty.
+// every frame on top of the wire's own.
+//
+// A tick runs as one unit, and its window spans a report period when it is
+// longer than one: the report tick due inside it waits for the window to close,
+// and is not run twice afterwards. At 8 kHz a report period is 125 us, so a
+// command tick of 1 kHz costs about one report in twenty; at 100 Hz it costs
+// about one in eighty, and a command waits ten milliseconds.
 #ifndef THETAGP_CFG_CMD_PROC_HZ
-#define THETAGP_CFG_CMD_PROC_HZ 1000
+#define THETAGP_CFG_CMD_PROC_HZ 100
 #endif
 
 // ── USB report path ──
