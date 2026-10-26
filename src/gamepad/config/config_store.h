@@ -150,7 +150,7 @@ inline constexpr uint16_t kProfileNameMax = 25;
 
 // The version of the body format this firmware writes, and the oldest one it
 // still reads.
-inline constexpr int kProfileVersion = 2;
+inline constexpr int kProfileVersion = 3;
 inline constexpr int kOldestReadableVersion = 1;
 
 uint16_t serializeProfile(const ConfigStore &cfg, const char *name, char *dst,

@@ -74,7 +74,7 @@ constexpr const char *kBodyV2 = R"json({"ver":2,"map":{"socd":0,"four_way":0,"dp
 
 // A body whose version this firmware does not read, carrying values a field of
 // the store could hold: what a refusal has to keep out is exactly these.
-constexpr const char *kBodyFuture = R"json({"ver":3,"map":{"socd":0},"stick":{"lx_dz":4095},"led":{"bri":9},"cal":{"lx_c":-3000}})json";
+constexpr const char *kBodyFuture = R"json({"ver":4,"map":{"socd":0},"stick":{"lx_dz":4095},"led":{"bri":9},"cal":{"lx_c":-3000}})json";
 
 // A body that carries no version at all: it predates the field, so it is the
 // oldest shape this firmware reads.
@@ -152,17 +152,17 @@ int main() {
 
     char body[1024] = {};
     bodyText(cfg, body, sizeof(body));
-    check(std::strcmp(body, kBodyV2) == 0,
-          "the body read back is written byte for byte as it was carried");
-    if (std::strcmp(body, kBodyV2) != 0) {
-      std::printf("  wrote: %.80s\n  board: %.80s\n", body, kBodyV2);
-    }
+    check(std::strstr(body, "{\"ver\":3,") == body,
+          "the body read back is written under the current version");
+    check(std::strstr(body, "\"bri\":63") != nullptr &&
+              std::strstr(body, "\"mode\":1") != nullptr,
+          "with the fields it was read with");
 
     ConfigStore old = kConfigDefaults;
     (void)parseProfile(kBodyV1, bodyLen(kBodyV1), &old);
     char migrated[1024] = {};
     bodyText(old, migrated, sizeof(migrated));
-    check(std::strstr(migrated, "{\"ver\":2,") == migrated,
+    check(std::strstr(migrated, "{\"ver\":3,") == migrated,
           "a body read under version 1 is written as the current version");
     check(std::strstr(migrated, "\"stick\":{\"lx_dz\":0,") != nullptr,
           "the migrated body carries the old body's values in the new shape");
@@ -175,7 +175,7 @@ int main() {
   {
     ConfigStore cfg = markedStore();
     check(!parseProfile(kBodyFuture, bodyLen(kBodyFuture), &cfg),
-          "a version 3 body is refused");
+          "a version 4 body is refused");
     check(cfg.stick.lx_dz == 1234 && cfg.led.bri == 77 && cfg.cal.lx_c == -99,
           "no field of a refused body was written");
 
@@ -195,7 +195,27 @@ int main() {
     check(cfg.led.bri == 50, "and its later fields are read there too");
   }
 
-  std::printf("-- 6. a value outside the range a row declares --\n");
+  std::printf("-- 6. an effect a body was written before the strip honoured --\n");
+  {
+    // A body of the older format carries a mode nothing acted on, whichever
+    // number it holds: every strip showed the rainbow then.
+    const char *kOldOff = R"json({"ver":2,"led":{"mode":0}})json";
+    ConfigStore cfg = kConfigDefaults;
+    check(parseProfile(kOldOff, bodyLen(kOldOff), &cfg), "a version 2 body is read");
+    check(static_cast<int>(cfg.led.mode) ==
+              static_cast<int>(ThetaGP::Enums::LEDMode::Rainbow),
+          "its mode reads as the rainbow every strip showed then");
+
+    // From the version that carries the effect, the number is the effect.
+    const char *kNewOff = R"json({"ver":3,"led":{"mode":0}})json";
+    ConfigStore kept = kConfigDefaults;
+    check(parseProfile(kNewOff, bodyLen(kNewOff), &kept), "a version 3 body is read");
+    check(static_cast<int>(kept.led.mode) ==
+              static_cast<int>(ThetaGP::Enums::LEDMode::Off),
+          "and its mode is the one it names");
+  }
+
+  std::printf("-- 7. a value outside the range a row declares --\n");
   {
     const char *kOutOfRange = R"json({"ver":2,"map":{"dpad":5},"led":{"bri":250}})json";
     ConfigStore cfg = kConfigDefaults;

@@ -28,6 +28,7 @@
 #include "conf/ThetaGP_Config.h"
 #include "configs/config_keys.gen.h"
 #include "gamepad/config/config_manager.h"
+#include "pb/enums.pb.h"
 
 #include "utils/log/log.h"
 
@@ -96,7 +97,26 @@ LedEffect::Clock s_clock;
 uint8_t s_sentFrame = LedEffect::FRAME_COUNT;
 uint32_t s_lastTickUs = 0;
 
+// The look the frames were built for. It starts outside every value a key
+// holds, so the first tick builds them.
+uint8_t s_shownMode = 0xFF;
+uint16_t s_shownHue = 0xFFFF;
+uint8_t s_shownSat = 0xFF;
+
 constexpr uint16_t kStartHue = 0; // red
+
+// The colour a still strip holds: the hue a profile carries, moved towards
+// white as little as its saturation asks, so no saturation is pure white.
+LedEffect::Rgb stillColour(uint16_t degrees, uint8_t saturation) {
+  const LedEffect::Rgb wheel = LedEffect::hueToRgb(static_cast<uint16_t>(
+      static_cast<uint32_t>(degrees % 360u) * LedEffect::HUE_CYCLE / 360u));
+  const auto mixed = [saturation](uint8_t channel) {
+    const uint32_t towardsWhite =
+        static_cast<uint32_t>(channel) * saturation + 255u * (255u - saturation);
+    return static_cast<uint8_t>(towardsWhite / 255u);
+  };
+  return LedEffect::Rgb{mixed(wheel.g), mixed(wheel.r), mixed(wheel.b)};
+}
 
 // A frame has to stay up for at least one tick of the task that advances the
 // frames: the shortest one is the fastest rate the config key accepts.
@@ -120,8 +140,7 @@ void RgbStrip::init() {
   _zeroDuty = static_cast<uint16_t>(period * kZeroHighNs / kBitPeriodNs);
   _oneDuty = static_cast<uint16_t>(period * kOneHighNs / kBitPeriodNs);
 
-  LedEffect::render(s_frames, LED_COUNT, kStartHue);
-  // The first tick advances the animation by the time since boot started here.
+  // The first tick builds the frames for the effect the profile asks for.
   s_lastTickUs = SystemTimer::getInstance().getMillis() * 1000U;
   _initialized = true;
 
@@ -140,7 +159,38 @@ void RgbStrip::task(uint32_t currentTimeUs) {
 
   const uint32_t deltaUs = currentTimeUs - s_lastTickUs;
   s_lastTickUs = currentTimeUs;
-  LedEffect::advance(s_clock, deltaUs, frameIntervalUs());
+
+  const Gamepad::Config::Led &led =
+      Gamepad::Config::ConfigManager::getInstance().config().led;
+  const bool rainbow = led.mode == static_cast<uint8_t>(Enums::LEDMode::Rainbow);
+  const bool solid = led.mode == static_cast<uint8_t>(Enums::LEDMode::Solid);
+
+  // A look a profile has moved to is rendered before the frame is chosen: the
+  // mode, the hue and the saturation are what the frames are built from.
+  if (led.mode != s_shownMode || led.hue != s_shownHue || led.sat != s_shownSat) {
+    s_shownMode = led.mode;
+    s_shownHue = led.hue;
+    s_shownSat = led.sat;
+
+    if (rainbow) {
+      LedEffect::render(s_frames, LED_COUNT, kStartHue);
+    } else {
+      const LedEffect::Rgb colour = solid ? stillColour(led.hue, led.sat) : LedEffect::Rgb{};
+      for (uint8_t i = 0; i < LED_COUNT; ++i) {
+        s_frames[i] = colour;
+      }
+    }
+    // What the strip holds was built for the look before this one.
+    s_sentFrame = LedEffect::FRAME_COUNT;
+  }
+
+  if (rainbow) {
+    LedEffect::advance(s_clock, deltaUs, frameIntervalUs());
+  } else {
+    // A still strip is not advanced: it shows the one frame and nothing after
+    // it, so the clock is held on that frame.
+    s_clock.frame = 0;
+  }
 
   // A tick that lands on the frame already on the line has nothing to send; a
   // sequence the strip is still reading leaves the frame for the tick after.

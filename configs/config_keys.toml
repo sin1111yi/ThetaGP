@@ -242,10 +242,11 @@ doc = "LED brightness"
 name = "led.mode"
 type = "u8"
 min = 0
-max = 4
-default = 0
-exposed = false
-doc = "LED effect (0 off)"
+max = 2
+default = 1
+exposed = true
+enum = "LEDMode"
+doc = "LED effect (0 off, 1 rainbow, 2 solid)"
 
 [[field]]
 name = "led.hue"
@@ -253,8 +254,8 @@ type = "u16"
 min = 0
 max = 360
 default = 180
-exposed = false
-doc = "LED hue in degrees"
+exposed = true
+doc = "Hue the solid effect holds, in degrees"
 
 [[field]]
 name = "led.sat"
@@ -262,8 +263,8 @@ type = "u8"
 min = 0
 max = 255
 default = 255
-exposed = false
-doc = "LED saturation"
+exposed = true
+doc = "Saturation the solid effect holds: 0 white, 255 full colour"
 
 [[field]]
 name = "led.rgb.hz"

@@ -55,12 +55,20 @@ static_assert(detail::kBtnMapUnmapped == 0xFF,
 // inside map, sat at "map.<leaf>". From version 2 on a field sits inside the
 // object its name starts with, which is the path the key table spells.
 //
+// Version 3 is the first that carries an LED effect the strip honours. Before
+// it `led.mode` was written by every body and read by nothing, so a body below
+// 3 carries a number that never named an effect; the field reads as the rainbow
+// every strip showed then.
+//
 // A body of any other version is not read at all: its fields would be fetched
 // at paths that hold nothing, and every one of them would fall back to its
 // default in silence — the state this check exists to keep out.
 // The value a field reads as when the body carries no such field. No row of the
 // key table accepts it as a value, which that table holds at compile time.
 constexpr int32_t kNoProfileValue = INT32_MIN;
+
+// The version that first carries an LED effect the strip honours.
+constexpr int kLedEffectVersion = 3;
 
 // ── Paths ──
 
@@ -217,6 +225,14 @@ bool parseProfile(const char *json, uint32_t len, ConfigStore *cfg) {
     const int32_t value = doc.getInt(path, static_cast<int>(kNoProfileValue));
     if (value == kNoProfileValue) {
       continue; // the body carries no such field
+    }
+    // A body written before the strip honoured its effect carries a mode
+    // nothing acted on: the strip showed the rainbow then, so that is what the
+    // field reads as, whatever number the body wrote there.
+    if (version < kLedEffectVersion && std::strcmp(entry.key, "led.mode") == 0) {
+      storeKeyElement(*cfg, entry, 0,
+                      static_cast<int32_t>(Enums::LEDMode::Rainbow));
+      continue;
     }
     storeKeyElement(*cfg, entry, 0,
                     keyElementAccepted(entry, value)

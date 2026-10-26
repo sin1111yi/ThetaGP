@@ -96,10 +96,10 @@ int main() {
     char body[kBodyCap] = {};
     const uint16_t len = writeDefaults(body, sizeof(body));
     check(len > 0, "the defaults serialize to a body");
-    if (std::strstr(body, "{\"ver\":2,\"map\":{\"socd\":") != body) {
+    if (std::strstr(body, "{\"ver\":3,\"map\":{\"socd\":") != body) {
       std::printf("  body starts: %.48s\n", body);
     }
-    check(std::strstr(body, "{\"ver\":2,\"map\":{\"socd\":") == body,
+    check(std::strstr(body, "{\"ver\":3,\"map\":{\"socd\":") == body,
           "the map object opens with the name the stored format carries");
     check(std::strstr(body, "\"four_way\":") != nullptr,
           "the four way key keeps the name the stored format carries");
