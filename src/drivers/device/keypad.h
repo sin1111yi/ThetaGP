@@ -61,6 +61,9 @@ struct KeypadConfig {
   // time moves with the scan rate and the report rate, which is what the assertions
   // below pin at compile time.
 
+  // The NOPs between driving a line and reading the columns: 50 cycles, about
+  // 0.1 us at 480 MHz. The default assumes a 30-50 kohm pull-up against 10-20 pF;
+  // a board that changes the pull-up or lengthens the trace recomputes it.
   static constexpr uint32_t GPIO_STABILIZE_DELAY_CYCLES = 50;
 
   // The bounds the two rows declare. A press is confirmed inside one report
