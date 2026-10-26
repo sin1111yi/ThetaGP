@@ -7,7 +7,7 @@
 
 using namespace ThetaGP::Util;
 
-// ── Path helpers ──────────────────────────────────────────────
+// ── Path helpers ──
 
 // Digits of a number token as an int. strtol is not used: newlib-nano's returns
 // the right value but leaves endptr at the start, so the usual endptr check
@@ -120,7 +120,7 @@ const char *Json::buildFmt(const char *path, const char *spec) const {
   return _fmtBuf;
 }
 
-// ── Parse ─────────────────────────────────────────────────────
+// ── Parse ──
 
 void Json::parse(const char *s, int len) {
   _input = s;
@@ -253,7 +253,7 @@ int Json::scanf(const char *fmt, ...) const {
   return ret;
 }
 
-// ── Parse: key comparison ───────────────────────────────────
+// ── Parse: key comparison ──
 
 namespace {
 
@@ -432,7 +432,7 @@ uint32_t Json::missingKeyCount(const Json &source) const {
   return walk.complete ? walk.missing : 0;
 }
 
-// ── Write ─────────────────────────────────────────────────────
+// ── Write ──
 
 void Json::beginWrite(char *buf, int cap) {
   _buf = buf;
@@ -467,7 +467,7 @@ int Json::end() {
   return _len;
 }
 
-// ── Common ────────────────────────────────────────────────────
+// ── Common ──
 
 void Json::reset() {
   _input = nullptr;

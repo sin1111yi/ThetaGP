@@ -26,7 +26,7 @@ class Json {
   const char *buildFmt(const char *path, const char *spec) const;
 
 public:
-  // ── Parse ───────────────────────────────────────────────────
+  // ── Parse ──
 
   // Points the parser at a JSON string; a negative len means strlen.
   void parse(const char *s, int len = -1);
@@ -64,7 +64,7 @@ public:
   // frozen's scanf, for batch operations.
   int scanf(const char *fmt, ...) const;
 
-  // ── Parse: key comparison ───────────────────────────────────
+  // ── Parse: key comparison ──
 
   // How many object keys `source` carries that this document does not. A key is
   // the chain of names that reaches it, not the walker's spelling of a path: a
@@ -76,7 +76,7 @@ public:
   // reaches. An incomplete count reports nothing rather than part of it.
   uint32_t missingKeyCount(const Json &source) const;
 
-  // ── Write ───────────────────────────────────────────────────
+  // ── Write ──
 
   // Enters write mode on the caller's buffer.
   void beginWrite(char *buf, int cap);
@@ -94,7 +94,7 @@ public:
   const char *c_str() const { return _buf; }
   int len() const { return _writing ? _len : 0; }
 
-  // ── Common ──────────────────────────────────────────────────
+  // ── Common ──
 
   // Resets both parse and write state.
   void reset();

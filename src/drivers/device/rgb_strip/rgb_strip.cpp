@@ -193,7 +193,7 @@ void RgbStrip::task(uint32_t currentTimeUs) {
         s_frames[i] = colour;
       }
     }
-    // What the strip holds was built for the look before this one.
+    // The look changed, so no frame of the new one has been sent yet.
     s_sentFrame = LedEffect::FRAME_COUNT;
   }
 

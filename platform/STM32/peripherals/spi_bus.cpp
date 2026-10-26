@@ -122,7 +122,7 @@ constexpr std::array<IRQn_Type, SPI_IRQ_GROUPS> spiGroupIRQn = {
     SPI1_IRQn, SPI2_IRQn, SPI3_IRQn, SPI4_IRQn, SPI5_IRQn, SPI6_IRQn};
 #endif
 
-// ── DMA dummy targets (for TX/RX when no src/dst provided) ────
+// ── DMA dummy targets (for TX/RX when no src/dst provided) ──
 
 COMMON_ZERO_INIT static uint8_t s_dmaDummyTxByte = 0xFF;
 COMMON_ZERO_INIT static uint8_t s_dmaDummyRxByte;
@@ -600,7 +600,7 @@ static void SPIx_IRQHandler(uint32_t spiIdx) {
       return;
     }
 
-    // ── All chunks complete — check callback for Repeat ────
+    // ── All chunks complete — check callback for Repeat ──
     bool repeat = false;
     if (spi->_asyncCb) {
       auto status = spi->_asyncCb(spi->_asyncCtx);

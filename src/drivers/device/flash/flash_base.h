@@ -52,7 +52,7 @@ public:
 
   static FlashBase &getInstance();
 
-  // ── Pure virtual interface ──────────────────────────────────
+  // ── Pure virtual interface ──
 
   // Read len bytes from addr into data buffer
   [[nodiscard]] virtual bool read(uint32_t addr, uint8_t *data, uint32_t len) = 0;

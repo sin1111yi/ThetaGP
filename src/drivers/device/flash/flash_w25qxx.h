@@ -38,7 +38,7 @@ public:
     return instance;
   }
 
-  // ── FlashBase interface ─────────────────────────────────────
+  // ── FlashBase interface ──
   void init() override;
   [[nodiscard]] bool read(uint32_t addr, uint8_t *data, uint32_t len) override;
   [[nodiscard]] bool write(uint32_t addr, const uint8_t *data, uint32_t len) override;
@@ -51,7 +51,7 @@ public:
 private:
   FlashW25qxx();
 
-  // ── W25QXX instruction set (private constexpr) ─────────────
+  // ── W25QXX instruction set (private constexpr) ──
   static constexpr uint8_t I_WRITE_EN = 0x06U;
   static constexpr uint8_t I_VSR_WRITE_EN = 0x50U;
   static constexpr uint8_t I_WRITE_DIS = 0x04U;
@@ -104,11 +104,11 @@ private:
   static constexpr uint8_t I_ENABLE_RESET = 0x66U;
   static constexpr uint8_t I_RESET_DEVICE = 0x99U;
 
-  // ── Status Register bits ────────────────────────────────────
+  // ── Status Register bits ──
   static constexpr uint8_t SR1_BUSY = 0x01U;
   static constexpr uint8_t SR1_WEL = 0x02U;
 
-  // ── W25QXX type IDs (manufacturer << 8 | device) ────────────
+  // ── W25QXX type IDs (manufacturer << 8 | device) ──
   static constexpr uint16_t TYPE_W25Q10 = 0xEF10U;
   static constexpr uint16_t TYPE_W25Q20 = 0xEF11U;
   static constexpr uint16_t TYPE_W25Q40 = 0xEF12U;
@@ -120,14 +120,14 @@ private:
   static constexpr uint16_t TYPE_W25Q256 = 0xEF18U;
   static constexpr uint16_t TYPE_W25Q512 = 0xEF19U;
 
-  // ── Internal helpers ────────────────────────────────────────
+  // ── Internal helpers ──
   uint8_t readStatusReg(uint8_t idx);
   void writeEnable();
   void waitWhileBusy(uint32_t timeoutMs = 30000);
   void set4ByteAddrMode(bool enable);
   void reset();
 
-  // ── Members ─────────────────────────────────────────────────
+  // ── Members ──
   bool _addrMode4Byte = false;
 };
 
