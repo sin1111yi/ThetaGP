@@ -28,41 +28,32 @@
 namespace ThetaGP::Gamepad::Profile {
 
 // ── Constants ──
-// Layout: Sector 0 = BootMeta Ring (128×16B=2KB) + Address Ring (256×8B=2KB)
-//         Sector 1 = Profile0 primary
-//         Sector 2 = Profile0 backup
-//         Sectors 3..N = User Ring (linear append area)
+// Layout: sector 0 holds the BootMeta ring (128 x 16 B) and the address ring
+// (256 x 8 B), sector 1 the primary Profile 0 and sector 2 its backup, sectors
+// 3 and up the user ring.
 
-static constexpr uint32_t PROFILE_JSON_MAX =
-    4096; /**< Max JSON body size per profile */
+// The largest body a profile carries.
+static constexpr uint32_t PROFILE_JSON_MAX = 4096;
 
-// One byte more than the largest body: a body of exactly PROFILE_JSON_MAX bytes
-// still gets a NUL after it, which the scanners that read it as a string need.
-// Every write into the staging buffer stays below this size.
+// The staging buffer: one byte more than the largest body, so a body of exactly
+// PROFILE_JSON_MAX bytes still has a NUL after it.
 static constexpr uint32_t PROFILE_STAGING_SIZE = PROFILE_JSON_MAX + 1;
 
-static constexpr uint16_t PROFILE_MAX_ID = 15; /**< Maximum profile ID (0-15) */
-static constexpr uint16_t PROFILE_ID_NONE =
-    0xFFFF; /**< Sentinel for empty AddressEntry */
-static constexpr uint16_t PROFILE_ID_ACTIVE =
-    PROFILE_ID_NONE; /**< Selects the active profile in ProfileStore::readProfile
-                      */
+// The highest profile id.
+static constexpr uint16_t PROFILE_MAX_ID = 15;
+// The sentinel an empty address entry carries.
+static constexpr uint16_t PROFILE_ID_NONE = 0xFFFF;
+// The id readProfile() takes for the active profile.
+static constexpr uint16_t PROFILE_ID_ACTIVE = PROFILE_ID_NONE;
 
-// The empty-slot sentinel must not be a profile id: readProfile() tests
-// PROFILE_ID_ACTIVE (== PROFILE_ID_NONE) before the range check, so a sentinel
-// that landed inside 0..PROFILE_MAX_ID would take the first branch and read a
-// profile for a ring entry that marks a deleted one. The two constants are
-// defined independently, so this compares them instead of restating one.
+// readProfile() tests the sentinels before the id range, so neither may land
+// inside it.
 static_assert(PROFILE_ID_NONE > PROFILE_MAX_ID,
               "PROFILE_ID_NONE must stay outside the valid id range");
-
-// readProfile() branches on PROFILE_ID_ACTIVE, not on PROFILE_ID_NONE, so pin
-// that symbol too: it is the one the first branch compares.
 static_assert(PROFILE_ID_ACTIVE > PROFILE_MAX_ID,
               "PROFILE_ID_ACTIVE must stay outside the valid id range");
 
-// Body lengths travel as uint16_t (writeFactoryProfile, createProfile,
-// modifyProfile all take one), so the staging size must fit that type.
+// Body lengths travel as uint16_t.
 static_assert(PROFILE_STAGING_SIZE <= 0xFFFF,
               "PROFILE_STAGING_SIZE must fit as a uint16_t body length");
 
@@ -85,10 +76,7 @@ static constexpr uint32_t PROFILE0_BACKUP =
 static constexpr uint32_t USER_RING_BASE =
     0x003000; /**< User Ring start address */
 
-// Sectors held back ahead of the User Ring: sector 0 carries the BootMeta Ring
-// (2 KB) and the Address Ring (2 KB), sector 1 holds Profile 0's primary copy
-// and sector 2 its backup. The count is derived from the ring base, so a layout
-// move carries the count with it; this constant is the only source for it.
+// The sectors the reserved region ahead of the user ring takes.
 static constexpr uint32_t RESERVED_SECTORS =
     USER_RING_BASE / PROFILE_SECTOR_SIZE;
 static_assert(USER_RING_BASE % PROFILE_SECTOR_SIZE == 0,
@@ -142,10 +130,8 @@ struct ProfileStatus {
   uint32_t totalSectors = 0;    // total flash sectors
   uint32_t usedSectors = 0;     // sectors occupied by profile data
   uint32_t freeSectors = 0;     // sectors still available in the User Ring
-  uint32_t reservedSectors = 0; // sectors held by the reserved region ahead of
-                                // the User Ring (BootMeta Ring + Address Ring,
-                                // Profile 0 and its backup). used + free +
-                                // reserved == total holds by construction.
+  uint32_t reservedSectors = 0; // sectors ahead of the user ring:
+                                // used + free + reserved == total
   uint32_t nextAddr = 0;        // User Ring next write pointer
   uint16_t bootMetaSeq = 0;     // current BootMeta sequence number
   uint16_t addressRingSeq = 0;  // current Address Ring sequence number
@@ -247,10 +233,8 @@ private:
   uint16_t ensureBootMetaSlot();
   uint16_t ensureAddressRingSlot();
 
-  // ── Cached state (describes the flash as of the last scan) ──
-  // init() refreshes every field here; writeFactoryProfile() refreshes the ones
-  // a factory write invalidates. needsFactoryProfile() is derived from these on
-  // demand rather than stored.
+  // ── Cached state, as of the last scan ──
+  // init() refreshes every field here, a factory write the ones it invalidates.
   uint16_t _activeProfileId = 0;
   uint32_t _activeAddress = PROFILE0_ADDR;
   uint32_t _nextAddr = USER_RING_BASE;
