@@ -37,6 +37,8 @@
 
 #include "wire/frame.h"
 #include "wire/dispatch.h"
+#include "wire/flash.h"
+#include "wire/profile_d.h"
 #include "wire/sys_d.h"
 
 using namespace ThetaGP;
@@ -162,8 +164,12 @@ FAST_CODE static void taskCmdProc(uint32_t currentTimeUs) {
   }
 
   // A stream's frames answer no frame of the host's, so they leave from here,
-  // one per tick, and only while nothing else is in flight.
-  if (s_txLength == 0) {
+  // one per tick, and only while nothing else is in flight. Asking for one
+  // when no stream is open is what the question below answers first: the reply
+  // it would build is over a kilobyte of zeros written for nothing, on a tick
+  // that runs a thousand times a second.
+  if (s_txLength == 0 &&
+      (Wire::Flash::active() || Wire::ProfileTransfer::busy())) {
     const uint16_t carried =
         Wire::Dispatch::pending(s_reply, sizeof s_reply);
     if (carried != 0) {
