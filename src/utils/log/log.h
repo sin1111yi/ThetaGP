@@ -91,7 +91,13 @@ static inline void _LOG(LogLevel level, const char *file, uint16_t line,
 }
 
 /* clang-format off */
+// A line kept only by a build that asked for debug lines: the rest compile the
+// call out, so neither the format nor the ring entry exists.
+#if THETAGP_CFG_LOG_DEBUG
 #define LOG_DEBUG(format, ...)  _LOG(LOG_LV(Debug), __FILE__, __LINE__, format, ##__VA_ARGS__)
+#else
+#define LOG_DEBUG(...)          ((void)0)
+#endif
 #define LOG_INFO(format, ...)   _LOG(LOG_LV(Info), __FILE__, __LINE__, format, ##__VA_ARGS__)
 #define LOG_WARN(format, ...)   _LOG(LOG_LV(Warn), __FILE__, __LINE__, format, ##__VA_ARGS__)
 #define LOG_ERROR(format, ...)  _LOG(LOG_LV(Error), __FILE__, __LINE__, format, ##__VA_ARGS__)

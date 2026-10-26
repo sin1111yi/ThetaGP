@@ -207,8 +207,8 @@ void ConfigManager::factoryReset() {
 
 void ConfigManager::applySys() {
 #if THETAGP_CFG_LOG_EN
-  // The threshold a profile names, as the logger holds it: the debug level
-  // carries the channel bit that shows every line the build kept.
+  // The threshold a profile names, as the logger holds it: the debug lines a
+  // build keeps are its own switch, not a level a profile picks.
   switch (_config.sys.log) {
   case 0:
     LogSetLevel(LOG_LV(Info));
@@ -216,11 +216,8 @@ void ConfigManager::applySys() {
   case 1:
     LogSetLevel(LOG_LV(Warn));
     break;
-  case 2:
-    LogSetLevel(LOG_LV(Error));
-    break;
   default:
-    LogSetLevel(LOG_LV(Debug));
+    LogSetLevel(LOG_LV(Error));
     break;
   }
 #endif
@@ -373,6 +370,8 @@ void ConfigManager::factoryReset() {
 
 void ConfigManager::applySys() {
 #if THETAGP_CFG_LOG_EN
+  // The three levels a profile chooses among: a debug line is the build's
+  // switch (THETAGP_CFG_LOG_DEBUG), not a threshold a body carries.
   switch (_config.sys.log) {
   case 0:
     LogSetLevel(LOG_LV(Info));
@@ -380,11 +379,8 @@ void ConfigManager::applySys() {
   case 1:
     LogSetLevel(LOG_LV(Warn));
     break;
-  case 2:
-    LogSetLevel(LOG_LV(Error));
-    break;
   default:
-    LogSetLevel(LOG_LV(Debug));
+    LogSetLevel(LOG_LV(Error));
     break;
   }
 #endif

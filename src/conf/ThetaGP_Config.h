@@ -92,13 +92,19 @@
 #endif
 
 // ── Logging ──
-// Logging is on with a Debug threshold in a debug build and compiled out of a
-// release build, which is what the build type implies; NDEBUG is defined by
-// the release flags. The level macro must name a LogLevel enumerator (Info,
-// Warn, Error, Debug) because the logger pastes it into LOG_LV().
+// Logging is on in a debug build and compiled out of a release build, which is
+// what the build type implies; NDEBUG is defined by the release flags.
 //
-// This is the threshold the firmware writes at until a profile is read: the
-// profile carries its own as `sys.log`, and reading one moves the threshold.
+// The level macro is the threshold the firmware writes at until a profile is
+// read: the profile carries its own as `sys.log`, and reading one moves the
+// threshold. It names one of the three levels a profile chooses among (Info,
+// Warn, Error), because the logger pastes it into LOG_LV().
+//
+// Debug lines are not among them. A Debug line is a mark of where the firmware
+// has been rather than a line a reader filters: it costs a format on the scan
+// path and a line in the ring, so a build decides whether it exists at all, and
+// one built with it writes every Debug line the code kept whatever threshold a
+// profile asks for.
 #if defined(NDEBUG)
 #ifndef THETAGP_CFG_LOG_EN
 #define THETAGP_CFG_LOG_EN 0
@@ -106,12 +112,18 @@
 #ifndef THETAGP_CFG_LOG_LV
 #define THETAGP_CFG_LOG_LV Error
 #endif
+#ifndef THETAGP_CFG_LOG_DEBUG
+#define THETAGP_CFG_LOG_DEBUG 0
+#endif
 #else
 #ifndef THETAGP_CFG_LOG_EN
 #define THETAGP_CFG_LOG_EN 1
 #endif
 #ifndef THETAGP_CFG_LOG_LV
-#define THETAGP_CFG_LOG_LV Debug
+#define THETAGP_CFG_LOG_LV Info
+#endif
+#ifndef THETAGP_CFG_LOG_DEBUG
+#define THETAGP_CFG_LOG_DEBUG 1
 #endif
 #endif
 

@@ -326,11 +326,11 @@ doc = "Input mode the USB device reports: 0 XInput, 1 Switch, 2 PS3, 3 Keyboard,
 name = "sys.log"
 type = "u8"
 min = 0
-max = 3
+max = 2
 default = 0
 exposed = true
 enum = "LogLevel"
-doc = "Log threshold, from Info up; Debug shows every line"
+doc = "Log threshold, from Info up to Error; the debug lines a build keeps are not a threshold"
 
 [[field]]
 name = "sys.deb_samp"
