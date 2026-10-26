@@ -74,13 +74,30 @@ uint32_t refreshRateHz() {
 // is spent on before the next frame is due.
 uint32_t frameIntervalUs() { return 1000000UL / refreshRateHz(); }
 
-// The config's brightness limit in 1/256ths, so the scaling below stays
-// integer.
+// The most the board's electrical limit allows, in 1/256ths, so the scaling
+// below stays integer.
 constexpr uint32_t kBrightnessQ8 =
     static_cast<uint32_t>(THETAGP_CFG_LED_BRIGHTNESS_LIMIT * 256.0f);
 
-uint8_t limited(uint8_t value) {
-  const uint32_t scaled = (value * kBrightnessQ8) >> 8;
+// The brightness key's ceiling is the whole of that limit: a profile's setting
+// is a share of it, and the ceiling is held to the key's own declaration.
+constexpr uint8_t kFullBrightness = 128;
+static_assert(kFullBrightness ==
+                  Gamepad::Config::keyEntry(Gamepad::Config::ConfigKey::LedBri).maxVal,
+              "the brightness the board allows is the key's ceiling: raise the "
+              "row in configs/config_keys.toml with this constant");
+
+// The share of the limit the profile asks for, in 1/256ths. A brightness the
+// key does not reach leaves the strips at the limit rather than above it.
+uint32_t brightnessQ8() {
+  const uint8_t asked =
+      Gamepad::Config::ConfigManager::getInstance().config().led.bri;
+  const uint32_t share = asked < kFullBrightness ? asked : kFullBrightness;
+  return kBrightnessQ8 * share / kFullBrightness;
+}
+
+uint8_t limited(uint8_t value, uint32_t scaleQ8) {
+  const uint32_t scaled = (value * scaleQ8) >> 8;
   return static_cast<uint8_t>(scaled > 255U ? 255U : scaled);
 }
 
@@ -103,19 +120,12 @@ uint8_t s_shownMode = 0xFF;
 uint16_t s_shownHue = 0xFFFF;
 uint8_t s_shownSat = 0xFF;
 
-constexpr uint16_t kStartHue = 0; // red
 
 // The colour a still strip holds: the hue a profile carries, moved towards
-// white as little as its saturation asks, so no saturation is pure white.
+// white as little as its saturation asks.
 LedEffect::Rgb stillColour(uint16_t degrees, uint8_t saturation) {
-  const LedEffect::Rgb wheel = LedEffect::hueToRgb(static_cast<uint16_t>(
-      static_cast<uint32_t>(degrees % 360u) * LedEffect::HUE_CYCLE / 360u));
-  const auto mixed = [saturation](uint8_t channel) {
-    const uint32_t towardsWhite =
-        static_cast<uint32_t>(channel) * saturation + 255u * (255u - saturation);
-    return static_cast<uint8_t>(towardsWhite / 255u);
-  };
-  return LedEffect::Rgb{mixed(wheel.g), mixed(wheel.r), mixed(wheel.b)};
+  return LedEffect::desaturate(
+      LedEffect::hueToRgb(LedEffect::unitsOfDegrees(degrees)), saturation);
 }
 
 // A frame has to stay up for at least one tick of the task that advances the
@@ -173,7 +183,10 @@ void RgbStrip::task(uint32_t currentTimeUs) {
     s_shownSat = led.sat;
 
     if (rainbow) {
-      LedEffect::render(s_frames, LED_COUNT, kStartHue);
+      // The wheel starts at the hue the profile names, at the saturation it
+      // names: the same two numbers the still effect is drawn from.
+      LedEffect::render(s_frames, LED_COUNT,
+                        LedEffect::unitsOfDegrees(led.hue), led.sat);
     } else {
       const LedEffect::Rgb colour = solid ? stillColour(led.hue, led.sat) : LedEffect::Rgb{};
       for (uint8_t i = 0; i < LED_COUNT; ++i) {
@@ -213,6 +226,7 @@ void RgbStrip::encode(const LedEffect::Rgb *frame) {
   // blue, most significant bit first — each taken down to the configured
   // share of full scale.
   const uint8_t *pixels = reinterpret_cast<const uint8_t *>(frame);
+  const uint32_t scaleQ8 = brightnessQ8();
   uint16_t slot = 0;
 
   // The chips wired past the ones this board lights are handed a black pixel
@@ -224,7 +238,7 @@ void RgbStrip::encode(const LedEffect::Rgb *frame) {
     const uint8_t *channels = &pixels[pixel * 3];
     uint8_t share[3];
     for (uint8_t channel = 0; channel < 3; ++channel) {
-      share[channel] = limited(channels[channel]);
+      share[channel] = limited(channels[channel], scaleQ8);
     }
 
     for (uint8_t bit = 0; bit < kBitsPerPixel; ++bit) {

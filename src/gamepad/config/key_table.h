@@ -101,7 +101,7 @@ constexpr uint8_t keyTypeWidth(KeyType type) {
 // sized from both, so a table whose exposed rows outgrow the count — or a name
 // that outgrows the length — is a build error rather than a reply cut short at
 // run time.
-inline constexpr uint8_t kKeyTableMaxEntries = 12;
+inline constexpr uint8_t kKeyTableMaxEntries = 16;
 inline constexpr size_t kKeyTableMaxNameLen = 24;
 
 // Every field of ConfigStore, in the order the declaration lists them. A field

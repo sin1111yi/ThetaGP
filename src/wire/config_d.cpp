@@ -201,6 +201,11 @@ void ConfigDomain::setKey(const ThetaGP_Request &request, ThetaGP_Reply &reply) 
     storeKeyElement(store, *entry, 0, static_cast<int32_t>(value));
   }
 
+  // A field that reaches past the store is handed over as soon as it is
+  // written: `sys.log` moves the threshold the firmware writes at, which a
+  // caller sees in the log of its own command.
+  ConfigManager::getInstance().applySys();
+
   reply.which_kind = ThetaGP_Reply_config_set_key_tag;
   writeKey(reply.kind.config_set_key.key, sizeof reply.kind.config_set_key.key,
            *entry);

@@ -24,6 +24,7 @@
 #include "BoardConfig.h"
 #include "conf/ThetaGP_Config.h"
 
+#include "configs/config_keys.gen.h"
 #include "drivers/device/device.h"
 #include "drivers/peripherals/gpio.h"
 #include "drivers/peripherals/timer.h"
@@ -55,11 +56,12 @@ struct KeypadConfig {
   // trace, and a level change commits exactly that many scans after the last
   // opposed sample — no window has to fill, and nothing is carried over from
   // before it.
-  static constexpr uint8_t PRESS_SAMPLES = 2;
-  static constexpr uint8_t RELEASE_SAMPLES = 32;
-
-  static constexpr uint32_t GPIO_STABILIZE_DELAY_CYCLES = 50;
-
+  //
+  // A profile carries the pair (`sys.deb_samp` and `sys.deb_thr`), so the two
+  // are read from it on every scan. The rows of the key table declare the
+  // range each may hold, and the checks below hold those ranges to the
+  // properties the design needs: the numbers move, the properties do not.
+  //
   // One scan callback walks every drive line (scanCallback -> the
   // readInputScanMatrix loop over DRIVE_PIN_NUM), so a key is sampled once per
   // scan and its sampling rate is THETAGP_CFG_KEYPAD_SCAN_HZ itself. Every scan
@@ -73,63 +75,75 @@ struct KeypadConfig {
   // The thresholds are counts of scans, so their meaning in time moves with the
   // scan rate and the report rate. The assertions below pin that meaning at
   // compile time instead of leaving it to the configuration: each one names the
-  // property it protects, and a build that would break it does not compile.
-  static_assert(THETAGP_CFG_KEYPAD_SCAN_HZ >=
-                    PRESS_SAMPLES * THETAGP_CFG_USB_REPORT_RATE_HZ,
+  // property it protects, and a table whose ranges would break it does not
+  // compile.
+
+  static constexpr uint32_t GPIO_STABILIZE_DELAY_CYCLES = 50;
+
+  // The bounds the two rows declare. A press is confirmed inside one report
+  // period, and a release window is at least one report period long and at most
+  // one millisecond longer than the press it follows.
+  static constexpr uint32_t PRESS_MAX =
+      Gamepad::Config::keyEntry(Gamepad::Config::ConfigKey::SysDebSamp).maxVal;
+  static constexpr uint32_t PRESS_MIN =
+      Gamepad::Config::keyEntry(Gamepad::Config::ConfigKey::SysDebSamp).minVal;
+  static constexpr uint32_t RELEASE_MAX =
+      Gamepad::Config::keyEntry(Gamepad::Config::ConfigKey::SysDebThr).maxVal;
+  static constexpr uint32_t RELEASE_MIN =
+      Gamepad::Config::keyEntry(Gamepad::Config::ConfigKey::SysDebThr).minVal;
+
+  static_assert(PRESS_MAX * THETAGP_CFG_USB_REPORT_RATE_HZ <=
+                    THETAGP_CFG_KEYPAD_SCAN_HZ,
                 "keypad: a press is committed only after PRESS_SAMPLES "
                 "consecutive scans of the pressed level, and every scan is a "
                 "decision point, so the confirmation takes PRESS_SAMPLES scan "
                 "periods. It has to complete inside one report period, or a "
-                "report tick can miss the confirmation entirely. Raise "
-                "THETAGP_CFG_KEYPAD_SCAN_HZ in src/conf/ThetaGP_Config.h or "
-                "lower the board's [usb] wired_report_hz; the quantity that has "
-                "to fit in a report period is the confirmation, not the "
-                "sampling rate.");
+                "report tick can miss the confirmation entirely. Lower the "
+                "ceiling of sys.deb_samp, raise THETAGP_CFG_KEYPAD_SCAN_HZ, or "
+                "lower the board's [usb] wired_report_hz.");
 
-  static_assert(RELEASE_SAMPLES >= PRESS_SAMPLES,
-                "keypad: the release threshold has to be at least the press "
-                "threshold. With a shorter release run the release direction "
-                "is the easier one to trigger, so a burst of the opposite level "
-                "that cannot commit a press can still commit a release, and a "
-                "held key gets chopped in half by its own bounce.");
+  static_assert(RELEASE_MIN >= PRESS_MAX,
+                "keypad: the release range has to start at or above where the "
+                "press range ends. A release run shorter than a press run is "
+                "the easier direction to trigger, so a held key gets chopped in "
+                "half by its own bounce. Raise the floor of sys.deb_thr or "
+                "lower the ceiling of sys.deb_samp.");
 
-  static_assert(PRESS_SAMPLES >= 2 && RELEASE_SAMPLES >= 2,
+  static_assert(PRESS_MIN >= 2 && RELEASE_MIN >= 2,
                 "keypad: both thresholds have to be at least 2 samples, so that "
                 "no single sample can change a key's committed state. At 1 a "
                 "threshold filters nothing: one sample commits, it stays "
                 "committed until the opposite threshold is reached, and a "
                 "single sampling artifact becomes a host-visible key event.");
 
-  static_assert(static_cast<uint32_t>(RELEASE_SAMPLES) <= 255,
+  static_assert(RELEASE_MAX <= 255,
                 "keypad: a key's run counters are uint8_t, so a threshold above "
                 "255 would wrap and the key would never leave its committed "
-                "state. Keep both thresholds inside the counter's range.");
+                "state. Keep both ranges inside the counter's range.");
 
-  static_assert(1000 * (RELEASE_SAMPLES - PRESS_SAMPLES) <=
+  static_assert(1000 * (RELEASE_MAX - PRESS_MIN) <=
                     THETAGP_CFG_KEYPAD_SCAN_HZ,
                 "keypad: the release threshold stretches the reported duration "
                 "of a press by (RELEASE_SAMPLES - PRESS_SAMPLES) scan periods "
                 "against its physical duration. That stretch is capped at 1 ms, "
-                "a tenth of the shortest tap a hand performs, and this pair of "
-                "thresholds exceeds the cap. Lower RELEASE_SAMPLES, raise "
-                "PRESS_SAMPLES, or raise THETAGP_CFG_KEYPAD_SCAN_HZ.");
-
-  static_assert(1000 * RELEASE_SAMPLES >= THETAGP_CFG_KEYPAD_SCAN_HZ,
-                "keypad: the release confirmation window is RELEASE_SAMPLES "
-                "scan periods long and has to be at least 1 ms, the report "
-                "period of the slowest link the product declares. Below it a "
-                "short committed press can fall between two report ticks and be "
-                "dropped. Raise RELEASE_SAMPLES or lower "
+                "a tenth of the shortest tap a hand performs, and the widest "
+                "pair the ranges allow exceeds the cap. Lower the range of "
+                "sys.deb_thr or sys.deb_samp, or raise "
                 "THETAGP_CFG_KEYPAD_SCAN_HZ.");
 
-  static_assert(RELEASE_SAMPLES * THETAGP_CFG_USB_REPORT_RATE_HZ >=
+  static_assert(1000 * RELEASE_MIN >= THETAGP_CFG_KEYPAD_SCAN_HZ,
+                "keypad: the release confirmation window has to be at least "
+                "1 ms, the report period of the slowest link the product "
+                "declares. Below it a short committed press can fall between "
+                "two report ticks and be dropped. Raise the floor of "
+                "sys.deb_thr or lower THETAGP_CFG_KEYPAD_SCAN_HZ.");
+
+  static_assert(RELEASE_MIN * THETAGP_CFG_USB_REPORT_RATE_HZ >=
                     THETAGP_CFG_KEYPAD_SCAN_HZ,
-                "keypad: the release confirmation window is RELEASE_SAMPLES "
-                "scan periods long and has to cover the report period this "
-                "build runs at, or a minimum-length press falls between two "
-                "report ticks and is dropped. Raise RELEASE_SAMPLES, lower "
-                "THETAGP_CFG_KEYPAD_SCAN_HZ, or raise the board's [usb] "
-                "wired_report_hz.");
+                "keypad: the release confirmation window has to cover the "
+                "report period this build runs at, or a minimum-length press "
+                "falls between two report ticks and is dropped. Raise the floor "
+                "of sys.deb_thr or raise the board's [usb] wired_report_hz.");
 
   enum class Mode : uint8_t {
     ScanMatrix,

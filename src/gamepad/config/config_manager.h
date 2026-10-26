@@ -76,6 +76,12 @@ public:
   uint16_t activeProfileId() const;
   uint8_t profileCount() const;
 
+  /** Hand the fields that reach past the store to the code reading them: the
+   * threshold the logger writes at. A profile carries it, so it is applied
+   * when one is read, when the configuration is reset, and after a write that
+   * may have moved it. */
+  void applySys();
+
   /** Get const reference to active configuration. */
   const ConfigStore &config() const { return _config; }
   /** Get mutable reference to active configuration (internal use). */

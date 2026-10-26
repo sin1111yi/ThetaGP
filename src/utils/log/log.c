@@ -79,6 +79,8 @@ static void LogSetRootPath(void) {
 #endif
 }
 
+void LogSetLevel(LogLevel level) { g_LogLevel = level; }
+
 void LogPrint(LogLevel level, const char *file, uint16_t line,
               const char *format, va_list args) {
   // When g_LogLevel has LOG_LV_ALWAYS set (Debug/Interface), show all

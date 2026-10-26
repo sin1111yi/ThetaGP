@@ -96,6 +96,9 @@
 // release build, which is what the build type implies; NDEBUG is defined by
 // the release flags. The level macro must name a LogLevel enumerator (Info,
 // Warn, Error, Debug) because the logger pastes it into LOG_LV().
+//
+// This is the threshold the firmware writes at until a profile is read: the
+// profile carries its own as `sys.log`, and reading one moves the threshold.
 #if defined(NDEBUG)
 #ifndef THETAGP_CFG_LOG_EN
 #define THETAGP_CFG_LOG_EN 0

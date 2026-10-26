@@ -217,6 +217,11 @@ constexpr ConfigStore makeDefaults() {
   cfg.led.sat  = kKeyDefaultLedSat;
   cfg.led.rgb.hz   = kKeyDefaultLedRgbHz;
 
+  // ── System ──
+  cfg.sys.log      = kKeyDefaultSysLog;
+  cfg.sys.deb_samp = kKeyDefaultSysDebSamp;
+  cfg.sys.deb_thr  = kKeyDefaultSysDebThr;
+
   // ── Calibration ──
   cfg.cal.lx_c = kKeyDefaultCalLxC;
   cfg.cal.ly_c = kKeyDefaultCalLyC;

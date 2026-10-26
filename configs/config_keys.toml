@@ -233,10 +233,10 @@ doc = "RT deadzone, in raw trigger units"
 name = "led.bri"
 type = "u8"
 min = 0
-max = 255
+max = 128
 default = 128
 exposed = true
-doc = "LED brightness"
+doc = "LED brightness, as a share of the strip's limit: 128 is the whole of it"
 
 [[field]]
 name = "led.mode"
@@ -321,3 +321,31 @@ exposed = true
 flags = ["reboot"]
 enum = "InputMode"
 doc = "Input mode the USB device reports: 0 XInput, 1 Switch, 2 PS3, 3 Keyboard, 4 DualShock 4, 5 Xbox One, 13 DualSense, 14 generic HID, 15 Switch Pro; a mode this build does not answer is set up as the generic HID device"
+
+[[field]]
+name = "sys.log"
+type = "u8"
+min = 0
+max = 3
+default = 0
+exposed = true
+enum = "LogLevel"
+doc = "Log threshold, from Info up; Debug shows every line"
+
+[[field]]
+name = "sys.deb_samp"
+type = "u8"
+min = 2
+max = 32
+default = 2
+exposed = true
+doc = "Scans a press has to hold before it commits"
+
+[[field]]
+name = "sys.deb_thr"
+type = "u8"
+min = 32
+max = 34
+default = 32
+exposed = true
+doc = "Scans a release has to hold before it commits"

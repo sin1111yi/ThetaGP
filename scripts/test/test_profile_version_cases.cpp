@@ -166,9 +166,11 @@ int main() {
           "a body read under version 1 is written as the current version");
     check(std::strstr(migrated, "\"stick\":{\"lx_dz\":0,") != nullptr,
           "the migrated body carries the old body's values in the new shape");
-    check(
-              std::strstr(migrated, "\"sys\"") == nullptr,
-          "the objects the store no longer carries are not written back");
+    // The store carries a `sys` object again, so the thresholds the old body
+    // held come across at their own paths; a value the row's range has since
+    // narrowed falls back to the default, which is what `deb_thr` does here.
+    check(std::strstr(migrated, "\"sys\":{\"log\":1,\"deb_samp\":3") != nullptr,
+          "the system object the old body carries is written back");
   }
 
   std::printf("-- 4. a version this firmware does not read is refused whole --\n");
@@ -217,12 +219,21 @@ int main() {
 
   std::printf("-- 7. a value outside the range a row declares --\n");
   {
-    const char *kOutOfRange = R"json({"ver":2,"map":{"dpad":5},"led":{"bri":250}})json";
+    const char *kOutOfRange =
+        R"json({"ver":2,"map":{"dpad":5},"led":{"bri":100}})json";
     ConfigStore cfg = kConfigDefaults;
     (void)parseProfile(kOutOfRange, bodyLen(kOutOfRange), &cfg);
     check(cfg.map.dpad == kConfigDefaults.map.dpad,
           "a D-pad mode outside 0..2 leaves the field at its default");
-    check(cfg.led.bri == 250, "a brightness inside its range is stored");
+    check(cfg.led.bri == 100, "a brightness inside its range is stored");
+
+    // The brightness pastes no share of a limit: its ceiling is the whole of
+    // it, so a value above the ceiling is no value of that field.
+    const char *kTooBright = R"json({"ver":2,"led":{"bri":250}})json";
+    ConfigStore bright = kConfigDefaults;
+    (void)parseProfile(kTooBright, bodyLen(kTooBright), &bright);
+    check(bright.led.bri == kConfigDefaults.led.bri,
+          "a brightness above the ceiling leaves the field at its default");
   }
 
   std::printf("%d checks, %d failed\n", g_ran, g_failed);

@@ -54,6 +54,10 @@ typedef void (*LogDelayFunc)(uint32_t us);
 #endif
 
 void LogInit(LogPrintFunc printFunc, LogDelayFunc delayFunc);
+
+// The threshold lines are written at: a line below it is dropped. It starts at
+// the level the build carries and a profile moves it.
+void LogSetLevel(LogLevel level);
 void LogPrint(LogLevel level, const char *file, uint16_t line,
               const char *format, va_list args);
 

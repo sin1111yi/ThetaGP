@@ -25,6 +25,7 @@
 #include "drivers/device/keypad.h"
 
 #include "drivers/device/system_timer.h"
+#include "gamepad/config/config_manager.h"
 #include "drivers/peripherals/gpio.h"
 #include "drivers/peripherals/nvic.h"
 #include "drivers/peripherals/peripherals_manager.h"
@@ -80,6 +81,16 @@ void Keypad::scanCallback() {
   // call, and the host converts to microseconds where a conversion is wanted.
   const uint32_t startCycles = SystemTimer::getInstance().getCycleCounter();
 
+  // The pair a profile carries. Nothing in a body can make a release run
+  // shorter than a press run: the longer of the two is what the release
+  // threshold takes, so the properties the header holds at compile time hold
+  // for every pair the rows accept.
+  const Gamepad::Config::Sys &sys =
+      Gamepad::Config::ConfigManager::getInstance().config().sys;
+  const uint8_t pressSamples = sys.deb_samp;
+  const uint8_t releaseSamples =
+      sys.deb_thr < pressSamples ? pressSamples : sys.deb_thr;
+
   uint32_t mask = 0;
   (this->*_readInput)(&mask);
 
@@ -101,7 +112,7 @@ void Keypad::scanCallback() {
       s.releaseRun = 0;
     } else if (pressed) {
       s.releaseRun = 0;
-      if (++s.pressRun >= KeypadConfig::PRESS_SAMPLES) {
+      if (++s.pressRun >= pressSamples) {
         s.stableState = KeyState::Pressed;
         // Commit point — press. The run that has just crossed its threshold is
         // this commit's lateness in scans, so it is stamped while the counter
@@ -117,7 +128,7 @@ void Keypad::scanCallback() {
       }
     } else {
       s.pressRun = 0;
-      if (++s.releaseRun >= KeypadConfig::RELEASE_SAMPLES) {
+      if (++s.releaseRun >= releaseSamples) {
         s.stableState = KeyState::Released;
         // Commit point — release, stamped the same way as the press one.
         _commitCount++;

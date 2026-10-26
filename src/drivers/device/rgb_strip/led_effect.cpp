@@ -74,7 +74,22 @@ Rgb hueToRgb(uint16_t hue) {
   return Rgb{channel[Green], channel[Red], channel[Blue]};
 }
 
-void render(Rgb *out, uint8_t ledCount, uint16_t phaseOffset) {
+uint16_t unitsOfDegrees(uint16_t degrees) {
+  return static_cast<uint16_t>(static_cast<uint32_t>(degrees % 360u) *
+                               HUE_CYCLE / 360u);
+}
+
+Rgb desaturate(Rgb colour, uint8_t saturation) {
+  const auto mixed = [saturation](uint8_t channel) {
+    const uint32_t towardsWhite = static_cast<uint32_t>(channel) * saturation +
+                                  255u * (255u - saturation);
+    return static_cast<uint8_t>(towardsWhite / 255u);
+  };
+  return Rgb{mixed(colour.g), mixed(colour.r), mixed(colour.b)};
+}
+
+void render(Rgb *out, uint8_t ledCount, uint16_t phaseOffset,
+            uint8_t saturation) {
   if (ledCount == 0) {
     return;
   }
@@ -90,7 +105,7 @@ void render(Rgb *out, uint8_t ledCount, uint16_t phaseOffset) {
     for (uint8_t led = 0; led < ledCount; ++led) {
       const uint16_t hue =
           static_cast<uint16_t>(phaseOffset + led * ledStep + frameHue);
-      out[frame * ledCount + led] = hueToRgb(hue);
+      out[frame * ledCount + led] = desaturate(hueToRgb(hue), saturation);
     }
   }
 }

@@ -79,6 +79,15 @@ struct Led {
   Rgb rgb;
 };
 
+struct Sys {
+  // Key `sys.log`: the threshold the firmware logs at.
+  uint8_t log;
+  // Key `sys.deb_samp`: scans a press holds before it commits.
+  uint8_t deb_samp;
+  // Key `sys.deb_thr`: scans a release holds before it commits.
+  uint8_t deb_thr;
+};
+
 struct Usb {
   // Key `usb.input_mode`: the mode the device reports as.
   uint8_t input_mode;
@@ -100,6 +109,7 @@ struct ConfigStore {
   Led led;
   Cal cal;
   Usb usb;
+  Sys sys;
 };
 
 // The domains sit one after another, each starting where the one before it
@@ -120,7 +130,10 @@ static_assert(offsetof(ConfigStore, cal) ==
 static_assert(offsetof(ConfigStore, usb) ==
                   offsetof(ConfigStore, cal) + sizeof(Cal),
               "config store: Cal does not start where Led ended");
-static_assert(sizeof(ConfigStore) - offsetof(ConfigStore, usb) - sizeof(Usb) <
+static_assert(offsetof(ConfigStore, sys) ==
+                  offsetof(ConfigStore, usb) + sizeof(Usb),
+              "config store: Usb does not start where Cal ended");
+static_assert(sizeof(ConfigStore) - offsetof(ConfigStore, sys) - sizeof(Sys) <
                   alignof(ConfigStore),
               "config store: the store ends in more than its own padding");
 

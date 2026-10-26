@@ -42,11 +42,21 @@ static constexpr uint8_t FRAME_COUNT = 50;
 // HUE_CYCLE wraps to the start of the wheel.
 Rgb hueToRgb(uint16_t hue);
 
+// The wheel's own units for a hue given in degrees, which is the unit the
+// configuration carries it in.
+uint16_t unitsOfDegrees(uint16_t degrees);
+
+// The colour taken towards white by as little as `saturation` asks: 255 is the
+// colour itself and 0 is white.
+Rgb desaturate(Rgb colour, uint8_t saturation);
+
 // Renders FRAME_COUNT frames of the rainbow into out, which holds 50 *
 // ledCount elements: frame f of a ledCount-long strip runs from
 // out[f * ledCount] to out[f * ledCount + ledCount - 1]. An LED's hue is its
-// position along the strip, a frame's is its position along the cycle.
-void render(Rgb *out, uint8_t ledCount, uint16_t phaseOffset);
+// position along the strip, a frame's is its position along the cycle, and
+// `phaseOffset` turns the whole wheel to the hue a profile starts it at. Each
+// LED is taken down to `saturation`'s distance from white.
+void render(Rgb *out, uint8_t ledCount, uint16_t phaseOffset, uint8_t saturation);
 
 // The frame the animation is showing and the time a tick carried over.
 struct Clock {

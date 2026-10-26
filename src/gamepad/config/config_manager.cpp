@@ -90,6 +90,8 @@ bool ConfigManager::init() {
   // compiled defaults when the flash carries one of an older format.
   (void)repairFactoryProfile();
 
+  applySys();
+
   LOG_INFO("ConfigManager: init OK, active=%u count=%u", status.activeId,
            status.profileCount);
   return true;
@@ -190,6 +192,7 @@ bool ConfigManager::readProfileBody(uint16_t profileId) {
              profileId);
     ok = false;
   }
+  applySys();
   LOG_INFO("ConfigManager: load id=%u %s", profileId, ok ? "OK" : "FAIL");
   return ok;
 }
@@ -197,7 +200,31 @@ bool ConfigManager::readProfileBody(uint16_t profileId) {
 // The compiled defaults are the reset's whole effect: nothing is read from the
 // flash and nothing is written to it, so the body the device persists is left
 // where it was and a save is what puts these values there.
-void ConfigManager::factoryReset() { _config = kConfigDefaults; }
+void ConfigManager::factoryReset() {
+  _config = kConfigDefaults;
+  applySys();
+}
+
+void ConfigManager::applySys() {
+#if THETAGP_CFG_LOG_EN
+  // The threshold a profile names, as the logger holds it: the debug level
+  // carries the channel bit that shows every line the build kept.
+  switch (_config.sys.log) {
+  case 0:
+    LogSetLevel(LOG_LV(Info));
+    break;
+  case 1:
+    LogSetLevel(LOG_LV(Warn));
+    break;
+  case 2:
+    LogSetLevel(LOG_LV(Error));
+    break;
+  default:
+    LogSetLevel(LOG_LV(Debug));
+    break;
+  }
+#endif
+}
 
 // ── saveProfile() ──
 // The body this save replaces, read back before the write: a save that does not
@@ -325,6 +352,7 @@ Profile::ProfileStatus ConfigManager::getStatus() const {
 
 bool ConfigManager::init() {
   _config = kConfigDefaults;
+  applySys();
   LOG_INFO("ConfigManager: no flash chip, running on defaults");
   return true;
 }
@@ -338,7 +366,29 @@ bool ConfigManager::readProfileBody(uint16_t) { return false; }
 
 // No storage to write to either, which is what the reset does anyway: the
 // compiled defaults replace the configuration in effect and nothing else moves.
-void ConfigManager::factoryReset() { _config = kConfigDefaults; }
+void ConfigManager::factoryReset() {
+  _config = kConfigDefaults;
+  applySys();
+}
+
+void ConfigManager::applySys() {
+#if THETAGP_CFG_LOG_EN
+  switch (_config.sys.log) {
+  case 0:
+    LogSetLevel(LOG_LV(Info));
+    break;
+  case 1:
+    LogSetLevel(LOG_LV(Warn));
+    break;
+  case 2:
+    LogSetLevel(LOG_LV(Error));
+    break;
+  default:
+    LogSetLevel(LOG_LV(Debug));
+    break;
+  }
+#endif
+}
 
 bool ConfigManager::saveProfile(uint32_t *droppedKeys) {
   // No storage to write to, so no body is replaced and nothing can be left
