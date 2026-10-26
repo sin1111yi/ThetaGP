@@ -833,7 +833,7 @@ void ProfileDomain::select(const ThetaGP_Request &request,
         return;
     }
 
-    if (!ProfileStore::getInstance().selectProfile(
+    if (!ConfigManager::getInstance().selectProfile(
             static_cast<uint16_t>(arm.id))) {
         writeFailure(reply, ThetaGP_ErrorCode_ERR_INTERNAL,
                      ThetaGP_Reason_REASON_PROFILE_SELECT_FAILED);

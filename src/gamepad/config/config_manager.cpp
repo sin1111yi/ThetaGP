@@ -255,8 +255,15 @@ uint8_t ConfigManager::profileCount() const {
   return ProfileStore::getInstance().getStatus().profileCount;
 }
 
-// Reserved like the entry above: not implemented, so it moves nothing.
-bool ConfigManager::selectProfile(uint16_t) { return false; }
+// The profile the device runs from is the store's own entry, and its body is
+// what the device runs on: the configuration in effect is read from it, so a
+// switch takes effect without a reboot.
+bool ConfigManager::selectProfile(uint16_t id) {
+  if (!ProfileStore::getInstance().selectProfile(id)) {
+    return false;
+  }
+  return readProfileBody(id);
+}
 
 Profile::ProfileStatus ConfigManager::getStatus() const {
   return ProfileStore::getInstance().getStatus();
