@@ -46,23 +46,21 @@ using namespace ThetaGP::Gamepad;
 
 namespace {
 
-// The reply payload and the frame built around it, held across the command
-// task's calls: one request is answered at a time. Both are allocated once and
-// written off the hot path, so they sit in the system RAM, not in fast RAM.
+// The reply payload and the frame built around it: one request is answered at
+// a time. AXI SRAM (COMMON_ZERO_INIT), the region DMA reaches.
 COMMON_ZERO_INIT static uint8_t s_reply[Wire::Frame::PAYLOAD_MAX]{};
 COMMON_ZERO_INIT static uint8_t s_frame[Wire::Frame::FRAME_MAX]{};
 
-// How much of s_frame is still to go out. The CDC FIFO takes 64 bytes at a
-// time, so a larger reply leaves over several calls instead of being cut off.
+// How much of s_frame is still to go out, and how much of it has: the CDC FIFO
+// takes a chunk at a time, so a larger reply leaves over several calls.
 uint16_t s_txLength = 0;
 uint16_t s_txSent = 0;
 
-// The refusals the frame layer has counted, so the task answers a frame it had
-// to refuse once and only once.
+// The refusal count the task has answered up to.
 uint32_t s_refused = 0;
 
-// Hand the CDC FIFO as much of the pending frame as it will take. Nothing
-// waits here: a full FIFO ends the call, and the rest goes out on the next one.
+// Hands the CDC FIFO as much of the pending frame as it takes; a full FIFO ends
+// the call and the rest goes out on a later one.
 static void pumpCdcTx(void) {
   while (s_txLength != 0) {
     const uint16_t left = static_cast<uint16_t>(s_txLength - s_txSent);
@@ -84,7 +82,7 @@ static void pumpCdcTx(void) {
   }
 }
 
-// Take a framed reply for sending, unless one is still on its way out.
+// Takes a framed reply for sending unless one is still on its way out.
 static bool queueFrame(uint16_t length) {
   if (length == 0 || s_txLength != 0) {
     return false;
@@ -99,10 +97,8 @@ static bool queueFrame(uint16_t length) {
 FAST_CODE static void taskGamepadCore(uint32_t currentTimeUs) {
   UNUSED(currentTimeUs);
 
-  // tud_task first: consume pending USB events and free the HID IN
-  // endpoint before submitting the next report. Calling it after
-  // process() drops ~2/3 of a 1kHz report stream (single-buffer HID:
-  // a report submitted while the endpoint is still busy is discarded).
+  // tud_task first: it frees the HID IN endpoint, and a report submitted while
+  // that endpoint is still busy is dropped.
   tud_task();
   Gamepad::Gamepad::getInstance().process();
 }
@@ -110,22 +106,19 @@ FAST_CODE static void taskGamepadCore(uint32_t currentTimeUs) {
 FAST_CODE static void taskCmdProc(uint32_t currentTimeUs) {
   UNUSED(currentTimeUs);
 
-  // The command tick: move on what is still going out, drop a half frame whose
-  // bytes stopped arriving, then answer the whole frames the USB interrupt
-  // assembled. A reply is framed here and handed to the CDC FIFO;
-  // tud_task() on the report tick is what moves those bytes out.
+  // Moves the reply out, drops a half frame whose bytes stopped arriving, then
+  // answers the frames the receive side assembled.
   Wire::Frame &codec = Wire::Frame::getInstance();
   codec.tick(Drivers::Device::SystemTimer::getInstance().getMillis());
   pumpCdcTx();
 
-  // One reply at a time: while a frame is leaving, s_frame holds it and the
-  // frames the codec assembled wait for a later tick.
+  // One reply at a time: the frames assembled wait for a later tick.
   if (s_txLength != 0) {
     return;
   }
 
-  // A frame the layer refused is answered with a transport error: the host
-  // resends the command it could not get through.
+  // A refused frame is answered once, with the transport error the host
+  // resends on.
   const uint32_t refused = codec.droppedFrames();
   if (refused != s_refused) {
     s_refused = refused;
@@ -155,19 +148,16 @@ FAST_CODE static void taskCmdProc(uint32_t currentTimeUs) {
     pumpCdcTx();
   }
 
-  // A reset the host asked for is owed the wire before it takes the wire down:
-  // the frame is out of this task's hands and into the CDC's FIFO, so the reset
-  // waits until that FIFO is empty and the host has the reply.
+  // A reset takes the wire down, so it waits until the reply has left the
+  // FIFO.
   if (Wire::SysDomain::resetRequested() && s_txLength == 0 &&
       tud_cdc_n_write_available(0) == CFG_TUD_CDC_TX_BUFSIZE) {
     NVIC_SystemReset();
   }
 
-  // A stream's frames answer no frame of the host's, so they leave from here,
-  // one per tick, and only while nothing else is in flight. Asking for one
-  // when no stream is open is what the question below answers first: the reply
-  // it would build is over a kilobyte of zeros written for nothing, on a tick
-  // that runs a thousand times a second.
+  // A stream answers no frame of the host's: one frame per tick, while nothing
+  // else is in flight. Both streams are asked whether they are open first,
+  // because the call builds its reply before it finds out.
   if (s_txLength == 0 &&
       (Wire::Flash::active() || Wire::ProfileTransfer::busy())) {
     const uint16_t carried =
@@ -187,16 +177,13 @@ void ThetaGP::ThetaGamepad::registerTasks(void) {
   TaskManager::registerTask("GAMEPAD", "CORE", taskGamepadCore,
                             TASK_PERIOD_HZ(THETAGP_CFG_USB_REPORT_RATE_HZ),
                             TaskPriority::Realtime);
-  // The command task runs at the report tick's own rate: a command waits for
-  // the next tick of this task before it is answered, so the period is the
-  // latency a caller pays for every frame. A tick that finds nothing to answer
-  // costs a few cycles, and the work is the same per frame whatever the rate.
+  // A command waits for this task's next tick, so the period is the latency a
+  // caller pays per frame.
   TaskManager::registerTask("COMM", "CMD_PROC", taskCmdProc,
                             TASK_PERIOD_HZ(THETAGP_CFG_CMD_PROC_HZ),
                             TaskPriority::Medium);
 #if THETAGP_CFG_HAS_RGB_STRIP
-  // The strip is cosmetic; sending a frame holds the CPU long enough to matter
-  // against the report tick, so it runs below every task that carries input.
+  // The strip is cosmetic: it runs below every task that carries input.
   TaskManager::registerTask("LED", "EFFECT", Drivers::Device::RgbStrip::task,
                             TASK_PERIOD_US(THETAGP_CFG_LED_TASK_PERIOD_US),
                             TaskPriority::Low);
