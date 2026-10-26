@@ -108,9 +108,9 @@ FAST_CODE static void taskGamepadCore(uint32_t currentTimeUs) {
 FAST_CODE static void taskCmdProc(uint32_t currentTimeUs) {
   UNUSED(currentTimeUs);
 
-  // The 20 Hz command tick: move on what is still going out, drop a half frame
-  // whose bytes stopped arriving, then answer the whole frames the USB
-  // interrupt assembled. A reply is framed here and handed to the CDC FIFO;
+  // The command tick: move on what is still going out, drop a half frame whose
+  // bytes stopped arriving, then answer the whole frames the USB interrupt
+  // assembled. A reply is framed here and handed to the CDC FIFO;
   // tud_task() on the report tick is what moves those bytes out.
   Wire::Frame &codec = Wire::Frame::getInstance();
   codec.tick(Drivers::Device::SystemTimer::getInstance().getMillis());
@@ -181,8 +181,13 @@ void ThetaGP::ThetaGamepad::registerTasks(void) {
   TaskManager::registerTask("GAMEPAD", "CORE", taskGamepadCore,
                             TASK_PERIOD_HZ(THETAGP_CFG_USB_REPORT_RATE_HZ),
                             TaskPriority::Realtime);
+  // The command task runs at the report tick's own rate: a command waits for
+  // the next tick of this task before it is answered, so the period is the
+  // latency a caller pays for every frame. A tick that finds nothing to answer
+  // costs a few cycles, and the work is the same per frame whatever the rate.
   TaskManager::registerTask("COMM", "CMD_PROC", taskCmdProc,
-                            TASK_PERIOD_HZ(20), TaskPriority::Medium);
+                            TASK_PERIOD_HZ(THETAGP_CFG_CMD_PROC_HZ),
+                            TaskPriority::Medium);
 #if THETAGP_CFG_HAS_RGB_STRIP
   // The strip is cosmetic; sending a frame holds the CPU long enough to matter
   // against the report tick, so it runs below every task that carries input.
