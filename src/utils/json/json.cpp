@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <cstring>
 
+using namespace ThetaGP::Util;
+
 // ── Path helpers ──────────────────────────────────────────────
 
 // Digits of a number token as an int. strtol is not used: newlib-nano's returns

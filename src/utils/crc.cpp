@@ -28,6 +28,8 @@
 
 #include "crc.h"
 
+using namespace ThetaGP::Util;
+
 // Nibble wide lookup for the reflected CRC-32 polynomial 0xEDB88320. A byte
 // wide table costs 1 KB of flash for about twice the speed, which a record of a
 // few dozen bytes cannot spend.

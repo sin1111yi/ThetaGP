@@ -255,7 +255,7 @@ uint16_t Ps4Auth::getReport(uint8_t report_id, uint8_t *buffer,
     uint8_t frame[kFrameSize + 1] = {};
     frame[0] = report_id;
     std::memcpy(&frame[1], payload, kFrameSize - 4);
-    const uint32_t crc = Crc::crc32(frame, kFrameSize - 3);
+    const uint32_t crc = Util::Crc::crc32(frame, kFrameSize - 3);
     std::memcpy(&payload[kFrameSize - 4], &crc, sizeof(crc));
     s_chunk = static_cast<uint8_t>((s_chunk + 1) % kAnswerChunks);
     return copyOut(payload, kFrameSize, buffer, reqlen);
@@ -268,7 +268,7 @@ uint16_t Ps4Auth::getReport(uint8_t report_id, uint8_t *buffer,
     uint8_t frame[12] = {};
     frame[0] = report_id;
     std::memcpy(&frame[1], payload, 11);
-    const uint32_t crc = Crc::crc32(frame, sizeof(frame));
+    const uint32_t crc = Util::Crc::crc32(frame, sizeof(frame));
     std::memcpy(&payload[11], &crc, sizeof(crc));
     return copyOut(payload, sizeof(payload), buffer, reqlen);
   }
@@ -302,7 +302,7 @@ void Ps4Auth::setReport(uint8_t report_id, uint8_t const *buffer,
   std::memcpy(&frame[1], buffer, kFrameSize - 4);
   uint32_t carried = 0;
   std::memcpy(&carried, &buffer[kFrameSize - 4], sizeof(carried));
-  if (Crc::crc32(frame, kFrameSize - 3) != carried) {
+  if (Util::Crc::crc32(frame, kFrameSize - 3) != carried) {
     return;
   }
 

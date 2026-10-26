@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+namespace ThetaGP::Util {
+
 // Zero-allocation JSON, over frozen. Parse mode reads the caller's string in
 // place; write mode fills the caller's buffer.
 //
@@ -97,3 +99,5 @@ public:
   // Resets both parse and write state.
   void reset();
 };
+
+} // namespace ThetaGP::Util

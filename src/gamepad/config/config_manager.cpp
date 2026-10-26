@@ -24,7 +24,7 @@
 #include "gamepad/config/config_defaults.h"
 #include "gamepad/config/config_store.h"
 #include "gamepad/profile/profile_store.h"
-#include "utils/json/json.h" // Json::missingKeyCount, the key comparison
+#include "utils/json/json.h" // Util::Json::missingKeyCount, the key comparison
 
 #include "utils/log/log.h"
 
@@ -136,7 +136,7 @@ bool ConfigManager::repairFactoryProfile() {
   ProfileText held;
   bool reads = store.readProfile(0, &held) && held.len > 0;
   if (reads) {
-    Json body;
+    Util::Json body;
     body.parse(held.data, static_cast<int>(held.len));
     if (body.getInt("ver", kOldestReadableVersion) == kProfileVersion) {
       return true;
@@ -256,7 +256,7 @@ bool ConfigManager::saveProfile(uint32_t *droppedKeys) {
 
   char carriedName[kProfileNameMax] = {};
   if (haveReplaced) {
-    Json replaced;
+    Util::Json replaced;
     replaced.parse(reinterpret_cast<const char *>(s_replaced), replacedLen);
     (void)replaced.getStrCopy("name", carriedName, sizeof(carriedName));
   }
@@ -274,9 +274,9 @@ bool ConfigManager::saveProfile(uint32_t *droppedKeys) {
 
   uint32_t notCarriedOver = 0;
   if (droppedKeys && haveReplaced) {
-    Json fresh;
+    Util::Json fresh;
     fresh.parse(reinterpret_cast<const char *>(s_staging), jsonLen);
-    Json replaced;
+    Util::Json replaced;
     replaced.parse(reinterpret_cast<const char *>(s_replaced), replacedLen);
     notCarriedOver = fresh.missingKeyCount(replaced);
   }

@@ -324,7 +324,7 @@ void readProfileName(ProfileStore &store, uint16_t id, char *out, size_t cap) {
     if (!store.readProfile(id, &text) || text.len == 0) {
         return;
     }
-    Json body;
+    Util::Json body;
     body.parse(text.data, static_cast<int>(text.len));
     (void)body.getStrCopy("name", out, static_cast<int>(cap));
 }

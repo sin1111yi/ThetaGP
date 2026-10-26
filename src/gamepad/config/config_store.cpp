@@ -155,7 +155,7 @@ bool parseProfile(const char *json, uint32_t len, ConfigStore *cfg) {
 
   // The body's own length is the parse window: no terminator is looked for past
   // its last byte.
-  Json doc;
+  Util::Json doc;
   doc.parse(json, static_cast<int>(len));
 
   // The version decides how every field's path is spelled, so it is read before
@@ -230,7 +230,7 @@ uint16_t serializeProfile(const ConfigStore &cfg, const char *name, char *dst,
     return 0;
   }
 
-  Json doc;
+  Util::Json doc;
   doc.beginWrite(dst, cap);
   doc.printf("{%Q:%d", "ver", kProfileVersion);
   // The profile's name travels with its body: a save keeps the one the body it

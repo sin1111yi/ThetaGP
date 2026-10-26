@@ -55,7 +55,7 @@ public:
   // active, read once as the call starts.
   //
   // `droppedKeys`, when it is not null, is handed the number of keys of the
-  // replaced body the new one does not carry (Json::missingKeyCount). It stays 0
+  // replaced body the new one does not carry (Util::Json::missingKeyCount). It stays 0
   // for a call that did not reach the flash, and for one whose comparison had no
   // answer.
   bool saveProfile(uint32_t *droppedKeys = nullptr);

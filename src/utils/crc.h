@@ -31,6 +31,8 @@
 #include <cstddef>
 #include <cstdint>
 
+namespace ThetaGP::Util {
+
 // Checksums over a byte range: CRC-32 and CRC-16/CCITT. Both are pure
 // functions of the bytes they are given, so the variant is chosen by name
 // rather than by which helper file a caller happens to include.
@@ -55,3 +57,5 @@ private:
   static uint32_t crc32Bytes(const uint8_t *bytes, size_t len);
   static uint16_t crc16CcittBytes(const uint8_t *bytes, size_t len);
 };
+
+} // namespace ThetaGP::Util

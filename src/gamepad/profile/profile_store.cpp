@@ -77,7 +77,7 @@ ProfileStore &ProfileStore::getInstance() {
 // ── CRC16 for BootMeta ──
 
 uint16_t ProfileStore::crc16BootMeta(const BootMeta *meta) const {
-  return Crc::crc16Ccitt(reinterpret_cast<const uint8_t *>(meta), 14);
+  return Util::Crc::crc16Ccitt(reinterpret_cast<const uint8_t *>(meta), 14);
 }
 
 // ── writeBootMeta() ──

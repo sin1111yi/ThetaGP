@@ -114,7 +114,7 @@ int main() {
   {
     char body[kBodyCap] = {};
     const uint16_t len = writeDefaults(body, sizeof(body));
-    Json doc;
+    ThetaGP::Util::Json doc;
     doc.parse(body, static_cast<int>(len));
 
     const KeyEntry &socd = keyEntry(ConfigKey::MapSocd);
