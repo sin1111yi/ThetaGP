@@ -29,20 +29,21 @@
 
 #include <cstdint>
 
-// CDC RX buffer in AXI SRAM (declared in usb_driver.cpp)
-extern COMMON_ZERO_INIT uint8_t s_cdc_buffer[256];
-
-namespace ThetaGP::USB {
+namespace ThetaGP::Drivers::GPEmulator::USB {
 
 class USBDriver {
 private:
   static constexpr uint16_t CDC_BUFFER_SIZE = 256;
+
+  // The CDC read buffer, in AXI SRAM: the callback reads into it and hands it on.
+  static COMMON_ZERO_INIT uint8_t s_cdc_buffer[CDC_BUFFER_SIZE];
+
   USBDriver() = default;
 
   usbd_class_driver_t _drivers[2];
 
-  // ── C-style CDC RX callback ──
-  typedef void (*CDCRxCallbackFunc)(void *buffer, uint16_t len);
+  // The CDC receive callback, C-style so no std::function is needed.
+  using CDCRxCallbackFunc = void (*)(void *buffer, uint16_t len);
   CDCRxCallbackFunc volatile _cdcRxCallback;
 
 public:
@@ -61,11 +62,7 @@ public:
     UNUSED(itf);
 
     while (tud_cdc_available()) {
-      uint32_t len = tud_cdc_read(s_cdc_buffer, sizeof(s_cdc_buffer));
-#if 0
-      tud_cdc_write(s_cdc_buffer, len);
-      tud_cdc_write_flush();
-#endif
+      const uint32_t len = tud_cdc_read(s_cdc_buffer, sizeof s_cdc_buffer);
       if (_cdcRxCallback) {
         _cdcRxCallback(s_cdc_buffer, len);
       }
@@ -73,7 +70,7 @@ public:
   }
 };
 
-} // namespace ThetaGP::USB
+} // namespace ThetaGP::Drivers::GPEmulator::USB
 
 extern "C" {
 bool get_usb_mounted(void);

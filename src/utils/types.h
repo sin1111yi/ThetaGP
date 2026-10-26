@@ -38,12 +38,7 @@ extern "C" {
 #ifdef __cplusplus
 namespace ThetaGP {
 
-/**
- * @brief Result type with [[nodiscard]] enforcement
- *
- * Modern C++ class wrapping operation result codes.
- * Use isOk() / isError() or compare against Result::Value constants.
- */
+// An operation's result. A value is [[nodiscard]], so a caller reads it.
 class [[nodiscard]] Result {
 public:
   enum Value : int32_t {

@@ -29,12 +29,12 @@
 
 #include <cstring>
 
-using namespace ThetaGP::USB;
 using namespace ThetaGP::Drivers::GPEmulator;
+using namespace ThetaGP::Drivers::GPEmulator::USB;
 
 COMMON_ZERO_INIT static uint8_t s_config_descriptor[1024];
 COMMON_ZERO_INIT static uint16_t s_config_size;
-COMMON_ZERO_INIT uint8_t s_cdc_buffer[256];
+COMMON_ZERO_INIT uint8_t USBDriver::s_cdc_buffer[CDC_BUFFER_SIZE];
 
 // Bulk endpoint max packet size: 512 for HS, 64 for FS
 static constexpr uint8_t CDC_BULK_EPSIZE_LO = THETAGP_USB_HIGH_SPEED ? 0x00 : 0x40;

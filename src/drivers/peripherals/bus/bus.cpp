@@ -23,10 +23,7 @@
 
 #include "drivers/peripherals/bus/bus.h"
 
-namespace ThetaGP {
-namespace Drivers {
-namespace Peripheral {
-namespace BUS {
+namespace ThetaGP::Drivers::Peripheral::BUS {
 
 Bus::Bus() {}
 
@@ -65,7 +62,4 @@ Result Bus::transmitReceiveDma(TransferCallback cb, void *ctx,
   return transmitReceiveImpl(cb, ctx, txData, rxData, len);
 }
 
-} // namespace BUS
-} // namespace Peripheral
-} // namespace Drivers
-} // namespace ThetaGP
+} // namespace ThetaGP::Drivers::Peripheral::BUS

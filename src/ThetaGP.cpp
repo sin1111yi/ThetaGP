@@ -95,11 +95,12 @@ void ThetaGamepad::setup() {
 
   // The CDC command channel: the USB interrupt hands the bytes the host sent to
   // the frame assembler, and the command task answers them.
-  USB::USBDriver::getInstance().setCDCRxCallback([](void *buffer, uint16_t length) {
-    Wire::Frame::getInstance().feed(
-        static_cast<const uint8_t *>(buffer), length,
-        Drivers::Device::SystemTimer::getInstance().getMillis());
-  });
+  Drivers::GPEmulator::USB::USBDriver::getInstance().setCDCRxCallback(
+      [](void *buffer, uint16_t length) {
+        Wire::Frame::getInstance().feed(
+            static_cast<const uint8_t *>(buffer), length,
+            Drivers::Device::SystemTimer::getInstance().getMillis());
+      });
 }
 
 void ThetaGamepad::bootup() {

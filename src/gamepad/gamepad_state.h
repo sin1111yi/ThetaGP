@@ -103,8 +103,7 @@
  */
 #define AUX_MASK_FUNCTION    (1U << 15)
 
-namespace ThetaGP {
-namespace Gamepad {
+namespace ThetaGP::Gamepad {
 
 struct GamepadRawInput {
   uint8_t dpad{0};
@@ -168,5 +167,4 @@ uint8_t filterToFourWayMode(DpadState &s, uint8_t dpad);
  */
 uint8_t runSOCDCleaner(DpadState &s, Enums::SOCDMode mode, uint8_t dpad);
 
-} // namespace Gamepad
-} // namespace ThetaGP
+} // namespace ThetaGP::Gamepad

@@ -66,7 +66,7 @@ void GPEmulatorManager::setup(Enums::InputMode mode) {
 
   emulator->initialize();
 
-  USB::USBDriver::getInstance().init();
+  Drivers::GPEmulator::USB::USBDriver::getInstance().init();
 
   // TinyUSB initialize
   tusb_rhport_init_t dev_init = {.role = TUSB_ROLE_DEVICE,
