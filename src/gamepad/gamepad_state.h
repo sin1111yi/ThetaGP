@@ -106,13 +106,6 @@
 namespace ThetaGP {
 namespace Gamepad {
 
-const uint8_t dpadMasks[] = {
-    GAMEPAD_MASK_UP,
-    GAMEPAD_MASK_DOWN,
-    GAMEPAD_MASK_LEFT,
-    GAMEPAD_MASK_RIGHT,
-};
-
 struct GamepadRawInput {
   uint8_t dpad{0};
   uint32_t buttons{0};

@@ -54,7 +54,20 @@ uint16_t dpadToAnalogY(uint8_t dpad) {
 }
 
 uint8_t getMaskFromDirection(DpadDirection direction) {
-  return dpadMasks[static_cast<size_t>(direction) - 1];
+  switch (direction) {
+  case DpadDirection::Up:
+    return GAMEPAD_MASK_UP;
+  case DpadDirection::Down:
+    return GAMEPAD_MASK_DOWN;
+  case DpadDirection::Left:
+    return GAMEPAD_MASK_LEFT;
+  case DpadDirection::Right:
+    return GAMEPAD_MASK_RIGHT;
+  case DpadDirection::None:
+  case DpadDirection::Count:
+    break;
+  }
+  return 0;
 }
 
 uint8_t updateDpad(DpadState &s, uint8_t dpad, DpadDirection direction) {
