@@ -96,11 +96,8 @@
 #define GAMEPAD_TRIGGER_MID  0x7F
 #define GAMEPAD_TRIGGER_MAX  0xFF
 
-/**
- * @brief AUX defines - gamepad state that doesn't translate to an output
- * button/dpad/etc. If you want to have require the Function button for a hotkey
- * in a board config, use `#define HOTKEY_0X_AUX_MASK 32768`
- */
+// AUX bit the Function button sets: gamepad state that maps to no output button,
+// axis or direction.
 #define AUX_MASK_FUNCTION    (1U << 15)
 
 namespace ThetaGP::Gamepad {
@@ -129,13 +126,7 @@ uint16_t dpadToAnalogY(uint8_t dpad);
 
 uint8_t getMaskFromDirection(Enums::DpadDirection direction);
 
-/**
- * @brief State the D-pad filters carry from one call to the next.
- *
- * `order` holds the cardinal directions currently pressed, oldest first, and
- * `count` how many of its slots are in use. `lastUD` and `lastLR` hold the
- * direction each axis saw last.
- */
+// State the D-pad filters carry from one call to the next.
 struct DpadState {
   Enums::DpadDirection order[4]{}; // press order, oldest first
   uint8_t count{0};
@@ -145,26 +136,11 @@ struct DpadState {
 
 uint8_t updateDpad(DpadState &s, uint8_t dpad, Enums::DpadDirection direction);
 
-/**
- * @brief Filter diagonals out of the dpad, making the device work as a 4-way
- * lever.
- *
- * The most recent cardinal direction wins.
- *
- * @param s The state carried between calls.
- * @param dpad The GameState.dpad value.
- * @return uint8_t The new dpad value.
- */
+// Filter diagonals out of the dpad, making the device work as a 4-way lever.
+// The most recent cardinal direction wins.
 uint8_t filterToFourWayMode(DpadState &s, uint8_t dpad);
 
-/**
- * @brief Run SOCD cleaning against a D-pad value.
- *
- * @param s The state carried between calls.
- * @param mode The SOCD cleaning mode.
- * @param dpad The GamepadRawInput.dpad value.
- * @return uint8_t The clean D-pad value.
- */
+// Run SOCD cleaning against a D-pad value.
 uint8_t runSOCDCleaner(DpadState &s, Enums::SOCDMode mode, uint8_t dpad);
 
 } // namespace ThetaGP::Gamepad

@@ -26,21 +26,15 @@
 #include "build_info.h"
 #include "utils/log/log.h"
 
-// Suppress deprecated volatile and pedantic warnings in TinyUSB upstream source
-// Note: Per-file pragma scope is insufficient — individual TinyUSB source files
-// include tusb_common.h which triggers these. Suppressed globally via CMake
-// target_compile_options on TINYUSB_SOURCES.
-//
-// Local diagnostics guard for tusb_config.h itself:
+// Deprecated volatile and pedantic warnings from the TinyUSB sources are
+// suppressed for those targets in CMake. The push below guards this file alone.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 #ifdef __cplusplus
 #pragma GCC diagnostic ignored "-Wvolatile"
 #endif
 
-//--------------------------------------------------------------------+
-// ThetaGP Private USB Configuration
-//--------------------------------------------------------------------+
+// ── thetagp private usb configuration ──
 
 // USB speed indicator
 #if defined(BDCFG_SPEED_HS)
@@ -67,9 +61,7 @@
 extern "C" {
 #endif
 
-//--------------------------------------------------------------------+
-// RHport Configuration
-//--------------------------------------------------------------------+
+// ── rhport configuration ──
 
 // RHPort number used for device (ULPI is port 1)
 #ifndef BOARD_TUD_RHPORT
@@ -94,9 +86,7 @@ extern "C" {
 #error "[usb] hw_periph must be USB1 or USB2 — see configs/CONFIGURATION.md"
 #endif
 
-//--------------------------------------------------------------------
-// COMMON CONFIGURATION
-//--------------------------------------------------------------------
+// ── common configuration ──
 
 #ifndef CFG_TUSB_OS
 #define CFG_TUSB_OS OPT_OS_NONE
@@ -112,10 +102,9 @@ extern "C" {
 #define CFG_TUSB_MEM_SECTION COMMON_ZERO_INIT
 #endif
 
-// High speed runs on the core with internal DMA: the core packetizes a transfer
-// itself, so a 512-byte packet costs the CPU nothing per byte. The buffers it
-// reads live in the AXI SRAM region the MPU marks non-cacheable, which is what
-// makes the transfer safe without cache maintenance.
+// High speed runs on the core's internal DMA, so a 512-byte packet costs the CPU
+// nothing per byte. The buffers it reads live in the AXI SRAM region the MPU marks
+// non-cacheable, which is what makes the transfer safe without cache maintenance.
 #if THETAGP_USB_HIGH_SPEED
 #ifndef CFG_TUD_DWC2_DMA_ENABLE
 #define CFG_TUD_DWC2_DMA_ENABLE 1
@@ -144,9 +133,7 @@ extern "C" {
 #define CFG_TUD_ENABLED       1
 #define CFG_TUD_MAX_SPEED     BOARD_TUD_MAX_SPEED
 
-//--------------------------------------------------------------------
-// DEVICE CONFIGURATION
-//--------------------------------------------------------------------
+// ── device configuration ──
 
 #ifndef CFG_TUD_ENDPOINT0_SIZE
 #define CFG_TUD_ENDPOINT0_SIZE THETAGP_USB_EP0_SIZE
@@ -156,13 +143,13 @@ extern "C" {
 #define CFG_TUD_CDC_RX_BUFSIZE (THETAGP_USB_HIGH_SPEED ? 512 : 64)
 #define CFG_TUD_CDC_TX_BUFSIZE 1024
 
-// CDC Endpoint transfer buffer size, default to max bulk packet size (HS 512,
-// FS 64). Larger is faster. Larger RX_EPSIZE requires CFG_TUD_CDC_RX_NEED_ZLP =
-// 1 and host ZLP support
+// CDC endpoint transfer size: the max bulk packet of the speed in use (HS 512,
+// FS 64). A larger RX_EPSIZE needs CFG_TUD_CDC_RX_NEED_ZLP = 1 and host ZLP
+// support.
 #define CFG_TUD_CDC_RX_EPSIZE  (THETAGP_USB_HIGH_SPEED ? 512 : 64)
 #define CFG_TUD_CDC_TX_EPSIZE  (THETAGP_USB_HIGH_SPEED ? 512 : 64)
 
-//------------- CLASS -------------//
+// ── classes this device carries ──
 #define CFG_TUD_HID            1
 #define CFG_TUD_CDC            1
 #define CFG_TUD_MSC            0
@@ -173,7 +160,7 @@ extern "C" {
 }
 #endif
 
-// Restore compiler diagnostic settings
+// The diagnostics this file pushed.
 #pragma GCC diagnostic pop
 
 #endif /* _TUSB_CONFIG_H_ */

@@ -25,18 +25,15 @@
 
 namespace ThetaGP::Wire {
 
-// One frame of the CDC wire: a varint length, the payload, and the payload's
-// byte sum in the low 16 bits, little endian. The length counts the payload's
-// bytes and neither the prefix nor the checksum; the checksum covers the
-// payload's bytes and neither the prefix nor itself.
+// One frame of the CDC wire: a varint length, the payload, and the payload's byte
+// sum in the low 16 bits, little endian. The length and the checksum both cover the
+// payload alone, so neither counts the prefix.
 //
 // The class carries no message and no message type: a payload is handed up as
-// a pointer and a length, and what is inside it belongs to the layer above.
+// bytes, and what is inside it belongs to the layer above.
 //
-// The receive side is fed one byte or one buffer at a time and accumulates, so
-// the USB interrupt feeds it and the main loop takes from it. A frame whose
-// checksum does not hold is refused whole, and every refusal is counted in a
-// counter nothing else clears.
+// The receive side accumulates what the USB interrupt feeds it, and the main loop
+// takes whole frames out. A frame whose checksum does not hold is refused whole.
 class Frame {
 public:
     Frame(const Frame &) = delete;
@@ -90,10 +87,9 @@ public:
     // to PAYLOAD_MAX.
     static uint8_t prefixSize(uint16_t length);
 
-    // Writes one frame into a buffer and returns its size in bytes, or 0 when
-    // the payload is above PAYLOAD_MAX, a pointer is null, or out is too short
-    // for this frame. A frame of an empty payload is 3 bytes, so 0 is no frame
-    // rather than one.
+    // Writes one frame into out and returns its size in bytes, or 0 when the
+    // payload is above PAYLOAD_MAX, a pointer is null, or out is too short. A frame
+    // of an empty payload is 3 bytes, so 0 is no frame rather than one.
     static uint16_t encode(const uint8_t *payload, uint16_t length,
                            uint8_t *out, uint16_t capacity);
 
@@ -110,10 +106,8 @@ public:
     // returns whether this tick dropped one.
     bool tick(uint32_t nowMs);
 
-    // Takes the oldest whole frame whose checksum held and returns whether a
-    // frame was taken. A frame is only ever taken after its checksum has been
-    // held against it, and the bytes stay valid until the next frame is
-    // published into that slot.
+    // Takes the oldest whole frame whose checksum held, and answers whether one was
+    // taken. The bytes stay valid until the next frame is published into that slot.
     bool take(Payload &out);
 
     // Whole frames waiting to be taken.

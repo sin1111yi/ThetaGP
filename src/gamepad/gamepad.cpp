@@ -52,10 +52,7 @@ void Gamepad::reinit() {
   setup();
 }
 
-/**
- * @brief Register a keypad device
- * @param device Reference to Device (must be Keypad)
- */
+// Registers the keypad the gamepad reads.
 void Gamepad::registerKeypadDevice(Device *device) {
   if (std::strcmp(device->getName(), "keypad") == 0) {
     _inputDevice = device;
@@ -63,9 +60,7 @@ void Gamepad::registerKeypadDevice(Device *device) {
   }
 }
 
-/**
- * @brief Read input from registered keypad device
- */
+// Reads the registered keypad into this tick's raw input.
 void Gamepad::read() {
   if (!_inputDevice || !_inputDevice->isInitialized()) {
     return;
@@ -94,9 +89,7 @@ void Gamepad::read() {
   }
 }
 
-/**
- * @brief Main entry point for task scheduler
- */
+// Runs one report tick: raw input, transforms, output state.
 void Gamepad::process() {
   if (!_initialized || !_ready) {
     return;

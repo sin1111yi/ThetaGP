@@ -42,14 +42,14 @@ namespace ThetaGP {
 class [[nodiscard]] Result {
 public:
   enum Value : int32_t {
-    Ok = 0,            // Operation succeeded
-    Error = -1,        // Operation failed
-    Timeout = -2,      // Operation timed out
-    Busy = -3,         // Resource busy
-    NoMemory = -4,     // Out of memory
-    InvalidParam = -5, // Invalid parameter
-    NotReady = -6,     // Device not ready
-    Unsupported = -7,  // Operation unsupported
+    Ok = 0,
+    Error = -1,
+    Timeout = -2,
+    Busy = -3,
+    NoMemory = -4,
+    InvalidParam = -5,
+    NotReady = -6,
+    Unsupported = -7,
   };
 
   constexpr Result() = default;
@@ -70,14 +70,10 @@ private:
   Value _value = Ok;
 };
 
-/**
- * @brief Check if result indicates success
- */
+// Whether the result indicates success.
 [[nodiscard]] constexpr inline bool isOk(Result r) { return r.isOk(); }
 
-/**
- * @brief Check if result indicates error
- */
+// Whether the result indicates error.
 [[nodiscard]] constexpr inline bool isError(Result r) { return r.isError(); }
 
 } // namespace ThetaGP

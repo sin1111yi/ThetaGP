@@ -31,34 +31,20 @@
 #include <cstddef>
 #include <cstdint>
 
-/**
- * @brief Checksums over a byte range: CRC-32 and CRC-16/CCITT.
- *
- * Both are pure functions of the bytes they are given, so the variant is chosen
- * by name rather than by which helper file a caller happens to include.
- */
+// Checksums over a byte range: CRC-32 and CRC-16/CCITT. Both are pure
+// functions of the bytes they are given, so the variant is chosen by name
+// rather than by which helper file a caller happens to include.
 class Crc {
 public:
-  /**
-   * @brief CRC-32: reflected, polynomial 0xEDB88320, initial 0xFFFFFFFF, final
-   * XOR.
-   * @param data Array to read.
-   * @param size Number of elements in the array (1 by default).
-   * @returns the checksum.
-   */
+  // CRC-32: reflected, polynomial 0xEDB88320, initial 0xFFFFFFFF, final XOR.
   template <typename Type>
   static uint32_t crc32(const Type *data, size_t size = 1) {
     return crc32Bytes(reinterpret_cast<const uint8_t *>(data),
                       size * sizeof(Type));
   }
 
-  /**
-   * @brief CRC-16/CCITT-FALSE: polynomial 0x1021, initial 0xFFFF, not
-   * reflected, no final XOR. This is the variant the BootMeta field carries.
-   * @param data Array to read.
-   * @param size Number of elements in the array (1 by default).
-   * @returns the checksum.
-   */
+  // CRC-16/CCITT-FALSE: polynomial 0x1021, initial 0xFFFF, not reflected, no
+  // final XOR. This is the variant the BootMeta field carries.
   template <typename Type>
   static uint16_t crc16Ccitt(const Type *data, size_t size = 1) {
     return crc16CcittBytes(reinterpret_cast<const uint8_t *>(data),

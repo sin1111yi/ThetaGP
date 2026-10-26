@@ -29,13 +29,10 @@
 
 namespace ThetaGP::Gamepad::Config {
 
-// No field carries an initializer. The defaults are aggregated in one object in
-// config_defaults.h (kConfigDefaults); this struct has none of its own. A
-// ConfigStore nothing has assigned to it is zero, not a usable config.
-// One struct per domain the key table names a field under. A domain's fields
-// are the fields a profile body carries under that name, and the store is one
-// member per domain: the byte a key stands for is its domain's offset plus its
-// own offset inside it.
+// The `map` domain of a profile body. No field carries an initializer: the
+// defaults are aggregated in config_defaults.h, so a store nothing has assigned to
+// is zero rather than a usable configuration. A key's byte is its domain's offset
+// plus its own offset inside it.
 struct Map {
   uint8_t btn_map[32]; // Physical key → button bit index (0xFF = unmapped)
   uint8_t socd;
@@ -112,11 +109,8 @@ struct ConfigStore {
   Sys sys;
 };
 
-// The domains sit one after another, each starting where the one before it
-// ended, and the only byte the rows of the key table do not have to reach is
-// the one the store's own alignment pads out at its end: a domain or a field
-// added without the row that names it would leave a byte inside this layout
-// that no profile key has a path for, and that is what fails here.
+// The domains sit one after another, so a domain or a field added without the row
+// that names it fails here.
 static_assert(offsetof(ConfigStore, stick) == sizeof(Map), "config store: Map is not first and whole");
 static_assert(offsetof(ConfigStore, trig) ==
                   offsetof(ConfigStore, stick) + sizeof(Stick),
@@ -137,28 +131,17 @@ static_assert(sizeof(ConfigStore) - offsetof(ConfigStore, sys) - sizeof(Sys) <
                   alignof(ConfigStore),
               "config store: the store ends in more than its own padding");
 
-// Parse the JSON profile body `json[0 .. len)` into ConfigStore. `len` is the
-// body's length in bytes, and it is what bounds the parse: the body needs no
-// terminator, and no byte behind it is read even when it fills the buffer it
-// sits in whole. Pass the length the store reported for the body being parsed.
-//
-// Answers whether the body was read. False means the body's version is not one
-// this firmware reads, and nothing of that body was applied: a version it cannot
-// place is refused whole rather than read at paths that hold nothing. What the
-// store holds after a refusal is the caller's business — both callers hand in
-// the compiled defaults.
+// Reads the JSON body `json[0 .. len)` into cfg. `len` bounds the parse: the body
+// needs no terminator, and no byte behind it is read. Answers false for a version
+// this firmware does not read, with nothing of that body applied.
 bool parseProfile(const char *json, uint32_t len, ConfigStore *cfg);
 
-// Write cfg into dst as a profile JSON body. `cap` is the size of dst in bytes,
-// terminator included. Returns the body length in bytes, terminator not
-// counted, or 0 when no usable body was produced: dst was too small for it, or
-// the body would be longer than PROFILE_JSON_MAX, the most the flash layer
-// stores. A truncated body is never returned — 0 means "nothing to persist", so
-// a caller must not hand that length to the store.
-// `name` is the profile's own name, written into the body beside the version;
-// an empty one writes none.
-// The longest name a profile body carries, terminator included: the length the
-// wire's profile entry reports.
+// Writes cfg into dst as a profile body, with `name` beside the version; an empty
+// name writes none. `cap` includes the terminator. Answers the body's length, or 0
+// when dst is too small or the body would pass PROFILE_JSON_MAX: a truncated body
+// is never returned, so a caller never hands 0 to the store.
+
+// The longest name a profile body carries, terminator included.
 inline constexpr uint16_t kProfileNameMax = 25;
 
 // The version of the body format this firmware writes, and the oldest one it

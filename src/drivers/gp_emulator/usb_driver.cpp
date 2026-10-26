@@ -128,7 +128,7 @@ const uint8_t *USBDriver::getConfigurationDescriptor(uint8_t index) {
   return s_config_descriptor;
 }
 
-// ------------------------------------------------------------------- //
+// ── TinyUSB callbacks and the C entry points into this driver ──
 
 extern "C" {
 

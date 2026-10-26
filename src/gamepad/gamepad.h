@@ -39,11 +39,8 @@ namespace ThetaGP::Gamepad {
 using Device = ThetaGP::Drivers::Device::Device;
 using GPEmulatorManager = ThetaGP::Drivers::GPEmulator::GPEmulatorManager;
 
-/**
- * @brief Gamepad class - handles input mapping and state management
- *
- * Process method is designed to be called by task scheduler
- */
+// Input mapping and state management. `process()` is called by the scheduler on
+// every report tick.
 class Gamepad {
 private:
   // This tick's raw input plus the memory the configured transforms keep
@@ -83,10 +80,7 @@ public:
     return instance;
   }
 
-  /**
-   * @brief Register a keypad device
-   * @param device Reference to Device (must be Keypad)
-   */
+  // Register a keypad device
   void registerKeypadDevice(Device *device);
 
   /* clang-format off */

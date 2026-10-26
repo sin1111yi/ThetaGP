@@ -29,12 +29,8 @@
 
 namespace ThetaGP::Drivers::Device {
 
-/**
- * @brief W25QXX family SPI flash driver (C++ implementation)
- *
- * Replaces the old C-style w25qxx.c/w25qxx.h driver.
- * Uses SpiBus::transfer() for all SPI communication (full-duplex).
- */
+// The Winbond W25QXX family over FlashBase. Every exchange is a full-duplex
+// SpiBus::transfer().
 class FlashW25qxx : public FlashBase {
 public:
   static FlashW25qxx &getInstance() {

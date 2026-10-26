@@ -57,24 +57,19 @@ static_assert(PROFILE_ID_ACTIVE > PROFILE_MAX_ID,
 static_assert(PROFILE_STAGING_SIZE <= 0xFFFF,
               "PROFILE_STAGING_SIZE must fit as a uint16_t body length");
 
-// Erase sector size of the external SPI flash. The profile layout and the
-// sector accounting in getStatus() both count in these units.
-static constexpr uint32_t PROFILE_SECTOR_SIZE =
-    0x1000; /**< Erase sector size of the external SPI flash (4 KB) */
+// The erase sector of the external SPI flash. The layout below and the sector
+// accounting in getStatus() both count in these units.
+static constexpr uint32_t PROFILE_SECTOR_SIZE = 0x1000;
 
-static constexpr uint32_t BOOTMETA_BASE = 0x000000; /**< BootMeta Ring base */
-static constexpr uint32_t BOOTMETA_SIZE =
-    0x000800; /**< BootMeta Ring size (2048 bytes) */
-static constexpr uint32_t ADDR_RING_BASE =
-    0x000800; /**< Profile Address Ring base */
-static constexpr uint32_t ADDR_RING_SIZE =
-    0x000800; /**< Profile Address Ring size (2048 bytes) */
-static constexpr uint32_t PROFILE0_ADDR =
-    0x001000; /**< Profile 0 primary copy */
-static constexpr uint32_t PROFILE0_BACKUP =
-    0x002000; /**< Sector 2: Profile 0 backup */
-static constexpr uint32_t USER_RING_BASE =
-    0x003000; /**< User Ring start address */
+// The reserved region ahead of the user ring, a sector apart: the BootMeta ring,
+// the address ring, Profile 0's two copies, then the user profiles.
+static constexpr uint32_t BOOTMETA_BASE = 0x000000;
+static constexpr uint32_t BOOTMETA_SIZE = 0x000800;
+static constexpr uint32_t ADDR_RING_BASE = 0x000800;
+static constexpr uint32_t ADDR_RING_SIZE = 0x000800;
+static constexpr uint32_t PROFILE0_ADDR = 0x001000;   // Profile 0, primary
+static constexpr uint32_t PROFILE0_BACKUP = 0x002000; // Profile 0, backup
+static constexpr uint32_t USER_RING_BASE = 0x003000;
 
 // The sectors the reserved region ahead of the user ring takes.
 static constexpr uint32_t RESERVED_SECTORS =
@@ -83,10 +78,10 @@ static_assert(USER_RING_BASE % PROFILE_SECTOR_SIZE == 0,
               "the User Ring must start on a sector boundary, or the reserved "
               "sector count would round down");
 
-static constexpr uint16_t BOOTMETA_MAGIC = 0x5442; /**< "TB" magic */
+static constexpr uint16_t BOOTMETA_MAGIC = 0x5442; // "TB"
 
-static constexpr uint16_t BOOTMETA_SLOTS = 128;  /**< BootMeta Ring capacity */
-static constexpr uint16_t ADDR_RING_SLOTS = 256;  /**< Address Ring capacity */
+static constexpr uint16_t BOOTMETA_SLOTS = 128;   // entries in the BootMeta ring
+static constexpr uint16_t ADDR_RING_SLOTS = 256;  // entries in the address ring
 
 // ── Structs ──
 
@@ -113,36 +108,31 @@ struct AddressEntry {
 
 static_assert(sizeof(AddressEntry) == 8, "AddressEntry must be 8 bytes");
 
-/** Read-only view of a profile body. `data` is NUL-terminated and points into
- * the store's staging buffer, so the view is invalidated by the next call that
- * reads or writes a profile. The buffer is not writable through this view.
- * That buffer is PROFILE_STAGING_SIZE bytes, one more than the largest body, so
- * the terminator of a full-length body still lands inside it. */
+// A read-only view of a profile body. `data` is NUL-terminated and points into
+// the staging buffer, so the next read or write of a profile invalidates it.
 struct ProfileText {
   const char *data = nullptr;
   uint16_t len = 0;
 };
 
-/** Runtime status of the profile system. */
+// Runtime status of the profile system.
 struct ProfileStatus {
-  uint16_t activeId = 0;        // currently active profile ID
-  uint8_t profileCount = 0;     // number of valid profiles (excluding empty)
-  uint32_t totalSectors = 0;    // total flash sectors
-  uint32_t usedSectors = 0;     // sectors occupied by profile data
-  uint32_t freeSectors = 0;     // sectors still available in the User Ring
-  uint32_t reservedSectors = 0; // sectors ahead of the user ring:
-                                // used + free + reserved == total
-  uint32_t nextAddr = 0;        // User Ring next write pointer
-  uint16_t bootMetaSeq = 0;     // current BootMeta sequence number
-  uint16_t addressRingSeq = 0;  // current Address Ring sequence number
+  uint16_t activeId = 0;        // the profile in effect
+  uint8_t profileCount = 0;     // valid profiles, empty entries left out
+  uint32_t totalSectors = 0;    // flash sectors
+  uint32_t usedSectors = 0;     // sectors profile data occupies
+  uint32_t freeSectors = 0;     // sectors left in the user ring
+  uint32_t reservedSectors = 0; // sectors ahead of the user ring; the three add up
+  uint32_t nextAddr = 0;        // the user ring's next write pointer
+  uint16_t bootMetaSeq = 0;     // the BootMeta ring's sequence number
+  uint16_t addressRingSeq = 0;  // the address ring's sequence number
 };
 
 // ── ProfileStore class ──
 
-/**
- * Profile configuration storage manager on external SPI flash (W25Q64).
- * Ring-based layout using monotonic sequence numbers for crash-safe updates.
- */
+// Profile storage on the external SPI flash. Both rings append, and the highest
+// sequence number is the entry in effect, so a write cut short by a reset leaves
+// the entry before it standing.
 class ProfileStore {
 public:
   ProfileStore() = default;
@@ -151,77 +141,59 @@ public:
 
   static ProfileStore &getInstance();
 
-  /** Scan BootMeta and Address Rings, determine active profile and next write
-   * addr. Writes nothing: see needsFactoryProfile() for the flash that carries
-   * no profile at all. */
+  // Scans both rings for the active profile and the next write address. Writes
+  // nothing.
   bool init();
 
-  /** True when the flash carries no valid BootMeta and no Profile0 body: the
-   * holder of the configuration writes the factory Profile0.
-   *
-   * A property of the flash as it stands right now, answered from the caches
-   * init() filled plus a read of the Profile0 area — never remembered from an
-   * earlier call, because an erase changes the answer without a reboot. Call it
-   * after init(). */
+  // Whether the flash carries no valid BootMeta and no Profile 0 body: the
+  // answer is read now, from the caches init() filled plus the Profile 0 area, and
+  // never remembered, because an erase changes it without a reboot.
   bool needsFactoryProfile() const;
 
-  /** Write factory default Profile0 (only when BootMeta Ring is empty). */
+  // Writes the factory Profile 0, only where the BootMeta ring is empty.
   bool writeFactoryProfile(const char *json, uint16_t len);
-  /**
-   * Writes the factory profile over the one the flash holds. The store keeps the
-   * factory body at a fixed address of its own, so a replace is the same write
-   * as the first one: it is for a body whose format is older than the format
-   * this firmware writes.
-   */
+  // Writes the factory Profile 0 over the one the flash holds: the body sits at a
+  // fixed address of its own, so a replace is the same write as the first one.
   bool replaceFactoryProfile(const char *json, uint16_t len);
 
-  /** Create a new user profile (finds next free ID, appends to User Ring). */
+  // Creates a user profile at the first free id, appended to the user ring.
   bool createProfile(const char *json, uint16_t len, uint16_t *newId);
 
-  /** Append a new version of an existing profile to the User Ring. */
+  // Appends a new version of an existing profile to the user ring.
   bool modifyProfile(uint16_t id, const char *json, uint16_t len);
 
-  /** Mark a profile as deleted via Address Ring entry (address=0). */
+  // Marks a profile deleted with an address-ring entry holding address 0.
   bool deleteProfile(uint16_t id);
 
-  /** Select a profile as active (appends BootMeta entry). */
+  // Selects a profile as active by appending a BootMeta entry.
   bool selectProfile(uint16_t id);
 
-  /** Reserved for a later entry into the store: not implemented, so it reads
-   * nothing and answers that it did not. */
+  // Reserved for a later entry into the store: not implemented, so it reads
+  // nothing and answers that it did not.
   bool loadActive(uint8_t *buf, uint16_t *outLen);
 
-  /** Read-only view of the body of profile `id` (PROFILE_ID_ACTIVE selects the
-   * active profile). Returns false when there is no such profile. */
+  // The body of profile `id`, as a view into the staging buffer;
+  // PROFILE_ID_ACTIVE reads the active one. Answers false when there is none.
   bool readProfile(uint16_t id, ProfileText *out);
 
-  /** True when this store has an address for profile `id`: the fixed address
-   * the factory profile sits at, for id 0, the active profile's address, for
-   * PROFILE_ID_ACTIVE, and the Address Ring's entry, for every other id in
-   * range. Those are the ids readProfile() resolves an address for, so a false
-   * here is readProfile()'s answer for an id the ring holds no entry for.
-   *
-   * Derived from the address map the last scan filled — the same map
-   * getStatus() counts profileCount from — and answered from it alone: no read
-   * of the flash, nothing written, and no path of its own to fall out of step
-   * with the reader. A caller that needs to know whether the store carries an
-   * id can ask this instead of reading a body for the answer. */
+  // Whether the store holds an id: the factory address for 0, the active
+  // profile's address for PROFILE_ID_ACTIVE, and the address ring's entry for
+  // every other id. Answered from the address map the last scan filled, without a
+  // read of the flash.
   bool carriesProfile(uint16_t id) const;
 
-  /** Get runtime status of the profile system. */
+  // Counts the sectors, the profiles and the sequence numbers as of the last scan.
   ProfileStatus getStatus() const;
 
-  /** Compact User Ring: move all valid profiles to head, reset rings. */
+  // Moves the valid profiles to the head of the user ring and resets the rings.
   bool compaction();
 
 private:
   // ── Internal helpers ──
   bool resetSector0();
-  /** Read the raw body at `address` into buf, which must hold at least
-   * PROFILE_JSON_MAX bytes (nullptr means the store's staging buffer), and
-   * report its length in outLen. Writes no terminator: the read copies
-   * PROFILE_JSON_MAX bytes over from flash and the length scan stops at the
-   * first 0x00 or 0xFF among them. */
+  // Reads the body at `address` into buf (nullptr for the staging buffer) and
+  // reports its length in outLen. No terminator is written: the length stops at
+  // the first 0x00 or 0xFF.
   bool readBody(uint32_t address, uint8_t *buf, uint16_t *outLen);
   bool writeBootMeta(uint16_t id, uint32_t address);
   uint16_t crc16BootMeta(const BootMeta *meta) const;
@@ -247,8 +219,8 @@ private:
   uint16_t _profileSeqs[16] = {0};
 };
 
-/** Staging buffer for profile bodies: large enough for a body of
- * PROFILE_JSON_MAX bytes plus the NUL the scanners read it by. */
+// The buffer bodies are read into and written out of: a body of PROFILE_JSON_MAX
+// bytes plus the NUL the scanners read it by.
 COMMON_ZERO_INIT extern uint8_t s_staging[PROFILE_STAGING_SIZE];
 
 } // namespace ThetaGP::Gamepad::Profile

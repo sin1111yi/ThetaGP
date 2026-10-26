@@ -19,15 +19,8 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-/**
- * @file dma_manager.h
- * @brief DMA stream allocation manager (singleton)
- *
- * DmaManager provides centralized allocation of DMA streams.
- * Each controller (DMA1, DMA2) has 8 streams (S0-S7).
- * The allocator tracks which streams are in use via a 16-bit
- * bitmask and hands out the first available stream.
- */
+// Hands out DMA streams. Each controller has eight (S0 to S7), and which ones
+// are taken is tracked in a 16-bit bitmask.
 
 #pragma once
 
@@ -44,18 +37,10 @@ public:
     return instance;
   }
 
-  /**
-   * @brief Allocate a DMA stream on the given controller
-   *
-   * Finds the first free stream on the specified controller,
-   * marks it as allocated, creates a new DmaChannel, and sets
-   * the DMAMUX request ID.
-   *
-   * @param ctrl     DMA controller (Dma1 or Dma2)
-   * @param requestId DMAMUX request number (e.g. DMA_REQUEST_USART1_TX)
-   * @return DmaChannel* on success, nullptr if all streams on that
-   *         controller are already allocated
-   */
+  // Takes the first free stream on the controller, sets its DMAMUX request, and
+  // reports nullptr when the controller has none left. The caller owns the
+  // channel: a write to one in use, or to an unknown request id, lands on a
+  // channel it does not own.
   [[nodiscard]] DmaChannel *allocate(Controller ctrl, uint32_t requestId);
 
 private:

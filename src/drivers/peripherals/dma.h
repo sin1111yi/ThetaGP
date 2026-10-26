@@ -19,18 +19,9 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-/**
- * @file dma.h
- * @brief DMA channel abstraction for ThetaGP
- *
- * DmaChannel manages a single DMA stream: clock gating, DMAMUX routing,
- * HW register configuration, and ISR dispatch. Designed to be used by
- * peripheral drivers (UART, SPI) or standalone for memory-to-memory
- * transfers.
- *
- * ISR dispatch uses pure-C function pointers registered in a static
- * dispatch table — no C++ virtual calls in interrupt context.
- */
+// One DMA stream: clock gating, DMAMUX routing, register setup and interrupt
+// dispatch. Interrupts reach the channel through a C function pointer in a static
+// table, so nothing virtual runs in interrupt context.
 
 #pragma once
 
@@ -114,28 +105,24 @@ public:
   DmaChannel(Controller controller, Stream stream);
   ~DmaChannel();
 
-  // --- Configuration (call before init) ---
+  // ── configuration ──
   void setRequestId(uint32_t dmamuxRequestId);
   void configure(const DmaConfig &cfg);
 
-  /**
-   * @brief Set ISR completion callback
-   *
-   * Called from the pure-C ISR dispatch when transfer completes
-   * or on error. The callback receives the context pointer set here.
-   */
+  // The callback the stream's interrupt calls when a transfer completes or
+  // fails, with the context pointer set here.
   void setCallback(DmaIsrCallback cb, void *context = nullptr);
 
-  // --- Lifecycle ---
+  // ── lifecycle ──
   Result init();
   Result deinit();
 
-  // --- Transfer control ---
+  // ── transfer control ──
   Result start(uint32_t srcAddress, uint32_t dstAddress,
                uint16_t dataCount);
   Result stop();
 
-  // --- Status ---
+  // ── status ──
   [[nodiscard]] bool isBusy() const;
   bool isInitialized() const { return _initialized; }
   void *halHandle() const { return _halHandle; }

@@ -85,9 +85,7 @@ enum class Pull : uint32_t {
 
 enum class PinState : bool { Reset = false, Set = true };
 
-/**
- * @brief Pin descriptor for board configuration macros
- */
+// A pin as a board configuration names it: its port and its number.
 struct PinDesc {
   Port port;
   Pin pin;

@@ -164,9 +164,7 @@ void HardwareTimer::config(Instance instance, uint32_t frequency,
   _state.triggerEvent = triggerEvent;
 }
 
-/**
- * @brief Get timer clock frequency based on timer instance
- */
+// The clock the timer runs at: its bus clock, doubled when the prescaler is on.
 uint32_t HardwareTimer::getTimerClock() const {
   uint32_t timerClock;
 
@@ -192,13 +190,8 @@ uint32_t HardwareTimer::getTimerClock() const {
   return timerClock;
 }
 
-/**
- * @brief Calculate prescaler and period based on target frequency
- *
- * Formula: frequency = timerClock / ((prescaler+1) * (period+1))
- *
- * @param frequency Target frequency in Hz
- */
+// Sets the prescaler and period for `frequency`: it is timerClock over
+// (prescaler + 1) * (period + 1), with the period inside 16 bits.
 void HardwareTimer::calculatePrescalerAndPeriod(uint32_t frequency) {
   if (frequency == 0) {
     return;

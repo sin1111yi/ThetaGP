@@ -81,10 +81,9 @@ uint16_t ProfileStore::crc16BootMeta(const BootMeta *meta) const {
 }
 
 // ── writeBootMeta() ──
-// Records the profile a reboot reads its configuration from: init() takes the
-// newest entry of the BootMeta ring, so every path that moves the body of the
-// profile the device runs from writes one. A body written without it is read
-// back only until the next reboot.
+// Records the profile a reboot reads its configuration from. init() takes the
+// newest entry of the ring, so a body written without one is read back only until
+// the next reboot.
 
 bool ProfileStore::writeBootMeta(uint16_t id, uint32_t address) {
   seqBeforeIncrement();
@@ -111,10 +110,9 @@ bool ProfileStore::writeBootMeta(uint16_t id, uint32_t address) {
   return true;
 }
 
-// ── seqBeforeIncrement: check seq overflow before incrementing ──
-// When BootMeta or Address Ring seq hits 65535, Sector 0 is erased and
-// rebuilt with seq=1. This prevents uint16_t overflow that would cause
-// the highest-seq lookup to pick the wrong entry.
+// ── seqBeforeIncrement() ──
+// A ring whose sequence number reaches 65535 has sector 0 erased and rebuilt at
+// sequence 1, so the wrap never makes the lookup pick the older entry.
 void ProfileStore::seqBeforeIncrement() {
   if (_bootMetaSeq >= 65534 || _addressRingSeq >= 65534) {
     LOG_WARN("ProfileStore: seq near overflow (%u/%u), resetting Sector 0",
@@ -124,8 +122,8 @@ void ProfileStore::seqBeforeIncrement() {
 }
 
 // ── ensureBootMetaSlot / ensureAddressRingSlot ──
-// When the corresponding ring is full, trigger Sector 0 reset (which
-// moves valid data back to slot 0), then return the fresh slot index.
+// A full ring resets sector 0, which leaves its entries at the head of the ring;
+// the fresh slot is the one after them.
 
 uint16_t ProfileStore::ensureBootMetaSlot() {
   uint16_t slot = bootMetaSlotIndex();
@@ -148,11 +146,8 @@ uint16_t ProfileStore::ensureAddressRingSlot() {
 }
 
 // ── init() ──
-// Scans both Sector 0 rings and leaves every cache field describing the flash
-// as it is now. It writes nothing: on a flash that carries no profile at all,
-// the configuration layer writes the factory Profile0 (ConfigManager::
-// ensureFactoryProfile()), which asks this flash each time and so fits a chip
-// that was erased under a running device too.
+// Scans both rings of sector 0 and leaves every cache field describing the flash
+// as it is now. It writes nothing.
 
 bool ProfileStore::init() {
   LOG_INFO("ProfileStore: init");
@@ -197,12 +192,9 @@ bool ProfileStore::init() {
 }
 
 // ── needsFactoryProfile() ──
-// The caller that owns the configuration needs to know whether the flash holds
-// a profile at all. That is a property of the flash, so it is answered from the
-// current caches (filled by init()) plus a read of the Profile0 area — never
-// remembered from the call that first saw a fresh flash. An erase between two
-// calls changes the answer, and a cached flag would keep answering "no" after
-// the caller had written one.
+// Whether the flash holds a profile at all, answered from the caches init() filled
+// plus a read of the Profile 0 area. An erase between two calls changes the
+// answer, so it is never remembered.
 
 bool ProfileStore::needsFactoryProfile() const {
   // A BootMeta entry names an active profile: the flash holds configuration.
@@ -219,9 +211,8 @@ bool ProfileStore::needsFactoryProfile() const {
     return false;
   }
 
-  // Nothing is hooked onto the rings; is there a body anyway? Read into a local
-  // probe rather than the shared staging buffer — the answer must not disturb
-  // whatever the caller has staged there.
+  // No ring entry, so the Profile 0 body is read directly, into a probe of its
+  // own: the answer must not disturb what the caller has staged.
   uint8_t probe[16];
   if (!flash.read(PROFILE0_ADDR, probe, sizeof(probe))) {
     return false;
@@ -334,9 +325,8 @@ uint32_t ProfileStore::findNextAddr() const {
   const auto &info = flash.getInfo();
   uint32_t flashSize = info.sizeBytes;
 
-  // The highest address the address map places inside the User Ring, and 0
-  // while the map holds none: an address below USER_RING_BASE — where Profile0
-  // keeps its two copies — lies outside the ring and marks no space in it.
+  // The highest address the map places inside the user ring, and 0 while it holds
+  // none: an address below USER_RING_BASE lies outside the ring.
   uint32_t ringUsedUpTo = 0;
   for (uint16_t i = 0; i <= PROFILE_MAX_ID; ++i) {
     if (_profileAddresses[i] >= USER_RING_BASE &&
@@ -408,13 +398,9 @@ bool ProfileStore::writeFactoryProfile(const char *json, uint16_t len) {
     return false;
   }
 
-  // ── Converge the cache onto the values the flash now holds ──
-  // Each field below is what a fresh scanBootMeta()/scanAddressRing() over this
-  // flash would produce; the two must not drift apart, or resetSector0() copies
-  // a seq the ring cannot see back into it (scanAddressRing() only accepts
-  // entry.seq > _profileSeqs[id], which starts at 0 — a _profileSeqs[0] left at
-  // 0 makes the entry written below invisible, dropping Profile0 out of
-  // _profileAddresses[] and out of profileCount).
+  // ── the cache as a fresh scan would produce it ──
+  // Each field below holds what scanBootMeta() and scanAddressRing() over this
+  // flash would report, so the cache and the flash do not drift apart.
   _bootMetaSeq = 1;               // BootMeta slot 0: seq
   _activeProfileId = 0;           // BootMeta slot 0: profileId
   _activeAddress = PROFILE0_ADDR; // BootMeta slot 0: address
@@ -429,10 +415,8 @@ bool ProfileStore::writeFactoryProfile(const char *json, uint16_t len) {
   if (!flash.write(ADDR_RING_BASE,
                    reinterpret_cast<const uint8_t *>(&addrEntry),
                    sizeof(AddressEntry))) {
-    // The body and the BootMeta are on the flash, but the ring holds no entry
-    // for id 0 — which is exactly what a rescan of this flash reports, so the
-    // cache reports the same. The body stays readable either way:
-    // readProfile(0) reads the fixed PROFILE0_ADDR.
+    // The ring holds no entry for id 0, which is what a rescan of this flash
+    // reports. The body stays readable: readProfile(0) reads PROFILE0_ADDR.
     LOG_WARN("ProfileStore: failed to write Address entry for profile0");
     _addressRingSeq = 0;
     _profileAddresses[0] = 0;
@@ -443,9 +427,8 @@ bool ProfileStore::writeFactoryProfile(const char *json, uint16_t len) {
     _profileSeqs[0] = 1;               // Address Ring slot 0: seq
   }
 
-  // profileCount is a property of the address map, not of the write above:
-  // recount it with the rule init() uses, so that entries the map still holds
-  // for other ids stay counted (the failed branch above clears id 0 only).
+  // profileCount is a property of the address map, recounted by the rule init()
+  // uses: the failed branch above clears id 0 only.
   _profileCount = 0;
   for (uint16_t i = 0; i <= PROFILE_MAX_ID; ++i) {
     if (_profileAddresses[i] != 0) {
@@ -510,13 +493,9 @@ bool ProfileStore::replaceFactoryProfile(const char *json, uint16_t len) {
     return false;
   }
 
-  // ── Converge the cache onto the values the flash now holds ──
-  // Each field below is what a fresh scanBootMeta()/scanAddressRing() over this
-  // flash would produce; the two must not drift apart, or resetSector0() copies
-  // a seq the ring cannot see back into it (scanAddressRing() only accepts
-  // entry.seq > _profileSeqs[id], which starts at 0 — a _profileSeqs[0] left at
-  // 0 makes the entry written below invisible, dropping Profile0 out of
-  // _profileAddresses[] and out of profileCount).
+  // ── the cache as a fresh scan would produce it ──
+  // Each field below holds what scanBootMeta() and scanAddressRing() over this
+  // flash would report, so the cache and the flash do not drift apart.
   _bootMetaSeq = 1;               // BootMeta slot 0: seq
   _activeProfileId = 0;           // BootMeta slot 0: profileId
   _activeAddress = PROFILE0_ADDR; // BootMeta slot 0: address
@@ -531,10 +510,8 @@ bool ProfileStore::replaceFactoryProfile(const char *json, uint16_t len) {
   if (!flash.write(ADDR_RING_BASE,
                    reinterpret_cast<const uint8_t *>(&addrEntry),
                    sizeof(AddressEntry))) {
-    // The body and the BootMeta are on the flash, but the ring holds no entry
-    // for id 0 — which is exactly what a rescan of this flash reports, so the
-    // cache reports the same. The body stays readable either way:
-    // readProfile(0) reads the fixed PROFILE0_ADDR.
+    // The ring holds no entry for id 0, which is what a rescan of this flash
+    // reports. The body stays readable: readProfile(0) reads PROFILE0_ADDR.
     LOG_WARN("ProfileStore: failed to write Address entry for profile0");
     _addressRingSeq = 0;
     _profileAddresses[0] = 0;
@@ -545,9 +522,8 @@ bool ProfileStore::replaceFactoryProfile(const char *json, uint16_t len) {
     _profileSeqs[0] = 1;               // Address Ring slot 0: seq
   }
 
-  // profileCount is a property of the address map, not of the write above:
-  // recount it with the rule init() uses, so that entries the map still holds
-  // for other ids stay counted (the failed branch above clears id 0 only).
+  // profileCount is a property of the address map, recounted by the rule init()
+  // uses: the failed branch above clears id 0 only.
   _profileCount = 0;
   for (uint16_t i = 0; i <= PROFILE_MAX_ID; ++i) {
     if (_profileAddresses[i] != 0) {
@@ -832,9 +808,8 @@ bool ProfileStore::readBody(uint32_t address, uint8_t *buf, uint16_t *outLen) {
 bool ProfileStore::loadActive(uint8_t *, uint16_t *) { return false; }
 
 // ── carriesProfile() ──
-// The two branches readProfile() resolves without consulting the address map,
-// and the map itself for every other id. Nothing here reads the flash or writes
-// anywhere, so the answer costs nothing a read of a body costs.
+// The two ids readProfile() resolves without the address map, and the map itself
+// for every other id. Nothing here reads the flash.
 
 bool ProfileStore::carriesProfile(uint16_t id) const {
   if (id == PROFILE_ID_ACTIVE || id == 0) {
@@ -899,17 +874,16 @@ ProfileStatus ProfileStore::getStatus() const {
 }
 
 // ── compaction() ──
-// Moves all valid profiles to the head of the User Ring, resets Address Ring
-// and BootMeta. Needed when the User Ring runs out of space.
+// Moves the valid profiles to the head of the user ring and resets both rings,
+// which is what a ring short of space needs.
 
 bool ProfileStore::compaction() {
   LOG_INFO("ProfileStore: compaction start");
 
   auto &flash = Drivers::Device::FlashBase::getInstance();
 
-  // 1. Collect valid user profiles (address != 0).
-  //    Profile0 (id=0) is excluded — it stays at the fixed PROFILE0_ADDR and
-  //    its backup at PROFILE0_BACKUP is never touched.
+  // 1. The valid user profiles: id 0 stays at PROFILE0_ADDR and its backup is
+  //    never touched.
   struct ValidProfile {
     uint16_t id;
     uint32_t oldAddr;
@@ -930,11 +904,8 @@ bool ProfileStore::compaction() {
     return true;
   }
 
-  // Sort by oldAddr ascending. This is REQUIRED for in-place compaction
-  // safety: writeAddr starts at USER_RING_BASE and increments by one sector
-  // per profile, so writeAddr[i] <= oldAddr[i] only holds if valid[] is
-  // ordered by address. Processing in id order could erase a target sector
-  // that still contains an un-read source profile (data corruption).
+  // Sorted by address, so the rewrite below never erases a sector holding a
+  // profile it has not read yet.
   for (uint8_t i = 0; i < validCount; ++i) {
     for (uint8_t j = i + 1; j < validCount; ++j) {
       if (valid[j].oldAddr < valid[i].oldAddr) {
@@ -986,9 +957,7 @@ bool ProfileStore::compaction() {
   bootMeta.crc16 = 0;
   bootMeta.crc16 = crc16BootMeta(&bootMeta);
 
-  // 4. Erase the whole Sector 0 (BootMeta Ring + Address Ring), then rebuild
-  //    both rings below. Order matters: Address Ring entries must be written
-  //    AFTER the erase, otherwise they get wiped.
+  // 4. Erases both rings of sector 0; they are rebuilt below.
   if (!eraseSector0Range(BOOTMETA_BASE, BOOTMETA_SIZE)) {
     LOG_ERROR("ProfileStore: compaction BootMeta erase fail");
     return false;
@@ -1086,9 +1055,8 @@ bool ProfileStore::resetSector0() {
     return false;
   }
 
-  // Restore Profile0 from Sector 2 backup. Erase Sector 1 (PROFILE0_ADDR)
-  // first — Sector 0 erase does NOT touch Sector 1, and NOR flash can only
-  // program 1→0, so rewriting over old data without erase corrupts.
+  // Profile 0 comes back from its backup. Its own sector is erased first: a NOR
+  // cell takes a write onto an erased one and nothing else.
   if (!flash.eraseSector(PROFILE0_ADDR)) {
     LOG_ERROR("ProfileStore: failed to erase Profile0 primary sector");
     return false;

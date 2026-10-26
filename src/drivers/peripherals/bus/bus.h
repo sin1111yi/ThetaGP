@@ -19,15 +19,9 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-/**
- * @file bus.h
- * @brief Abstract base class for all BUS peripherals (SPI, UART, I2C)
- *
- * Two modes: Polling (LL), Dma (auto DMA with fallback).
- *
- * All transfers route through a single virtual hook transmitReceiveImpl.
- * Half-duplex transmit/receive are convenience wrappers.
- */
+// The interface every bus implements. A transfer runs in Polling mode on the LL
+// layer or in Dma mode, which falls back to polling. Every transfer routes through
+// transmitReceiveImpl(); transmit and receive are half-duplex wrappers of it.
 
 #pragma once
 

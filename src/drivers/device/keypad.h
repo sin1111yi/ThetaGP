@@ -49,34 +49,17 @@ static constexpr uint8_t KEYPAD_NO_KEY = 0xFF;
 struct KeypadConfig {
   static constexpr uint32_t DEFAULT_SCAN_FREQ = THETAGP_CFG_KEYPAD_SCAN_HZ;
 
-  // Consecutive scans of one level that a key's line has to hold before the
-  // key's committed state follows it, one threshold per direction. These are
-  // run lengths, not window sizes: a sample that agrees with the committed
-  // state clears both runs, so a run shorter than its threshold leaves no
-  // trace, and a level change commits exactly that many scans after the last
-  // opposed sample — no window has to fill, and nothing is carried over from
-  // before it.
+  // Consecutive scans of one level that a key's line has to hold before its
+  // committed state follows it, one threshold per direction. These are run
+  // lengths, not window sizes: a sample that agrees with the committed state
+  // clears both runs, so a level change commits exactly that many scans after the
+  // last opposed sample.
   //
-  // A profile carries the pair (`sys.deb_samp` and `sys.deb_thr`), so the two
-  // are read from it on every scan. The rows of the key table declare the
-  // range each may hold, and the checks below hold those ranges to the
-  // properties the design needs: the numbers move, the properties do not.
-  //
-  // One scan callback walks every drive line (scanCallback -> the
-  // readInputScanMatrix loop over DRIVE_PIN_NUM), so a key is sampled once per
-  // scan and its sampling rate is THETAGP_CFG_KEYPAD_SCAN_HZ itself. Every scan
-  // is also a decision point, so the committed-state refresh rate is that same
-  // scan rate: there is no window and no vote behind it, only the two run
-  // counters a key keeps. THETAGP_CFG_KEYPAD_SCAN_HZ is the adjustable value
-  // (src/conf/ThetaGP_Config.h); the report rate is declared by the board
-  // ([usb] wired_report_hz in its BoardConfig.toml); the drive-line count
-  // follows the board's key matrix.
-  //
-  // The thresholds are counts of scans, so their meaning in time moves with the
-  // scan rate and the report rate. The assertions below pin that meaning at
-  // compile time instead of leaving it to the configuration: each one names the
-  // property it protects, and a table whose ranges would break it does not
-  // compile.
+  // A profile carries the pair (`sys.deb_samp` and `sys.deb_thr`) and both are read
+  // on every scan. A key is sampled once per scan, so the committed state refreshes
+  // at THETAGP_CFG_KEYPAD_SCAN_HZ. The thresholds count scans, so their meaning in
+  // time moves with the scan rate and the report rate, which is what the assertions
+  // below pin at compile time.
 
   static constexpr uint32_t GPIO_STABILIZE_DELAY_CYCLES = 50;
 
@@ -92,11 +75,9 @@ struct KeypadConfig {
   static constexpr uint32_t RELEASE_MIN =
       Gamepad::Config::keyEntry(Gamepad::Config::ConfigKey::SysDebThr).minVal;
 
-  // A press is confirmed after PRESS_SAMPLES scans, and the confirmation has to
-  // complete inside one report period or a report tick misses it. A run longer
-  // than that window is held to it at use, so only the shortest value the row
-  // takes has to fit here: a board that runs its reports faster than it scans
-  // cannot honour a long debounce, and clamps it.
+  // The confirmation has to complete inside one report period, or a report tick
+  // misses it. A run longer than that is clamped at use, so only the shortest value
+  // the row takes has to fit here.
   static_assert(PRESS_MIN * THETAGP_CFG_USB_REPORT_RATE_HZ <=
                     THETAGP_CFG_KEYPAD_SCAN_HZ,
                 "keypad: a press is committed only after PRESS_SAMPLES "
@@ -200,24 +181,14 @@ private:
   volatile uint32_t _pressedMask = 0;
   HardwareTimer _scanTimer;
 
-  // ── Scan time (minimum measurement point) ──
-  // Microseconds the device layer's clock (SystemTimer::getMicros) advanced across
-  // one scanCallback: a read at entry, a read at exit, then three accumulating
-  // writes. Nothing else runs in the ISR — no division, no print, no peripheral
-  // access — so the measurement costs about one clock read per scan, and the host
-  // does the subtraction.
+  // ── scan time ──
+  // The clock advanced across one scanCallback, read at entry and at exit. Nothing
+  // else runs in the ISR, so the measurement costs about one clock read per scan and
+  // the host does the subtraction.
   //
-  // Cycles, not microseconds. The counter ticks once per CPU cycle, so a scan of
-  // roughly ten microseconds reads as five thousand counts and keeps that
-  // resolution; converting at the stamp would round every reading to a step of
-  // about 1/480 of the value. The readout converts, and only where microseconds
-  // are wanted.
-  //
-  // Cumulative since boot and never reset: an average is sum_cycles / count and a
-  // worst case is max_cycles, both computed on the host. The sum accumulates the
-  // scan's own time only, never idle time, so at the current scan rate it grows
-  // by ≈4.8e8 counts per wall second — a 32-bit accumulator would wrap in about
-  // nine seconds; it is 64-bit for that reason.
+  // Counts, not microseconds: converting at the stamp would round every reading.
+  // Cumulative since boot and never reset, and 64-bit because the sum grows by about
+  // 4.8e8 counts per wall second at the current scan rate.
   volatile uint32_t _scanCyclesCount = 0;
   volatile uint32_t _scanCyclesLast = 0;
   volatile uint32_t _scanCyclesMax = 0;

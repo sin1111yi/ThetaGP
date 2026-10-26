@@ -31,30 +31,19 @@
 
 namespace ThetaGP::Drivers::Device {
 
-/**
- * @brief Generic flash memory information structure
- */
+// Generic flash memory information structure
 struct FlashInfo {
-  uint32_t sizeBytes = 0;      /**< Total flash size in bytes */
-  uint16_t pageSize = 0;       /**< Page program size in bytes */
-  uint32_t sectorSize = 0;     /**< Erase sector size in bytes */
-  uint32_t blockSize = 0;      /**< Erase block size in bytes */
-  uint8_t manufacturerId = 0;  /**< JEDEC manufacturer ID */
-  uint16_t deviceId = 0;       /**< Device ID */
+  uint32_t sizeBytes = 0;      // Total flash size in bytes
+  uint16_t pageSize = 0;       // Page program size in bytes
+  uint32_t sectorSize = 0;     // Erase sector size in bytes
+  uint32_t blockSize = 0;      // Erase block size in bytes
+  uint8_t manufacturerId = 0;  // JEDEC manufacturer ID
+  uint16_t deviceId = 0;       // Device ID
 };
 
-/**
- * @brief Abstract base class for SPI flash devices
- *
- * Inherits Device and defines the common interface for flash memory
- * operations: read, write, erase, and identification.
- * SPI bus reference (_spi) is injected via constructor from
- * PeripheralsManager, avoiding inline bus construction.
- *
- * WearLevel (nested) provides full-flash ring buffer wear-leveling.
- * Since there is only one flash chip and FlashBase is a singleton,
- * WearLevel lives here as a member rather than a separate singleton.
- */
+// The interface every SPI flash driver implements: read, write, erase and the
+// chip's identification. The bus it owns is handed in by PeripheralsManager, and
+// the wear-levelling ring lives here as a member because there is one chip.
 class FlashBase : public Device {
 public:
   FlashBase(const char *name, Drivers::Peripheral::BUS::SpiBus &spi)
@@ -65,28 +54,28 @@ public:
 
   // ── Pure virtual interface ──────────────────────────────────
 
-  /** @brief Read len bytes from addr into data buffer */
+  // Read len bytes from addr into data buffer
   [[nodiscard]] virtual bool read(uint32_t addr, uint8_t *data, uint32_t len) = 0;
 
-  /** @brief Write len bytes from data buffer to addr */
+  // Write len bytes from data buffer to addr
   [[nodiscard]] virtual bool write(uint32_t addr, const uint8_t *data, uint32_t len) = 0;
 
-  /** @brief Erase a 4KB sector starting at addr */
+  // Erase a 4KB sector starting at addr
   [[nodiscard]] virtual bool eraseSector(uint32_t addr) = 0;
 
-  /** @brief Erase entire chip (may take many seconds) */
+  // Erase entire chip (may take many seconds)
   [[nodiscard]] virtual bool eraseChip() = 0;
 
-  /** @brief Read the chip identification (manufacturer + device) */
+  // Read the chip identification (manufacturer + device)
   [[nodiscard]] virtual uint32_t readId() = 0;
 
-  /** @brief Get const reference to flash information struct */
+  // Get const reference to flash information struct
   [[nodiscard]] virtual const FlashInfo &getInfo() const = 0;
 
-  /** @brief Check if the flash is busy (erase/program in progress) */
+  // Check if the flash is busy (erase/program in progress)
   [[nodiscard]] virtual bool isBusy() = 0;
 
-  /** @brief Set the transfer mode (Polling or Dma) of the bus the flash owns */
+  // Set the transfer mode (Polling or Dma) of the bus the flash owns
   void setSpiBusMode(Peripheral::BUS::Mode mode) { _spi.setMode(mode); }
 
 protected:

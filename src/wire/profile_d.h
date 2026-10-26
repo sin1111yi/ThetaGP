@@ -92,12 +92,11 @@ public:
 // The profile domain: the arms it serves, and the dispatch from a request to
 // the arm it names.
 //
-// The gate in front of the arms that read or write the store's staging buffer
-// is answered here once, not by each arm. The two arms of a staged write pass
-// it while a staged write holds the buffer, an arm that opens a staging is met
-// ahead of it, and every other arm is refused while a body is on its way back
-// to the host. The two arms that read no body -- the store's status and its
-// list -- are answered whatever the buffer is doing.
+// The gate in front of every arm that reaches the staging buffer is answered here
+// once, not by each arm: the two arms of a staged write pass while a staging holds
+// the buffer, an arm that opens one is met ahead of the gate, and every other arm is
+// refused while a body is on its way back. The status and list arms read no body
+// and are answered either way.
 //
 // The active profile is the store's: a body written becomes it, a select names
 // one, and a delete that drops it leaves the store on the factory one.

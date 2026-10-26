@@ -37,79 +37,61 @@ public:
 
   bool init();
 
-  /** Reserved for a later entry of this layer: not implemented, so it reads
-   * nothing and answers that it did not. */
+  // Reserved for a later entry of this layer: not implemented, so it reads
+  // nothing and answers that it did not.
   bool loadProfile(uint16_t profileId);
 
-  /** Read a profile's body into the configuration the device runs on, starting
-   * from the compiled-in defaults, and leave the active profile where it is:
-   * this entry does not change the active profile, whichever id it is handed.
-   * A read that does not come back and a body this firmware does not read both
-   * answer false, and the configuration then stands at the compiled-in
-   * defaults. */
+  // Reads a profile's body into the configuration the device runs on, over the
+  // compiled defaults, and leaves the active profile where it is. A read that
+  // fails and a body this firmware does not read both answer false, leaving the
+  // configuration at those defaults.
   bool readProfileBody(uint16_t profileId);
 
-  /** Replace the configuration in effect with the compiled-in defaults, touching
-   * no storage: writing the result out is saveProfile's job, so the profile the
-   * configuration belongs to is not changed by this. */
+  // Replaces the configuration in effect with the compiled defaults, touching no
+  // storage: writing the result out is saveProfile's job.
   void factoryReset();
 
-  /** Write the configuration in effect to the profile it belongs to, which is
-   * the profile the store carries as active: read from the store as the call
-   * starts, once, and the one id the whole call stands on.
-   *
-   * `droppedKeys`, when it is not null, is handed what the write did not carry
-   * over from the body it replaced: the number of object keys of that body the
-   * body written in its place does not hold (Json::missingKeyCount, which is
-   * where the count is defined). The body compared against is the one of the
-   * profile this call writes to, read back by that id. A write that carried
-   * every key over leaves it at 0, and so does every call that returns without
-   * writing: the count is only ever raised by a write that reached the flash,
-   * so a caller reports it as a fact of a save that happened. It stays 0 when
-   * the body being replaced cannot be read back, and when the comparison has
-   * no answer (Json::missingKeyCount): a write that happened is not evidence
-   * of one that dropped nothing. */
+  // Writes the configuration in effect to the profile the store carries as
+  // active, read once as the call starts.
+  //
+  // `droppedKeys`, when it is not null, is handed the number of keys of the
+  // replaced body the new one does not carry (Json::missingKeyCount). It stays 0
+  // for a call that did not reach the flash, and for one whose comparison had no
+  // answer.
   bool saveProfile(uint32_t *droppedKeys = nullptr);
 
-  /** The profile the configuration the device runs on belongs to: the store's
-   * active profile, read from the store. */
+  // The profile the configuration belongs to, as the store carries it.
   uint16_t activeProfileId() const;
   uint8_t profileCount() const;
 
-  /** Hand the fields that reach past the store to the code reading them: the
-   * threshold the logger writes at. A profile carries it, so it is applied
-   * when one is read, when the configuration is reset, and after a write that
-   * may have moved it. */
+  // Hands the fields that reach past the store to the code reading them: the
+  // threshold the logger writes at. Applied when a profile is read, on reset, and
+  // after a write.
   void applySys();
 
-  /** Get const reference to active configuration. */
+  // The configuration in effect.
   const ConfigStore &config() const { return _config; }
-  /** Get mutable reference to active configuration (internal use). */
+  // The same configuration, writable by this layer's writers.
   ConfigStore &configMut() { return _config; }
 
-  /** Reserved for a later entry of this layer: not implemented, so it moves
-   * nothing. */
+  // Reserved for a later entry of this layer: not implemented, so it moves
+  // nothing.
   bool selectProfile(uint16_t profileId);
-  /** Reserved for a later entry of this layer: not implemented, so it moves
-   * nothing. */
+  // Reserved for a later entry of this layer: not implemented, so it moves
+  // nothing.
   void setActiveProfileId(uint16_t id);
   Profile::ProfileStatus getStatus() const;
 
 #if THETAGP_CFG_HAS_FLASH
-  /** Profile storage on the external flash; absent on boards without a chip. */
+  // Profile storage on the external flash; absent on boards without a chip.
   Profile::ProfileStore &store() {
     return Profile::ProfileStore::getInstance();
   }
 
-  /** Bring flash and RAM back in step on a flash that carries no profile at
-   * all: write the factory Profile0 (the compiled defaults) and reset the
-   * active configuration to what that body holds. Does nothing when the flash
-   * already carries a profile.
-   *
-   * The question is put to the flash rather than decided once at boot, so the
-   * answer stays right whenever the profile area has been left empty. init() is
-   * its only caller. Returns true when the flash holds a profile after the
-   * call. */
+  // Writes the factory Profile 0 where the flash carries no profile, and resets
+  // the configuration to what that body holds. The question is put to the flash
+  // rather than decided once at boot, so it holds whenever the profile area has
+  // been left empty. Answers whether the flash holds a profile after the call.
   bool ensureFactoryProfile();
   // Writes the factory body again from the compiled defaults when the one held
   // is of an older format.
