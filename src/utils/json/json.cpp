@@ -39,14 +39,10 @@ static bool isNumberToken(const struct json_token &tok) {
   return tok.type == JSON_TYPE_NUMBER && tok.ptr && tok.len > 0;
 }
 
-// A token that spells a whole decimal integer and nothing else: an optional
-// minus, then digits that start with a non-zero one unless the number is the
-// single zero, then a value terminator. frozen ends a number token where the
-// digits end, so a document spelling 1x hands over the token "1"; the digits of
-// 1.9, 1e1, 0x1 and 01 stop inside the token. Digits taken out of either
-// spelling are a number the document never carried, and a bit index or an
-// enumerator is where such a number lands, so the whole spelling and the
-// character behind the token are both checked here.
+// Whether a token spells a whole decimal integer and nothing else: an optional
+// minus, then digits that start with a non-zero one unless the number is zero,
+// then a value terminator. frozen ends a number token where its digits end, so
+// the character behind the token is checked too.
 static bool isPlainIntToken(const struct json_token &tok, const char *input,
                             int inputLen) {
   if (!tok.ptr || tok.len <= 0) {
@@ -93,12 +89,9 @@ static bool isPlainIntToken(const struct json_token &tok, const char *input,
 const char *Json::buildFmt(const char *path, const char *spec) const {
   if (!path || !spec) return nullptr;
 
-  // What the format holds, counted before a byte of it is written: one "{key:"
-  // per segment (the separators of the path are not written), the format
-  // specifier, one '}' per segment to close them, and the terminator. A path
-  // whose format does not fit the buffer as a whole is refused as a whole — a
-  // truncated format is one that walks somewhere other than the path it was
-  // built from.
+  // The format's length, counted before a byte of it is written: one "{key:" per
+  // segment, the specifier, one '}' per segment, and the terminator. A format
+  // that does not fit is refused rather than truncated.
   size_t pathLen = 0;
   int segments = 1;  // the last segment
   for (const char *p = path; *p; ++p) {
@@ -150,10 +143,8 @@ int Json::getInt(const char *path, int def) const {
 int Json::getArrInt(const char *path, int idx, int def) const {
   if (!_input || !path || idx < 0) return def;
 
-  // frozen walks into an array element under the name "<array>[<index>]" and
-  // matches that spelling against the path it is given plus the index. Object
-  // keys on that path carry a leading dot, so the array path is spelled with
-  // one; a path without it reaches no element.
+  // frozen names an array element "<array>[<index>]", and the array path it is
+  // given is spelled with a leading dot.
   char arrPath[64];
   const size_t pathLen = strlen(path);
   if (pathLen + 2 > sizeof(arrPath)) return def;
@@ -264,20 +255,14 @@ int Json::scanf(const char *fmt, ...) const {
 
 namespace {
 
-// A key is identified by the chain of names that reaches it, and the lookup
-// that asks about it walks that chain as a dotted path. The walker spells a
-// member's path the same way, but its spelling is not the chain: a name
-// carrying a '.' reads as two names, and a name carrying '[' or ']' reads as an
-// array element. The walk below therefore carries the chain itself rather than
-// trusting the path, and anything it cannot name exactly makes the whole
-// comparison unknown — a count that is quietly short or quietly long is worse
-// than no count at all.
+// A key is the chain of names that reaches it, and the walk carries that chain
+// rather than the dotted path the walker spells: a name carrying '.' or brackets
+// reads as a path, not as a name. A key the walk cannot name exactly makes the
+// whole comparison unknown.
 
-// The longest dotted path a lookup can be built for. The format is the path,
-// two bytes and a '}' per name, the specifier and the terminator, and
-// buildFmt's buffer holds 128 bytes: past 128 - 3 (specifier and terminator)
-// - 3 (the shortest name's braces) = 122 bytes of path there is no format for
-// any segmentation.
+// The longest dotted path a lookup can be built for, from buildFmt's 128-byte
+// buffer: the format is the path, two bytes and a '}' per name, the specifier
+// and the terminator.
 constexpr size_t kMaxLookupPathLen = 122;
 
 // The deepest chain of names this counts. A body nested deeper than this is far
@@ -355,12 +340,9 @@ static void countKey(KeyWalk *walk, const char *leaf, size_t leafLen) {
 
 // One member of the document being walked, as json_walk reports it.
 //
-// The walker reports an object's members, an array's elements, and the start
-// and the end of every container. A member of an object is a key; an element of
-// an array is not, and neither is an event that ends a container (those arrive
-// unnamed). What an array holds is told apart by the walk's own count of open
-// arrays rather than by the look of the path, so a key whose name ends in ']'
-// is a key like any other.
+// An object's member is a key; an array's element is not, and neither is an event
+// that ends a container. The walk tells them apart by its count of open arrays,
+// not by the look of a path.
 static void missingKeyCb(void *data, const char *name, size_t nameLen,
                          const char *path, const struct json_token *token) {
   KeyWalk *walk = static_cast<KeyWalk *>(data);
@@ -368,10 +350,8 @@ static void missingKeyCb(void *data, const char *name, size_t nameLen,
 
   switch (token->type) {
   case JSON_TYPE_OBJECT_END:
-    // An object's end arrives with the path the object was opened with, and a
-    // name's entry was recorded with that same length; an unnamed object (the
-    // body itself, or an element of an array) closes no entry, because its path
-    // is strictly longer than the entry's.
+    // An object's end carries the path it was opened with, which is the length
+    // its entry was recorded with; an unnamed object closes no entry.
     if (walk->names > 0 &&
         walk->namePathLen[walk->names - 1] == strlen(path)) {
       walk->names--;
@@ -379,13 +359,8 @@ static void missingKeyCb(void *data, const char *name, size_t nameLen,
     return;
   case JSON_TYPE_ARRAY_END:
     if (walk->arrays > 0) walk->arrays--;
-    // An array's end arrives with the path the array was opened with, exactly
-    // as an object's does, so the name ARRAY_START recorded for the member
-    // holding it closes here by the same test. An array that opened no entry
-    // leaves the path strictly longer than the entry's — a member's array is
-    // named by a path whose length the end repeats, while an element's array
-    // carries the brackets of the array around it — or the chain is empty, as
-    // for the body itself.
+    // An array's end carries the path it was opened with, as an object's does, so
+    // the entry ARRAY_START recorded for its member closes here by the same test.
     if (walk->names > 0 &&
         walk->namePathLen[walk->names - 1] == strlen(path)) {
       walk->names--;
@@ -413,7 +388,7 @@ static void missingKeyCb(void *data, const char *name, size_t nameLen,
   }
 }
 
-// Whether a walk that reports `consumed` bytes got through a body of `len`
+// Whether a walk that reports `consumed` bytes got through a body of `len`.
 // bytes. What is left behind the walked part may carry keys of its own, so a
 // walk that stopped early leaves the comparison unknown; whitespace is the one
 // thing that can stand there without hiding anything.

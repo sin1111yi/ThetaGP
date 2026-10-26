@@ -53,10 +53,8 @@ using Gamepad::Config::storeKeyElement;
 
 namespace {
 
-// The key list reply is built from the table's exposed rows, and the schema
-// sizes its buffers with the two limits the table declares for them. The pair
-// is held together here, so a table that outgrows the reply is a build error
-// rather than a list cut short at run time.
+// The key list reply is built from the exposed rows, in buffers the schema sizes
+// from the limits the table declares for them.
 static_assert(Gamepad::Config::kKeyTableMaxEntries <=
                   sizeof(((ThetaGP_ConfigListKeysOk *)nullptr)->keys) /
                       sizeof(ThetaGP_ConfigKeyEntry),
@@ -65,10 +63,8 @@ static_assert(Gamepad::Config::kKeyTableMaxNameLen <
                   sizeof(((ThetaGP_ConfigKeyEntry *)nullptr)->key),
               "config list: a key name outgrows the reply's own buffer");
 
-// The key table's types and the shapes the wire names for them line up member
-// for member, which is what makes the cast in listKeys total: a type added on
-// either side fails the build rather than reaching a host as a shape the
-// schema does not carry.
+// The key table's types and the wire's shapes line up member for member, which
+// is what makes the cast in listKeys total.
 static_assert(static_cast<int>(ThetaGP_ConfigKeyType_CONFIG_KEY_U8) ==
                       ThetaGP_ConfigKeyType_CONFIG_KEY_U8 &&
                   static_cast<int>(ThetaGP_ConfigKeyType_CONFIG_KEY_U16) ==
@@ -86,11 +82,8 @@ void writeKey(char *out, size_t cap, const KeyEntry &entry) {
   std::snprintf(out, cap, "%s", entry.key);
 }
 
-// The row the request names, or the refusal a caller is owed for a key this
-// firmware does not carry. A request whose name field is empty names no key at
-// all, which is told apart from a name no exposed row carries: the first is a
-// value that arrived missing, the second a field the control protocol does not
-// reach.
+// The row the request names, or the refusal it is owed: a missing name is not
+// the same refusal as a name no exposed row carries.
 const KeyEntry *requestedKey(const char *name, ThetaGP_Reply &reply) {
   if (name[0] == '\0') {
     writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_PARAM,
@@ -106,11 +99,8 @@ const KeyEntry *requestedKey(const char *name, ThetaGP_Reply &reply) {
 }
 
 #if THETAGP_CFG_HAS_FLASH
-// The refusal owed to an arm that reads or writes a body while a body's bytes
-// are spoken for: the flash stream holds the one staging buffer a save
-// serializes into and a load reads into, and so does a body's own transfer. No
-// reason is added to the code, because a reason naming the same fact would be
-// the code again.
+// The refusal owed to an arm that reads or writes a body while the staging buffer
+// is spoken for. No reason is added: it would repeat the code.
 bool refusedWhileBodyBusy(ThetaGP_Reply &reply) {
   if (!Flash::active() && !ProfileTransfer::busy()) {
     return false;
@@ -294,10 +284,9 @@ void ConfigDomain::load(ThetaGP_Reply &reply) {
 
   ConfigManager &config = ConfigManager::getInstance();
 
-  // The read is the profile the configuration belongs to and not a move onto
-  // one: the active profile is where the read was handed it. The configuration
-  // starts from the compiled defaults, so a body this firmware cannot read
-  // leaves the device on those defaults and is answered as a read that failed.
+  // The read belongs to the profile the configuration is on and is not a move
+  // onto it. A body this firmware cannot read leaves the device on the compiled
+  // defaults, and the read answers that it failed.
   if (!config.readProfileBody(config.activeProfileId())) {
     writeFailure(reply, ThetaGP_ErrorCode_ERR_INTERNAL,
                  ThetaGP_Reason_REASON_PROFILE_LOAD_FAILED);
