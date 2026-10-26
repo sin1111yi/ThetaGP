@@ -76,11 +76,8 @@ bool ConfigManager::init() {
     return false;
   }
 
-  // Parse the profile body into _config, on top of the compiled-in defaults.
-  // The window is text.len, the body length readProfile reported for the bytes
-  // it put in text.data — the parse never leans on a terminator the buffer may
-  // not hold. A body of a version this firmware does not read is refused, and
-  // the configuration stays at the defaults set above.
+  // The body is parsed over the compiled defaults, in the window readProfile
+  // reported. A refused body leaves those defaults in place.
   if (text.len > 0 && !parseProfile(text.data, text.len, &_config)) {
     LOG_WARN("ConfigManager: the profile body was refused, the configuration "
              "stays at the compiled defaults");
@@ -97,11 +94,8 @@ bool ConfigManager::init() {
   return true;
 }
 
-// Restore the factory Profile0 on a flash that carries no profile, and reset
-// the active configuration to what that body holds. The question "is there a
-// profile?" is put to the flash on the spot (ProfileStore::needsFactoryProfile())
-// instead of being answered once at boot, so init() is the only caller and the
-// answer stays right for a profile area left empty while the device ran.
+// Writes the factory Profile 0 on a flash that carries none, and resets the
+// configuration to what that body holds.
 bool ConfigManager::ensureFactoryProfile() {
   ProfileStore &store = ProfileStore::getInstance();
   if (!store.needsFactoryProfile()) {
@@ -134,10 +128,8 @@ bool ConfigManager::ensureFactoryProfile() {
   return true;
 }
 
-// The factory body is the compiled defaults, so it is kept in the format this
-// firmware writes: a body of an older format is written again from those
-// defaults. The body a device falls back to is then one a host can parse, and
-// the format it carries is the one every other body carries.
+// The factory body is the compiled defaults, so a body of an older format is
+// written again from them.
 bool ConfigManager::repairFactoryProfile() {
   ProfileStore &store = ProfileStore::getInstance();
 
@@ -171,10 +163,8 @@ bool ConfigManager::repairFactoryProfile() {
 bool ConfigManager::loadProfile(uint16_t) { return false; }
 
 bool ConfigManager::readProfileBody(uint16_t profileId) {
-  // The reset does not depend on what the read returns: _config is overwritten
-  // with the compiled-in defaults before the read, and a body of length 0
-  // (erased or half-written sector) leaves it at those defaults. Only the parse
-  // step below looks at len.
+  // The configuration is reset to the compiled defaults before the read, so a
+  // body of length 0 leaves it at those defaults.
   _config = kConfigDefaults;
 
   // The id read is the one this call was handed, whether or not the store calls
@@ -182,11 +172,8 @@ bool ConfigManager::readProfileBody(uint16_t profileId) {
   // reading only for the entry that moved onto it first.
   ProfileText text;
   bool ok = ProfileStore::getInstance().readProfile(profileId, &text);
-  // text.len is the length of the body the read placed in text.data, so it is
-  // the parse window here too. A body of a version this firmware does not read
-  // is refused, and the read is answered as failed: the configuration then
-  // stands at the compiled defaults the reset above applied, which is what the
-  // caller is told.
+  // text.len is the parse window. A refused body leaves the configuration at
+  // the defaults the reset applied, and the read answers that it failed.
   if (ok && text.len > 0 && !parseProfile(text.data, text.len, &_config)) {
     LOG_WARN("ConfigManager: id=%u carries a body this firmware does not read",
              profileId);
@@ -224,21 +211,15 @@ void ConfigManager::applySys() {
 }
 
 // ── saveProfile() ──
-// The body this save replaces, read back before the write: a save that does not
-// carry a key of it over says so instead of dropping it in silence.
-//
-// A buffer of its own, and read before the body being written is serialized:
-// the read the profile store offers goes through its staging buffer, which the
-// serializer's output lives in, so it has to happen first and be copied out.
+// The body this save replaces is read back before the write, into a buffer of its
+// own: the save reports the keys it did not carry over.
 static COMMON_ZERO_INIT uint8_t s_replaced[PROFILE_STAGING_SIZE];
 
 bool ConfigManager::saveProfile(uint32_t *droppedKeys) {
   ProfileStore &store = ProfileStore::getInstance();
 
-  // The profile this save writes to, read from the store as the save starts:
-  // the store carries the active profile and this layer keeps no reading of
-  // it, so the profile the configuration belongs to is asked for here rather
-  // than remembered. Read once, and the one id the whole save stands on.
+  // The profile this save writes to, read from the store once: it is the one id
+  // the whole save stands on.
   const uint16_t activeId = store.getStatus().activeId;
 
   // What the caller is handed is raised by the write below and by nothing
@@ -252,14 +233,9 @@ bool ConfigManager::saveProfile(uint32_t *droppedKeys) {
     return false;
   }
 
-  // How many keys of the body being replaced the new body does not carry. The
-  // replaced body is the one of the profile this save writes to, read back by
-  // that id. Its keys are looked up in the body about to be written rather
-  // than in a list of the keys the serializer writes, so a key added to the
-  // profile shape moves this count with it.
-  // The body being replaced is read whether or not the caller wants the count:
-  // its name is what the new body carries on, so a save does not rename a
-  // profile to nothing.
+  // How many keys of the replaced body the new one does not carry, counted against
+  // the body about to be written. The replaced body is read either way: its name
+  // is what the new one carries on.
   bool haveReplaced = false;
   uint16_t replacedLen = 0;
   {
@@ -342,10 +318,8 @@ Profile::ProfileStatus ConfigManager::getStatus() const {
 
 #else // THETAGP_CFG_HAS_FLASH
 
-// Without a flash chip there is nowhere to keep profiles, so the configuration
-// runs on the compiled defaults in ConfigStore. The host holds the user's
-// settings and is expected to push them over the control protocol; nothing
-// survives a power cycle on this side.
+// Without a flash chip there is nowhere to keep profiles: the configuration runs
+// on the compiled defaults, and nothing survives a power cycle.
 
 bool ConfigManager::init() {
   _config = kConfigDefaults;

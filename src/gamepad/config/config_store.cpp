@@ -48,21 +48,11 @@ static_assert(detail::kBtnMapUnmapped == 0xFF,
               "kBtnMapUnmapped: the unmapped btn_map slot is 0xFF on the wire");
 
 // ── Profile versions ──
-// The version this firmware writes and the oldest one it still reads.
+// Version 1 kept every domain object inside `map`; from version 2 a field sits
+// inside the object its name starts with. Version 3 is the first whose `led.mode`
+// the strip honours, so a body below 3 reads that field as the rainbow.
 //
-// Version 1 kept every domain object inside its one `map` object, so a field of
-// another domain sat at "map.<domain>.<leaf>" while the map fields, already
-// inside map, sat at "map.<leaf>". From version 2 on a field sits inside the
-// object its name starts with, which is the path the key table spells.
-//
-// Version 3 is the first that carries an LED effect the strip honours. Before
-// it `led.mode` was written by every body and read by nothing, so a body below
-// 3 carries a number that never named an effect; the field reads as the rainbow
-// every strip showed then.
-//
-// A body of any other version is not read at all: its fields would be fetched
-// at paths that hold nothing, and every one of them would fall back to its
-// default in silence — the state this check exists to keep out.
+// A body of any other version is not read at all.
 // The value a field reads as when the body carries no such field. No row of the
 // key table accepts it as a value, which that table holds at compile time.
 constexpr int32_t kNoProfileValue = INT32_MIN;
@@ -154,12 +144,8 @@ static void domainSegment(const char *domain, size_t index, char *dst,
 }
 
 // ── parseProfile() ──
-// Reads a profile body into the store, and answers whether it was read. A body
-// of a version this firmware does not read is refused as a whole: nothing of it
-// is applied, so no field of it can land somewhere and the rest fall back to a
-// default in silence. What a store that was not written holds is the caller's
-// business — both callers hand in the compiled defaults, so a refusal leaves the
-// configuration at those defaults.
+// Reads a profile body into the store and reports whether it was read. A refused
+// body leaves the store as it was.
 
 bool parseProfile(const char *json, uint32_t len, ConfigStore *cfg) {
   if (!json || !cfg) {
@@ -167,11 +153,8 @@ bool parseProfile(const char *json, uint32_t len, ConfigStore *cfg) {
     return false;
   }
 
-  // The body's own length is the parse window. Handing it over instead of
-  // letting the parser look for a terminator is what keeps the read inside the
-  // buffer: a body of PROFILE_JSON_MAX bytes with no terminator behind it ends
-  // exactly at the last byte of the buffer, and a terminator is never looked
-  // for past it.
+  // The body's own length is the parse window: no terminator is looked for past
+  // its last byte.
   Json doc;
   doc.parse(json, static_cast<int>(len));
 
@@ -189,25 +172,17 @@ bool parseProfile(const char *json, uint32_t len, ConfigStore *cfg) {
   const KeyEntry *const table = keyTable();
   const uint8_t count = keyTableCount();
 
-  // Every field of the store is read through its row: the row carries the name
-  // the body writes the field under and the bytes the field occupies, so a
-  // field cannot be read at one place and written at another.
-  //
-  // A scalar is stored only when the number lies inside the range its row
-  // declares. A number outside that range leaves the field at its compiled
-  // default, the same value a body with no such field leaves behind: narrowing
-  // the number instead would store one no body carried — 300 into a byte field
-  // stores 44, a legal-looking value with a different meaning.
+  // Every field is read through its row, which carries the name the body writes
+  // it under and the bytes it occupies. A number outside the row's range leaves
+  // the field at its compiled default rather than being narrowed into it.
   for (uint8_t i = 0; i < count; ++i) {
     const KeyEntry &entry = table[i];
     char path[48];
     profilePath(entry, version, path, sizeof(path));
 
     if (entry.type == ThetaGP_ConfigKeyType_CONFIG_KEY_U8_ARRAY) {
-      // A body that carries the array fills every element of the field: the
-      // elements it does not reach take the unmapped sentinel, so a short array
-      // cannot leave a stale tail behind. A body with no array leaves the field
-      // as it stands.
+      // A body that carries the array fills every element; the ones it does not
+      // reach take the unmapped sentinel, so no stale tail is left behind.
       const int elems = doc.getArrLen(path);
       if (elems <= 0) {
         continue;
@@ -245,11 +220,9 @@ bool parseProfile(const char *json, uint32_t len, ConfigStore *cfg) {
 }
 
 // ── serializeProfile() ──
-// Writes the store as a body of the current version. The body walks the key
-// table, so the fields it carries, the object each field sits in and their
-// order are the declaration's: an object opens at the first row that names it
-// and closes when a row of another object arrives, which is why the rows of one
-// object are held adjacent in that table.
+// Writes the store as a body of the current version, walking the key table: an
+// object opens at the first row that names it and closes at a row of another,
+// so the rows of one object are held adjacent in that table.
 
 uint16_t serializeProfile(const ConfigStore &cfg, const char *name, char *dst,
                           uint16_t cap) {
@@ -269,10 +242,8 @@ uint16_t serializeProfile(const ConfigStore &cfg, const char *name, char *dst,
   const KeyEntry *const table = keyTable();
   const uint8_t count = keyTableCount();
 
-  // The objects being written, as the domain the fields before this one named:
-  // a field of `led` and a field of `led.rgb` share the `led` object, so the
-  // walk keeps open as many objects as the domain has segments and closes the
-  // ones the next domain does not name again.
+  // The objects being written, by the domain of the fields before this one: a
+  // field of `led` and one of `led.rgb` share the `led` object.
   constexpr size_t kMaxDomain = 24;
   char previous[kMaxDomain] = "";
   size_t open = 0;
@@ -326,12 +297,8 @@ uint16_t serializeProfile(const ConfigStore &cfg, const char *name, char *dst,
 
   const uint16_t len = static_cast<uint16_t>(doc.end());
 
-  // 0 is the "no body" answer, and there are two ways to get here: the text was
-  // cut at the end of dst (frozen reports the length the piece needed, Json
-  // clamps it and raises overflowed(), so what sits in dst is a broken prefix),
-  // or the body is longer than the flash layer can store. Blanking dst keeps
-  // the buffer from looking like a body to a caller that ignores the return
-  // value, and every write path in the store rejects a length of 0.
+  // 0 means no body: the text was cut at the end of dst, or the body is longer
+  // than the flash layer stores. dst is blanked so it cannot be read as one.
   if (doc.overflowed() || len == 0 || len > Profile::PROFILE_JSON_MAX) {
     LOG_ERROR("serializeProfile: no usable body (cap=%u, len=%u%s)", cap, len,
               doc.overflowed() ? ", truncated" : "");
