@@ -120,6 +120,59 @@ static_assert(keysAddressSlots(),
 
 inline constexpr std::array<uint8_t, kBtnMapSlots> kBtnMap = buildBtnMap();
 
+// The schema's GamepadButton is the bit each mask names: a remap slot holds that
+// bit's index, so the two tables have to stay in step. An enum value that
+// stopped naming its mask's bit would make every slot mean another button.
+constexpr bool gamepadButtonNamesTheBits() {
+  constexpr struct {
+    uint32_t mask;
+    Enums::GamepadButton button;
+  } kPairs[] = {
+      {GAMEPAD_MASK_UP, Enums::GamepadButton::GAMEPAD_BUTTON_UP},
+      {GAMEPAD_MASK_DOWN, Enums::GamepadButton::GAMEPAD_BUTTON_DOWN},
+      {GAMEPAD_MASK_LEFT, Enums::GamepadButton::GAMEPAD_BUTTON_LEFT},
+      {GAMEPAD_MASK_RIGHT, Enums::GamepadButton::GAMEPAD_BUTTON_RIGHT},
+      {GAMEPAD_MASK_B1, Enums::GamepadButton::GAMEPAD_BUTTON_B1},
+      {GAMEPAD_MASK_B2, Enums::GamepadButton::GAMEPAD_BUTTON_B2},
+      {GAMEPAD_MASK_B3, Enums::GamepadButton::GAMEPAD_BUTTON_B3},
+      {GAMEPAD_MASK_B4, Enums::GamepadButton::GAMEPAD_BUTTON_B4},
+      {GAMEPAD_MASK_L1, Enums::GamepadButton::GAMEPAD_BUTTON_L1},
+      {GAMEPAD_MASK_R1, Enums::GamepadButton::GAMEPAD_BUTTON_R1},
+      {GAMEPAD_MASK_L2, Enums::GamepadButton::GAMEPAD_BUTTON_L2},
+      {GAMEPAD_MASK_R2, Enums::GamepadButton::GAMEPAD_BUTTON_R2},
+      {GAMEPAD_MASK_S1, Enums::GamepadButton::GAMEPAD_BUTTON_S1},
+      {GAMEPAD_MASK_S2, Enums::GamepadButton::GAMEPAD_BUTTON_S2},
+      {GAMEPAD_MASK_L3, Enums::GamepadButton::GAMEPAD_BUTTON_L3},
+      {GAMEPAD_MASK_R3, Enums::GamepadButton::GAMEPAD_BUTTON_R3},
+      {GAMEPAD_MASK_A1, Enums::GamepadButton::GAMEPAD_BUTTON_A1},
+      {GAMEPAD_MASK_A2, Enums::GamepadButton::GAMEPAD_BUTTON_A2},
+      {GAMEPAD_MASK_A3, Enums::GamepadButton::GAMEPAD_BUTTON_A3},
+      {GAMEPAD_MASK_A4, Enums::GamepadButton::GAMEPAD_BUTTON_A4},
+      {GAMEPAD_MASK_DU, Enums::GamepadButton::GAMEPAD_BUTTON_DU},
+      {GAMEPAD_MASK_DD, Enums::GamepadButton::GAMEPAD_BUTTON_DD},
+      {GAMEPAD_MASK_DL, Enums::GamepadButton::GAMEPAD_BUTTON_DL},
+      {GAMEPAD_MASK_DR, Enums::GamepadButton::GAMEPAD_BUTTON_DR},
+      {GAMEPAD_MASK_E1, Enums::GamepadButton::GAMEPAD_BUTTON_E1},
+      {GAMEPAD_MASK_E2, Enums::GamepadButton::GAMEPAD_BUTTON_E2},
+      {GAMEPAD_MASK_E3, Enums::GamepadButton::GAMEPAD_BUTTON_E3},
+      {GAMEPAD_MASK_E4, Enums::GamepadButton::GAMEPAD_BUTTON_E4},
+      {GAMEPAD_MASK_E5, Enums::GamepadButton::GAMEPAD_BUTTON_E5},
+      {GAMEPAD_MASK_E6, Enums::GamepadButton::GAMEPAD_BUTTON_E6},
+      {GAMEPAD_MASK_E7, Enums::GamepadButton::GAMEPAD_BUTTON_E7},
+      {GAMEPAD_MASK_E8, Enums::GamepadButton::GAMEPAD_BUTTON_E8},
+  };
+  for (const auto &pair : kPairs) {
+    if (bitIndexOf(pair.mask) != static_cast<uint8_t>(pair.button)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static_assert(gamepadButtonNamesTheBits(),
+              "GamepadButton: each value is the bit index of the mask it names");
+
+
 // The default set as a whole: each field's factory default, emitted from the
 // config key declaration, plus the board's key table. The fields are written
 // one by one in declaration order; the button table is a compile-time
