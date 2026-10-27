@@ -254,10 +254,14 @@ default still compiles — the one class of defect a build cannot catch:
 `test_profile_keys.py` and `test_profile_version.py`, each beside the cases it
 compiles.
 
-Which commands a board answers is a property of the firmware it runs and not of
-its build flags: an arm with no handler answers `ERR_UNKNOWN_CMD`, so a host can
-ask rather than assume. Today the `sys` domain is live and the others are still
-being moved onto the protocol.
+Which commands a board answers is a property of the firmware it runs: an arm with
+no handler answers `ERR_UNKNOWN_CMD`, so a host can ask rather than assume. The
+`sys` and `config` domains are answered by every build, `config` included —
+`save` answers `persisted: false` and `load` answers `ERR_NOT_SUPPORTED` where the
+board carries no chip, and `factory_reset` always answers `persisted: false`
+because the reset writes nothing. The `profile` and `test` domains are compiled in
+only under `THETAGP_CFG_HAS_FLASH`, so a board without a chip answers their arms
+with the unknown-command refusal.
 
 ---
 
@@ -311,9 +315,10 @@ Rules:
 - **`FAST_DATA_ZERO_INIT`** — hot path variable, zero-initialized in DTCM (NOLOAD, no Flash copy).
 - **`FAST_DATA`** — hot path variable with initial value, initialized from Flash load image into DTCM.
 - **Registration** — any new static buffer of 256 B or more must be recorded
-  in the buffer register (name, size, macro, region) so total static usage
-  stays reviewable in one place. The register currently lives in
-  `docs/analysis/adr-0003-mempool-removal.md` §3.1.
+  in `BUFFERS.md` (name, size, macro, region) so total static usage stays
+  reviewable in one place. It is tracked with the code, so the rule can be
+  followed from a fresh clone; it is a checklist and not an addend, since those
+  bytes are already inside the region totals the linker prints.
 
 Usage:
 ```cpp
