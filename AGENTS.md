@@ -263,6 +263,28 @@ because the reset writes nothing. The `profile` and `test` domains are compiled 
 only under `THETAGP_CFG_HAS_FLASH`, so a board without a chip answers their arms
 with the unknown-command refusal.
 
+### Reply cost and the report tick
+
+A reply is built and encoded inside one command-task window, so a wide one spans
+report periods instead of delaying a frame of its own. Measure that window on a
+release build: the encoder's cost grows with the bytes it writes, and an `-O0`
+build makes it roughly four times slower, so a number taken there says nothing
+about the firmware a board ships.
+
+`config.list_keys` is the widest reply the protocol carries (293 B, 16 entries).
+Twenty requests back to back on ThetaGPH7 at 8 kHz:
+
+| build | command window, max | command window, mean |
+|---|---:|---:|
+| release (`-Os -O3`) | 259 us | 165 us |
+| debug, `-Og` | 371 us | 237 us |
+| debug, `-O0` | 1,149 us | 719 us |
+
+Filling the sixteen entries is 27 us of that; the rest is the encoder, and
+replacing the string copy in the fill changes nothing. The report task is the
+same across the three rows (13 to 17 us, 8,000 Hz), so what a wide reply costs is
+report slots, not report accuracy.
+
 ---
 
 ## 6. Hardware Platform Constraints
