@@ -25,6 +25,7 @@
 #include "drivers/gp_emulator/hid/hid_descriptors.h"
 #include "drivers/gp_emulator/shared/driver_helper.h"
 
+#include "drivers/device/system_timer.h"
 #include "gamepad/gamepad.h"
 
 #include "tusb.h"
@@ -149,11 +150,25 @@ bool HIDDriver::process(void *gamepad) {
     }
   }
 
-  if (memcmp(last_report, &hidReport, sizeof(hidReport)) != 0) {
-    if (tud_hid_ready() && tud_hid_report(0, &hidReport, sizeof(hidReport))) {
-      memcpy(last_report, &hidReport, sizeof(hidReport));
-      return true;
-    }
+  if (!tud_hid_ready()) {
+    _sent = false;
+    return false;
+  }
+
+  // A report goes out when the pad changed, and one every kIdleReportMs
+  // otherwise: the one a change produces can leave before the host's driver
+  // begins to read, and a pad that then stands still would never be seen.
+  const bool changed = memcmp(last_report, &hidReport, sizeof(hidReport)) != 0;
+  const uint32_t now = Drivers::Device::SystemTimer::getInstance().getMillis();
+  if (_sent && !changed && (now - _lastSent) < kIdleReportMs) {
+    return false;
+  }
+
+  if (tud_hid_report(0, &hidReport, sizeof(hidReport))) {
+    memcpy(last_report, &hidReport, sizeof(hidReport));
+    _lastSent = now;
+    _sent = true;
+    return true;
   }
 
   return false;

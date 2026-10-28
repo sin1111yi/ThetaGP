@@ -20,6 +20,7 @@
  */
 
 #include "drivers/gp_emulator/xbone/xbone_driver.h"
+#include "drivers/device/system_timer.h"
 #include "drivers/gp_emulator/shared/driver_helper.h"
 #include "drivers/gp_emulator/xbone/xbone_descriptors.h"
 
@@ -48,6 +49,10 @@ static uint32_t s_opened_at;
 static bool s_announced;
 static bool s_powered;
 static bool s_report_sent;
+// When the last report left, and whether one has since the host opened the
+// endpoint.
+static uint32_t s_last_sent_ms;
+static bool s_sent_since_open;
 static bool s_guide_pressed;
 static uint32_t s_keepalive_at;
 static uint8_t s_keepalive_sequence = 1;
@@ -259,6 +264,7 @@ static void xbone_reset(uint8_t rhport) {
   s_announced = false;
   s_powered = false;
   s_report_sent = false;
+  s_sent_since_open = false;
   s_descriptor_pending = false;
   s_descriptor_waiting_ack = false;
   s_descriptor_sent = 0;
@@ -295,6 +301,7 @@ static uint16_t xbone_open(uint8_t rhport,
   s_announced = false;
   s_powered = false;
   s_report_sent = false;
+  s_sent_since_open = false;
   s_descriptor_pending = false;
   s_descriptor_waiting_ack = false;
   s_descriptor_sent = 0;
@@ -468,7 +475,12 @@ bool XboxOneDriver::process(void *gamepad) {
 
   const uint8_t *core = reinterpret_cast<const uint8_t *>(&s_report) +
                         XBONE_HEADER_SIZE;
-  if (std::memcmp(core, s_last_core, sizeof(s_last_core)) == 0) {
+  // A report goes out when the pad changed, and one every kIdleReportMs
+  // otherwise: the one a change produces can leave before the host's driver
+  // begins to read, and a pad that then stands still would never be seen.
+  const bool changed = std::memcmp(core, s_last_core, sizeof(s_last_core)) != 0;
+  const uint32_t now = Drivers::Device::SystemTimer::getInstance().getMillis();
+  if (s_sent_since_open && !changed && (now - s_last_sent_ms) < kIdleReportMs) {
     return s_report_sent;
   }
 
@@ -477,6 +489,8 @@ bool XboxOneDriver::process(void *gamepad) {
     return false;
   }
   std::memcpy(s_last_core, core, sizeof(s_last_core));
+  s_last_sent_ms = now;
+  s_sent_since_open = true;
   s_report_sent = true;
   return true;
 }

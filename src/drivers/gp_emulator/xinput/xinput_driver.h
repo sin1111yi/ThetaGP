@@ -59,6 +59,10 @@ public:
 private:
   XInputReport report = {};
   uint8_t last_report[XINPUT_REPORT_SIZE] = {};
+  // Whether a report has left the endpoint since the host opened it, and when
+  // the last one did.
+  bool _sent = false;
+  uint32_t _lastSent = 0;
 };
 
 } // namespace ThetaGP::Drivers::GPEmulator

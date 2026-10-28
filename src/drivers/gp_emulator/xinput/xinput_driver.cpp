@@ -20,6 +20,7 @@
  */
 
 #include "drivers/gp_emulator/xinput/xinput_driver.h"
+#include "drivers/device/system_timer.h"
 #include "drivers/gp_emulator/shared/driver_helper.h"
 #include "drivers/gp_emulator/xinput/xinput_descriptors.h"
 
@@ -231,9 +232,15 @@ bool XInputDriver::process(void *gamepad) {
   }
 
   if (s_endpoint_in == 0 || !tud_ready()) {
+    _sent = false;
     return false;
   }
-  if (std::memcmp(&report, last_report, sizeof(report)) == 0) {
+  // A report goes out when the pad changed, and one every kIdleReportMs
+  // otherwise: the one a change produces can leave before the host's driver
+  // begins to read, and a pad that then stands still would never be seen.
+  const bool changed = std::memcmp(&report, last_report, sizeof(report)) != 0;
+  const uint32_t now = Drivers::Device::SystemTimer::getInstance().getMillis();
+  if (_sent && !changed && (now - _lastSent) < kIdleReportMs) {
     return false;
   }
   if (!usbd_edpt_claim(THETAGP_USB_RHPORT, s_endpoint_in)) {
@@ -247,6 +254,8 @@ bool XInputDriver::process(void *gamepad) {
   }
   usbd_edpt_release(THETAGP_USB_RHPORT, s_endpoint_in);
   std::memcpy(last_report, &report, sizeof(report));
+  _lastSent = now;
+  _sent = true;
   return true;
 }
 

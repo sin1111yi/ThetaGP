@@ -34,6 +34,10 @@ namespace ThetaGP::Drivers::GPEmulator {
 
 class GPEmulator {
 public:
+  // How long a report is left to stand before it is sent again anyway: a host
+  // that missed the one a change produced still learns where the device stands.
+  static constexpr uint32_t kIdleReportMs = 100;
+
   virtual void initialize() = 0;
   virtual void initializeAux() = 0;
   virtual bool process(void *gamepad) = 0;
