@@ -27,8 +27,7 @@
 
 namespace ThetaGP::Drivers::GPEmulator {
 
-// The axes a car simulator reports, in the order its report names them and in
-// the order a board's analog channels are read as.
+// The axes a car simulator reports, in the order its report names them.
 enum class CarSimAxis : uint8_t {
   Steer = 0,  // The wheel's angle, its rest at the centre
   Throttle,   // The pedal's travel, its rest at the top
@@ -38,8 +37,8 @@ enum class CarSimAxis : uint8_t {
   Count,
 };
 
-// The wheel as one report tick leaves it: the counts of the axes the board
-// wires, before any calibration, and the gear the shifter stands in.
+// The wheel as one report tick leaves it: the counts of the axes the board wires,
+// before any calibration, and the gear the shifter stands in.
 struct CarSimState {
   static constexpr uint8_t kAxisCount = static_cast<uint8_t>(CarSimAxis::Count);
 
@@ -50,8 +49,8 @@ struct CarSimState {
   static constexpr int8_t kGearNeutral = 0;
   static constexpr int8_t kGearReverse = -1;
 
-  // The count each axis holds, in CarSimAxis order; an axis the board does not
-  // wire keeps kAbsent.
+  // The count each axis holds, in CarSimAxis order; an unwired axis keeps
+  // kAbsent.
   uint16_t count[kAxisCount] = {Device::AnalogInput::kAbsent,
                                 Device::AnalogInput::kAbsent,
                                 Device::AnalogInput::kAbsent,
@@ -59,9 +58,9 @@ struct CarSimState {
                                 Device::AnalogInput::kAbsent};
   int8_t gear = kGearNone;
 
-  // Takes the board's channels as the axes, in wiring order: channel 0 is the
-  // steering, then the pedals and the handbrake, and an axis past the board's
-  // channels reads as absent.
+  // Takes the board's channels as the axes in wiring order: channel 0 steers,
+  // then the pedals, then the handbrake. An axis past the board's channels reads
+  // as absent.
   void read(const uint16_t *channels, uint8_t channelCount) {
     for (uint8_t i = 0; i < kAxisCount; ++i) {
       count[i] = i < channelCount ? channels[i] : Device::AnalogInput::kAbsent;

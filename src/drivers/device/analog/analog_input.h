@@ -28,23 +28,20 @@
 namespace ThetaGP::Drivers::Device {
 
 // The interface a board's analog acquisition implements: how many channels it
-// wires, and the counts it took on this tick. The channels carry no names here;
-// what a count means to a report is the layer above's, and the counts arrive in
-// the board's own wiring order.
+// wires, and the counts it took, in the board's wiring order. A count carries no
+// meaning here; the layer above names it.
 class AnalogInput : public Device {
 public:
   // The most channels a board may report.
   static constexpr uint8_t kChannelMax = 8;
 
-  // The count of a channel the board does not wire, so a reader leaves it out
-  // rather than presenting a value nothing measured.
+  // The count of a channel the board does not wire.
   static constexpr uint16_t kAbsent = 0xFFFF;
 
   // The channels this board wires, never above kChannelMax.
   [[nodiscard]] virtual uint8_t channelCount() const = 0;
 
-  // Reads this tick's counts into `counts`, which holds kChannelMax entries in
-  // the board's wiring order.
+  // Reads this tick's counts into `counts`, which holds kChannelMax entries.
   virtual void read(uint16_t *counts) = 0;
 
 protected:

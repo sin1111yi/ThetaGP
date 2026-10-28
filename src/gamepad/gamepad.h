@@ -52,8 +52,8 @@ private:
   // runs.
   const Config::ConfigStore *_cfg = nullptr;
   Device *_inputDevice = nullptr;
-  // The board's analog channels, absent on a board that wires none, the counts
-  // they were last read into, and how many of them the board wires.
+  // The board's analog channels, the counts they were last read into, and how
+  // many of them the board wires.
   Drivers::Device::AnalogInput *_analogDevice = nullptr;
   uint16_t _analogCounts[Drivers::Device::AnalogInput::kChannelMax] = {};
   uint8_t _analogChannels = 0;
@@ -89,12 +89,12 @@ public:
   // Register a keypad device
   void registerKeypadDevice(Device *device);
 
-  // Registers the board's analog channels. A board without a sensor registers
-  // none, and every channel then reads as absent.
+  // Registers the board's analog channels; a board without a sensor registers
+  // none and every channel reads as absent.
   void registerAnalogInput(Drivers::Device::AnalogInput *device);
 
-  // The counts of the last report tick, in the board's wiring order, and how
-  // many of them the board wires.
+  // The counts of the last report tick, in the board's wiring order and how many
+  // the board wires.
   [[nodiscard]] const uint16_t *analogCounts() const { return _analogCounts; }
   [[nodiscard]] uint8_t analogChannelCount() const { return _analogChannels; }
 
