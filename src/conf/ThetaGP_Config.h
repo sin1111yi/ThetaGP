@@ -50,6 +50,13 @@
 #define THETAGP_CFG_USB_DBG 0
 #endif
 
+// ── Car simulator ──
+// Whether the generic HID device is the car simulator instead of the gamepad:
+// the board's analog channels as five axes, and its shifter as the gear.
+#ifndef THETAGP_CFG_CARSIM
+#define THETAGP_CFG_CARSIM 0
+#endif
+
 // ── Logging ──
 // Logging is on in a debug build and compiled out of a release one. The level is
 // the threshold the firmware writes at until a profile is read; the profile

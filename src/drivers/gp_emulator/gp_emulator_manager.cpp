@@ -20,6 +20,8 @@
  */
 
 #include "drivers/gp_emulator/gp_emulator_manager.h"
+#include "conf/ThetaGP_Config.h"
+#include "drivers/gp_emulator/carsim/carsim_driver.h"
 #include "drivers/gp_emulator/hid/hid_driver.h"
 #include "drivers/gp_emulator/ps4/ps4_driver.h"
 #include "drivers/gp_emulator/xinput/xinput_driver.h"
@@ -57,6 +59,13 @@ void GPEmulatorManager::setup(Enums::InputMode mode) {
     break;
   case Enums::InputMode::INPUT_MODE_XBONE:
     emulator = new XboxOneDriver();
+    break;
+  case Enums::InputMode::INPUT_MODE_GENERIC:
+#if THETAGP_CFG_CARSIM
+    emulator = new CarSimDriver();
+#else
+    emulator = new HIDDriver();
+#endif
     break;
   default:
     // Every other declared mode is answered by the generic HID device.
