@@ -22,6 +22,7 @@
 #pragma once
 
 #include "drivers/gp_emulator/carsim/carsim_descriptors.h"
+#include "drivers/gp_emulator/carsim/carsim_effects.h"
 #include "drivers/gp_emulator/carsim/carsim_state.h"
 #include "drivers/gp_emulator/gp_emulator.h"
 
@@ -31,7 +32,8 @@
 namespace ThetaGP::Drivers::GPEmulator {
 
 // The car simulator: a HID joystick whose five axes are the board's analog
-// channels and whose gear is the shifter's.
+// channels and whose gear is the shifter's, with the force feedback reports the
+// host plays effects through.
 class CarSimDriver : public GPEmulator {
 public:
   void initialize() override;
@@ -58,6 +60,12 @@ private:
   CarSimReport _report{};
   CarSimReport _lastReport{};
   CarSimState _state{};
+  CarSimEffects _effects{};
+
+  // The angle the effects push against, and the time it was taken at.
+  uint16_t _lastAngle = 0x8000;
+  uint32_t _lastUs = 0;
+
   // Whether a report has left the endpoint since the host opened it, and when
   // the last one did.
   bool _sent = false;

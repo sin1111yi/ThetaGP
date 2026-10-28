@@ -26,9 +26,9 @@
 #if THETAGP_CFG_CARSIM
 
 #include "build_info.h"
+#include "drivers/device/system_timer.h"
 #include "drivers/gp_emulator/shared/driver_helper.h"
 
-#include "drivers/device/system_timer.h"
 #include "gamepad/gamepad.h"
 
 #include "tusb.h"
@@ -105,6 +105,8 @@ void CarSimDriver::initialize() {
       .handbrake = kPedalRest,
   };
   _lastReport = _report;
+  _effects.reset();
+  _lastAngle = kSteerRest;
 
   // Derive USB product ID from board name (hash → lower 16 bits)
   uint16_t pid = static_cast<uint16_t>(
@@ -133,14 +135,28 @@ bool CarSimDriver::process(void *gamepad) {
   _state.read(gp->analogCounts(), gp->analogChannelCount());
 
   _report.buttons = gp->getState().buttons;
-  _report.direction =
-      kHatOfDpad[gp->getState().dpad & GAMEPAD_MASK_DPAD & 0x0F];
+  _report.direction = kHatOfDpad[gp->getState().dpad & GAMEPAD_MASK_DPAD];
   _report.gear = gearValue(_state);
   _report.steer = axisValue(_state, CarSimAxis::Steer, kSteerRest);
   _report.throttle = axisValue(_state, CarSimAxis::Throttle, kPedalRest);
   _report.brake = axisValue(_state, CarSimAxis::Brake, kPedalRest);
   _report.clutch = axisValue(_state, CarSimAxis::Clutch, kPedalRest);
   _report.handbrake = axisValue(_state, CarSimAxis::Handbrake, kPedalRest);
+
+  // The effects push against the steering angle and the speed it moved at, and
+  // the motor holds what they add up to. A board with no motor still resolves
+  // them, so a host's effect upload runs to completion.
+  const uint32_t nowUs = Drivers::Device::SystemTimer::getInstance().getMicros();
+  const uint32_t nowMs =
+      Drivers::Device::SystemTimer::getInstance().getMillis();
+  const int16_t torque =
+      _effects.torque(_report.steer, _lastAngle, nowUs - _lastUs, nowMs);
+  _lastAngle = _report.steer;
+  _lastUs = nowUs;
+
+  if (Drivers::Device::ServoMotor *motor = gp->servoMotor(); motor != nullptr) {
+    motor->applyTorque(torque);
+  }
 
   // Wake up TinyUSB device only when state changes while suspended
   if (tud_suspended()) {
@@ -157,14 +173,13 @@ bool CarSimDriver::process(void *gamepad) {
   // A report goes out when the wheel changed, and one every 100 ms otherwise, so
   // a host that missed the first still sees where the wheel stands.
   const bool changed = memcmp(&_lastReport, &_report, sizeof(_report)) != 0;
-  const uint32_t now = Drivers::Device::SystemTimer::getInstance().getMillis();
-  if (_sent && !changed && (now - _lastSent) < 100) {
+  if (_sent && !changed && (nowMs - _lastSent) < 100) {
     return false;
   }
 
-  if (tud_hid_report(0, &_report, sizeof(_report))) {
+  if (tud_hid_report(CARSIM_REPORT_AXES, &_report, sizeof(_report))) {
     memcpy(&_lastReport, &_report, sizeof(_report));
-    _lastSent = now;
+    _lastSent = nowMs;
     _sent = true;
     return true;
   }
@@ -174,9 +189,11 @@ bool CarSimDriver::process(void *gamepad) {
 
 uint16_t CarSimDriver::get_report(uint8_t report_id, hid_report_type_t report_type,
                                   uint8_t *buffer, uint16_t reqlen) {
-  UNUSED(report_id);
-  UNUSED(report_type);
-  // The report is answered in as much of itself as the caller asked for.
+  if (report_type == HID_REPORT_TYPE_FEATURE) {
+    return _effects.answer(report_id, buffer, reqlen);
+  }
+
+  // The axes report is answered in as much of itself as the caller asked for.
   uint16_t size = static_cast<uint16_t>(sizeof(_report));
   if (size > reqlen) {
     size = reqlen;
@@ -187,10 +204,8 @@ uint16_t CarSimDriver::get_report(uint8_t report_id, hid_report_type_t report_ty
 
 void CarSimDriver::set_report(uint8_t report_id, hid_report_type_t report_type,
                               uint8_t const *buffer, uint16_t bufsize) {
-  (void)report_id;
   (void)report_type;
-  (void)buffer;
-  (void)bufsize;
+  _effects.handle(report_id, buffer, bufsize);
 }
 
 bool CarSimDriver::vendor_control_xfer_cb(uint8_t rhport, uint8_t stage,
