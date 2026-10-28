@@ -145,10 +145,10 @@ static const uint8_t hid_report_descriptor[] = {
     0x05, 0x01,       //   USAGE_PAGE (Generic Desktop)
     0x26, 0xff, 0x00, //   LOGICAL_MAXIMUM (255)
     0x46, 0xff, 0x00, //   PHYSICAL_MAXIMUM (255)
-    0x09, 0x30,       //   USAGE (X)
-    0x09, 0x31,       //   USAGE (Y)
-    0x09, 0x32,       //   USAGE (Z)
-    0x09, 0x35,       //   USAGE (Rz)
+    0x09, 0x30,       //   USAGE (X) — left stick, horizontal
+    0x09, 0x31,       //   USAGE (Y) — left stick, vertical
+    0x09, 0x33,       //   USAGE (Rx) — right stick, horizontal
+    0x09, 0x34,       //   USAGE (Ry) — right stick, vertical
     0x75, 0x08,       //   REPORT_SIZE (8)
     0x95, 0x04,       //   REPORT_COUNT (4)
     0x81, 0x02,       //   INPUT (Data,Var,Abs)
