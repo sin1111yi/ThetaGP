@@ -26,7 +26,7 @@
 #include "utils/time.h"
 #include "utils/types.h"
 
-#include "drivers/device/analog_input.h"
+#include "drivers/device/analog/analog_input.h"
 #include "drivers/device/device_manager.h"
 #include "drivers/gp_emulator/gp_emulator.h"
 #include "drivers/gp_emulator/gp_emulator_manager.h"
@@ -52,10 +52,11 @@ private:
   // runs.
   const Config::ConfigStore *_cfg = nullptr;
   Device *_inputDevice = nullptr;
-  // The board's analog channels, absent on a board that wires none, and the
-  // frame they were last read into.
+  // The board's analog channels, absent on a board that wires none, the counts
+  // they were last read into, and how many of them the board wires.
   Drivers::Device::AnalogInput *_analogDevice = nullptr;
-  Drivers::Device::AnalogFrame _analogFrame{};
+  uint16_t _analogCounts[Drivers::Device::AnalogInput::kChannelMax] = {};
+  uint8_t _analogChannels = 0;
   bool _initialized = false;
   bool _ready = false;
   GPEmulatorManager *_emulatorMgr = nullptr;
@@ -89,13 +90,13 @@ public:
   void registerKeypadDevice(Device *device);
 
   // Registers the board's analog channels. A board without a sensor registers
-  // none, and every frame then reads as absent.
+  // none, and every channel then reads as absent.
   void registerAnalogInput(Drivers::Device::AnalogInput *device);
 
-  // The counts of the last report tick, as the acquisition read them.
-  [[nodiscard]] const Drivers::Device::AnalogFrame &analogInput() const {
-    return _analogFrame;
-  }
+  // The counts of the last report tick, in the board's wiring order, and how
+  // many of them the board wires.
+  [[nodiscard]] const uint16_t *analogCounts() const { return _analogCounts; }
+  [[nodiscard]] uint8_t analogChannelCount() const { return _analogChannels; }
 
   /* clang-format off */
   // GP2040-CE style button query methods (forced inline for performance)

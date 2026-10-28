@@ -68,7 +68,12 @@ void Gamepad::registerAnalogInput(Drivers::Device::AnalogInput *device) {
 // Reads the registered keypad into this tick's raw input.
 void Gamepad::read() {
   if (_analogDevice != nullptr && _analogDevice->isInitialized()) {
-    _analogDevice->read(_analogFrame);
+    const uint8_t channels = _analogDevice->channelCount();
+    _analogChannels =
+        channels < Drivers::Device::AnalogInput::kChannelMax
+            ? channels
+            : Drivers::Device::AnalogInput::kChannelMax;
+    _analogDevice->read(_analogCounts);
   }
 
   if (!_inputDevice || !_inputDevice->isInitialized()) {
