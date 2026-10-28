@@ -143,9 +143,9 @@ bool CarSimDriver::process(void *gamepad) {
   _report.clutch = axisValue(_state, CarSimAxis::Clutch, kPedalRest);
   _report.handbrake = axisValue(_state, CarSimAxis::Handbrake, kPedalRest);
 
-  // The effects push against the steering angle and the speed it moved at, and
+  // The effects push against the angle and the speed the wheel moved at, and
   // the motor holds what they add up to. A board with no motor still resolves
-  // them, so a host's effect upload runs to completion.
+  // them.
   const uint32_t nowUs = Drivers::Device::SystemTimer::getInstance().getMicros();
   const uint32_t nowMs =
       Drivers::Device::SystemTimer::getInstance().getMillis();
@@ -170,8 +170,7 @@ bool CarSimDriver::process(void *gamepad) {
     return false;
   }
 
-  // A report goes out when the wheel changed, and one every 100 ms otherwise, so
-  // a host that missed the first still sees where the wheel stands.
+  // A report goes out on change, and every 100 ms otherwise.
   const bool changed = memcmp(&_lastReport, &_report, sizeof(_report)) != 0;
   if (_sent && !changed && (nowMs - _lastSent) < 100) {
     return false;

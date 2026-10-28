@@ -155,9 +155,7 @@ bool HIDDriver::process(void *gamepad) {
     return false;
   }
 
-  // A report goes out when the pad changed, and one every kIdleReportMs
-  // otherwise: the one a change produces can leave before the host's driver
-  // begins to read, and a pad that then stands still would never be seen.
+  // A report goes out on change, and every kIdleReportMs otherwise.
   const bool changed = memcmp(last_report, &hidReport, sizeof(hidReport)) != 0;
   const uint32_t now = Drivers::Device::SystemTimer::getInstance().getMillis();
   if (_sent && !changed && (now - _lastSent) < kIdleReportMs) {

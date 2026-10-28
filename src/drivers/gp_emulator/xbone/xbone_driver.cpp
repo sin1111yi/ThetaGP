@@ -475,9 +475,7 @@ bool XboxOneDriver::process(void *gamepad) {
 
   const uint8_t *core = reinterpret_cast<const uint8_t *>(&s_report) +
                         XBONE_HEADER_SIZE;
-  // A report goes out when the pad changed, and one every kIdleReportMs
-  // otherwise: the one a change produces can leave before the host's driver
-  // begins to read, and a pad that then stands still would never be seen.
+  // A report goes out on change, and every kIdleReportMs otherwise.
   const bool changed = std::memcmp(core, s_last_core, sizeof(s_last_core)) != 0;
   const uint32_t now = Drivers::Device::SystemTimer::getInstance().getMillis();
   if (s_sent_since_open && !changed && (now - s_last_sent_ms) < kIdleReportMs) {
