@@ -60,8 +60,17 @@ void Gamepad::registerKeypadDevice(Device *device) {
   }
 }
 
+// Registers the board's analog channels.
+void Gamepad::registerAnalogInput(Drivers::Device::AnalogInput *device) {
+  _analogDevice = device;
+}
+
 // Reads the registered keypad into this tick's raw input.
 void Gamepad::read() {
+  if (_analogDevice != nullptr && _analogDevice->isInitialized()) {
+    _analogDevice->read(_analogFrame);
+  }
+
   if (!_inputDevice || !_inputDevice->isInitialized()) {
     return;
   }

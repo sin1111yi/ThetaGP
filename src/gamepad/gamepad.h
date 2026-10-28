@@ -26,6 +26,7 @@
 #include "utils/time.h"
 #include "utils/types.h"
 
+#include "drivers/device/analog_input.h"
 #include "drivers/device/device_manager.h"
 #include "drivers/gp_emulator/gp_emulator.h"
 #include "drivers/gp_emulator/gp_emulator_manager.h"
@@ -51,6 +52,10 @@ private:
   // runs.
   const Config::ConfigStore *_cfg = nullptr;
   Device *_inputDevice = nullptr;
+  // The board's analog channels, absent on a board that wires none, and the
+  // frame they were last read into.
+  Drivers::Device::AnalogInput *_analogDevice = nullptr;
+  Drivers::Device::AnalogFrame _analogFrame{};
   bool _initialized = false;
   bool _ready = false;
   GPEmulatorManager *_emulatorMgr = nullptr;
@@ -82,6 +87,15 @@ public:
 
   // Register a keypad device
   void registerKeypadDevice(Device *device);
+
+  // Registers the board's analog channels. A board without a sensor registers
+  // none, and every frame then reads as absent.
+  void registerAnalogInput(Drivers::Device::AnalogInput *device);
+
+  // The counts of the last report tick, as the acquisition read them.
+  [[nodiscard]] const Drivers::Device::AnalogFrame &analogInput() const {
+    return _analogFrame;
+  }
 
   /* clang-format off */
   // GP2040-CE style button query methods (forced inline for performance)
