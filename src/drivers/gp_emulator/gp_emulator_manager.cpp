@@ -23,6 +23,7 @@
 #include "conf/ThetaGP_Config.h"
 #include "drivers/gp_emulator/carsim/carsim_driver.h"
 #include "drivers/gp_emulator/hid/hid_driver.h"
+#include "drivers/gp_emulator/keyboard/keyboard_driver.h"
 #include "drivers/gp_emulator/ps4/ps4_driver.h"
 #include "drivers/gp_emulator/xinput/xinput_driver.h"
 #include "drivers/gp_emulator/xbone/xbone_driver.h"
@@ -59,6 +60,9 @@ void GPEmulatorManager::setup(Enums::InputMode mode) {
     break;
   case Enums::InputMode::INPUT_MODE_XBONE:
     emulator = new XboxOneDriver();
+    break;
+  case Enums::InputMode::INPUT_MODE_KEYBOARD:
+    emulator = new KeyboardDriver();
     break;
   case Enums::InputMode::INPUT_MODE_GENERIC:
 #if THETAGP_CFG_CARSIM
