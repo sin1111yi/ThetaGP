@@ -65,6 +65,11 @@ void Gamepad::registerAnalogInput(Drivers::Device::AnalogInput *device) {
   _analogDevice = device;
 }
 
+// Registers the motor that turns the wheel.
+void Gamepad::registerServoMotor(Drivers::Device::ServoMotor *motor) {
+  _servoMotor = motor;
+}
+
 // Reads the registered keypad into this tick's raw input.
 void Gamepad::read() {
   if (_analogDevice != nullptr && _analogDevice->isInitialized()) {

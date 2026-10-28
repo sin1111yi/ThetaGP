@@ -27,6 +27,7 @@
 #include "utils/types.h"
 
 #include "drivers/device/analog/analog_input.h"
+#include "drivers/device/motor/servomotor.h"
 #include "drivers/device/device_manager.h"
 #include "drivers/gp_emulator/gp_emulator.h"
 #include "drivers/gp_emulator/gp_emulator_manager.h"
@@ -57,6 +58,8 @@ private:
   Drivers::Device::AnalogInput *_analogDevice = nullptr;
   uint16_t _analogCounts[Drivers::Device::AnalogInput::kChannelMax] = {};
   uint8_t _analogChannels = 0;
+  // The motor that turns the wheel, absent on a board that wires none.
+  Drivers::Device::ServoMotor *_servoMotor = nullptr;
   bool _initialized = false;
   bool _ready = false;
   GPEmulatorManager *_emulatorMgr = nullptr;
@@ -92,6 +95,13 @@ public:
   // Registers the board's analog channels; a board without a sensor registers
   // none and every channel reads as absent.
   void registerAnalogInput(Drivers::Device::AnalogInput *device);
+
+  // Registers the motor that turns the wheel; a board without one registers
+  // none and force feedback has nowhere to go.
+  void registerServoMotor(Drivers::Device::ServoMotor *motor);
+  [[nodiscard]] Drivers::Device::ServoMotor *servoMotor() const {
+    return _servoMotor;
+  }
 
   // The counts of the last report tick, in the board's wiring order and how many
   // the board wires.
