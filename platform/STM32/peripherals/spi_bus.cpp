@@ -25,6 +25,7 @@
 #include "drivers/peripherals/nvic.h"
 #include "drivers/peripherals/nvic_exti.h"
 #include "utils/log/log.h"
+#include "utils/time.h"
 
 #include <array>
 #include <cstring>
@@ -40,6 +41,7 @@
 using namespace ThetaGP::Drivers::Peripheral::BUS;
 using namespace ThetaGP::Drivers::Peripheral::GPIO;
 using ThetaGP::Result;
+static constexpr uint32_t kSpiTransferTimeoutUs = 100000;
 
 struct HalSpi {
   SPI_HandleTypeDef handle;
@@ -405,11 +407,17 @@ void SpiBus::spiInternalInitStream(const uint8_t *txData, uint8_t *rxData,
 }
 
 void SpiBus::spiInternalStartDMA(TransferCallback cb, void *ctx,
-                                  uint16_t totalLen) {
+                                   uint16_t totalLen) {
   auto *SPIx = SPI_HANDLE.Instance;
+  _asyncCb = cb;
+  _asyncCtx = ctx;
 
   if (_dmaTx && _streamTxLen > 0) {
-    _dmaTx->stop();
+    if (_dmaTx->stop().isError()) {
+      _spiTransferError = true;
+      _spiTransferDone = true;
+      return;
+    }
     _dmaTx->configure({
         .direction = DMA::Direction::MemoryToPeripheral,
         .srcDataWidth = DMA::DataWidth::Byte,
@@ -418,13 +426,23 @@ void SpiBus::spiInternalStartDMA(TransferCallback cb, void *ctx,
         .srcIncrement = _streamTxInc,
         .destIncrement = false,
     });
-    _dmaTx->start(_streamTxSrc,
-                  reinterpret_cast<uint32_t>(&SPIx->TXDR),
-                  _streamTxLen);
+    if (_dmaTx->start(_streamTxSrc,
+                   reinterpret_cast<uint32_t>(&SPIx->TXDR),
+                   _streamTxLen).isError()) {
+      spiInternalStopDMA();
+      _spiTransferError = true;
+      _spiTransferDone = true;
+      return;
+    }
   }
 
   if (_dmaRx && _streamRxLen > 0) {
-    _dmaRx->stop();
+    if (_dmaRx->stop().isError()) {
+      spiInternalStopDMA();
+      _spiTransferError = true;
+      _spiTransferDone = true;
+      return;
+    }
     _dmaRx->configure({
         .direction = DMA::Direction::PeripheralToMemory,
         .srcDataWidth = DMA::DataWidth::Byte,
@@ -433,26 +451,31 @@ void SpiBus::spiInternalStartDMA(TransferCallback cb, void *ctx,
         .srcIncrement = false,
         .destIncrement = _streamRxInc,
     });
-    _dmaRx->start(reinterpret_cast<uint32_t>(&SPIx->RXDR),
-                  _streamRxDst,
-                  _streamRxLen);
+    if (_dmaRx->start(reinterpret_cast<uint32_t>(&SPIx->RXDR),
+                   _streamRxDst,
+                   _streamRxLen).isError()) {
+      spiInternalStopDMA();
+      _spiTransferError = true;
+      _spiTransferDone = true;
+      return;
+    }
   }
 
   MODIFY_REG(SPIx->CR2, SPI_CR2_TSIZE, totalLen);
   SET_BIT(SPIx->CFG1, SPI_CFG1_TXDMAEN | SPI_CFG1_RXDMAEN);
-  SET_BIT(SPIx->IER, SPI_IER_EOTIE);
+  SET_BIT(SPIx->IER, SPI_IER_EOTIE | SPI_IER_OVRIE | SPI_IER_MODFIE |
+                         SPI_IER_UDRIE | SPI_IER_TIFREIE);
   SET_BIT(SPIx->CR1, SPI_CR1_SPE);
   SET_BIT(SPIx->CR1, SPI_CR1_CSTART);
 
-  _asyncCb = cb;
-  _asyncCtx = ctx;
 }
 
 void SpiBus::spiInternalStopDMA() {
   auto *SPIx = SPI_HANDLE.Instance;
 
   CLEAR_BIT(SPIx->CFG1, SPI_CFG1_TXDMAEN | SPI_CFG1_RXDMAEN);
-  CLEAR_BIT(SPIx->IER, SPI_IER_EOTIE);
+  CLEAR_BIT(SPIx->IER, SPI_IER_EOTIE | SPI_IER_OVRIE | SPI_IER_MODFIE |
+                           SPI_IER_UDRIE | SPI_IER_TIFREIE);
   CLEAR_BIT(SPIx->CR1, SPI_CR1_SPE);
 
   if (_dmaTx) { (void)_dmaTx->stop(); }
@@ -469,22 +492,38 @@ Result SpiBus::spiInternalReadWriteBufPolled(const uint8_t *txData,
   LL_SPI_SetTransferSize(SPIx, len);
   LL_SPI_Enable(SPIx);
   LL_SPI_StartMasterTransfer(SPIx);
+  const uint32_t started = time_us_32();
+  auto waitFor = [&](uint32_t flag) -> Result {
+    while ((SPIx->SR & flag) == 0) {
+      if (SPIx->SR & (SPI_SR_OVR | SPI_SR_MODF | SPI_SR_UDR | SPI_SR_TIFRE))
+        return Result::Error;
+      if (time_us_32() - started >= kSpiTransferTimeoutUs)
+        return Result::Timeout;
+    }
+    return Result::Ok;
+  };
+  auto finish = [&](Result result) {
+    LL_SPI_Disable(SPIx);
+    WRITE_REG(SPIx->IFCR, SPI_IFCR_EOTC | SPI_IFCR_TXTFC | SPI_IFCR_OVRC |
+                            SPI_IFCR_MODFC | SPI_IFCR_UDRC | SPI_IFCR_TIFREC);
+    return result;
+  };
 
   while (len > 0) {
-    while (!LL_SPI_IsActiveFlag_TXP(SPIx)) {}
+    Result result = waitFor(SPI_SR_TXP);
+    if (result.isError()) return finish(result);
     uint8_t b = txData ? *(txData++) : 0xFF;
     LL_SPI_TransmitData8(SPIx, b);
 
-    while (!LL_SPI_IsActiveFlag_RXP(SPIx)) {}
+    result = waitFor(SPI_SR_RXP);
+    if (result.isError()) return finish(result);
     b = LL_SPI_ReceiveData8(SPIx);
     if (rxData) { *(rxData++) = b; }
     --len;
   }
 
-  while (!LL_SPI_IsActiveFlag_EOT(SPIx)) {}
-  LL_SPI_ClearFlag_EOT(SPIx);
-  LL_SPI_ClearFlag_TXTF(SPIx);
-  LL_SPI_Disable(SPIx);
+  Result result = waitFor(SPI_SR_EOT);
+  return finish(result);
 #endif
   return Result::Ok;
 }
@@ -494,8 +533,9 @@ Result SpiBus::spiInternalReadWriteBufPolled(const uint8_t *txData,
 Result SpiBus::transmitReceiveImpl(TransferCallback cb, void *ctx,
                              const uint8_t *txData, uint8_t *rxData,
                              uint32_t len) {
-  if (len == 0) return Result::InvalidParam;
+  if (len == 0 || len > UINT16_MAX) return Result::InvalidParam;
   if (!_initialized) return Result::NotReady;
+  if (!_spiTransferDone) return Result::Busy;
 
   if (_mode == Mode::Polling) {
     if (cb != nullptr)     return Result::Unsupported;
@@ -530,12 +570,28 @@ Result SpiBus::transmitReceiveImpl(TransferCallback cb, void *ctx,
   if (txData) { _asyncSrc += chunk; }
 
   _spiTransferDone = false;
+  _spiTransferError = false;
+  _spiTransferFault = 0;
 
   spiInternalInitStream(_txBuf, _rxBuf, chunk);
   spiInternalStartDMA(cb, ctx, chunk);
+  if (_spiTransferError) return Result::Error;
 
   if (cb == nullptr) {
-    while (!_spiTransferDone) {}
+    const uint32_t started = time_us_32();
+    while (!_spiTransferDone) {
+      if (time_us_32() - started >= kSpiTransferTimeoutUs) {
+        spiInternalStopDMA();
+        WRITE_REG(SPI_HANDLE.Instance->IFCR, SPI_IFCR_EOTC | SPI_IFCR_TXTFC |
+                    SPI_IFCR_OVRC | SPI_IFCR_MODFC | SPI_IFCR_UDRC | SPI_IFCR_TIFREC);
+        _spiTransferDone = true;
+        return Result::Timeout;
+      }
+    }
+    if (_spiTransferError) {
+      LOG_ERROR("SPI: transfer error 0x%08lX", _spiTransferFault);
+      return Result::Error;
+    }
     return Result::Ok;
   }
 
@@ -555,13 +611,30 @@ static void SPIx_IRQHandler(uint32_t spiIdx) {
   auto *hal = static_cast<HalSpi *>(spi->halHandle());
   auto *SPIx = hal->handle.Instance;
   uint32_t sr = SPIx->SR;
+  if (sr & (SPI_SR_OVR | SPI_SR_MODF | SPI_SR_UDR | SPI_SR_TIFRE)) {
+    spi->spiInternalStopDMA();
+    WRITE_REG(SPIx->IFCR, SPI_IFCR_EOTC | SPI_IFCR_TXTFC | SPI_IFCR_OVRC |
+                            SPI_IFCR_MODFC | SPI_IFCR_UDRC | SPI_IFCR_TIFREC);
+    spi->_spiTransferFault = sr;
+    spi->_spiTransferError = true;
+    spi->_spiTransferDone = true;
+    // The callback is the asynchronous half's only completion signal, so this
+    // ending is handed to it too; a bus that just faulted is not restarted
+    // whatever it answers. The log line belongs to the task that made the
+    // transfer: a polled UART write in here would spend the ISR's time.
+    if (spi->_asyncCb != nullptr) {
+      (void)spi->_asyncCb(spi->_asyncCtx);
+    }
+    return;
+  }
 
   if (sr & SPI_SR_EOT) {
     SET_BIT(SPIx->IFCR, SPI_IFCR_EOTC);
     SET_BIT(SPIx->IFCR, SPI_IFCR_TXTFC);
 
     CLEAR_BIT(SPIx->CFG1, SPI_CFG1_TXDMAEN | SPI_CFG1_RXDMAEN);
-    CLEAR_BIT(SPIx->IER, SPI_IER_EOTIE);
+    CLEAR_BIT(SPIx->IER, SPI_IER_EOTIE | SPI_IER_OVRIE | SPI_IER_MODFIE |
+                             SPI_IER_UDRIE | SPI_IER_TIFREIE);
     CLEAR_BIT(SPIx->CR1, SPI_CR1_SPE);
 
     if (spi->_dmaTx) { (void)spi->_dmaTx->stop(); }
@@ -626,7 +699,6 @@ static void SPIx_IRQHandler(uint32_t spiIdx) {
         (void)std::memset(spi->txBuf(), 0xFF, chunk);
       }
       spi->_asyncDst = spi->_asyncDstOrig;
-      if (spi->_asyncDst) { spi->_asyncDst += chunk; }
       spi->_asyncChunkLen = chunk;
       spi->_asyncRemaining -= chunk;
 
@@ -637,10 +709,6 @@ static void SPIx_IRQHandler(uint32_t spiIdx) {
     }
   }
 
-  if (sr & (SPI_SR_OVR | SPI_SR_MODF | SPI_SR_UDR | SPI_SR_TIFRE)) {
-    SET_BIT(SPIx->IFCR, SPI_IFCR_OVRC | SPI_IFCR_MODFC);
-    SET_BIT(SPIx->IFCR, SPI_IFCR_UDRC | SPI_IFCR_TIFREC);
-  }
 }
 
 #define spiIrqHandler(name, idx)                                               \

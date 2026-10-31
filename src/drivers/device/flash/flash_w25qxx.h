@@ -121,9 +121,9 @@ private:
   static constexpr uint16_t TYPE_W25Q512 = 0xEF19U;
 
   // ── Internal helpers ──
-  uint8_t readStatusReg(uint8_t idx);
-  void writeEnable();
-  void waitWhileBusy(uint32_t timeoutMs = 30000);
+  bool readStatusReg(uint8_t idx, uint8_t &status);
+  bool writeEnable();
+  bool waitWhileBusy(uint32_t timeoutMs = 30000);
   void set4ByteAddrMode(bool enable);
   void reset();
 

@@ -57,7 +57,7 @@ void FlashW25qxx::reset() {
   _spi.disable();
 }
 
-uint8_t FlashW25qxx::readStatusReg(uint8_t idx) {
+bool FlashW25qxx::readStatusReg(uint8_t idx, uint8_t &status) {
   uint8_t cmd = 0;
   switch (idx) {
   case 1:
@@ -70,31 +70,35 @@ uint8_t FlashW25qxx::readStatusReg(uint8_t idx) {
     cmd = I_READ_SR3;
     break;
   default:
-    return 0;
+    return false;
   }
 
-  uint8_t status = 0;
   _spi.enable();
-  (void)_spi.transmit(&cmd, 1);
-  (void)_spi.receive(&status, 1);
+  const bool ok = _spi.transmit(&cmd, 1).isOk() &&
+                  _spi.receive(&status, 1).isOk();
   _spi.disable();
-  return status;
+  return ok;
 }
 
-void FlashW25qxx::writeEnable() {
+bool FlashW25qxx::writeEnable() {
+  if (!waitWhileBusy()) return false;
   uint8_t tx[1] = {I_WRITE_EN};
   _spi.enable();
-  (void)_spi.transmit(tx, sizeof(tx));
+  const bool ok = _spi.transmit(tx, sizeof(tx)).isOk();
   _spi.disable();
-  waitWhileBusy();
+  uint8_t status = 0;
+  return ok && readStatusReg(1, status) && (status & SR1_WEL) != 0;
 }
 
-void FlashW25qxx::waitWhileBusy(uint32_t timeoutMs) {
+bool FlashW25qxx::waitWhileBusy(uint32_t timeoutMs) {
   uint32_t start = millis();
-  while (isBusy()) {
+  while (true) {
+    uint8_t status = 0;
+    if (!readStatusReg(1, status)) return false;
+    if ((status & SR1_BUSY) == 0) return true;
     if (millis() - start >= timeoutMs) {
       LOG_WARN("FLASH: waitWhileBusy timeout after %ums", timeoutMs);
-      break;
+      return false;
     }
   }
 }
@@ -107,7 +111,12 @@ void FlashW25qxx::set4ByteAddrMode(bool enable) {
   _addrMode4Byte = enable;
 }
 
-bool FlashW25qxx::isBusy() { return (readStatusReg(1) & SR1_BUSY) != 0; }
+bool FlashW25qxx::isBusy() {
+  uint8_t status = 0;
+  // A status read that fails is not a chip that is busy: the read, write or
+  // erase that needed the answer reports the failure itself.
+  return readStatusReg(1, status) && (status & SR1_BUSY) != 0;
+}
 
 uint32_t FlashW25qxx::readId() {
   uint8_t cmd[4] = {I_MANUF_DEV_ID, 0x00, 0x00, 0x00};
@@ -202,7 +211,7 @@ bool FlashW25qxx::read(uint32_t addr, uint8_t *data, uint32_t len) {
     return false;
   }
 
-  if (addr >= _info.sizeBytes || (addr + len) > _info.sizeBytes) {
+  if (addr >= _info.sizeBytes || len > _info.sizeBytes - addr) {
     return false;
   }
 
@@ -223,11 +232,11 @@ bool FlashW25qxx::read(uint32_t addr, uint8_t *data, uint32_t len) {
   }
 
   _spi.enable();
-  (void)_spi.transmit(cmdBuf, cmdLen);
-  (void)_spi.receive(data, len);
+  const bool ok = _spi.transmit(cmdBuf, cmdLen).isOk() &&
+                  _spi.receive(data, len).isOk();
   _spi.disable();
 
-  return true;
+  return ok;
 }
 
 bool FlashW25qxx::write(uint32_t addr, const uint8_t *data, uint32_t len) {
@@ -235,7 +244,7 @@ bool FlashW25qxx::write(uint32_t addr, const uint8_t *data, uint32_t len) {
     return false;
   }
 
-  if (addr >= _info.sizeBytes || (addr + len) > _info.sizeBytes) {
+  if (addr >= _info.sizeBytes || len > _info.sizeBytes - addr) {
     return false;
   }
 
@@ -248,7 +257,7 @@ bool FlashW25qxx::write(uint32_t addr, const uint8_t *data, uint32_t len) {
     uint32_t pageRemaining = 256 - pageOffset;
     uint32_t writeLen = (remaining < pageRemaining) ? remaining : pageRemaining;
 
-    writeEnable();
+    if (!writeEnable()) return false;
 
     uint8_t addrBytes = _addrMode4Byte ? 4 : 3;
     uint8_t cmdLen = 1 + addrBytes;
@@ -268,11 +277,11 @@ bool FlashW25qxx::write(uint32_t addr, const uint8_t *data, uint32_t len) {
     }
 
     _spi.enable();
-    (void)_spi.transmit(cmdBuf, cmdLen);
-    (void)_spi.transmit(currentData, writeLen);
+    const bool ok = _spi.transmit(cmdBuf, cmdLen).isOk() &&
+                    _spi.transmit(currentData, writeLen).isOk();
     _spi.disable();
 
-    waitWhileBusy();
+    if (!ok || !waitWhileBusy()) return false;
 
     currentAddr += writeLen;
     currentData += writeLen;
@@ -291,7 +300,7 @@ bool FlashW25qxx::eraseSector(uint32_t addr) {
     return false;
   }
 
-  writeEnable();
+  if (!writeEnable()) return false;
 
   uint8_t addrBytes = _addrMode4Byte ? 4 : 3;
 
@@ -309,11 +318,10 @@ bool FlashW25qxx::eraseSector(uint32_t addr) {
   }
 
   _spi.enable();
-  (void)_spi.transmit(cmdBuf, 1 + addrBytes);
+  const bool ok = _spi.transmit(cmdBuf, 1 + addrBytes).isOk();
   _spi.disable();
 
-  waitWhileBusy();
-  return true;
+  return ok && waitWhileBusy();
 }
 
 bool FlashW25qxx::eraseChip() {
@@ -321,15 +329,14 @@ bool FlashW25qxx::eraseChip() {
     return false;
   }
 
-  writeEnable();
+  if (!writeEnable()) return false;
 
   uint8_t tx[1] = {I_CHIP_ERASE};
   _spi.enable();
-  (void)_spi.transmit(tx, sizeof(tx));
+  const bool ok = _spi.transmit(tx, sizeof(tx)).isOk();
   _spi.disable();
 
-  waitWhileBusy();
-  return true;
+  return ok && waitWhileBusy();
 }
 
 const FlashInfo &FlashW25qxx::getInfo() const { return _info; }

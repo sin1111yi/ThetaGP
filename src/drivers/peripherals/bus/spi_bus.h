@@ -78,6 +78,10 @@ public:
 
   bool isBusy() const;
 
+  // Whether the transfer that just ended was stopped by a bus fault: a caller
+  // handed an asynchronous completion reads this to tell it from a clean one.
+  [[nodiscard]] bool transferFailed() const { return _spiTransferError; }
+
   // ── DMA state ──
   DMA::DmaChannel *_dmaTx = nullptr;
   DMA::DmaChannel *_dmaRx = nullptr;
@@ -93,6 +97,10 @@ public:
   TransferCallback _asyncCb = nullptr;
   void *_asyncCtx = nullptr;
   volatile bool _spiTransferDone = true;
+  volatile bool _spiTransferError = false;
+  // The status register as the fault path found it, kept for the log the task
+  // writes once the transfer has returned.
+  volatile uint32_t _spiTransferFault = 0;
 
   void spiInternalInitStream(const uint8_t *txData, uint8_t *rxData,
                               uint16_t len);
