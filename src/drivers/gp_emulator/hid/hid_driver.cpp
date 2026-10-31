@@ -150,10 +150,11 @@ bool HIDDriver::process(void *gamepad) {
     }
   }
 
-  if (!tud_hid_ready()) {
+  if (!tud_ready()) {
     _sent = false;
     return false;
   }
+  if (!tud_hid_ready()) return false;
 
   // A report goes out on change, and every kIdleReportMs otherwise.
   const bool changed = memcmp(last_report, &hidReport, sizeof(hidReport)) != 0;

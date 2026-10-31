@@ -165,10 +165,11 @@ bool CarSimDriver::process(void *gamepad) {
     }
   }
 
-  if (!tud_hid_ready()) {
+  if (!tud_ready()) {
     _sent = false;
     return false;
   }
+  if (!tud_hid_ready()) return false;
 
   // A report goes out on change, and every 100 ms otherwise.
   const bool changed = memcmp(&_lastReport, &_report, sizeof(_report)) != 0;
