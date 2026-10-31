@@ -248,11 +248,13 @@ cargo run --release -p thetagp-mcp -- --simulated           # with no board
 This repository carries no host tool of its own: the protocol's host side is the
 toolkit, so there is one of it and not two.
 
-The two suites under `scripts/test/` guard the configuration-key emitter
-(`scripts/config/gen_config_keys.py`), where a wrong key name, type, range or
-default still compiles — the one class of defect a build cannot catch:
+The suites under `scripts/test/` guard what a build cannot catch. Two of them
+cover the configuration-key emitter (`scripts/config/gen_config_keys.py`), where
+a wrong key name, type, range or default still compiles:
 `test_profile_keys.py` and `test_profile_version.py`, each beside the cases it
-compiles.
+compiles. The third, `test_profile_store.py`, compiles the profile store
+against an in-memory NOR model, where a ring slot written to the wrong place, a
+body lost to compaction or an entry that never reached the flash still links.
 
 Which commands a board answers is a property of the firmware it runs: an arm with
 no handler answers `ERR_UNKNOWN_CMD`, so a host can ask rather than assume. The

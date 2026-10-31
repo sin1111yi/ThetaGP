@@ -152,8 +152,7 @@ public:
 
   // Writes the factory Profile 0, only where the BootMeta ring is empty.
   bool writeFactoryProfile(const char *json, uint16_t len);
-  // Writes the factory Profile 0 over the one the flash holds: the body sits at a
-  // fixed address of its own, so a replace is the same write as the first one.
+  // Replaces the factory body without changing the active profile or metadata.
   bool replaceFactoryProfile(const char *json, uint16_t len);
 
   // Creates a user profile at the first free id, appended to the user ring.
@@ -197,7 +196,7 @@ private:
   bool readBody(uint32_t address, uint8_t *buf, uint16_t *outLen);
   bool writeBootMeta(uint16_t id, uint32_t address);
   uint16_t crc16BootMeta(const BootMeta *meta) const;
-  void seqBeforeIncrement();
+  bool seqBeforeIncrement();
   bool scanBootMeta(uint16_t *outActiveId, uint32_t *outAddress);
   bool scanAddressRing();
   uint32_t findNextAddr() const;

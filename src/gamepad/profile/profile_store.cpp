@@ -32,6 +32,7 @@
 namespace ThetaGP::Gamepad::Profile {
 
 COMMON_ZERO_INIT uint8_t s_staging[PROFILE_STAGING_SIZE];
+static COMMON_ZERO_INIT uint8_t s_compaction[PROFILE_JSON_MAX];
 
 // ── Slot index helpers (ring buffer wraparound) ──
 
@@ -41,8 +42,8 @@ static uint16_t bootMetaSlotIndex() {
     uint32_t slotAddr = BOOTMETA_BASE + i * sizeof(BootMeta);
     BootMeta meta;
     if (!flash.read(slotAddr, reinterpret_cast<uint8_t *>(&meta),
-                    sizeof(BootMeta))) {
-      return 0;
+                     sizeof(BootMeta))) {
+      return UINT16_MAX;
     }
     if (meta.magic != BOOTMETA_MAGIC) {
       return i;
@@ -57,8 +58,8 @@ static uint16_t addressRingSlotIndex() {
     uint32_t slotAddr = ADDR_RING_BASE + i * sizeof(AddressEntry);
     AddressEntry entry;
     if (!flash.read(slotAddr, reinterpret_cast<uint8_t *>(&entry),
-                    sizeof(AddressEntry))) {
-      return 0;
+                     sizeof(AddressEntry))) {
+      return UINT16_MAX;
     }
     if (entry.profileId == PROFILE_ID_NONE) {
       return i;
@@ -86,7 +87,10 @@ uint16_t ProfileStore::crc16BootMeta(const BootMeta *meta) const {
 // the next reboot.
 
 bool ProfileStore::writeBootMeta(uint16_t id, uint32_t address) {
-  seqBeforeIncrement();
+  const uint16_t slot = ensureBootMetaSlot();
+  if (slot >= BOOTMETA_SLOTS) {
+    return false;
+  }
 
   BootMeta bootMeta;
   bootMeta.magic = BOOTMETA_MAGIC;
@@ -98,7 +102,7 @@ bool ProfileStore::writeBootMeta(uint16_t id, uint32_t address) {
   bootMeta.crc16 = crc16BootMeta(&bootMeta);
 
   const uint32_t bootMetaSlot =
-      BOOTMETA_BASE + (ensureBootMetaSlot() * sizeof(BootMeta));
+      BOOTMETA_BASE + (slot * sizeof(BootMeta));
   auto &flash = Drivers::Device::FlashBase::getInstance();
   if (!flash.write(bootMetaSlot, reinterpret_cast<const uint8_t *>(&bootMeta),
                    sizeof(BootMeta))) {
@@ -113,12 +117,13 @@ bool ProfileStore::writeBootMeta(uint16_t id, uint32_t address) {
 // ── seqBeforeIncrement() ──
 // A ring whose sequence number reaches 65535 has sector 0 erased and rebuilt at
 // sequence 1, so the wrap never makes the lookup pick the older entry.
-void ProfileStore::seqBeforeIncrement() {
+bool ProfileStore::seqBeforeIncrement() {
   if (_bootMetaSeq >= 65534 || _addressRingSeq >= 65534) {
     LOG_WARN("ProfileStore: seq near overflow (%u/%u), resetting Sector 0",
              _bootMetaSeq, _addressRingSeq);
-    resetSector0();
+    return resetSector0();
   }
+  return true;
 }
 
 // ── ensureBootMetaSlot / ensureAddressRingSlot ──
@@ -126,20 +131,24 @@ void ProfileStore::seqBeforeIncrement() {
 // the fresh slot is the one after them.
 
 uint16_t ProfileStore::ensureBootMetaSlot() {
+  if (!seqBeforeIncrement()) return BOOTMETA_SLOTS;
   uint16_t slot = bootMetaSlotIndex();
+  if (slot == UINT16_MAX) return BOOTMETA_SLOTS;
   if (slot >= BOOTMETA_SLOTS) {
     LOG_INFO("ProfileStore: BootMeta Ring full, resetting Sector 0");
-    resetSector0();
+    if (!resetSector0()) return BOOTMETA_SLOTS;
     slot = bootMetaSlotIndex();
   }
   return slot;
 }
 
 uint16_t ProfileStore::ensureAddressRingSlot() {
+  if (!seqBeforeIncrement()) return ADDR_RING_SLOTS;
   uint16_t slot = addressRingSlotIndex();
+  if (slot == UINT16_MAX) return ADDR_RING_SLOTS;
   if (slot >= ADDR_RING_SLOTS) {
     LOG_INFO("ProfileStore: Address Ring full, resetting Sector 0");
-    resetSector0();
+    if (!resetSector0()) return ADDR_RING_SLOTS;
     slot = addressRingSlotIndex();
   }
   return slot;
@@ -447,7 +456,7 @@ bool ProfileStore::writeFactoryProfile(const char *json, uint16_t len) {
 bool ProfileStore::replaceFactoryProfile(const char *json, uint16_t len) {
   LOG_INFO("ProfileStore: writeFactoryProfile, len=%u", len);
 
-  if (len == 0 || len > PROFILE_JSON_MAX) {
+  if (!json || len == 0 || len > PROFILE_JSON_MAX) {
     LOG_ERROR("ProfileStore: invalid profile length %u", len);
     return false;
   }
@@ -478,62 +487,39 @@ bool ProfileStore::replaceFactoryProfile(const char *json, uint16_t len) {
     return false;
   }
 
-  BootMeta meta;
-  meta.magic = BOOTMETA_MAGIC;
-  meta.seq = 1;
-  meta.profileId = 0;
-  meta.address = PROFILE0_ADDR;
-  meta.reserved = 0xFFFFFFFF;
-  meta.crc16 = 0;
-  meta.crc16 = crc16BootMeta(&meta);
+  // A body the flash carries no record of is recorded here, so a store that
+  // lost its rings still lists it: the body is reachable through the fixed
+  // address either way, but the ring entry is what a scan reports as a profile.
+  if (_profileAddresses[0] == 0) {
+    const uint16_t slot = ensureAddressRingSlot();
+    if (slot >= ADDR_RING_SLOTS) {
+      LOG_ERROR("ProfileStore: no room to record the factory profile");
+      return false;
+    }
 
-  if (!flash.write(BOOTMETA_BASE, reinterpret_cast<const uint8_t *>(&meta),
-                   sizeof(BootMeta))) {
-    LOG_ERROR("ProfileStore: failed to write BootMeta slot 0");
-    return false;
-  }
+    _addressRingSeq++;
+    AddressEntry entry;
+    entry.profileId = 0;
+    entry.address = PROFILE0_ADDR;
+    entry.seq = _addressRingSeq;
 
-  // ── the cache as a fresh scan would produce it ──
-  // Each field below holds what scanBootMeta() and scanAddressRing() over this
-  // flash would report, so the cache and the flash do not drift apart.
-  _bootMetaSeq = 1;               // BootMeta slot 0: seq
-  _activeProfileId = 0;           // BootMeta slot 0: profileId
-  _activeAddress = PROFILE0_ADDR; // BootMeta slot 0: address
+    if (!flash.write(ADDR_RING_BASE + slot * sizeof(AddressEntry),
+                     reinterpret_cast<const uint8_t *>(&entry),
+                     sizeof(AddressEntry))) {
+      LOG_ERROR("ProfileStore: failed to record the factory profile");
+      return false;
+    }
 
-  // The Address Ring entry that makes the body findable (scanAddressRing()
-  // reads the rings, not the fixed PROFILE0_ADDR).
-  AddressEntry addrEntry;
-  addrEntry.profileId = 0;
-  addrEntry.address = PROFILE0_ADDR;
-  addrEntry.seq = 1;
+    _profileAddresses[0] = PROFILE0_ADDR;
+    _profileSeqs[0] = _addressRingSeq;
+    _profileCount++;
 
-  if (!flash.write(ADDR_RING_BASE,
-                   reinterpret_cast<const uint8_t *>(&addrEntry),
-                   sizeof(AddressEntry))) {
-    // The ring holds no entry for id 0, which is what a rescan of this flash
-    // reports. The body stays readable: readProfile(0) reads PROFILE0_ADDR.
-    LOG_WARN("ProfileStore: failed to write Address entry for profile0");
-    _addressRingSeq = 0;
-    _profileAddresses[0] = 0;
-    _profileSeqs[0] = 0;
-  } else {
-    _addressRingSeq = 1;               // Address Ring slot 0: seq
-    _profileAddresses[0] = PROFILE0_ADDR; // Address Ring slot 0: address
-    _profileSeqs[0] = 1;               // Address Ring slot 0: seq
-  }
-
-  // profileCount is a property of the address map, recounted by the rule init()
-  // uses: the failed branch above clears id 0 only.
-  _profileCount = 0;
-  for (uint16_t i = 0; i <= PROFILE_MAX_ID; ++i) {
-    if (_profileAddresses[i] != 0) {
-      _profileCount++;
+    // Nothing named an active profile, so the one recorded is the one init()
+    // falls back to.
+    if (_bootMetaSeq == 0 && !writeBootMeta(0, PROFILE0_ADDR)) {
+      return false;
     }
   }
-
-  _nextAddr = findNextAddr();        // no flash field of its own: derived from
-                                     // the address map (Profile0 sits below
-                                     // USER_RING_BASE, so the head is free)
 
   LOG_INFO("ProfileStore: factory profile written");
   return true;
@@ -586,7 +572,8 @@ bool ProfileStore::createProfile(const char *json, uint16_t len,
 
   _nextAddr = ((dataAddr & ~0xFFF) + 0x1000);
 
-  seqBeforeIncrement();
+  const uint16_t slot = ensureAddressRingSlot();
+  if (slot >= ADDR_RING_SLOTS) return false;
   _addressRingSeq++;
   AddressEntry addrEntry;
   addrEntry.profileId = id;
@@ -594,7 +581,7 @@ bool ProfileStore::createProfile(const char *json, uint16_t len,
   addrEntry.seq = _addressRingSeq;
 
   uint32_t addrSlot =
-      ADDR_RING_BASE + (ensureAddressRingSlot() * sizeof(AddressEntry));
+      ADDR_RING_BASE + (slot * sizeof(AddressEntry));
   if (!flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&addrEntry),
                    sizeof(AddressEntry))) {
     LOG_ERROR("ProfileStore: failed to write Address entry");
@@ -660,7 +647,8 @@ bool ProfileStore::modifyProfile(uint16_t id, const char *json, uint16_t len) {
 
   _nextAddr = ((dataAddr & ~0xFFF) + 0x1000);
 
-  seqBeforeIncrement();
+  const uint16_t slot = ensureAddressRingSlot();
+  if (slot >= ADDR_RING_SLOTS) return false;
   _addressRingSeq++;
   AddressEntry addrEntry;
   addrEntry.profileId = id;
@@ -668,7 +656,7 @@ bool ProfileStore::modifyProfile(uint16_t id, const char *json, uint16_t len) {
   addrEntry.seq = _addressRingSeq;
 
   uint32_t addrSlot =
-      ADDR_RING_BASE + (ensureAddressRingSlot() * sizeof(AddressEntry));
+      ADDR_RING_BASE + (slot * sizeof(AddressEntry));
   if (!flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&addrEntry),
                    sizeof(AddressEntry))) {
     LOG_ERROR("ProfileStore: failed to write Address entry for modify");
@@ -707,7 +695,8 @@ bool ProfileStore::deleteProfile(uint16_t id) {
   auto &flash = Drivers::Device::FlashBase::getInstance();
 
   // Mark deleted: write Address Ring entry with address=0, seq=high
-  seqBeforeIncrement();
+  const uint16_t slot = ensureAddressRingSlot();
+  if (slot >= ADDR_RING_SLOTS) return false;
   _addressRingSeq++;
   AddressEntry addrEntry;
   addrEntry.profileId = id;
@@ -715,7 +704,7 @@ bool ProfileStore::deleteProfile(uint16_t id) {
   addrEntry.seq = _addressRingSeq;
 
   uint32_t addrSlot =
-      ADDR_RING_BASE + (ensureAddressRingSlot() * sizeof(AddressEntry));
+      ADDR_RING_BASE + (slot * sizeof(AddressEntry));
   if (!flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&addrEntry),
                    sizeof(AddressEntry))) {
     LOG_ERROR("ProfileStore: failed to write deletion Address entry");
@@ -900,6 +889,7 @@ bool ProfileStore::compaction() {
   }
 
   if (validCount == 0) {
+    _nextAddr = USER_RING_BASE;
     LOG_INFO("ProfileStore: no valid profiles to compact");
     return true;
   }
@@ -916,14 +906,18 @@ bool ProfileStore::compaction() {
     }
   }
 
+  if (_activeProfileId != 0 && _profileAddresses[_activeProfileId] == 0) {
+    LOG_ERROR("ProfileStore: active profile is absent during compaction");
+    return false;
+  }
+
   // 2. Rewrite each valid profile at User Ring head (S3 onward)
   uint32_t writeAddr = USER_RING_BASE;
-  _addressRingSeq = 0;
 
   for (uint8_t i = 0; i < validCount; ++i) {
-    memset(s_staging, 0xFF, PROFILE_JSON_MAX);
+    memset(s_compaction, 0xFF, PROFILE_JSON_MAX);
     // read old
-    if (!flash.read(valid[i].oldAddr, s_staging, PROFILE_JSON_MAX)) {
+    if (!flash.read(valid[i].oldAddr, s_compaction, PROFILE_JSON_MAX)) {
       LOG_ERROR("ProfileStore: compaction read fail at 0x%06lX",
                 valid[i].oldAddr);
       return false;
@@ -935,7 +929,7 @@ bool ProfileStore::compaction() {
       return false;
     }
     // write target
-    if (!flash.write(writeAddr, s_staging, PROFILE_JSON_MAX)) {
+    if (!flash.write(writeAddr, s_compaction, PROFILE_JSON_MAX)) {
       LOG_ERROR("ProfileStore: compaction write fail at 0x%06lX", writeAddr);
       return false;
     }
@@ -945,12 +939,9 @@ bool ProfileStore::compaction() {
   }
 
   // 3. Reset BootMeta for the active profile
-  _bootMetaSeq = 0;
-  seqBeforeIncrement();
-  _bootMetaSeq++;
   BootMeta bootMeta;
   bootMeta.magic = BOOTMETA_MAGIC;
-  bootMeta.seq = _bootMetaSeq;
+  bootMeta.seq = 1;
   bootMeta.profileId = _activeProfileId;
   bootMeta.address = _profileAddresses[_activeProfileId];
   bootMeta.reserved = 0xFFFFFFFF;
@@ -962,7 +953,6 @@ bool ProfileStore::compaction() {
     LOG_ERROR("ProfileStore: compaction BootMeta erase fail");
     return false;
   }
-
   if (!flash.write(BOOTMETA_BASE, reinterpret_cast<const uint8_t *>(&bootMeta),
                    sizeof(BootMeta))) {
     LOG_ERROR("ProfileStore: compaction BootMeta write fail");
@@ -972,7 +962,6 @@ bool ProfileStore::compaction() {
   // 5. Rebuild Address Ring: all compacted user profiles + profile0
   _addressRingSeq = 0;
   for (uint8_t i = 0; i < validCount; ++i) {
-    seqBeforeIncrement();
     _addressRingSeq++;
     AddressEntry addrEntry;
     addrEntry.profileId = valid[i].id;
@@ -990,7 +979,6 @@ bool ProfileStore::compaction() {
 
   // Profile0 Address Ring entry (fixed address, never moved by compaction)
   {
-    seqBeforeIncrement();
     _addressRingSeq++;
     AddressEntry addrEntry;
     addrEntry.profileId = 0;
@@ -999,22 +987,14 @@ bool ProfileStore::compaction() {
 
     uint32_t addrSlot =
         ADDR_RING_BASE + validCount * sizeof(AddressEntry);
-    (void)flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&addrEntry),
-                      sizeof(AddressEntry));
+    if (!flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&addrEntry),
+                      sizeof(AddressEntry))) return false;
+    _profileAddresses[0] = PROFILE0_ADDR;
+    _profileSeqs[0] = _addressRingSeq;
   }
 
-  // 6. Clear unused Address Ring slots (after profile0 entry)
-  uint16_t clearStart = validCount + 1;
-  for (uint16_t i = clearStart; i < ADDR_RING_SLOTS; ++i) {
-    AddressEntry empty;
-    empty.profileId = PROFILE_ID_NONE;
-    empty.address = 0;
-    empty.seq = 0;
-    uint32_t addrSlot = ADDR_RING_BASE + i * sizeof(AddressEntry);
-    (void)flash.write(addrSlot, reinterpret_cast<const uint8_t *>(&empty),
-                      sizeof(AddressEntry));
-  }
-
+  _activeAddress = bootMeta.address;
+  _bootMetaSeq = bootMeta.seq;
   _nextAddr = writeAddr;
 
   return true;
@@ -1044,7 +1024,7 @@ bool ProfileStore::resetSector0() {
     if (_profileAddresses[i] != 0) {
       validEntries[entryCount].profileId = i;
       validEntries[entryCount].address = _profileAddresses[i];
-      validEntries[entryCount].seq = _profileSeqs[i];
+      validEntries[entryCount].seq = entryCount + 1;
       entryCount++;
     }
   }
@@ -1055,24 +1035,6 @@ bool ProfileStore::resetSector0() {
     return false;
   }
 
-  // Profile 0 comes back from its backup. Its own sector is erased first: a NOR
-  // cell takes a write onto an erased one and nothing else.
-  if (!flash.eraseSector(PROFILE0_ADDR)) {
-    LOG_ERROR("ProfileStore: failed to erase Profile0 primary sector");
-    return false;
-  }
-  memset(s_staging, 0, PROFILE_JSON_MAX);
-  if (!flash.read(PROFILE0_BACKUP, s_staging, PROFILE_JSON_MAX)) {
-    LOG_WARN("ProfileStore: failed to read Profile0 backup, writing minimal "
-             "default");
-    const char *emptyProfile = "{\"ver\":1}";
-    (void)flash.write(PROFILE0_ADDR,
-                      reinterpret_cast<const uint8_t *>(emptyProfile),
-                      strlen(emptyProfile));
-  } else {
-    (void)flash.write(PROFILE0_ADDR, s_staging, PROFILE_JSON_MAX);
-  }
-
   // Write BootMeta slot 0
   if (!flash.write(BOOTMETA_BASE,
                    reinterpret_cast<const uint8_t *>(&activeBootMeta),
@@ -1081,13 +1043,14 @@ bool ProfileStore::resetSector0() {
     return false;
   }
 
-  // Write valid Address entries (best-effort)
+  // Restore valid Address entries.
   for (uint8_t i = 0; i < entryCount; ++i) {
     uint32_t slotAddr = ADDR_RING_BASE + i * sizeof(AddressEntry);
     if (!flash.write(slotAddr,
                      reinterpret_cast<const uint8_t *>(&validEntries[i]),
                      sizeof(AddressEntry))) {
       LOG_WARN("ProfileStore: Address entry restore failed at slot %u", i);
+      return false;
     }
   }
 
@@ -1097,7 +1060,9 @@ bool ProfileStore::resetSector0() {
   _bootMetaSeq = 1;
   // Address Ring seq: use the max of restored entries, or 0 if none
   _addressRingSeq = 0;
+  memset(_profileSeqs, 0, sizeof(_profileSeqs));
   for (uint8_t i = 0; i < entryCount; ++i) {
+    _profileSeqs[validEntries[i].profileId] = validEntries[i].seq;
     if (validEntries[i].seq > _addressRingSeq) {
       _addressRingSeq = validEntries[i].seq;
     }

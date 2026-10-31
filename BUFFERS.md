@@ -23,7 +23,7 @@ arm-none-eabi-nm -S "$elf" | arm-none-eabi-c++filt      # names
 A symbol's region comes from its address: DTCMRAM `0x2000_0000`, AXI SRAM
 `0x2400_0000`, RAM_D2 `0x3000_0000`, RAM_D3 `0x3800_0000`, ITCM `0x0000_0000`.
 A symbol without the `COMMON_*` macro is in `.bss`/`.data` and therefore lands in
-DTCM. The snapshot below is the BoringTechH743 debug build at `71f4781`.
+DTCM. The snapshot below is the BoringTechH743 debug build of this tree.
 
 ## What the tree owns
 
@@ -32,6 +32,7 @@ DTCM. The snapshot below is the BoringTechH743 debug build at `71f4781`.
 | `Frame::instance` | 5,156 | plain static, function-local | DTCM | `src/wire/frame.cpp:35` |
 | `s_replaced` | 4,097 | `COMMON_ZERO_INIT` | AXI | `src/gamepad/config/config_manager.cpp:216` |
 | `s_staging` | 4,097 | `COMMON_ZERO_INIT` | AXI | `src/gamepad/profile/profile_store.cpp:34` |
+| `s_compaction` | 4,096 | `COMMON_ZERO_INIT` | AXI | `src/gamepad/profile/profile_store.cpp:35` |
 | `s_stage` | 4,096 | `COMMON_ZERO_INIT` | AXI | `src/wire/flash.cpp:23` |
 | `s_frames` | 1,200 | `COMMON_ZERO_INIT` | AXI | `src/drivers/device/rgb_strip/rgb_strip.cpp:109` |
 | `s_answer` | 1,064 | `COMMON_ZERO_INIT` | AXI | `src/drivers/gp_emulator/ps4/ps4_auth.cpp:161` |
@@ -49,7 +50,7 @@ DTCM. The snapshot below is the BoringTechH743 debug build at `71f4781`.
 | `s_challenge` | 256 | plain static | DTCM | `src/drivers/gp_emulator/ps4/ps4_auth.cpp:162` |
 | `descriptorStringBuffer` (×4) | 1,024 | plain static, function-local | DTCM | `src/drivers/gp_emulator/shared/driver_helper.h:33` |
 
-Totals: AXI SRAM 20,478 B, DTCMRAM 7,780 B.
+Totals: AXI SRAM 24,574 B, DTCMRAM 7,780 B.
 
 `getStringDescriptor()` is a `static inline` in a shared header with a
 function-local buffer, so each emulator translation unit that calls it carries its
