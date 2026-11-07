@@ -58,6 +58,9 @@ Rgb desaturate(Rgb colour, uint8_t saturation);
 // LED is taken down to `saturation`'s distance from white.
 void render(Rgb *out, uint8_t ledCount, uint16_t phaseOffset, uint8_t saturation);
 
+void renderFrame(Rgb *out, uint8_t ledCount, uint8_t frame,
+                 uint16_t phaseOffset, uint8_t saturation);
+
 // The frame the animation is showing and the time a tick carried over.
 struct Clock {
   uint32_t carriedUs = 0;

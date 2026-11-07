@@ -28,6 +28,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <initializer_list>
 
 namespace {
 
@@ -472,6 +473,89 @@ void a_caught_up_backlog_keeps_its_release_times() {
         "the oldest kept release sets the longest wait");
 }
 
+void a_large_backlog_replaces_already_pending_releases() {
+  for (MissPolicy policy : {MissPolicy::Skip, MissPolicy::CatchUp}) {
+    Core core;
+    Clock clock;
+    attach(core, clock);
+    Counted high;
+    Counted low;
+    TaskSpec blocker = periodic("high", &high, 1000000, Priority::High);
+    blocker.phase_us = 0;
+    TaskSpec spec = periodic("low", &low, 1000, Priority::Low);
+    spec.miss = policy;
+    spec.max_pending = 3;
+    TaskIndex index = kInvalidTask;
+    check(core.add(blocker) == AddError::None, "the blocker is added");
+    check(core.add(spec, &index) == AddError::None, "the backlog task is added");
+    check(core.start() && core.run_once(), "the first release remains pending");
+    clock.now = 300000;
+    check(core.run_once(), "the backlog runs");
+    const uint32_t expected = policy == MissPolicy::Skip ? 0 : 2000;
+    check(core.stats(index)->max_start_latency_us == expected,
+          "the newest releases retain their timestamps after a large gap");
+  }
+}
+
+struct AdvancingClock {
+  uint32_t now = 0;
+  bool advance_on_enter = false;
+};
+
+uint32_t advancing_now(void *context) {
+  return static_cast<AdvancingClock *>(context)->now;
+}
+
+void advance_on_enter(void *context) {
+  AdvancingClock *clock = static_cast<AdvancingClock *>(context);
+  if (clock->advance_on_enter) {
+    clock->now = 1000;
+  }
+}
+
+void exit_noop(void *) {}
+
+void a_release_due_during_selection_blocks_a_budgeted_task() {
+  Core core;
+  AdvancingClock clock;
+  Port port;
+  port.now_us = advancing_now;
+  port.enter_critical = advance_on_enter;
+  port.exit_critical = exit_noop;
+  port.context = &clock;
+  check(core.set_port(port), "the advancing clock is set");
+  Counted high;
+  Counted low;
+  TaskSpec high_spec = periodic("high", &high, 1000, Priority::High);
+  high_spec.phase_us = 1000;
+  TaskSpec low_spec = periodic("low", &low, 1000, Priority::Low);
+  low_spec.budget_us = 10;
+  check(core.add(high_spec) == AddError::None && core.add(low_spec) == AddError::None,
+        "the tasks are added");
+  check(core.start(), "the set starts");
+  clock.advance_on_enter = true;
+  check(!core.run_once() && low.runs == 0, "a newly due higher release blocks the low task");
+  clock.advance_on_enter = false;
+  check(core.run_once() && high.runs == 1, "the higher task runs next");
+}
+
+void interval_total_survives_32_bit_overflow() {
+  Core core;
+  Clock clock;
+  attach(core, clock);
+  Counted counted;
+  TaskIndex index = kInvalidTask;
+  check(core.add(periodic("slow", &counted, 1000000000, Priority::Normal), &index) == AddError::None,
+        "the slow task is added");
+  check(core.start() && core.run_once(), "the first release runs");
+  for (int i = 0; i < 5; ++i) {
+    clock.now += 1000000000;
+    check(core.run_once(), "the next release runs");
+  }
+  check(core.stats(index)->sum_interval_us == 5000000000ULL,
+        "the interval total exceeds 32 bits");
+}
+
 } // namespace
 
 int main() {
@@ -489,6 +573,9 @@ int main() {
   a_task_waits_while_a_higher_release_is_too_near();
   a_skipped_backlog_keeps_the_newest_release();
   a_caught_up_backlog_keeps_its_release_times();
+  a_large_backlog_replaces_already_pending_releases();
+  a_release_due_during_selection_blocks_a_budgeted_task();
+  interval_total_survives_32_bit_overflow();
 
   std::printf("%d checks, %d failed\n", g_ran, g_failed);
   return g_failed == 0 ? 0 : 1;

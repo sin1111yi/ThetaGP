@@ -47,6 +47,15 @@ using namespace ThetaGP::Gamepad;
 
 namespace {
 
+constexpr uint32_t kCommandBudgetUs = 50;
+constexpr uint32_t kSystemBudgetUs = 50;
+#if THETAGP_CFG_HAS_RGB_STRIP
+constexpr uint32_t kLedBudgetUs = 250;
+static_assert(kLedBudgetUs + Sched::kStartGuardUs <
+                  Sched::periodUs(THETAGP_CFG_USB_REPORT_RATE_HZ),
+              "LED task budget does not fit the report period");
+#endif
+
 // The reply payload and the frame built around it: one request is answered at
 // a time. AXI SRAM (COMMON_ZERO_INIT), the region DMA reaches.
 COMMON_ZERO_INIT static uint8_t s_reply[Wire::Frame::PAYLOAD_MAX]{};
@@ -134,19 +143,18 @@ FAST_CODE static void taskCmdProc(void *context) {
   }
 
   Wire::Frame::Payload payload{};
-  while (s_txLength == 0 && codec.take(payload)) {
+  const bool tookFrame = codec.take(payload);
+  if (tookFrame) {
     const uint16_t answered = Wire::Dispatch::answer(
         payload.bytes, payload.length, s_reply, sizeof s_reply);
-    if (answered == 0) {
-      continue;
+    if (answered != 0) {
+      const uint16_t framed =
+          Wire::Frame::encode(s_reply, answered, s_frame, sizeof s_frame);
+      if (framed != 0) {
+        queueFrame(framed);
+        pumpCdcTx();
+      }
     }
-    const uint16_t framed =
-        Wire::Frame::encode(s_reply, answered, s_frame, sizeof s_frame);
-    if (framed == 0) {
-      continue;
-    }
-    queueFrame(framed);
-    pumpCdcTx();
   }
 
   // A reset takes the wire down, so it waits until the reply has left the
@@ -159,7 +167,7 @@ FAST_CODE static void taskCmdProc(void *context) {
   // A stream answers no frame of the host's: one frame per tick, while nothing
   // else is in flight. Both streams are asked whether they are open first,
   // because the call builds its reply before it finds out.
-  if (s_txLength == 0 &&
+  if (!tookFrame && s_txLength == 0 &&
       (Wire::Flash::active() || Wire::ProfileTransfer::busy())) {
     const uint16_t carried =
         Wire::Dispatch::pending(s_reply, sizeof s_reply);
@@ -202,19 +210,20 @@ void ThetaGP::ThetaGamepad::registerTasks(void) {
   // A command waits for this task's next tick, so the period is the latency a
   // caller pays per frame.
   if (!scheduler.addPeriodic("COMM", "CMD_PROC", taskCmdProc, nullptr,
-                             periodUs(THETAGP_CFG_CMD_PROC_HZ),
-                             Priority::Normal)) {
+                              periodUs(THETAGP_CFG_CMD_PROC_HZ),
+                              Priority::Normal, 0, kCommandBudgetUs)) {
     LOG_ERROR("scheduler: COMM.CMD_PROC was not registered");
   }
 #if THETAGP_CFG_HAS_RGB_STRIP
   // The strip is cosmetic: it runs below every task that carries input.
   if (!scheduler.addPeriodic("LED", "EFFECT", taskLedEffect, nullptr,
-                             THETAGP_CFG_LED_TASK_PERIOD_US, Priority::Low)) {
+                              THETAGP_CFG_LED_TASK_PERIOD_US, Priority::Low,
+                              0, kLedBudgetUs)) {
     LOG_ERROR("scheduler: LED.EFFECT was not registered");
   }
 #endif
   if (!scheduler.addPeriodic("SYSTEM", "UPDATE", taskSystemUpdate, nullptr,
-                             periodUs(1000), Priority::Low)) {
+                              periodUs(1000), Priority::Low, 0, kSystemBudgetUs)) {
     LOG_ERROR("scheduler: SYSTEM.UPDATE was not registered");
   }
 }

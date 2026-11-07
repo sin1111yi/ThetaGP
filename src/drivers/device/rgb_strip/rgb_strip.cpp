@@ -105,8 +105,7 @@ uint8_t limited(uint8_t value, uint32_t scaleQ8) {
 // reads it.
 COMMON_ZERO_INIT uint16_t s_slots[kSlotCount];
 
-// One animation cycle, rendered once at boot. AXI SRAM: a large, cold array.
-COMMON_ZERO_INIT LedEffect::Rgb s_frames[LedEffect::FRAME_COUNT * LED_COUNT];
+LedEffect::Rgb s_frame[LED_COUNT];
 
 // The frame the animation is on, and the one the strip was last handed. The
 // second starts outside the range of the first, so the first tick sends.
@@ -114,8 +113,7 @@ LedEffect::Clock s_clock;
 uint8_t s_sentFrame = LedEffect::FRAME_COUNT;
 uint32_t s_lastTickUs = 0;
 
-// The look the frames were built for. It starts outside every value a key
-// holds, so the first tick builds them.
+// The look the last frame was built for.
 uint8_t s_shownMode = 0xFF;
 uint16_t s_shownHue = 0xFFFF;
 uint8_t s_shownSat = 0xFF;
@@ -150,7 +148,7 @@ void RgbStrip::init() {
   _zeroDuty = static_cast<uint16_t>(period * kZeroHighNs / kBitPeriodNs);
   _oneDuty = static_cast<uint16_t>(period * kOneHighNs / kBitPeriodNs);
 
-  // The first tick builds the frames for the effect the profile asks for.
+  // The first tick builds the frame for the effect the profile asks for.
   s_lastTickUs = SystemTimer::getInstance().getMillis() * 1000U;
   _initialized = true;
 
@@ -175,24 +173,12 @@ void RgbStrip::task(uint32_t currentTimeUs) {
   const bool rainbow = led.mode == static_cast<uint8_t>(Enums::LEDMode::Rainbow);
   const bool solid = led.mode == static_cast<uint8_t>(Enums::LEDMode::Solid);
 
-  // A look a profile has moved to is rendered before the frame is chosen: the
-  // mode, the hue and the saturation are what the frames are built from.
+  // A changed look invalidates the last frame.
   if (led.mode != s_shownMode || led.hue != s_shownHue || led.sat != s_shownSat) {
     s_shownMode = led.mode;
     s_shownHue = led.hue;
     s_shownSat = led.sat;
 
-    if (rainbow) {
-      // The wheel starts at the hue the profile names, at the saturation it
-      // names: the same two numbers the still effect is drawn from.
-      LedEffect::render(s_frames, LED_COUNT,
-                        LedEffect::unitsOfDegrees(led.hue), led.sat);
-    } else {
-      const LedEffect::Rgb colour = solid ? stillColour(led.hue, led.sat) : LedEffect::Rgb{};
-      for (uint8_t i = 0; i < LED_COUNT; ++i) {
-        s_frames[i] = colour;
-      }
-    }
     // The look changed, so no frame of the new one has been sent yet.
     s_sentFrame = LedEffect::FRAME_COUNT;
   }
@@ -211,12 +197,24 @@ void RgbStrip::task(uint32_t currentTimeUs) {
     return;
   }
 
-  if (strip.send(&s_frames[s_clock.frame * LED_COUNT])) {
+  if (rainbow) {
+    LedEffect::renderFrame(s_frame, LED_COUNT, s_clock.frame,
+                           LedEffect::unitsOfDegrees(led.hue), led.sat);
+  } else {
+    const LedEffect::Rgb colour = solid ? stillColour(led.hue, led.sat) : LedEffect::Rgb{};
+    for (uint8_t i = 0; i < LED_COUNT; ++i) {
+      s_frame[i] = colour;
+    }
+  }
+  if (strip.send(s_frame)) {
     s_sentFrame = s_clock.frame;
   }
 }
 
 bool RgbStrip::send(const LedEffect::Rgb *frame) {
+  if (_timer.isBusy()) {
+    return false;
+  }
   encode(frame);
   return _timer.startSequence(s_slots, kSlotCount);
 }

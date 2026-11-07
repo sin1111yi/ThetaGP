@@ -119,7 +119,7 @@ const TaskInfo *Scheduler::taskInfo(TaskIndex task) const {
   // reports the rate it actually ran at.
   info.avg_cycle_us = stats->intervals == 0
                           ? info.desired_period_us
-                          : stats->sum_interval_us / stats->intervals;
+                          : static_cast<uint32_t>(stats->sum_interval_us / stats->intervals);
   info.run_count = stats->runs;
   info.late_count = stats->deadline_misses;
   return &info;

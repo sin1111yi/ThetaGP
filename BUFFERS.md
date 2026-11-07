@@ -35,7 +35,6 @@ DTCM. The snapshot below is the BoringTechH743 debug build of this tree.
 | `s_staging` | 4,097 | `COMMON_ZERO_INIT` | AXI | `src/gamepad/profile/profile_store.cpp:34` |
 | `s_compaction` | 4,096 | `COMMON_ZERO_INIT` | AXI | `src/gamepad/profile/profile_store.cpp:35` |
 | `s_stage` | 4,096 | `COMMON_ZERO_INIT` | AXI | `src/wire/flash.cpp:23` |
-| `s_frames` | 1,200 | `COMMON_ZERO_INIT` | AXI | `src/drivers/device/rgb_strip/rgb_strip.cpp:109` |
 | `s_answer` | 1,064 | `COMMON_ZERO_INIT` | AXI | `src/drivers/gp_emulator/ps4/ps4_auth.cpp:161` |
 | `s_slots` | 1,056 | `COMMON_ZERO_INIT` | AXI | `src/drivers/device/rgb_strip/rgb_strip.cpp:106` |
 | `s_frame` | 1,028 | `COMMON_ZERO_INIT` | AXI | `src/tasks.cpp:52` |

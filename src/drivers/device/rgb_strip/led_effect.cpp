@@ -88,25 +88,28 @@ Rgb desaturate(Rgb colour, uint8_t saturation) {
   return Rgb{mixed(colour.g), mixed(colour.r), mixed(colour.b)};
 }
 
+void renderFrame(Rgb *out, uint8_t ledCount, uint8_t frame,
+                 uint16_t phaseOffset, uint8_t saturation) {
+  if (ledCount == 0) {
+    return;
+  }
+  const uint16_t ledStep = static_cast<uint16_t>(HUE_CYCLE / ledCount);
+  const uint16_t frameHue =
+      static_cast<uint16_t>((frame * HUE_CYCLE) / FRAME_COUNT);
+  for (uint8_t led = 0; led < ledCount; ++led) {
+    const uint16_t hue =
+        static_cast<uint16_t>(phaseOffset + led * ledStep + frameHue);
+    out[led] = desaturate(hueToRgb(hue), saturation);
+  }
+}
+
 void render(Rgb *out, uint8_t ledCount, uint16_t phaseOffset,
             uint8_t saturation) {
   if (ledCount == 0) {
     return;
   }
-
-  const uint16_t ledStep = static_cast<uint16_t>(HUE_CYCLE / ledCount);
-
   for (uint8_t frame = 0; frame < FRAME_COUNT; ++frame) {
-    // Multiplied before divided: a per-frame increment would carry the
-    // truncation of every earlier frame into the one after it.
-    const uint16_t frameHue =
-        static_cast<uint16_t>((frame * HUE_CYCLE) / FRAME_COUNT);
-
-    for (uint8_t led = 0; led < ledCount; ++led) {
-      const uint16_t hue =
-          static_cast<uint16_t>(phaseOffset + led * ledStep + frameHue);
-      out[frame * ledCount + led] = desaturate(hueToRgb(hue), saturation);
-    }
+    renderFrame(out + frame * ledCount, ledCount, frame, phaseOffset, saturation);
   }
 }
 
@@ -115,13 +118,10 @@ void advance(Clock &clock, uint32_t deltaUs, uint32_t frameIntervalUs) {
     return;
   }
 
-  clock.carriedUs += deltaUs;
-  while (clock.carriedUs >= frameIntervalUs) {
-    clock.carriedUs -= frameIntervalUs;
-    clock.frame = static_cast<uint8_t>((clock.frame + 1) % FRAME_COUNT);
-  }
+  const uint64_t elapsed = static_cast<uint64_t>(clock.carriedUs) + deltaUs;
+  clock.carriedUs = static_cast<uint32_t>(elapsed % frameIntervalUs);
+  clock.frame = static_cast<uint8_t>(
+      (clock.frame + (elapsed / frameIntervalUs) % FRAME_COUNT) % FRAME_COUNT);
 }
 
 } // namespace ThetaGP::Drivers::Device::LedEffect
-
-

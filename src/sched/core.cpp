@@ -107,27 +107,20 @@ void Core::collect(State &task, uint32_t now) {
   // Every release at or before now is due; one arriving after a long gap is
   // counted whole rather than walked one period at a time.
   const uint64_t due = static_cast<uint64_t>(now - task.next_release_us) / period + 1;
-  const uint32_t room = kMaxPending - task.pending;
-  const uint32_t kept = due < room ? static_cast<uint32_t>(due) : room;
-  const uint32_t early = static_cast<uint32_t>(due) - kept;
-
-  if (task.pending == 0) {
-    // The kept releases are the newest of those that came due, so the oldest
-    // one still pending is the first of them.
-    task.first_pending_us = task.next_release_us + early * period;
+  const uint32_t cap = pending_cap(task.spec);
+  const uint64_t total = task.pending + due;
+  const uint32_t kept = total < cap ? static_cast<uint32_t>(total) : cap;
+  const uint64_t dropped = total - kept;
+  if (dropped >= task.pending) {
+    task.first_pending_us = task.next_release_us +
+        static_cast<uint32_t>(dropped - task.pending) * period;
+  } else {
+    task.first_pending_us += static_cast<uint32_t>(dropped) * period;
   }
-  task.pending = static_cast<uint8_t>(task.pending + kept);
+  task.pending = static_cast<uint8_t>(kept);
   task.stats.releases += static_cast<uint32_t>(due);
-  task.stats.missed_releases += early;
+  task.stats.missed_releases += static_cast<uint32_t>(dropped);
   task.next_release_us += static_cast<uint32_t>(due * period);
-
-  const uint8_t cap = pending_cap(task.spec);
-  if (task.pending > cap) {
-    const uint32_t folded = task.pending - cap;
-    task.stats.missed_releases += folded;
-    task.first_pending_us += folded * period;
-    task.pending = cap;
-  }
 }
 
 bool Core::post_event(State &task, uint32_t now) {
@@ -182,7 +175,7 @@ bool Core::post_from_isr(TaskIndex task) {
 }
 
 uint32_t Core::higher_release_window(Priority priority, uint32_t now) const {
-  uint32_t window = 0;
+  uint32_t window = UINT32_MAX;
   for (std::size_t i = 0; i < _count; ++i) {
     const State &task = _tasks[i];
     if (task.spec.release != Release::Periodic) {
@@ -194,7 +187,7 @@ uint32_t Core::higher_release_window(Priority priority, uint32_t now) const {
     }
     const int32_t delta = static_cast<int32_t>(task.next_release_us - now);
     const uint32_t due_in = delta > 0 ? static_cast<uint32_t>(delta) : 0;
-    if (window == 0 || due_in < window) {
+    if (due_in < window) {
       window = due_in;
     }
   }
@@ -228,20 +221,21 @@ bool Core::run_once() {
   }
 
   State &task = _tasks[pick];
-  if (task.spec.budget_us != 0) {
-    const uint32_t window = higher_release_window(task.spec.priority, now);
-    if (window != 0 && window <= task.spec.budget_us + kStartGuardUs) {
-      // The declared bound does not fit before the next higher-priority
-      // release, so the task waits for a wider gap.
-      ++task.stats.deferrals;
-      return false;
-    }
-  }
-
   if (_port.enter_critical != nullptr) {
     _port.enter_critical(_port.context);
   }
   const uint32_t started = now_isr();
+  if (task.spec.budget_us != 0) {
+    const uint32_t window = higher_release_window(task.spec.priority, started);
+    if (window != UINT32_MAX &&
+        (window <= kStartGuardUs || task.spec.budget_us >= window - kStartGuardUs)) {
+      ++task.stats.deferrals;
+      if (_port.exit_critical != nullptr) {
+        _port.exit_critical(_port.context);
+      }
+      return false;
+    }
+  }
   const uint32_t released = task.first_pending_us;
   --task.pending;
   if (task.pending == 0) {

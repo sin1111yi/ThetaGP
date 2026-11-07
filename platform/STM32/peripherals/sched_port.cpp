@@ -53,10 +53,11 @@ uint32_t portNowIsr(void *) {
 }
 
 void portEnter(void *) {
-  s_baseUs = Drivers::Device::SystemTimer::getInstance().getMicros();
-  s_baseCycles = clockCycleCounter();
-  s_savedPrimask = __get_PRIMASK();
+  const uint32_t primask = __get_PRIMASK();
   __disable_irq();
+  s_savedPrimask = primask;
+  s_baseUs = microsISR();
+  s_baseCycles = clockCycleCounter();
 }
 
 void portExit(void *) { __set_PRIMASK(s_savedPrimask); }

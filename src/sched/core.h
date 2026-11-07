@@ -119,7 +119,7 @@ struct TaskStats {
   // for the declared budget.
   uint32_t deferrals = 0;
   // The time between consecutive starts, summed over the intervals counted.
-  uint32_t sum_interval_us = 0;
+  uint64_t sum_interval_us = 0;
   uint32_t intervals = 0;
   uint32_t last_start_us = 0;
 };
