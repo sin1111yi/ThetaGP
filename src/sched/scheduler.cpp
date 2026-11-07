@@ -115,8 +115,11 @@ const TaskInfo *Scheduler::taskInfo(TaskIndex task) const {
       stats->runs == 0 ? 0 : stats->total_runtime_us / stats->runs;
   const uint32_t elapsed = _core.now_us() - _core.started_us();
   info.avg_delta_us = stats->runs == 0 ? 0 : elapsed / stats->runs;
-  info.avg_cycle_us =
-      info.desired_period_us != 0 ? info.desired_period_us : info.avg_delta_us;
+  // The measured spacing between starts, so a task that is blocked or folded
+  // reports the rate it actually ran at.
+  info.avg_cycle_us = stats->intervals == 0
+                          ? info.desired_period_us
+                          : stats->sum_interval_us / stats->intervals;
   info.run_count = stats->runs;
   info.late_count = stats->deadline_misses;
   return &info;

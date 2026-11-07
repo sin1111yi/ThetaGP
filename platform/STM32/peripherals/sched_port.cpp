@@ -24,47 +24,60 @@
 #include "build_info.h"
 
 #include "drivers/device/system_timer.h"
-#include "drivers/peripherals/nvic.h"
+#include "drivers/peripherals/systick.h"
 #include "utils/atomic.h"
 
 namespace ThetaGP::Sched {
 
 namespace {
 
-// The mask the interrupted code held, put back when the claim ends. The core
-// brackets one claim at a time, so one saved value is enough.
-FAST_DATA_ZERO_INIT uint8_t s_savedBasepri = 0;
+// The mask the interrupted code held, and the clocks its claim started at.
+// The core brackets one claim at a time, so one set of values is enough.
+// PRIMASK is used rather than BASEPRI because WFI only wakes on an interrupt
+// that can preempt the current execution priority: a SysTick masked by BASEPRI
+// would leave the core asleep forever.
+FAST_DATA_ZERO_INIT uint32_t s_savedPrimask = 0;
+FAST_DATA_ZERO_INIT uint32_t s_baseUs = 0;
+FAST_DATA_ZERO_INIT uint32_t s_baseCycles = 0;
 
 uint32_t portNowUs(void *) {
   return Drivers::Device::SystemTimer::getInstance().getMicros();
 }
 
-void portEnter(void *) {
-  s_savedBasepri = __get_BASEPRI();
-  __set_BASEPRI(NVIC_PRIO_MAX);
+// The clock a claim may read: the free-running cycle counter, offset from the
+// value the claim started at. It never waits on an interrupt the claim masked.
+uint32_t portNowIsr(void *) {
+  const uint32_t cycles = clockCycleCounter();
+  const int32_t elapsed = static_cast<int32_t>(cycles - s_baseCycles);
+  return s_baseUs + static_cast<uint32_t>(clockCyclesToMicros(elapsed));
 }
 
-void portExit(void *) { __set_BASEPRI(s_savedBasepri); }
+void portEnter(void *) {
+  s_baseUs = Drivers::Device::SystemTimer::getInstance().getMicros();
+  s_baseCycles = clockCycleCounter();
+  s_savedPrimask = __get_PRIMASK();
+  __disable_irq();
+}
 
-// The nearest release a bare WFI can honour is one SysTick period: WFI returns
-// on the next interrupt, which a 1 kHz tick places up to a millisecond later,
-// so a nearer deadline is left to the caller's loop.
-constexpr uint32_t kIdleFloorUs = 1000;
+void portExit(void *) { __set_PRIMASK(s_savedPrimask); }
 
 void portIdle(void *, uint32_t deadline_us) {
-  Drivers::Device::SystemTimer &timer =
-      Drivers::Device::SystemTimer::getInstance();
-  const int32_t delta =
-      static_cast<int32_t>(deadline_us - timer.getMicros());
-  if (delta <= static_cast<int32_t>(kIdleFloorUs)) {
+  // Called with the claim's mask held, so only the free-running clock is read.
+  // WFI wakes on a pending interrupt even with PRIMASK set; the handler runs
+  // when the claim releases it.
+  const uint32_t now = portNowIsr(nullptr);
+  const int32_t delta = static_cast<int32_t>(deadline_us - now);
+  if (delta <= 0) {
     return;
   }
-  const uint32_t primask = __get_PRIMASK();
-  __disable_irq();
-  if (static_cast<int32_t>(deadline_us - timer.getMicros()) > 0) {
-    __WFI();
+  // WFI returns on the next interrupt, and the next SysTick is at most one
+  // period away: a deadline nearer than that edge would pass while asleep.
+  const uint32_t toTick =
+      static_cast<uint32_t>(clockCyclesToMicros(static_cast<int32_t>(SysTick->VAL)));
+  if (static_cast<uint32_t>(delta) < toTick) {
+    return;
   }
-  __set_PRIMASK(primask);
+  __WFI();
 }
 
 } // namespace
@@ -72,6 +85,7 @@ void portIdle(void *, uint32_t deadline_us) {
 Port system_port() {
   Port port;
   port.now_us = portNowUs;
+  port.now_us_isr = portNowIsr;
   port.enter_critical = portEnter;
   port.exit_critical = portExit;
   port.idle_until_us = portIdle;

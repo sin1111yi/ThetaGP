@@ -107,20 +107,25 @@ void Core::collect(State &task, uint32_t now) {
   // Every release at or before now is due; one arriving after a long gap is
   // counted whole rather than walked one period at a time.
   const uint64_t due = static_cast<uint64_t>(now - task.next_release_us) / period + 1;
-  if (task.pending == 0) {
-    task.first_pending_us = task.next_release_us;
-  }
-
   const uint32_t room = kMaxPending - task.pending;
   const uint32_t kept = due < room ? static_cast<uint32_t>(due) : room;
+  const uint32_t early = static_cast<uint32_t>(due) - kept;
+
+  if (task.pending == 0) {
+    // The kept releases are the newest of those that came due, so the oldest
+    // one still pending is the first of them.
+    task.first_pending_us = task.next_release_us + early * period;
+  }
   task.pending = static_cast<uint8_t>(task.pending + kept);
   task.stats.releases += static_cast<uint32_t>(due);
-  task.stats.missed_releases += static_cast<uint32_t>(due) - kept;
+  task.stats.missed_releases += early;
   task.next_release_us += static_cast<uint32_t>(due * period);
 
   const uint8_t cap = pending_cap(task.spec);
   if (task.pending > cap) {
-    task.stats.missed_releases += task.pending - cap;
+    const uint32_t folded = task.pending - cap;
+    task.stats.missed_releases += folded;
+    task.first_pending_us += folded * period;
     task.pending = cap;
   }
 }
@@ -149,7 +154,7 @@ bool Core::post(TaskIndex task) {
   if (_port.enter_critical != nullptr) {
     _port.enter_critical(_port.context);
   }
-  const bool taken = post_event(held, _port.now_us(_port.context));
+  const bool taken = post_event(held, now_isr());
   if (_port.exit_critical != nullptr) {
     _port.exit_critical(_port.context);
   }
@@ -164,7 +169,36 @@ bool Core::post_from_isr(TaskIndex task) {
   if (held.spec.release != Release::Event) {
     return false;
   }
-  return post_event(held, _port.now_us(_port.context));
+  // The bracket is the same one the thread side takes: a nested interrupt that
+  // posts the same task cannot interleave the count and the timestamp.
+  if (_port.enter_critical != nullptr) {
+    _port.enter_critical(_port.context);
+  }
+  const bool taken = post_event(held, now_isr());
+  if (_port.exit_critical != nullptr) {
+    _port.exit_critical(_port.context);
+  }
+  return taken;
+}
+
+uint32_t Core::higher_release_window(Priority priority, uint32_t now) const {
+  uint32_t window = 0;
+  for (std::size_t i = 0; i < _count; ++i) {
+    const State &task = _tasks[i];
+    if (task.spec.release != Release::Periodic) {
+      continue;
+    }
+    if (static_cast<uint8_t>(task.spec.priority) <=
+        static_cast<uint8_t>(priority)) {
+      continue;
+    }
+    const int32_t delta = static_cast<int32_t>(task.next_release_us - now);
+    const uint32_t due_in = delta > 0 ? static_cast<uint32_t>(delta) : 0;
+    if (window == 0 || due_in < window) {
+      window = due_in;
+    }
+  }
+  return window;
 }
 
 bool Core::run_once() {
@@ -194,14 +228,26 @@ bool Core::run_once() {
   }
 
   State &task = _tasks[pick];
+  if (task.spec.budget_us != 0) {
+    const uint32_t window = higher_release_window(task.spec.priority, now);
+    if (window != 0 && window <= task.spec.budget_us + kStartGuardUs) {
+      // The declared bound does not fit before the next higher-priority
+      // release, so the task waits for a wider gap.
+      ++task.stats.deferrals;
+      return false;
+    }
+  }
+
   if (_port.enter_critical != nullptr) {
     _port.enter_critical(_port.context);
   }
-  const uint32_t started = _port.now_us(_port.context);
+  const uint32_t started = now_isr();
   const uint32_t released = task.first_pending_us;
   --task.pending;
   if (task.pending == 0) {
     task.first_pending_us = 0;
+  } else if (task.spec.release == Release::Periodic) {
+    task.first_pending_us += task.spec.period_us;
   }
   if (_port.exit_critical != nullptr) {
     _port.exit_critical(_port.context);
@@ -211,6 +257,11 @@ bool Core::run_once() {
   if (latency > task.stats.max_start_latency_us) {
     task.stats.max_start_latency_us = latency;
   }
+  if (task.stats.runs > 0) {
+    task.stats.sum_interval_us += started - task.stats.last_start_us;
+    ++task.stats.intervals;
+  }
+  task.stats.last_start_us = started;
   ++task.stats.runs;
   task.spec.run(task.spec.context);
 
@@ -231,23 +282,10 @@ bool Core::run_once() {
   return true;
 }
 
-bool Core::pump() {
-  bool ran = false;
-  while (run_once()) {
-    ran = true;
-  }
-  uint32_t wake = 0;
-  if (_port.idle_until_us != nullptr && next_wake_us(&wake)) {
-    _port.idle_until_us(_port.context, wake);
-  }
-  return ran;
-}
-
-bool Core::ready() const {
+bool Core::ready_at(uint32_t now) const {
   if (!_started) {
     return false;
   }
-  const uint32_t now = _port.now_us(_port.context);
   for (std::size_t i = 0; i < _count; ++i) {
     const State &task = _tasks[i];
     if (task.pending > 0) {
@@ -259,6 +297,35 @@ bool Core::ready() const {
     }
   }
   return false;
+}
+
+bool Core::ready() const {
+  return _started && ready_at(_port.now_us(_port.context));
+}
+
+bool Core::pump() {
+  bool ran = false;
+  while (run_once()) {
+    ran = true;
+  }
+
+  uint32_t wake = 0;
+  if (_port.idle_until_us == nullptr || !next_wake_us(&wake)) {
+    return ran;
+  }
+
+  // The ready check and the sleep are one step: a post that arrives between
+  // them would otherwise be missed until the next interrupt.
+  if (_port.enter_critical != nullptr) {
+    _port.enter_critical(_port.context);
+  }
+  if (!ready_at(now_isr())) {
+    _port.idle_until_us(_port.context, wake);
+  }
+  if (_port.exit_critical != nullptr) {
+    _port.exit_critical(_port.context);
+  }
+  return ran;
 }
 
 bool Core::next_wake_us(uint32_t *deadline_us) const {

@@ -31,6 +31,11 @@ namespace ThetaGP::Sched {
 inline constexpr std::size_t kMaxTasks = 16;
 inline constexpr uint8_t kMaxPending = 255;
 
+// Time left clear before a higher-priority release when a task that declares a
+// budget is started. It covers the dispatch and the port's bookkeeping, not the
+// callback.
+inline constexpr uint32_t kStartGuardUs = 32;
+
 enum class Priority : uint8_t {
   Idle = 0,
   Low = 1,
@@ -76,7 +81,8 @@ struct TaskSpec {
   // Relative to release. Zero takes the period for a periodic task and means
   // no check for an event task.
   uint32_t deadline_us = 0;
-  // Declared upper bound of one run. Zero means no budget check.
+  // Declared upper bound of one run. Zero means no budget check and no start
+  // guard; the task may then start at any moment.
   uint32_t budget_us = 0;
   // Event only: posts kept pending, 0 or 1 meaning that posts coalesce.
   uint8_t max_pending = 1;
@@ -86,8 +92,11 @@ struct TaskSpec {
 // which a core without it refuses to run.
 struct Port {
   uint32_t (*now_us)(void *context) = nullptr;
-  // Brackets the claim of a pending release; a single-core port may leave both
-  // null when nothing posts from an interrupt.
+  // The same clock read between enter_critical and exit_critical, where now_us
+  // may wait on the very interrupt it has masked. Null falls back to now_us.
+  uint32_t (*now_us_isr)(void *context) = nullptr;
+  // Brackets the claim of a pending release and the check before an idle. A
+  // single-core port may leave both null when nothing posts from an interrupt.
   void (*enter_critical)(void *context) = nullptr;
   void (*exit_critical)(void *context) = nullptr;
   // Sleeps until the deadline and returns early on an interrupt. A port
@@ -106,6 +115,13 @@ struct TaskStats {
   uint32_t max_runtime_us = 0;
   uint32_t last_runtime_us = 0;
   uint32_t total_runtime_us = 0;
+  // Runs that were held back because a higher-priority release was too near
+  // for the declared budget.
+  uint32_t deferrals = 0;
+  // The time between consecutive starts, summed over the intervals counted.
+  uint32_t sum_interval_us = 0;
+  uint32_t intervals = 0;
+  uint32_t last_start_us = 0;
 };
 
 class Core {
@@ -122,7 +138,8 @@ class Core {
   bool started() const { return _started; }
 
   // An event release. post() brackets the claim against an interrupt; the
-  // interrupt side calls post_from_isr() without that bracket.
+  // interrupt side calls post_from_isr(), which brackets it the same way so a
+  // nested interrupt cannot interleave the update.
   bool post(TaskIndex task);
   bool post_from_isr(TaskIndex task);
 
@@ -169,6 +186,12 @@ class Core {
   bool valid(TaskIndex task) const {
     return task >= 0 && static_cast<std::size_t>(task) < _count;
   }
+  uint32_t now_isr() const {
+    return _port.now_us_isr != nullptr ? _port.now_us_isr(_port.context)
+                                       : _port.now_us(_port.context);
+  }
+  bool ready_at(uint32_t now) const;
+  uint32_t higher_release_window(Priority priority, uint32_t now) const;
   void collect(State &task, uint32_t now);
   bool post_event(State &task, uint32_t now);
 };

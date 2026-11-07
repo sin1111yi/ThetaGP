@@ -401,6 +401,77 @@ void a_post_made_during_the_sleep_is_not_lost() {
   check(core.pump() && event.runs == 1, "the post made during the sleep runs next");
 }
 
+void a_task_waits_while_a_higher_release_is_too_near() {
+  Core core;
+  Clock clock;
+  attach(core, clock);
+
+  Counted high;
+  Counted low;
+  TaskIndex high_index = kInvalidTask;
+  TaskIndex low_index = kInvalidTask;
+  check(core.add(periodic("high", &high, 1000, Priority::High), &high_index) ==
+            AddError::None,
+        "the high task is added");
+  TaskSpec spec = periodic("low", &low, 100, Priority::Low);
+  spec.budget_us = 200;
+  check(core.add(spec, &low_index) == AddError::None, "the budgeted task is added");
+  check(core.start(), "the set starts");
+
+  check(core.run_once() && high.runs == 1, "the high task runs first");
+  check(core.run_once() && low.runs == 1, "the low task runs while the window is wide");
+
+  clock.now = 900;
+  check(!core.run_once(), "the low task waits when the window is narrow");
+  check(core.stats(low_index)->deferrals == 1, "the hold is counted");
+
+  clock.now = 1000;
+  check(core.run_once() && high.runs == 2, "the high task runs at its release");
+  check(core.run_once() && low.runs == 2, "and the low task follows it");
+}
+
+void a_skipped_backlog_keeps_the_newest_release() {
+  Core core;
+  Clock clock;
+  attach(core, clock);
+
+  Counted counted;
+  TaskIndex index = kInvalidTask;
+  check(core.add(periodic("skip", &counted, 1000, Priority::Normal), &index) ==
+            AddError::None,
+        "the task is added");
+  check(core.start(), "the set starts");
+  check(core.run_once(), "the first release runs");
+
+  clock.now = 5000;
+  check(core.run_once(), "the backlog runs once");
+  check(core.stats(index)->max_start_latency_us == 0,
+        "the run is measured from the newest release");
+  check(core.stats(index)->missed_releases == 4, "the four it skipped are counted");
+}
+
+void a_caught_up_backlog_keeps_its_release_times() {
+  Core core;
+  Clock clock;
+  attach(core, clock);
+
+  Counted counted;
+  TaskSpec spec = periodic("catch", &counted, 1000, Priority::Normal);
+  spec.miss = MissPolicy::CatchUp;
+  spec.max_pending = 3;
+  TaskIndex index = kInvalidTask;
+  check(core.add(spec, &index) == AddError::None, "the task is added");
+  check(core.start(), "the set starts");
+  check(core.run_once(), "the first release runs");
+
+  clock.now = 5000;
+  for (int i = 0; i < 3; ++i) {
+    check(core.run_once(), "a backlogged release runs");
+  }
+  check(core.stats(index)->max_start_latency_us == 2000,
+        "the oldest kept release sets the longest wait");
+}
+
 } // namespace
 
 int main() {
@@ -415,6 +486,9 @@ int main() {
   releases_are_compared_across_the_counter_wrap();
   the_pump_sleeps_to_the_earliest_release();
   a_post_made_during_the_sleep_is_not_lost();
+  a_task_waits_while_a_higher_release_is_too_near();
+  a_skipped_backlog_keeps_the_newest_release();
+  a_caught_up_backlog_keeps_its_release_times();
 
   std::printf("%d checks, %d failed\n", g_ran, g_failed);
   return g_failed == 0 ? 0 : 1;
