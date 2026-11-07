@@ -222,6 +222,18 @@ bool Core::run_once() {
   return true;
 }
 
+bool Core::pump() {
+  bool ran = false;
+  while (run_once()) {
+    ran = true;
+  }
+  uint32_t wake = 0;
+  if (_port.idle_until_us != nullptr && next_wake_us(&wake)) {
+    _port.idle_until_us(_port.context, wake);
+  }
+  return ran;
+}
+
 bool Core::ready() const {
   if (!_started) {
     return false;

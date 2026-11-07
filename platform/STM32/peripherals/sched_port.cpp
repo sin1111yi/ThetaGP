@@ -46,6 +46,27 @@ void portEnter(void *) {
 
 void portExit(void *) { __set_BASEPRI(s_savedBasepri); }
 
+// The nearest release a bare WFI can honour is one SysTick period: WFI returns
+// on the next interrupt, which a 1 kHz tick places up to a millisecond later,
+// so a nearer deadline is left to the caller's loop.
+constexpr uint32_t kIdleFloorUs = 1000;
+
+void portIdle(void *, uint32_t deadline_us) {
+  Drivers::Device::SystemTimer &timer =
+      Drivers::Device::SystemTimer::getInstance();
+  const int32_t delta =
+      static_cast<int32_t>(deadline_us - timer.getMicros());
+  if (delta <= static_cast<int32_t>(kIdleFloorUs)) {
+    return;
+  }
+  const uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+  if (static_cast<int32_t>(deadline_us - timer.getMicros()) > 0) {
+    __WFI();
+  }
+  __set_PRIMASK(primask);
+}
+
 } // namespace
 
 Port system_port() {
@@ -53,6 +74,7 @@ Port system_port() {
   port.now_us = portNowUs;
   port.enter_critical = portEnter;
   port.exit_critical = portExit;
+  port.idle_until_us = portIdle;
   return port;
 }
 

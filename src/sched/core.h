@@ -90,6 +90,9 @@ struct Port {
   // null when nothing posts from an interrupt.
   void (*enter_critical)(void *context) = nullptr;
   void (*exit_critical)(void *context) = nullptr;
+  // Sleeps until the deadline and returns early on an interrupt. A port
+  // without it leaves the caller to poll.
+  void (*idle_until_us)(void *context, uint32_t deadline_us) = nullptr;
   void *context = nullptr;
 };
 
@@ -125,6 +128,11 @@ class Core {
   // Collects the releases that came due and runs the highest-priority ready
   // task, at most one. Returns whether one ran.
   bool run_once();
+
+  // Runs every ready task, then asks the port to sleep until the earliest
+  // release. Returns whether a task ran. A post that arrives while the port
+  // sleeps ends the sleep, so the next call sees it.
+  bool pump();
 
   // Whether a task is ready now. When none is, next_wake_us writes the earliest
   // release the platform may sleep until.

@@ -331,6 +331,76 @@ void releases_are_compared_across_the_counter_wrap() {
   check(core.run_once() && counted.runs == 3, "the next release is due too");
 }
 
+struct IdleHook {
+  Clock clock;
+  Core *core = nullptr;
+  TaskIndex event = kInvalidTask;
+  bool post_once = false;
+  bool fired = false;
+};
+
+uint32_t hook_now(void *context) {
+  return static_cast<IdleHook *>(context)->clock.now;
+}
+
+void idle_until(void *context, uint32_t deadline_us) {
+  IdleHook *hook = static_cast<IdleHook *>(context);
+  if (hook->post_once && !hook->fired) {
+    hook->fired = true;
+    hook->core->post(hook->event);
+    return;
+  }
+  hook->clock.now = deadline_us;
+}
+
+void the_pump_sleeps_to_the_earliest_release() {
+  Core core;
+  IdleHook hook;
+
+  Port port;
+  port.now_us = hook_now;
+  port.idle_until_us = idle_until;
+  port.context = &hook;
+  check(core.set_port(port), "the port is set");
+
+  Counted counted;
+  check(core.add(periodic("a", &counted, 5000, Priority::Normal)) == AddError::None,
+        "the task is added");
+  check(core.start(), "the set starts");
+
+  check(core.pump() && counted.runs == 1, "the first release runs");
+  check(hook.clock.now == 5000, "the port slept to the release");
+  check(core.pump() && counted.runs == 2, "the release the sleep reached runs");
+}
+
+void a_post_made_during_the_sleep_is_not_lost() {
+  Core core;
+  IdleHook hook;
+  hook.core = &core;
+  hook.post_once = true;
+
+  Port port;
+  port.now_us = hook_now;
+  port.idle_until_us = idle_until;
+  port.context = &hook;
+  check(core.set_port(port), "the port is set");
+
+  Counted counted;
+  Counted event;
+  TaskIndex event_index = kInvalidTask;
+  check(core.add(periodic("tick", &counted, 10000, Priority::Normal)) == AddError::None,
+        "the periodic task is added");
+  TaskSpec spec = periodic("event", &event, 0, Priority::Normal);
+  spec.release = Release::Event;
+  check(core.add(spec, &event_index) == AddError::None, "the event task is added");
+  hook.event = event_index;
+  check(core.start(), "the set starts");
+
+  check(core.pump() && counted.runs == 1, "the periodic task runs before the sleep");
+  check(hook.clock.now == 0, "the sleep ended on the post, not on the deadline");
+  check(core.pump() && event.runs == 1, "the post made during the sleep runs next");
+}
+
 } // namespace
 
 int main() {
@@ -343,6 +413,8 @@ int main() {
   a_missed_period_keeps_one_release_or_upto_a_count();
   the_earliest_release_is_the_wake_time();
   releases_are_compared_across_the_counter_wrap();
+  the_pump_sleeps_to_the_earliest_release();
+  a_post_made_during_the_sleep_is_not_lost();
 
   std::printf("%d checks, %d failed\n", g_ran, g_failed);
   return g_failed == 0 ? 0 : 1;
