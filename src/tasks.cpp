@@ -24,7 +24,7 @@
 #include "utils/utils.h"
 
 #include "BoardConfig.h"
-#include "conf/ThetaGP_Config.h" // THETAGP_CFG_USB_REPORT_RATE_HZ, the gamepad task rate this file registers
+#include "conf/ThetaGP_Config.h"
 
 #include "gamepad/gamepad.h"
 #include "drivers/device/system_timer.h"
@@ -52,7 +52,7 @@ constexpr uint32_t kSystemBudgetUs = 50;
 #if THETAGP_CFG_HAS_RGB_STRIP
 constexpr uint32_t kLedBudgetUs = 250;
 static_assert(kLedBudgetUs + Sched::kStartGuardUs <
-                  Sched::periodUs(THETAGP_CFG_USB_REPORT_RATE_HZ),
+              Sched::periodUs(THETAGP_CFG_USB_REPORT_RATE_HZ),
               "LED task budget does not fit the report period");
 #endif
 

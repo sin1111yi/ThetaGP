@@ -42,13 +42,13 @@ using ThetaGP::Sched::Release;
 using ThetaGP::Sched::TaskIndex;
 using ThetaGP::Sched::TaskSpec;
 
-int g_failed = 0;
-int g_ran = 0;
+int gFailed = 0;
+int gRan = 0;
 
 void check(bool ok, const char *what) {
-  ++g_ran;
+  ++gRan;
   if (!ok) {
-    ++g_failed;
+    ++gFailed;
     std::printf("FAIL: %s\n", what);
   }
 }
@@ -57,26 +57,26 @@ struct Clock {
   uint32_t now = 0;
 };
 
-uint32_t clock_now(void *context) { return static_cast<Clock *>(context)->now; }
+uint32_t clockNow(void *context) { return static_cast<Clock *>(context)->now; }
 
 void attach(Core &core, Clock &clock) {
   Port port;
-  port.now_us = clock_now;
+  port.nowUs = clockNow;
   port.context = &clock;
-  check(core.set_port(port), "the port is set");
+  check(core.setPort(port), "the port is set");
 }
 
 struct Counted {
   Clock *clock = nullptr;
   int runs = 0;
-  uint32_t advance_us = 0;
+  uint32_t advanceUs = 0;
 };
 
-void run_counted(void *context) {
+void runCounted(void *context) {
   Counted *counted = static_cast<Counted *>(context);
   ++counted->runs;
   if (counted->clock != nullptr) {
-    counted->clock->now += counted->advance_us;
+    counted->clock->now += counted->advanceUs;
   }
 }
 
@@ -86,7 +86,7 @@ struct SelfPost {
   int runs = 0;
 };
 
-void run_self_post(void *context) {
+void runSelfPost(void *context) {
   SelfPost *post = static_cast<SelfPost *>(context);
   ++post->runs;
   if (post->runs == 1) {
@@ -94,23 +94,23 @@ void run_self_post(void *context) {
   }
 }
 
-TaskSpec periodic(const char *name, void *context, uint32_t period_us,
+TaskSpec periodic(const char *name, void *context, uint32_t periodUs,
                   Priority priority) {
   TaskSpec spec;
   spec.name = name;
-  spec.run = run_counted;
+  spec.run = runCounted;
   spec.context = context;
   spec.release = Release::Periodic;
   spec.priority = priority;
-  spec.period_us = period_us;
+  spec.periodUs = periodUs;
   return spec;
 }
 
-void the_task_set_is_frozen_by_start_and_full_at_its_capacity() {
-  Core no_port;
+void theTaskSetIsFrozenByStartAndFullAtItsCapacity() {
+  Core noPort;
   Counted counted;
   TaskSpec spec = periodic("a", &counted, 1000, Priority::Normal);
-  check(no_port.add(spec) == AddError::NoPort, "a core without a port takes none");
+  check(noPort.add(spec) == AddError::NoPort, "a core without a port takes none");
 
   Core core;
   Clock clock;
@@ -120,9 +120,9 @@ void the_task_set_is_frozen_by_start_and_full_at_its_capacity() {
   invalid.run = nullptr;
   check(core.add(invalid) == AddError::Invalid, "a task without a callback is refused");
 
-  TaskSpec no_period = spec;
-  no_period.period_us = 0;
-  check(core.add(no_period) == AddError::Invalid, "a periodic task without a period is refused");
+  TaskSpec noPeriod = spec;
+  noPeriod.periodUs = 0;
+  check(core.add(noPeriod) == AddError::Invalid, "a periodic task without a period is refused");
 
   for (std::size_t i = 0; i < ThetaGP::Sched::kMaxTasks; ++i) {
     const AddError added = core.add(spec);
@@ -133,7 +133,7 @@ void the_task_set_is_frozen_by_start_and_full_at_its_capacity() {
   check(core.add(spec) == AddError::Started, "a started set takes no more");
 }
 
-void a_periodic_task_runs_once_per_release_in_index_order() {
+void aPeriodicTaskRunsOncePerReleaseInIndexOrder() {
   Core core;
   Clock clock;
   attach(core, clock);
@@ -149,57 +149,61 @@ void a_periodic_task_runs_once_per_release_in_index_order() {
   check(low == 0 && high == 1, "the indices follow the order they were added");
   check(core.start(), "the set starts");
 
-  check(core.run_once() && slow.runs == 1 && fast.runs == 0,
+  check(core.runOnce() && slow.runs == 1 && fast.runs == 0,
         "the lower index goes first at one priority");
-  check(core.run_once() && fast.runs == 1, "the other task of the same release follows");
-  check(!core.run_once(), "nothing else is due");
+  check(core.runOnce() && fast.runs == 1, "the other task of the same release follows");
+  check(!core.runOnce(), "nothing else is due");
 
   clock.now = 1000;
-  check(core.run_once() && fast.runs == 2 && slow.runs == 1, "only the faster task is due at 1 ms");
+  check(core.runOnce() && fast.runs == 2 && slow.runs == 1, "only the faster task is due at 1 ms");
   clock.now = 2000;
-  check(core.run_once() && slow.runs == 2, "the slower task is due at 2 ms");
+  check(core.runOnce() && slow.runs == 2, "the slower task is due at 2 ms");
 }
 
-void a_higher_priority_task_is_chosen_first() {
+void aHigherPriorityTaskIsChosenFirst() {
   Core core;
   Clock clock;
   attach(core, clock);
 
   Counted low;
   Counted high;
-  check(core.add(periodic("low", &low, 1000, Priority::Low)) == AddError::None, "the low task is added");
-  check(core.add(periodic("high", &high, 1000, Priority::High)) == AddError::None, "the high task is added");
+  check(core.add(periodic("low", &low, 1000, Priority::Low)) ==
+            AddError::None,
+        "the low task is added");
+  check(core.add(periodic("high", &high, 1000, Priority::High)) ==
+            AddError::None,
+        "the high task is added");
   check(core.start(), "the set starts");
 
-  check(core.run_once() && high.runs == 1 && low.runs == 0, "the higher priority goes first");
-  check(core.run_once() && low.runs == 1, "the lower priority follows in the same release");
+  check(core.runOnce() && high.runs == 1 && low.runs == 0, "the higher priority goes first");
+  check(core.runOnce() && low.runs == 1, "the lower priority follows in the same release");
 }
 
-void a_late_start_and_a_long_run_are_recorded() {
+void aLateStartAndALongRunAreRecorded() {
   Core core;
   Clock clock;
   attach(core, clock);
 
   Counted counted;
   counted.clock = &clock;
-  counted.advance_us = 600;
+  counted.advanceUs = 600;
   TaskSpec spec = periodic("late", &counted, 1000, Priority::Normal);
-  spec.deadline_us = 500;
-  spec.budget_us = 100;
+  spec.deadlineUs = 500;
+  spec.budgetUs = 100;
   TaskIndex index = kInvalidTask;
   check(core.add(spec, &index) == AddError::None, "the task is added");
   check(core.start(), "the set starts");
-  check(core.run_once(), "the task runs");
+  check(core.runOnce(), "the task runs");
 
   const ThetaGP::Sched::TaskStats *stats = core.stats(index);
   check(stats != nullptr && stats->runs == 1, "the run is counted");
-  check(stats != nullptr && stats->deadline_misses == 1, "a run past its deadline is counted");
-  check(stats != nullptr && stats->budget_overruns == 1, "a run past its budget is counted");
-  check(stats != nullptr && stats->last_runtime_us == 600, "the run's length is recorded");
+  check(stats != nullptr && stats->deadlineMisses == 1, "a run past its deadline is counted");
+  check(stats != nullptr && stats->budgetOverruns == 1, "a run past its budget is counted");
+  check(stats != nullptr && stats->lastRuntimeUs == 600, "the run's length is recorded");
   check(core.stats(9) == nullptr, "an index the set does not carry has no statistics");
 }
 
-void posts_coalesce_unless_a_count_is_asked_for() {
+void postsCoalesceUnlessACountIsAskedFor() {
   Core core;
   Clock clock;
   attach(core, clock);
@@ -207,16 +211,16 @@ void posts_coalesce_unless_a_count_is_asked_for() {
   Counted coalesced;
   TaskSpec spec = periodic("event", &coalesced, 0, Priority::Normal);
   spec.release = Release::Event;
-  spec.max_pending = 0;
+  spec.maxPending = 0;
   TaskIndex index = kInvalidTask;
   check(core.add(spec, &index) == AddError::None, "a coalescing event task is added");
   check(core.start(), "the set starts");
 
   check(core.post(index), "the first post is taken");
   check(!core.post(index), "the next post is folded into it");
-  check(core.stats(index)->missed_releases == 1, "the folded post is counted");
-  check(core.run_once() && coalesced.runs == 1, "one run covers the folded posts");
-  check(!core.run_once(), "nothing is left pending");
+  check(core.stats(index)->missedReleases == 1, "the folded post is counted");
+  check(core.runOnce() && coalesced.runs == 1, "one run covers the folded posts");
+  check(!core.runOnce(), "nothing is left pending");
 
   Core counted;
   Clock clock2;
@@ -224,22 +228,22 @@ void posts_coalesce_unless_a_count_is_asked_for() {
   Counted bounded;
   TaskSpec many = periodic("event", &bounded, 0, Priority::Normal);
   many.release = Release::Event;
-  many.max_pending = 3;
-  TaskIndex bounded_index = kInvalidTask;
-  check(counted.add(many, &bounded_index) == AddError::None, "a counting event task is added");
+  many.maxPending = 3;
+  TaskIndex boundedIndex = kInvalidTask;
+  check(counted.add(many, &boundedIndex) == AddError::None, "a counting event task is added");
   check(counted.start(), "the set starts");
-  check(counted.post(bounded_index) && counted.post(bounded_index) && counted.post(bounded_index),
+  check(counted.post(boundedIndex) && counted.post(boundedIndex) && counted.post(boundedIndex),
         "three posts are taken");
-  check(!counted.post(bounded_index), "the fourth post overflows");
-  check(counted.stats(bounded_index)->missed_releases == 1, "the overflow is counted");
+  check(!counted.post(boundedIndex), "the fourth post overflows");
+  check(counted.stats(boundedIndex)->missedReleases == 1, "the overflow is counted");
   int runs = 0;
-  while (counted.run_once()) {
+  while (counted.runOnce()) {
     ++runs;
   }
   check(runs == 3 && bounded.runs == 3, "each taken post runs once");
 }
 
-void a_post_inside_a_callback_is_kept() {
+void aPostInsideACallbackIsKept() {
   Core core;
   Clock clock;
   attach(core, clock);
@@ -247,34 +251,34 @@ void a_post_inside_a_callback_is_kept() {
   SelfPost self;
   self.core = &core;
   TaskSpec spec = periodic("self", &self, 0, Priority::Normal);
-  spec.run = run_self_post;
+  spec.run = runSelfPost;
   spec.release = Release::Event;
-  spec.max_pending = 0;
+  spec.maxPending = 0;
   TaskIndex index = kInvalidTask;
   check(core.add(spec, &index) == AddError::None, "the task is added");
   self.self = index;
   check(core.start(), "the set starts");
 
   check(core.post(index), "the first post is taken");
-  check(core.run_once() && self.runs == 1, "the task runs once");
-  check(core.run_once() && self.runs == 2, "the post made inside the run is still pending");
-  check(!core.run_once(), "and only once");
+  check(core.runOnce() && self.runs == 1, "the task runs once");
+  check(core.runOnce() && self.runs == 2, "the post made inside the run is still pending");
+  check(!core.runOnce(), "and only once");
 }
 
-void a_missed_period_keeps_one_release_or_upto_a_count() {
+void aMissedPeriodKeepsOneReleaseOrUptoACount() {
   Core core;
   Clock clock;
   attach(core, clock);
 
   Counted skipped;
-  TaskIndex skip_index = kInvalidTask;
-  check(core.add(periodic("skip", &skipped, 1000, Priority::Normal), &skip_index) == AddError::None,
+  TaskIndex skipIndex = kInvalidTask;
+  check(core.add(periodic("skip", &skipped, 1000, Priority::Normal), &skipIndex) == AddError::None,
         "the skipping task is added");
   check(core.start(), "the set starts");
-  check(core.run_once(), "the first release runs");
+  check(core.runOnce(), "the first release runs");
   clock.now = 5000;
-  check(core.run_once() && skipped.runs == 2, "a long gap runs once");
-  check(core.stats(skip_index)->missed_releases == 4, "the four releases it skipped are counted");
+  check(core.runOnce() && skipped.runs == 2, "a long gap runs once");
+  check(core.stats(skipIndex)->missedReleases == 4, "the four releases it skipped are counted");
 
   Core catching;
   Clock clock2;
@@ -282,38 +286,40 @@ void a_missed_period_keeps_one_release_or_upto_a_count() {
   Counted caught;
   TaskSpec spec = periodic("catch", &caught, 1000, Priority::Normal);
   spec.miss = MissPolicy::CatchUp;
-  spec.max_pending = 3;
-  TaskIndex catch_index = kInvalidTask;
-  check(catching.add(spec, &catch_index) == AddError::None, "the catching task is added");
+  spec.maxPending = 3;
+  TaskIndex catchIndex = kInvalidTask;
+  check(catching.add(spec, &catchIndex) == AddError::None, "the catching task is added");
   check(catching.start(), "the set starts");
-  check(catching.run_once(), "the first release runs");
+  check(catching.runOnce(), "the first release runs");
   clock2.now = 5000;
   int runs = 0;
-  while (catching.run_once()) {
+  while (catching.runOnce()) {
     ++runs;
   }
   check(runs == 3 && caught.runs == 4, "the backlog runs up to its count");
-  check(catching.stats(catch_index)->missed_releases == 2, "what the count does not hold is missed");
+  check(catching.stats(catchIndex)->missedReleases == 2, "what the count does not hold is missed");
 }
 
-void the_earliest_release_is_the_wake_time() {
+void theEarliestReleaseIsTheWakeTime() {
   Core core;
   Clock clock;
   attach(core, clock);
 
   Counted counted;
-  check(core.add(periodic("a", &counted, 1000, Priority::Normal)) == AddError::None, "the task is added");
+  check(core.add(periodic("a", &counted, 1000, Priority::Normal)) ==
+            AddError::None,
+        "the task is added");
   check(core.start(), "the set starts");
   check(core.ready(), "the first release is already due");
-  check(!core.next_wake_us(nullptr), "a due release is not a wake time");
+  check(!core.nextWakeUs(nullptr), "a due release is not a wake time");
 
-  check(core.run_once(), "the release runs");
+  check(core.runOnce(), "the release runs");
   check(!core.ready(), "nothing is due now");
   uint32_t wake = 0;
-  check(core.next_wake_us(&wake) && wake == 1000, "the next release is the wake time");
+  check(core.nextWakeUs(&wake) && wake == 1000, "the next release is the wake time");
 }
 
-void releases_are_compared_across_the_counter_wrap() {
+void releasesAreComparedAcrossTheCounterWrap() {
   Core core;
   Clock clock;
   clock.now = 0xFFFFFF00u;
@@ -323,46 +329,46 @@ void releases_are_compared_across_the_counter_wrap() {
   check(core.add(periodic("wrap", &counted, 0x200, Priority::Normal)) == AddError::None,
         "the task is added");
   check(core.start(), "the set starts");
-  check(core.run_once() && counted.runs == 1, "the first release runs before the wrap");
+  check(core.runOnce() && counted.runs == 1, "the first release runs before the wrap");
 
   clock.now = 0x00000100u;
-  check(core.run_once() && counted.runs == 2, "the release after the wrap is due");
+  check(core.runOnce() && counted.runs == 2, "the release after the wrap is due");
 
   clock.now = 0x00000300u;
-  check(core.run_once() && counted.runs == 3, "the next release is due too");
+  check(core.runOnce() && counted.runs == 3, "the next release is due too");
 }
 
 struct IdleHook {
   Clock clock;
   Core *core = nullptr;
   TaskIndex event = kInvalidTask;
-  bool post_once = false;
+  bool postOnce = false;
   bool fired = false;
 };
 
-uint32_t hook_now(void *context) {
+uint32_t hookNow(void *context) {
   return static_cast<IdleHook *>(context)->clock.now;
 }
 
-void idle_until(void *context, uint32_t deadline_us) {
+void idleUntil(void *context, uint32_t deadlineUs) {
   IdleHook *hook = static_cast<IdleHook *>(context);
-  if (hook->post_once && !hook->fired) {
+  if (hook->postOnce && !hook->fired) {
     hook->fired = true;
     hook->core->post(hook->event);
     return;
   }
-  hook->clock.now = deadline_us;
+  hook->clock.now = deadlineUs;
 }
 
-void the_pump_sleeps_to_the_earliest_release() {
+void thePumpSleepsToTheEarliestRelease() {
   Core core;
   IdleHook hook;
 
   Port port;
-  port.now_us = hook_now;
-  port.idle_until_us = idle_until;
+  port.nowUs = hookNow;
+  port.idleUntilUs = idleUntil;
   port.context = &hook;
-  check(core.set_port(port), "the port is set");
+  check(core.setPort(port), "the port is set");
 
   Counted counted;
   check(core.add(periodic("a", &counted, 5000, Priority::Normal)) == AddError::None,
@@ -374,27 +380,27 @@ void the_pump_sleeps_to_the_earliest_release() {
   check(core.pump() && counted.runs == 2, "the release the sleep reached runs");
 }
 
-void a_post_made_during_the_sleep_is_not_lost() {
+void aPostMadeDuringTheSleepIsNotLost() {
   Core core;
   IdleHook hook;
   hook.core = &core;
-  hook.post_once = true;
+  hook.postOnce = true;
 
   Port port;
-  port.now_us = hook_now;
-  port.idle_until_us = idle_until;
+  port.nowUs = hookNow;
+  port.idleUntilUs = idleUntil;
   port.context = &hook;
-  check(core.set_port(port), "the port is set");
+  check(core.setPort(port), "the port is set");
 
   Counted counted;
   Counted event;
-  TaskIndex event_index = kInvalidTask;
+  TaskIndex eventIndex = kInvalidTask;
   check(core.add(periodic("tick", &counted, 10000, Priority::Normal)) == AddError::None,
         "the periodic task is added");
   TaskSpec spec = periodic("event", &event, 0, Priority::Normal);
   spec.release = Release::Event;
-  check(core.add(spec, &event_index) == AddError::None, "the event task is added");
-  hook.event = event_index;
+  check(core.add(spec, &eventIndex) == AddError::None, "the event task is added");
+  hook.event = eventIndex;
   check(core.start(), "the set starts");
 
   check(core.pump() && counted.runs == 1, "the periodic task runs before the sleep");
@@ -402,36 +408,36 @@ void a_post_made_during_the_sleep_is_not_lost() {
   check(core.pump() && event.runs == 1, "the post made during the sleep runs next");
 }
 
-void a_task_waits_while_a_higher_release_is_too_near() {
+void aTaskWaitsWhileAHigherReleaseIsTooNear() {
   Core core;
   Clock clock;
   attach(core, clock);
 
   Counted high;
   Counted low;
-  TaskIndex high_index = kInvalidTask;
-  TaskIndex low_index = kInvalidTask;
-  check(core.add(periodic("high", &high, 1000, Priority::High), &high_index) ==
+  TaskIndex highIndex = kInvalidTask;
+  TaskIndex lowIndex = kInvalidTask;
+  check(core.add(periodic("high", &high, 1000, Priority::High), &highIndex) ==
             AddError::None,
         "the high task is added");
   TaskSpec spec = periodic("low", &low, 100, Priority::Low);
-  spec.budget_us = 200;
-  check(core.add(spec, &low_index) == AddError::None, "the budgeted task is added");
+  spec.budgetUs = 200;
+  check(core.add(spec, &lowIndex) == AddError::None, "the budgeted task is added");
   check(core.start(), "the set starts");
 
-  check(core.run_once() && high.runs == 1, "the high task runs first");
-  check(core.run_once() && low.runs == 1, "the low task runs while the window is wide");
+  check(core.runOnce() && high.runs == 1, "the high task runs first");
+  check(core.runOnce() && low.runs == 1, "the low task runs while the window is wide");
 
   clock.now = 900;
-  check(!core.run_once(), "the low task waits when the window is narrow");
-  check(core.stats(low_index)->deferrals == 1, "the hold is counted");
+  check(!core.runOnce(), "the low task waits when the window is narrow");
+  check(core.stats(lowIndex)->deferrals == 1, "the hold is counted");
 
   clock.now = 1000;
-  check(core.run_once() && high.runs == 2, "the high task runs at its release");
-  check(core.run_once() && low.runs == 2, "and the low task follows it");
+  check(core.runOnce() && high.runs == 2, "the high task runs at its release");
+  check(core.runOnce() && low.runs == 2, "and the low task follows it");
 }
 
-void a_skipped_backlog_keeps_the_newest_release() {
+void aSkippedBacklogKeepsTheNewestRelease() {
   Core core;
   Clock clock;
   attach(core, clock);
@@ -442,16 +448,16 @@ void a_skipped_backlog_keeps_the_newest_release() {
             AddError::None,
         "the task is added");
   check(core.start(), "the set starts");
-  check(core.run_once(), "the first release runs");
+  check(core.runOnce(), "the first release runs");
 
   clock.now = 5000;
-  check(core.run_once(), "the backlog runs once");
-  check(core.stats(index)->max_start_latency_us == 0,
+  check(core.runOnce(), "the backlog runs once");
+  check(core.stats(index)->maxStartLatencyUs == 0,
         "the run is measured from the newest release");
-  check(core.stats(index)->missed_releases == 4, "the four it skipped are counted");
+  check(core.stats(index)->missedReleases == 4, "the four it skipped are counted");
 }
 
-void a_caught_up_backlog_keeps_its_release_times() {
+void aCaughtUpBacklogKeepsItsReleaseTimes() {
   Core core;
   Clock clock;
   attach(core, clock);
@@ -459,21 +465,21 @@ void a_caught_up_backlog_keeps_its_release_times() {
   Counted counted;
   TaskSpec spec = periodic("catch", &counted, 1000, Priority::Normal);
   spec.miss = MissPolicy::CatchUp;
-  spec.max_pending = 3;
+  spec.maxPending = 3;
   TaskIndex index = kInvalidTask;
   check(core.add(spec, &index) == AddError::None, "the task is added");
   check(core.start(), "the set starts");
-  check(core.run_once(), "the first release runs");
+  check(core.runOnce(), "the first release runs");
 
   clock.now = 5000;
   for (int i = 0; i < 3; ++i) {
-    check(core.run_once(), "a backlogged release runs");
+    check(core.runOnce(), "a backlogged release runs");
   }
-  check(core.stats(index)->max_start_latency_us == 2000,
+  check(core.stats(index)->maxStartLatencyUs == 2000,
         "the oldest kept release sets the longest wait");
 }
 
-void a_large_backlog_replaces_already_pending_releases() {
+void aLargeBacklogReplacesAlreadyPendingReleases() {
   for (MissPolicy policy : {MissPolicy::Skip, MissPolicy::CatchUp}) {
     Core core;
     Clock clock;
@@ -481,102 +487,103 @@ void a_large_backlog_replaces_already_pending_releases() {
     Counted high;
     Counted low;
     TaskSpec blocker = periodic("high", &high, 1000000, Priority::High);
-    blocker.phase_us = 0;
+    blocker.phaseUs = 0;
     TaskSpec spec = periodic("low", &low, 1000, Priority::Low);
     spec.miss = policy;
-    spec.max_pending = 3;
+    spec.maxPending = 3;
     TaskIndex index = kInvalidTask;
     check(core.add(blocker) == AddError::None, "the blocker is added");
     check(core.add(spec, &index) == AddError::None, "the backlog task is added");
-    check(core.start() && core.run_once(), "the first release remains pending");
+    check(core.start() && core.runOnce(), "the first release remains pending");
     clock.now = 300000;
-    check(core.run_once(), "the backlog runs");
+    check(core.runOnce(), "the backlog runs");
     const uint32_t expected = policy == MissPolicy::Skip ? 0 : 2000;
-    check(core.stats(index)->max_start_latency_us == expected,
+    check(core.stats(index)->maxStartLatencyUs == expected,
           "the newest releases retain their timestamps after a large gap");
   }
 }
 
 struct AdvancingClock {
   uint32_t now = 0;
-  bool advance_on_enter = false;
+  bool advanceOnEnter = false;
 };
 
-uint32_t advancing_now(void *context) {
+uint32_t advancingNow(void *context) {
   return static_cast<AdvancingClock *>(context)->now;
 }
 
-void advance_on_enter(void *context) {
+void advanceOnEnter(void *context) {
   AdvancingClock *clock = static_cast<AdvancingClock *>(context);
-  if (clock->advance_on_enter) {
+  if (clock->advanceOnEnter) {
     clock->now = 1000;
   }
 }
 
-void exit_noop(void *) {}
+void exitNoop(void *) {}
 
-void a_release_due_during_selection_blocks_a_budgeted_task() {
+void aReleaseDueDuringSelectionBlocksABudgetedTask() {
   Core core;
   AdvancingClock clock;
   Port port;
-  port.now_us = advancing_now;
-  port.enter_critical = advance_on_enter;
-  port.exit_critical = exit_noop;
+  port.nowUs = advancingNow;
+  port.enterCritical = advanceOnEnter;
+  port.exitCritical = exitNoop;
   port.context = &clock;
-  check(core.set_port(port), "the advancing clock is set");
+  check(core.setPort(port), "the advancing clock is set");
   Counted high;
   Counted low;
-  TaskSpec high_spec = periodic("high", &high, 1000, Priority::High);
-  high_spec.phase_us = 1000;
-  TaskSpec low_spec = periodic("low", &low, 1000, Priority::Low);
-  low_spec.budget_us = 10;
-  check(core.add(high_spec) == AddError::None && core.add(low_spec) == AddError::None,
+  TaskSpec highSpec = periodic("high", &high, 1000, Priority::High);
+  highSpec.phaseUs = 1000;
+  TaskSpec lowSpec = periodic("low", &low, 1000, Priority::Low);
+  lowSpec.budgetUs = 10;
+  check(core.add(highSpec) == AddError::None && core.add(lowSpec) == AddError::None,
         "the tasks are added");
   check(core.start(), "the set starts");
-  clock.advance_on_enter = true;
-  check(!core.run_once() && low.runs == 0, "a newly due higher release blocks the low task");
-  clock.advance_on_enter = false;
-  check(core.run_once() && high.runs == 1, "the higher task runs next");
+  clock.advanceOnEnter = true;
+  check(!core.runOnce() && low.runs == 0, "a newly due higher release blocks the low task");
+  clock.advanceOnEnter = false;
+  check(core.runOnce() && high.runs == 1, "the higher task runs next");
 }
 
-void interval_total_survives_32_bit_overflow() {
+void intervalTotalSurvives32BitOverflow() {
   Core core;
   Clock clock;
   attach(core, clock);
   Counted counted;
   TaskIndex index = kInvalidTask;
-  check(core.add(periodic("slow", &counted, 1000000000, Priority::Normal), &index) == AddError::None,
+  check(core.add(periodic("slow", &counted, 1000000000, Priority::Normal),
+                 &index) == AddError::None,
         "the slow task is added");
-  check(core.start() && core.run_once(), "the first release runs");
+  check(core.start() && core.runOnce(), "the first release runs");
   for (int i = 0; i < 5; ++i) {
     clock.now += 1000000000;
-    check(core.run_once(), "the next release runs");
+    check(core.runOnce(), "the next release runs");
   }
-  check(core.stats(index)->sum_interval_us == 5000000000ULL,
+  check(core.stats(index)->sumIntervalUs == 5000000000ULL,
         "the interval total exceeds 32 bits");
 }
 
 } // namespace
 
 int main() {
-  the_task_set_is_frozen_by_start_and_full_at_its_capacity();
-  a_periodic_task_runs_once_per_release_in_index_order();
-  a_higher_priority_task_is_chosen_first();
-  a_late_start_and_a_long_run_are_recorded();
-  posts_coalesce_unless_a_count_is_asked_for();
-  a_post_inside_a_callback_is_kept();
-  a_missed_period_keeps_one_release_or_upto_a_count();
-  the_earliest_release_is_the_wake_time();
-  releases_are_compared_across_the_counter_wrap();
-  the_pump_sleeps_to_the_earliest_release();
-  a_post_made_during_the_sleep_is_not_lost();
-  a_task_waits_while_a_higher_release_is_too_near();
-  a_skipped_backlog_keeps_the_newest_release();
-  a_caught_up_backlog_keeps_its_release_times();
-  a_large_backlog_replaces_already_pending_releases();
-  a_release_due_during_selection_blocks_a_budgeted_task();
-  interval_total_survives_32_bit_overflow();
+  theTaskSetIsFrozenByStartAndFullAtItsCapacity();
+  aPeriodicTaskRunsOncePerReleaseInIndexOrder();
+  aHigherPriorityTaskIsChosenFirst();
+  aLateStartAndALongRunAreRecorded();
+  postsCoalesceUnlessACountIsAskedFor();
+  aPostInsideACallbackIsKept();
+  aMissedPeriodKeepsOneReleaseOrUptoACount();
+  theEarliestReleaseIsTheWakeTime();
+  releasesAreComparedAcrossTheCounterWrap();
+  thePumpSleepsToTheEarliestRelease();
+  aPostMadeDuringTheSleepIsNotLost();
+  aTaskWaitsWhileAHigherReleaseIsTooNear();
+  aSkippedBacklogKeepsTheNewestRelease();
+  aCaughtUpBacklogKeepsItsReleaseTimes();
+  aLargeBacklogReplacesAlreadyPendingReleases();
+  aReleaseDueDuringSelectionBlocksABudgetedTask();
+  intervalTotalSurvives32BitOverflow();
 
-  std::printf("%d checks, %d failed\n", g_ran, g_failed);
-  return g_failed == 0 ? 0 : 1;
+  std::printf("%d checks, %d failed\n", gRan, gFailed);
+  return gFailed == 0 ? 0 : 1;
 }

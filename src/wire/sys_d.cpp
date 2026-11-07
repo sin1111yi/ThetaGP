@@ -102,19 +102,19 @@ void SysDomain::taskInfo(const ThetaGP_Request &request, ThetaGP_Reply &reply) {
     ok.tid = tid;
     copyText(ok.name, sizeof ok.name, info->name);
     copyText(ok.sub, sizeof ok.sub, info->sub);
-    ok.desired_us = info->desired_period_us;
-    ok.avg_cycle_us = info->avg_cycle_us;
+    ok.desired_us = info->desiredPeriodUs;
+    ok.avg_cycle_us = info->avgCycleUs;
     ok.actual_hz =
-        (info->avg_cycle_us > 0) ? (1000000U / info->avg_cycle_us) : 0;
-    ok.max_exec_us = info->max_exec_us;
-    ok.avg_exec_us = info->avg_exec_us;
-    ok.total_exec_us = info->total_exec_us;
-    ok.avg_delta_us = info->avg_delta_us;
+        (info->avgCycleUs > 0) ? (1000000U / info->avgCycleUs) : 0;
+    ok.max_exec_us = info->maxExecUs;
+    ok.avg_exec_us = info->avgExecUs;
+    ok.total_exec_us = info->totalExecUs;
+    ok.avg_delta_us = info->avgDeltaUs;
 #if THETAGP_CFG_TASK_COUNTERS
     ok.has_run_count = true;
-    ok.run_count = info->run_count;
+    ok.run_count = info->runCount;
     ok.has_late_count = true;
-    ok.late_count = info->late_count;
+    ok.late_count = info->lateCount;
 #endif
 }
 

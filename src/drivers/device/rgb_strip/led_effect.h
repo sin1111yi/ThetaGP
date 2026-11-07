@@ -58,6 +58,9 @@ Rgb desaturate(Rgb colour, uint8_t saturation);
 // LED is taken down to `saturation`'s distance from white.
 void render(Rgb *out, uint8_t ledCount, uint16_t phaseOffset, uint8_t saturation);
 
+// Renders one of the FRAME_COUNT frames into out, whose first ledCount
+// elements are filled: the same wheel as render(), at the frame the
+// animation is showing.
 void renderFrame(Rgb *out, uint8_t ledCount, uint8_t frame,
                  uint16_t phaseOffset, uint8_t saturation);
 

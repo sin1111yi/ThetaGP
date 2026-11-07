@@ -27,6 +27,6 @@ namespace ThetaGP::Sched {
 
 // The port a core runs on in the firmware: the system timer's microseconds and
 // the interrupt mask a claim is bracketed with.
-Port system_port();
+Port systemPort();
 
 } // namespace ThetaGP::Sched

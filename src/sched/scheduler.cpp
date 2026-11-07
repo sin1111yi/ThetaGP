@@ -27,7 +27,7 @@
 
 namespace ThetaGP::Sched {
 
-bool Scheduler::init() { return _core.set_port(system_port()); }
+bool Scheduler::init() { return _core.setPort(systemPort()); }
 
 bool Scheduler::add(const TaskSpec &spec, const char *sub) {
   TaskIndex index = kInvalidTask;
@@ -40,8 +40,8 @@ bool Scheduler::add(const TaskSpec &spec, const char *sub) {
 
 bool Scheduler::addPeriodic(const char *name, const char *sub,
                             void (*run)(void *), void *context,
-                            uint32_t period_us, Priority priority,
-                            uint32_t deadline_us, uint32_t budget_us,
+                            uint32_t periodUs, Priority priority,
+                            uint32_t deadlineUs, uint32_t budgetUs,
                             MissPolicy miss) {
   TaskSpec spec;
   spec.name = name;
@@ -50,22 +50,22 @@ bool Scheduler::addPeriodic(const char *name, const char *sub,
   spec.release = Release::Periodic;
   spec.priority = priority;
   spec.miss = miss;
-  spec.period_us = period_us;
-  spec.deadline_us = deadline_us;
-  spec.budget_us = budget_us;
+  spec.periodUs = periodUs;
+  spec.deadlineUs = deadlineUs;
+  spec.budgetUs = budgetUs;
   return add(spec, sub);
 }
 
 bool Scheduler::addEvent(const char *name, const char *sub, void (*run)(void *),
                          void *context, Priority priority,
-                         uint8_t max_pending) {
+                         uint8_t maxPending) {
   TaskSpec spec;
   spec.name = name;
   spec.run = run;
   spec.context = context;
   spec.release = Release::Event;
   spec.priority = priority;
-  spec.max_pending = max_pending;
+  spec.maxPending = maxPending;
   return add(spec, sub);
 }
 
@@ -73,7 +73,7 @@ bool Scheduler::start() {
   if (!_core.start()) {
     return false;
   }
-  _last_load_us = _core.now_us();
+  _lastLoadUs = _core.nowUs();
   return true;
 }
 
@@ -86,10 +86,10 @@ FAST_CODE void Scheduler::run() {
 }
 
 uint16_t Scheduler::loadPercent() {
-  const uint32_t now = _core.now_us();
-  const uint32_t busy = _core.take_busy_us();
-  const uint32_t delta = now - _last_load_us;
-  _last_load_us = now;
+  const uint32_t now = _core.nowUs();
+  const uint32_t busy = _core.takeBusyUs();
+  const uint32_t delta = now - _lastLoadUs;
+  _lastLoadUs = now;
   if (delta == 0) {
     return 0;
   }
@@ -107,21 +107,21 @@ const TaskInfo *Scheduler::taskInfo(TaskIndex task) const {
   TaskInfo &info = _reported;
   info.name = spec->name;
   info.sub = _subs[static_cast<std::size_t>(task)];
-  info.desired_period_us =
-      spec->release == Release::Periodic ? spec->period_us : 0;
-  info.max_exec_us = stats->max_runtime_us;
-  info.total_exec_us = stats->total_runtime_us;
-  info.avg_exec_us =
-      stats->runs == 0 ? 0 : stats->total_runtime_us / stats->runs;
-  const uint32_t elapsed = _core.now_us() - _core.started_us();
-  info.avg_delta_us = stats->runs == 0 ? 0 : elapsed / stats->runs;
+  info.desiredPeriodUs =
+      spec->release == Release::Periodic ? spec->periodUs : 0;
+  info.maxExecUs = stats->maxRuntimeUs;
+  info.totalExecUs = stats->totalRuntimeUs;
+  info.avgExecUs =
+      stats->runs == 0 ? 0 : stats->totalRuntimeUs / stats->runs;
+  const uint32_t elapsed = _core.nowUs() - _core.startedUs();
+  info.avgDeltaUs = stats->runs == 0 ? 0 : elapsed / stats->runs;
   // The measured spacing between starts, so a task that is blocked or folded
   // reports the rate it actually ran at.
-  info.avg_cycle_us = stats->intervals == 0
-                          ? info.desired_period_us
-                          : static_cast<uint32_t>(stats->sum_interval_us / stats->intervals);
-  info.run_count = stats->runs;
-  info.late_count = stats->deadline_misses;
+  info.avgCycleUs = stats->intervals == 0
+                          ? info.desiredPeriodUs
+                          : static_cast<uint32_t>(stats->sumIntervalUs / stats->intervals);
+  info.runCount = stats->runs;
+  info.lateCount = stats->deadlineMisses;
   return &info;
 }
 

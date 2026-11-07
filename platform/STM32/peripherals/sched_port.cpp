@@ -62,12 +62,12 @@ void portEnter(void *) {
 
 void portExit(void *) { __set_PRIMASK(s_savedPrimask); }
 
-void portIdle(void *, uint32_t deadline_us) {
+void portIdle(void *, uint32_t deadlineUs) {
   // Called with the claim's mask held, so only the free-running clock is read.
   // WFI wakes on a pending interrupt even with PRIMASK set; the handler runs
   // when the claim releases it.
   const uint32_t now = portNowIsr(nullptr);
-  const int32_t delta = static_cast<int32_t>(deadline_us - now);
+  const int32_t delta = static_cast<int32_t>(deadlineUs - now);
   if (delta <= 0) {
     return;
   }
@@ -83,13 +83,13 @@ void portIdle(void *, uint32_t deadline_us) {
 
 } // namespace
 
-Port system_port() {
+Port systemPort() {
   Port port;
-  port.now_us = portNowUs;
-  port.now_us_isr = portNowIsr;
-  port.enter_critical = portEnter;
-  port.exit_critical = portExit;
-  port.idle_until_us = portIdle;
+  port.nowUs = portNowUs;
+  port.nowUsIsr = portNowIsr;
+  port.enterCritical = portEnter;
+  port.exitCritical = portExit;
+  port.idleUntilUs = portIdle;
   return port;
 }
 

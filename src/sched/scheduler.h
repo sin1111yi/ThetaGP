@@ -36,20 +36,20 @@ constexpr uint32_t periodUs(uint32_t hz) { return 1000000U / hz; }
 struct TaskInfo {
   const char *name = nullptr;
   const char *sub = nullptr;
-  uint32_t desired_period_us = 0;
-  uint32_t avg_cycle_us = 0;
-  uint32_t max_exec_us = 0;
-  uint32_t avg_exec_us = 0;
-  uint32_t total_exec_us = 0;
-  uint32_t avg_delta_us = 0;
-  uint32_t run_count = 0;
-  uint32_t late_count = 0;
+  uint32_t desiredPeriodUs = 0;
+  uint32_t avgCycleUs = 0;
+  uint32_t maxExecUs = 0;
+  uint32_t avgExecUs = 0;
+  uint32_t totalExecUs = 0;
+  uint32_t avgDeltaUs = 0;
+  uint32_t runCount = 0;
+  uint32_t lateCount = 0;
 };
 
 // The scheduler the firmware runs on: a core over the board's clock, with the
 // task set registered before start() and frozen from there.
 class Scheduler {
- public:
+public:
   static Scheduler &getInstance() {
     static Scheduler instance;
     return instance;
@@ -61,11 +61,11 @@ class Scheduler {
 
   bool add(const TaskSpec &spec, const char *sub = nullptr);
   bool addPeriodic(const char *name, const char *sub, void (*run)(void *),
-                   void *context, uint32_t period_us, Priority priority,
-                   uint32_t deadline_us = 0, uint32_t budget_us = 0,
+                   void *context, uint32_t periodUs, Priority priority,
+                   uint32_t deadlineUs = 0, uint32_t budgetUs = 0,
                    MissPolicy miss = MissPolicy::Skip);
   bool addEvent(const char *name, const char *sub, void (*run)(void *),
-                void *context, Priority priority, uint8_t max_pending = 1);
+                void *context, Priority priority, uint8_t maxPending = 1);
 
   // Places the first release of every periodic task and freezes the set.
   bool start();
@@ -79,15 +79,15 @@ class Scheduler {
   // percentage. The window is the caller's polling interval.
   uint16_t loadPercent();
 
-  std::size_t taskCount() const { return _core.task_count(); }
+  std::size_t taskCount() const { return _core.taskCount(); }
   const TaskInfo *taskInfo(TaskIndex task) const;
 
- private:
+private:
   Scheduler() = default;
 
   Core _core = {};
   const char *_subs[kMaxTasks] = {};
-  uint32_t _last_load_us = 0;
+  uint32_t _lastLoadUs = 0;
   mutable TaskInfo _reported = {};
 };
 
