@@ -10,7 +10,7 @@
 #include "wire/frame.h"
 #include "conf/ThetaGP_Config.h"
 #include "gamepad/profile/profile_store.h"
-#include "task_manager.h"
+#include "sched/scheduler.h"
 #include "utils/log/log.h"
 #include "utils/mem_info.h"
 
@@ -89,7 +89,8 @@ void SysDomain::enterDfu(ThetaGP_Reply &reply) {
 
 void SysDomain::taskInfo(const ThetaGP_Request &request, ThetaGP_Reply &reply) {
     const int32_t tid = request.kind.sys_get_task_info.tid;
-    const Gamepad::TaskInfo *info = Gamepad::TaskManager::getTaskInfo(tid);
+    const Sched::TaskInfo *info =
+        Sched::Scheduler::getInstance().taskInfo(static_cast<Sched::TaskIndex>(tid));
     if (info == nullptr) {
         writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_PARAM,
                      ThetaGP_Reason_REASON_INVALID_TASK_ID);
@@ -98,29 +99,27 @@ void SysDomain::taskInfo(const ThetaGP_Request &request, ThetaGP_Reply &reply) {
 
     reply.which_kind = ThetaGP_Reply_sys_get_task_info_tag;
     ThetaGP_SysGetTaskInfoOk &ok = reply.kind.sys_get_task_info;
-    const uint32_t avgUs =
-        static_cast<uint32_t>(info->movingAverageCycleTimeUs);
     ok.tid = tid;
-    copyText(ok.name, sizeof ok.name, info->taskName);
-    copyText(ok.sub, sizeof ok.sub, info->subTaskName);
-    ok.desired_us = info->desiredPeriodUs;
-    ok.avg_cycle_us = avgUs;
-    ok.actual_hz = (avgUs > 0) ? (1000000U / avgUs) : 0;
-    ok.max_exec_us = info->maxExecutionTimeUs;
-    ok.avg_exec_us = info->averageExecutionTime10thUs / 10U;
-    ok.total_exec_us = info->totalExecutionTimeUs;
-    ok.avg_delta_us = info->averageDeltaTime10thUs / 10U;
+    copyText(ok.name, sizeof ok.name, info->name);
+    copyText(ok.sub, sizeof ok.sub, info->sub);
+    ok.desired_us = info->desired_period_us;
+    ok.avg_cycle_us = info->avg_cycle_us;
+    ok.actual_hz =
+        (info->avg_cycle_us > 0) ? (1000000U / info->avg_cycle_us) : 0;
+    ok.max_exec_us = info->max_exec_us;
+    ok.avg_exec_us = info->avg_exec_us;
+    ok.total_exec_us = info->total_exec_us;
+    ok.avg_delta_us = info->avg_delta_us;
 #if THETAGP_CFG_TASK_COUNTERS
     ok.has_run_count = true;
-    ok.run_count = info->runCount;
+    ok.run_count = info->run_count;
     ok.has_late_count = true;
-    ok.late_count = info->lateCount;
+    ok.late_count = info->late_count;
 #endif
 }
 
 void SysDomain::usage(ThetaGP_Reply &reply) {
     using namespace Util::MemInfo;
-    using Gamepad::TaskManager;
 
 #if THETAGP_CFG_HAS_FLASH
     const Gamepad::Profile::ProfileStatus pstat =
@@ -131,8 +130,9 @@ void SysDomain::usage(ThetaGP_Reply &reply) {
 
     reply.which_kind = ThetaGP_Reply_sys_get_usage_tag;
     ThetaGP_SysGetUsageOk &ok = reply.kind.sys_get_usage;
-    ok.cpu_load_percent = TaskManager::getAverageSystemLoadPercent();
-    ok.task_count = static_cast<uint32_t>(TaskManager::getTaskCount());
+    ok.cpu_load_percent = Sched::Scheduler::getInstance().loadPercent();
+    ok.task_count =
+        static_cast<uint32_t>(Sched::Scheduler::getInstance().taskCount());
     ok.mcu_flash_used_bytes = mcuFlashUsedBytes();
     ok.mcu_flash_total_bytes = mcuFlashTotalBytes();
     ok.ram_used_bytes = ramUsedBytes();

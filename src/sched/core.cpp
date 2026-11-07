@@ -84,8 +84,15 @@ bool Core::start() {
       task.next_release_us = now + task.spec.phase_us;
     }
   }
+  _started_us = now;
   _started = true;
   return true;
+}
+
+uint32_t Core::take_busy_us() {
+  const uint32_t busy = _busy_us;
+  _busy_us = 0;
+  return busy;
 }
 
 void Core::collect(State &task, uint32_t now) {
@@ -210,6 +217,8 @@ bool Core::run_once() {
   const uint32_t finished = _port.now_us(_port.context);
   const uint32_t runtime = finished - started;
   task.stats.last_runtime_us = runtime;
+  task.stats.total_runtime_us += runtime;
+  _busy_us += runtime;
   if (runtime > task.stats.max_runtime_us) {
     task.stats.max_runtime_us = runtime;
   }

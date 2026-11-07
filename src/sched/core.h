@@ -105,6 +105,7 @@ struct TaskStats {
   uint32_t max_start_latency_us = 0;
   uint32_t max_runtime_us = 0;
   uint32_t last_runtime_us = 0;
+  uint32_t total_runtime_us = 0;
 };
 
 class Core {
@@ -143,6 +144,12 @@ class Core {
   const TaskSpec *spec(TaskIndex task) const;
   std::size_t task_count() const { return _count; }
 
+  // The port's clock, and the microseconds spent in callbacks since the last
+  // call of take_busy_us().
+  uint32_t now_us() const { return _port.now_us(_port.context); }
+  uint32_t started_us() const { return _started_us; }
+  uint32_t take_busy_us();
+
  private:
   struct State {
     TaskSpec spec = {};
@@ -156,6 +163,8 @@ class Core {
   Port _port = {};
   std::size_t _count = 0;
   bool _started = false;
+  uint32_t _started_us = 0;
+  uint32_t _busy_us = 0;
 
   bool valid(TaskIndex task) const {
     return task >= 0 && static_cast<std::size_t>(task) < _count;

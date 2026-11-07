@@ -29,7 +29,8 @@
 #include "gamepad/gamepad.h"
 #include "drivers/device/system_timer.h"
 #include "drivers/device/rgb_strip/rgb_strip.h"
-#include "task_manager.h"
+#include "drivers/device/run_led.h"
+#include "sched/scheduler.h"
 
 #include "tusb.h"
 
@@ -94,8 +95,8 @@ static bool queueFrame(uint16_t length) {
 
 } // namespace
 
-FAST_CODE static void taskGamepadCore(uint32_t currentTimeUs) {
-  UNUSED(currentTimeUs);
+FAST_CODE static void taskGamepadCore(void *context) {
+  UNUSED(context);
 
   // tud_task first: it frees the HID IN endpoint, and a report submitted while
   // that endpoint is still busy is dropped.
@@ -103,8 +104,8 @@ FAST_CODE static void taskGamepadCore(uint32_t currentTimeUs) {
   Gamepad::Gamepad::getInstance().process();
 }
 
-FAST_CODE static void taskCmdProc(uint32_t currentTimeUs) {
-  UNUSED(currentTimeUs);
+FAST_CODE static void taskCmdProc(void *context) {
+  UNUSED(context);
 
   // Moves the reply out, drops a half frame whose bytes stopped arriving, then
   // answers the frames the receive side assembled.
@@ -173,19 +174,47 @@ FAST_CODE static void taskCmdProc(uint32_t currentTimeUs) {
   }
 }
 
+FAST_CODE static void taskSystemUpdate(void *context) {
+  UNUSED(context);
+  Drivers::Device::RunLed::getInstance().update(
+      Drivers::Device::SystemTimer::getInstance().getMicros());
+}
+
+#if THETAGP_CFG_HAS_RGB_STRIP
+static void taskLedEffect(void *context) {
+  UNUSED(context);
+  Drivers::Device::RgbStrip::task(
+      Drivers::Device::SystemTimer::getInstance().getMicros());
+}
+#endif
+
 void ThetaGP::ThetaGamepad::registerTasks(void) {
-  TaskManager::registerTask("GAMEPAD", "CORE", taskGamepadCore,
-                            TASK_PERIOD_HZ(THETAGP_CFG_USB_REPORT_RATE_HZ),
-                            TaskPriority::Realtime);
+  using ThetaGP::Sched::Priority;
+  using ThetaGP::Sched::Scheduler;
+  using ThetaGP::Sched::periodUs;
+
+  Scheduler &scheduler = Scheduler::getInstance();
+  if (!scheduler.addPeriodic("GAMEPAD", "CORE", taskGamepadCore, nullptr,
+                             periodUs(THETAGP_CFG_USB_REPORT_RATE_HZ),
+                             Priority::Realtime)) {
+    LOG_ERROR("scheduler: GAMEPAD.CORE was not registered");
+  }
   // A command waits for this task's next tick, so the period is the latency a
   // caller pays per frame.
-  TaskManager::registerTask("COMM", "CMD_PROC", taskCmdProc,
-                            TASK_PERIOD_HZ(THETAGP_CFG_CMD_PROC_HZ),
-                            TaskPriority::Medium);
+  if (!scheduler.addPeriodic("COMM", "CMD_PROC", taskCmdProc, nullptr,
+                             periodUs(THETAGP_CFG_CMD_PROC_HZ),
+                             Priority::Normal)) {
+    LOG_ERROR("scheduler: COMM.CMD_PROC was not registered");
+  }
 #if THETAGP_CFG_HAS_RGB_STRIP
   // The strip is cosmetic: it runs below every task that carries input.
-  TaskManager::registerTask("LED", "EFFECT", Drivers::Device::RgbStrip::task,
-                            TASK_PERIOD_US(THETAGP_CFG_LED_TASK_PERIOD_US),
-                            TaskPriority::Low);
+  if (!scheduler.addPeriodic("LED", "EFFECT", taskLedEffect, nullptr,
+                             THETAGP_CFG_LED_TASK_PERIOD_US, Priority::Low)) {
+    LOG_ERROR("scheduler: LED.EFFECT was not registered");
+  }
 #endif
+  if (!scheduler.addPeriodic("SYSTEM", "UPDATE", taskSystemUpdate, nullptr,
+                             periodUs(1000), Priority::Low)) {
+    LOG_ERROR("scheduler: SYSTEM.UPDATE was not registered");
+  }
 }

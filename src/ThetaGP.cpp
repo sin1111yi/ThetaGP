@@ -24,12 +24,11 @@
 
 #include "drivers/device/logger.h"
 #include "drivers/peripherals/peripherals_manager.h"
-#include "gamepad/scheduler/scheduler.h"
+#include "sched/scheduler.h"
 #include "utils/log/log.h"
 
 #include "gamepad/config/config_manager.h"
 #include "gamepad/gamepad.h"
-#include "task_manager.h"
 
 #include "drivers/device/device_manager.h"
 #include "drivers/device/flash/flash_base.h"
@@ -104,14 +103,11 @@ void ThetaGamepad::setup() {
 }
 
 void ThetaGamepad::bootup() {
-  Gamepad::TaskManager::init();
-  Gamepad::TaskManager::setupSysTasks();
+  Sched::Scheduler &scheduler = Sched::Scheduler::getInstance();
+  scheduler.init();
   registerTasks();
-  Gamepad::TaskManager::setupScheduler();
-
-  while (1) {
-    Gamepad::TaskManager::run();
-  }
+  scheduler.start();
+  scheduler.run();
 }
 
 int main(void) {
