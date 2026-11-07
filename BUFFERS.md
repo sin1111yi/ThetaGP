@@ -38,8 +38,8 @@ DTCM. The snapshot below is the BoringTechH743 debug build of this tree.
 | `s_frames` | 1,200 | `COMMON_ZERO_INIT` | AXI | `src/drivers/device/rgb_strip/rgb_strip.cpp:109` |
 | `s_answer` | 1,064 | `COMMON_ZERO_INIT` | AXI | `src/drivers/gp_emulator/ps4/ps4_auth.cpp:161` |
 | `s_slots` | 1,056 | `COMMON_ZERO_INIT` | AXI | `src/drivers/device/rgb_strip/rgb_strip.cpp:106` |
-| `s_frame` | 1,028 | `COMMON_ZERO_INIT` | AXI | `src/thetagp_tasks.cpp:52` |
-| `s_reply` | 1,024 | `COMMON_ZERO_INIT` | AXI | `src/thetagp_tasks.cpp:51` |
+| `s_frame` | 1,028 | `COMMON_ZERO_INIT` | AXI | `src/tasks.cpp:52` |
+| `s_reply` | 1,024 | `COMMON_ZERO_INIT` | AXI | `src/tasks.cpp:51` |
 | `s_config_descriptor` | 1,024 | `COMMON_ZERO_INIT` | AXI | `src/drivers/gp_emulator/usb_driver.cpp:35` |
 | `s_flashSpiTxBuf` | 512 | `COMMON_ZERO_INIT` | AXI | `src/drivers/device/flash/flash_w25qxx.cpp:42` |
 | `s_flashSpiRxBuf` | 512 | `COMMON_ZERO_INIT` | AXI | `src/drivers/device/flash/flash_w25qxx.cpp:43` |
