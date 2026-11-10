@@ -42,6 +42,8 @@
 #include "wire/profile_d.h"
 #include "wire/sys_d.h"
 
+#include "drivers/device/coprocessor_link.h"
+
 using namespace ThetaGP;
 using namespace ThetaGP::Gamepad;
 
@@ -49,6 +51,9 @@ namespace {
 
 constexpr uint32_t kCommandBudgetUs = 50;
 constexpr uint32_t kSystemBudgetUs = 50;
+#ifdef BDCFG_COPROCESSOR_UART
+constexpr uint32_t kLinkBudgetUs = 200;
+#endif
 #if THETAGP_CFG_HAS_RGB_STRIP
 constexpr uint32_t kLedBudgetUs = 250;
 static_assert(kLedBudgetUs + Sched::kStartGuardUs <
@@ -188,6 +193,13 @@ FAST_CODE static void taskSystemUpdate(void *context) {
       Drivers::Device::SystemTimer::getInstance().getMicros());
 }
 
+#ifdef BDCFG_COPROCESSOR_UART
+static void taskCoprocessorLink(void *context) {
+  UNUSED(context);
+  Drivers::Device::CoprocessorLink::getInstance().task();
+}
+#endif
+
 #if THETAGP_CFG_HAS_RGB_STRIP
 static void taskLedEffect(void *context) {
   UNUSED(context);
@@ -226,4 +238,11 @@ void ThetaGP::ThetaGamepad::registerTasks(void) {
                               periodUs(1000), Priority::Low, 0, kSystemBudgetUs)) {
     LOG_ERROR("scheduler: SYSTEM.UPDATE was not registered");
   }
+#ifdef BDCFG_COPROCESSOR_UART
+  // A heartbeat waits a period at most: the coprocessor sends one every 500 ms.
+  if (!scheduler.addPeriodic("LINK", "PANEL", taskCoprocessorLink, nullptr,
+                              periodUs(20), Priority::Low, 0, kLinkBudgetUs)) {
+    LOG_ERROR("scheduler: LINK.PANEL was not registered");
+  }
+#endif
 }

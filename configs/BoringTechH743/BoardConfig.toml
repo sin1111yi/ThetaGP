@@ -44,6 +44,13 @@ peripheral = "UART1"
 tx         = "PA9"
 rx         = "PA10"
 
+[[bus.uart]]
+bind       = "coprocessor"
+peripheral = "UART4"
+tx         = "PC10"
+rx         = "PC11"
+baud       = 4000000
+
 [[bus.spi]]
 bind       = "flash"
 peripheral = "SPI2"

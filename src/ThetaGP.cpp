@@ -36,6 +36,7 @@
 #include "drivers/device/rgb_strip/rgb_strip.h"
 #include "drivers/device/run_led.h"
 #include "drivers/device/system_timer.h"
+#include "drivers/device/coprocessor_link.h"
 #include "drivers/gp_emulator/gp_emulator_manager.h"
 #include "drivers/gp_emulator/usb_driver.h"
 
@@ -66,6 +67,10 @@ void ThetaGamepad::setup() {
   (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::Logger::getInstance());
 #endif
+#ifdef BDCFG_COPROCESSOR_UART
+  (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
+      &Drivers::Device::CoprocessorLink::getInstance());
+#endif
 #if THETAGP_CFG_HAS_FLASH
   (void)Drivers::Device::DeviceManager::getInstance().registerDevice(
       &Drivers::Device::FlashBase::getInstance());
@@ -76,6 +81,7 @@ void ThetaGamepad::setup() {
 #endif
 
   Drivers::Device::DeviceManager::getInstance().initDevices();
+
 
   Drivers::Device::RunLed::getInstance().setEffect(
       Drivers::Device::RunLed::Effect::DoubleFlash);
