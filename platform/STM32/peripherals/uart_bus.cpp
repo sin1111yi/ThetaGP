@@ -50,30 +50,79 @@ struct HalUart {
 
 #define UART_HANDLE (static_cast<HalUart *>(_halHandle)->handle)
 
+// Every pin each UART can be routed to, and the alternate function that selects
+// it, from the STM32H743 datasheet's alternate function mapping. A pin that is
+// not here cannot be that UART's: the lookup below refuses it rather than
+// leaving the line on its reset function.
 static constexpr struct {
   UartInstance uart;
   Port port;
   Pin pin;
   uint8_t af;
 } uartPinAfTable[] = {
+    // USART1
     {UartInstance::Uart1, Port::PortA, Pin::Pin9, 7},
     {UartInstance::Uart1, Port::PortA, Pin::Pin10, 7},
+    {UartInstance::Uart1, Port::PortB, Pin::Pin6, 7},
+    {UartInstance::Uart1, Port::PortB, Pin::Pin7, 7},
     {UartInstance::Uart1, Port::PortB, Pin::Pin14, 4},
     {UartInstance::Uart1, Port::PortB, Pin::Pin15, 4},
+
+    // USART2
     {UartInstance::Uart2, Port::PortA, Pin::Pin2, 7},
     {UartInstance::Uart2, Port::PortA, Pin::Pin3, 7},
+    {UartInstance::Uart2, Port::PortD, Pin::Pin5, 7},
+    {UartInstance::Uart2, Port::PortD, Pin::Pin6, 7},
+
+    // USART3
     {UartInstance::Uart3, Port::PortB, Pin::Pin10, 7},
     {UartInstance::Uart3, Port::PortB, Pin::Pin11, 7},
+    {UartInstance::Uart3, Port::PortC, Pin::Pin10, 7},
+    {UartInstance::Uart3, Port::PortC, Pin::Pin11, 7},
+    {UartInstance::Uart3, Port::PortD, Pin::Pin8, 7},
+    {UartInstance::Uart3, Port::PortD, Pin::Pin9, 7},
+
+    // UART4
     {UartInstance::Uart4, Port::PortA, Pin::Pin0, 8},
     {UartInstance::Uart4, Port::PortA, Pin::Pin1, 8},
+    {UartInstance::Uart4, Port::PortA, Pin::Pin11, 6},
+    {UartInstance::Uart4, Port::PortA, Pin::Pin12, 6},
     {UartInstance::Uart4, Port::PortB, Pin::Pin8, 8},
     {UartInstance::Uart4, Port::PortB, Pin::Pin9, 8},
-    {UartInstance::Uart5, Port::PortB, Pin::Pin5, 8},
-    {UartInstance::Uart5, Port::PortB, Pin::Pin6, 8},
+    {UartInstance::Uart4, Port::PortC, Pin::Pin10, 8},
+    {UartInstance::Uart4, Port::PortC, Pin::Pin11, 8},
+    {UartInstance::Uart4, Port::PortD, Pin::Pin0, 8},
+    {UartInstance::Uart4, Port::PortD, Pin::Pin1, 8},
+    {UartInstance::Uart4, Port::PortH, Pin::Pin13, 8},
+    {UartInstance::Uart4, Port::PortH, Pin::Pin14, 8},
+
+    // UART5
+    {UartInstance::Uart5, Port::PortB, Pin::Pin5, 14},
+    {UartInstance::Uart5, Port::PortB, Pin::Pin6, 14},
+    {UartInstance::Uart5, Port::PortB, Pin::Pin12, 14},
+    {UartInstance::Uart5, Port::PortB, Pin::Pin13, 14},
+    {UartInstance::Uart5, Port::PortC, Pin::Pin12, 8},
+    {UartInstance::Uart5, Port::PortD, Pin::Pin2, 8},
+
+    // USART6
     {UartInstance::Uart6, Port::PortC, Pin::Pin6, 7},
     {UartInstance::Uart6, Port::PortC, Pin::Pin7, 7},
+    {UartInstance::Uart6, Port::PortG, Pin::Pin9, 7},
+    {UartInstance::Uart6, Port::PortG, Pin::Pin14, 7},
+
+    // UART7
+    {UartInstance::Uart7, Port::PortA, Pin::Pin8, 11},
+    {UartInstance::Uart7, Port::PortA, Pin::Pin15, 11},
+    {UartInstance::Uart7, Port::PortB, Pin::Pin3, 11},
+    {UartInstance::Uart7, Port::PortB, Pin::Pin4, 11},
+    {UartInstance::Uart7, Port::PortE, Pin::Pin7, 7},
+    {UartInstance::Uart7, Port::PortE, Pin::Pin8, 7},
+    {UartInstance::Uart7, Port::PortF, Pin::Pin6, 7},
     {UartInstance::Uart7, Port::PortF, Pin::Pin7, 7},
-    {UartInstance::Uart7, Port::PortF, Pin::Pin8, 7},
+
+    // UART8
+    {UartInstance::Uart8, Port::PortE, Pin::Pin0, 8},
+    {UartInstance::Uart8, Port::PortE, Pin::Pin1, 8},
     {UartInstance::Uart8, Port::PortJ, Pin::Pin8, 8},
     {UartInstance::Uart8, Port::PortJ, Pin::Pin9, 8},
 };
@@ -83,6 +132,10 @@ static uint8_t lookupUartAf(UartInstance uart, Port port, Pin pin) {
     if (entry.uart == uart && entry.port == port && entry.pin == pin)
       return entry.af;
   }
+  // Alternate function 0 leaves the pin on its reset function, so a line that
+  // is missing from the table looks configured and carries nothing. Say so.
+  LOG_ERROR("uart: no alternate function for %u on P%u%u", (unsigned)uart,
+            (unsigned)port, (unsigned)pin);
   return 0;
 }
 
@@ -468,6 +521,16 @@ static void uartRxDmaComplete(void *context) {
     uart->_readDmaBufLen = 0;
     uart->rxCallback();
   }
+}
+
+void UartBus::setRxCallback(UartCallbackFunc cb, void *context) {
+  _rxCallback = cb;
+  _rxContext = context;
+}
+
+void UartBus::setTxCallback(UartCallbackFunc cb, void *context) {
+  _txCallback = cb;
+  _txContext = context;
 }
 
 bool UartBus::isBusy() const {
