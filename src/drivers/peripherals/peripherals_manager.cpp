@@ -82,6 +82,8 @@ void PeripheralsManager::initPeripherals() {
 
 void PeripheralsManager::initSpiBuses() {
 #if defined(BDCFG_SPI_DESC_DATA)
+  // The SPI descriptor groups its three pins, so it needs the bus named in
+  // front of it to reach the descriptor constructor; both boards carry one SPI.
   COMMON_DATA static BUS::SpiBus g_buses[] = { BUS::SpiBus{ BDCFG_SPI_DESC_DATA } };
   _spiBuses = g_buses;
   _spiCount = sizeof(g_buses) / sizeof(g_buses[0]);
@@ -93,7 +95,10 @@ void PeripheralsManager::initSpiBuses() {
 
 void PeripheralsManager::initUartBuses() {
 #if defined(BDCFG_UART_DESC_DATA)
-  COMMON_DATA static BUS::UartBus g_buses[] = { BUS::UartBus{ BDCFG_UART_DESC_DATA } };
+  // Each brace group is one bus: the descriptor macro ends up as one
+  // initializer per entry, and wrapping them again would only fit a board
+  // with a single UART.
+  COMMON_DATA static BUS::UartBus g_buses[] = { BDCFG_UART_DESC_DATA };
   _uartBuses = g_buses;
   _uartCount = sizeof(g_buses) / sizeof(g_buses[0]);
 #else
