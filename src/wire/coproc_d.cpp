@@ -19,22 +19,20 @@ namespace {
 
 using Drivers::Device::CoprocessorLink;
 
-// The link's own action numbers, which are the panel's: the host's enum is
-// numbered from prev upward without the link's "none".
+// The host's keys and the link's are the same six, in the same order: what a
+// caller names is what the panel is told, with no layer in between deciding
+// that one is another.
 uint8_t linkAction(ThetaGP_CoprocAction action) {
     switch (action) {
-    case ThetaGP_CoprocAction_COPROC_PREV:
-        return 1;
-    case ThetaGP_CoprocAction_COPROC_NEXT:
-        return 2;
-    case ThetaGP_CoprocAction_COPROC_ENTER:
-        return 3;
+    case ThetaGP_CoprocAction_COPROC_UP:
+    case ThetaGP_CoprocAction_COPROC_DOWN:
+    case ThetaGP_CoprocAction_COPROC_LEFT:
+    case ThetaGP_CoprocAction_COPROC_RIGHT:
+    case ThetaGP_CoprocAction_COPROC_CONFIRM:
     case ThetaGP_CoprocAction_COPROC_BACK:
-        return 4;
-    case ThetaGP_CoprocAction_COPROC_SHOW:
-        return 5;
+        return static_cast<uint8_t>(action);
     default:
-        return 0;
+        return 0xFF;
     }
 }
 
@@ -68,23 +66,11 @@ void CoprocDomain::state(ThetaGP_Reply &reply) {
 void CoprocDomain::nav(const ThetaGP_Request &request, ThetaGP_Reply &reply) {
     const ThetaGP_CoprocNav &arm = request.kind.coproc_nav;
     const uint8_t action = linkAction(arm.action);
-    if (action == 0) {
+    if (action > static_cast<uint8_t>(ThetaGP_CoprocAction_COPROC_BACK)) {
         writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_PARAM,
                      ThetaGP_Reason_REASON_VALUE_OUT_OF_RANGE, 0,
-                     ThetaGP_CoprocAction_COPROC_SHOW);
+                     ThetaGP_CoprocAction_COPROC_BACK);
         return;
-    }
-
-    uint8_t page = 0;
-    if (action == 5) {
-        // A show that names no page is a step the panel cannot take.
-        if (!arm.has_page || arm.page > ThetaGP_CoprocPage_COPROC_PAGE_ABOUT) {
-            writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_PARAM,
-                         ThetaGP_Reason_REASON_VALUE_OUT_OF_RANGE, 0,
-                         ThetaGP_CoprocPage_COPROC_PAGE_ABOUT);
-            return;
-        }
-        page = static_cast<uint8_t>(arm.page);
     }
 
     CoprocessorLink &link = CoprocessorLink::getInstance();
@@ -93,9 +79,9 @@ void CoprocDomain::nav(const ThetaGP_Request &request, ThetaGP_Reply &reply) {
                      ThetaGP_Reason_REASON_NOT_IMPLEMENTED);
         return;
     }
-    if (!link.sendNav(action, page)) {
-        // Four steps are already waiting: the host is asking faster than the
-        // panel is moving, and the step it asked for did not enter the queue.
+    if (!link.sendNav(action)) {
+        // Four keys are already waiting: the host is asking faster than the
+        // panel is moving, and the key it asked for did not enter the queue.
         writeFailure(reply, ThetaGP_ErrorCode_ERR_BUSY,
                      ThetaGP_Reason_REASON_NONE);
         return;

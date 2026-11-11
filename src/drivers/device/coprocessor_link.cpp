@@ -352,13 +352,13 @@ void CoprocessorLink::sendState() {
   }
 }
 
-bool CoprocessorLink::sendNav(uint8_t action, uint8_t page) {
+bool CoprocessorLink::sendNav(uint8_t action) {
   const uint8_t next = static_cast<uint8_t>((_navHead + 1) % kNavQueue);
   if (next == _navTail) {
     return false;
   }
 
-  _nav[_navHead] = NavStep{action, page};
+  _nav[_navHead] = NavStep{action};
   _navHead = next;
 
   // A transmitter that is free takes it now, so a step asked for from the
@@ -382,7 +382,6 @@ void CoprocessorLink::flushNav() {
     ThetaGP_Link_Message message = ThetaGP_Link_Message_init_zero;
     message.which_kind = ThetaGP_Link_Message_nav_tag;
     message.kind.nav.action = static_cast<ThetaGP_Link_NavAction>(step.action);
-    message.kind.nav.page = step.page;
 
     uint8_t payload[PAYLOAD_MAX] = {};
     uint16_t length = sizeof payload;
@@ -424,7 +423,7 @@ void CoprocessorLink::tick() {}
 
 void CoprocessorLink::received() {}
 
-bool CoprocessorLink::sendNav(uint8_t, uint8_t) { return false; }
+bool CoprocessorLink::sendNav(uint8_t) { return false; }
 
 #endif
 

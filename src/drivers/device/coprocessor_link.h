@@ -64,11 +64,10 @@ public:
   void setWakeTask(Sched::TaskIndex task) { _wakeTask = task; }
   [[nodiscard]] Sched::TaskIndex wakeTask() const { return _wakeTask; }
 
-  // One navigation step for the panel: the action and, for a step that names a
-  // page, which one. The step is queued and leaves on the periodic tick, which
-  // retries a transmitter that was carrying a frame; false means the queue is
-  // full and the step did not enter it.
-  bool sendNav(uint8_t action, uint8_t page = 0);
+  // One key for the panel. The key is queued and leaves on the periodic tick,
+  // which retries a transmitter that was carrying a frame; false means the
+  // queue is full and the key did not enter it.
+  bool sendNav(uint8_t action);
 
   [[nodiscard]] bool alive() const { return _alive; }
   [[nodiscard]] uint32_t receivedFrames() const { return _frames; }
@@ -96,7 +95,6 @@ private:
 
   struct NavStep {
     uint8_t action;
-    uint8_t page;
   };
 
   // The steps waiting for the transmitter, and how many ticks the one at the
