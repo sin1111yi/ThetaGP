@@ -33,26 +33,24 @@ namespace {
 
 // The mask the interrupted code held, and the clocks its claim started at.
 // The core brackets one claim at a time, so one set of values is enough.
-// PRIMASK is used rather than BASEPRI because WFI only wakes on an interrupt
-// that can preempt the current execution priority: a SysTick masked by BASEPRI
-// would leave the core asleep forever.
+// The mask is PRIMASK: an interrupt pending under it still ends a WFI.
 FAST_DATA_ZERO_INIT uint32_t s_savedPrimask = 0;
 FAST_DATA_ZERO_INIT uint32_t s_baseUs = 0;
 FAST_DATA_ZERO_INIT uint32_t s_baseCycles = 0;
 
-uint32_t portNowUs(void *) {
+FAST_CODE uint32_t portNowUs(void *) {
   return Drivers::Device::SystemTimer::getInstance().getMicros();
 }
 
 // The clock a claim may read: the free-running cycle counter, offset from the
 // value the claim started at. It never waits on an interrupt the claim masked.
-uint32_t portNowIsr(void *) {
+FAST_CODE uint32_t portNowIsr(void *) {
   const uint32_t cycles = clockCycleCounter();
   const int32_t elapsed = static_cast<int32_t>(cycles - s_baseCycles);
   return s_baseUs + static_cast<uint32_t>(clockCyclesToMicros(elapsed));
 }
 
-void portEnter(void *) {
+FAST_CODE void portEnter(void *) {
   const uint32_t primask = __get_PRIMASK();
   __disable_irq();
   s_savedPrimask = primask;
@@ -60,9 +58,9 @@ void portEnter(void *) {
   s_baseCycles = clockCycleCounter();
 }
 
-void portExit(void *) { __set_PRIMASK(s_savedPrimask); }
+FAST_CODE void portExit(void *) { __set_PRIMASK(s_savedPrimask); }
 
-void portIdle(void *, uint32_t deadlineUs) {
+FAST_CODE void portIdle(void *, uint32_t deadlineUs) {
   // Called with the claim's mask held, so only the free-running clock is read.
   // WFI wakes on a pending interrupt even with PRIMASK set; the handler runs
   // when the claim releases it.

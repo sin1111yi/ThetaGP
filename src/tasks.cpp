@@ -49,16 +49,30 @@ using namespace ThetaGP::Gamepad;
 
 namespace {
 
-constexpr uint32_t kCommandBudgetUs = 50;
-constexpr uint32_t kSystemBudgetUs = 50;
+// The time each task asks to have clear before the next report release when it
+// starts. It is not the length of a run: a wide reply keeps the command task
+// running across report releases. A clearance that does not fit between two
+// report releases, start guard included, is one the task never gets.
+constexpr bool fitsReportPeriod(uint32_t clearanceUs) {
+  return clearanceUs + Sched::kStartGuardUs <
+         Sched::periodUs(THETAGP_CFG_USB_REPORT_RATE_HZ);
+}
+
+constexpr uint32_t kCommandClearanceUs = 50;
+static_assert(fitsReportPeriod(kCommandClearanceUs),
+              "command task clearance does not fit the report period");
+constexpr uint32_t kSystemClearanceUs = 50;
+static_assert(fitsReportPeriod(kSystemClearanceUs),
+              "system task clearance does not fit the report period");
 #ifdef BDCFG_COPROCESSOR_UART
-constexpr uint32_t kLinkBudgetUs = 200;
+constexpr uint32_t kLinkClearanceUs = 200;
+static_assert(fitsReportPeriod(kLinkClearanceUs),
+              "link task clearance does not fit the report period");
 #endif
 #if THETAGP_CFG_HAS_RGB_STRIP
-constexpr uint32_t kLedBudgetUs = 250;
-static_assert(kLedBudgetUs + Sched::kStartGuardUs <
-              Sched::periodUs(THETAGP_CFG_USB_REPORT_RATE_HZ),
-              "LED task budget does not fit the report period");
+constexpr uint32_t kLedClearanceUs = 250;
+static_assert(fitsReportPeriod(kLedClearanceUs),
+              "LED task clearance does not fit the report period");
 #endif
 
 // The reply payload and the frame built around it: one request is answered at
@@ -223,25 +237,25 @@ void ThetaGP::ThetaGamepad::registerTasks(void) {
   // caller pays per frame.
   if (!scheduler.addPeriodic("COMM", "CMD_PROC", taskCmdProc, nullptr,
                               periodUs(THETAGP_CFG_CMD_PROC_HZ),
-                              Priority::Normal, 0, kCommandBudgetUs)) {
+                              Priority::Normal, 0, kCommandClearanceUs)) {
     LOG_ERROR("scheduler: COMM.CMD_PROC was not registered");
   }
 #if THETAGP_CFG_HAS_RGB_STRIP
   // The strip is cosmetic: it runs below every task that carries input.
   if (!scheduler.addPeriodic("LED", "EFFECT", taskLedEffect, nullptr,
                               THETAGP_CFG_LED_TASK_PERIOD_US, Priority::Low,
-                              0, kLedBudgetUs)) {
+                              0, kLedClearanceUs)) {
     LOG_ERROR("scheduler: LED.EFFECT was not registered");
   }
 #endif
   if (!scheduler.addPeriodic("SYSTEM", "UPDATE", taskSystemUpdate, nullptr,
-                              periodUs(1000), Priority::Low, 0, kSystemBudgetUs)) {
+                              periodUs(1000), Priority::Low, 0, kSystemClearanceUs)) {
     LOG_ERROR("scheduler: SYSTEM.UPDATE was not registered");
   }
 #ifdef BDCFG_COPROCESSOR_UART
   // A heartbeat waits a period at most: the coprocessor sends one every 500 ms.
   if (!scheduler.addPeriodic("LINK", "PANEL", taskCoprocessorLink, nullptr,
-                              periodUs(20), Priority::Low, 0, kLinkBudgetUs)) {
+                              periodUs(20), Priority::Low, 0, kLinkClearanceUs)) {
     LOG_ERROR("scheduler: LINK.PANEL was not registered");
   }
 #endif

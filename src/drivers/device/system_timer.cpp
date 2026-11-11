@@ -20,6 +20,9 @@
  */
 
 #include "drivers/device/system_timer.h"
+
+#include "build_info.h"
+
 #include "drivers/peripherals/systick.h"
 
 namespace ThetaGP::Drivers::Device {
@@ -30,7 +33,7 @@ void SystemTimer::init() {
   _initialized = true;
 }
 
-uint32_t SystemTimer::getMicros() const { return micros(); }
+FAST_CODE uint32_t SystemTimer::getMicros() const { return micros(); }
 
 uint32_t SystemTimer::getMillis() const { return millis(); }
 

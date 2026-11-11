@@ -87,7 +87,7 @@ void SysTick_Handler(void) {
 #endif
 }
 
-uint32_t microsISR(void) {
+FAST_CODE uint32_t microsISR(void) {
   register uint32_t ms, pending, cycle_cnt;
 
   ATOMIC_BLOCK(NVIC_PRIO_MAX) {
@@ -114,7 +114,7 @@ uint32_t microsISR(void) {
   return ((ms + pending) * 1000) + (usTicks * 1000 - cycle_cnt) / usTicks;
 }
 
-uint32_t micros(void) {
+FAST_CODE uint32_t micros(void) {
   register uint32_t ms, cycle_cnt;
 
   // Call microsISR() in interrupt and elevated (non-zero)
@@ -132,12 +132,12 @@ uint32_t micros(void) {
   return (ms * 1000) + (usTicks * 1000 - cycle_cnt) / usTicks;
 }
 
-uint32_t clockCycleCounter(void) { return DWT->CYCCNT; }
+FAST_CODE uint32_t clockCycleCounter(void) { return DWT->CYCCNT; }
 #else
 // TODO: Implement for other MCUs
 #endif
 
-int32_t clockCyclesToMicros(int32_t clockCycles) {
+FAST_CODE int32_t clockCyclesToMicros(int32_t clockCycles) {
   return clockCycles / usTicks;
 }
 

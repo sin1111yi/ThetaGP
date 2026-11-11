@@ -21,6 +21,8 @@
 
 #include "sched/core.h"
 
+#include "build_info.h"
+
 namespace ThetaGP::Sched {
 
 namespace {
@@ -84,18 +86,19 @@ bool Core::start() {
       task.nextReleaseUs = now + task.spec.phaseUs;
     }
   }
-  _started_us = now;
+  _lastNowUs = now;
+  _uptimeUs = 0;
   _started = true;
   return true;
 }
 
-uint32_t Core::takeBusyUs() {
-  const uint32_t busy = _busy_us;
-  _busy_us = 0;
+uint64_t Core::takeBusyUs() {
+  const uint64_t busy = _busyUs;
+  _busyUs = 0;
   return busy;
 }
 
-void Core::collect(State &task, uint32_t now) {
+FAST_CODE void Core::collect(State &task, uint32_t now) {
   const uint32_t period = task.spec.periodUs;
   if (task.spec.release != Release::Periodic || period == 0) {
     return;
@@ -123,7 +126,7 @@ void Core::collect(State &task, uint32_t now) {
   task.nextReleaseUs += static_cast<uint32_t>(due * period);
 }
 
-bool Core::postEvent(State &task, uint32_t now) {
+FAST_CODE bool Core::postEvent(State &task, uint32_t now) {
   const uint8_t cap = task.spec.maxPending == 0 ? 1 : task.spec.maxPending;
   if (task.pending < cap) {
     if (task.pending == 0) {
@@ -136,7 +139,7 @@ bool Core::postEvent(State &task, uint32_t now) {
   return false;
 }
 
-bool Core::post(TaskIndex task) {
+FAST_CODE bool Core::post(TaskIndex task) {
   if (!_started || !valid(task)) {
     return false;
   }
@@ -154,7 +157,7 @@ bool Core::post(TaskIndex task) {
   return taken;
 }
 
-bool Core::postFromIsr(TaskIndex task) {
+FAST_CODE bool Core::postFromIsr(TaskIndex task) {
   if (!_started || !valid(task)) {
     return false;
   }
@@ -174,7 +177,7 @@ bool Core::postFromIsr(TaskIndex task) {
   return taken;
 }
 
-uint32_t Core::higherReleaseWindow(Priority priority, uint32_t now) const {
+FAST_CODE uint32_t Core::higherReleaseWindow(Priority priority, uint32_t now) const {
   uint32_t window = UINT32_MAX;
   for (std::size_t i = 0; i < _count; ++i) {
     const State &task = _tasks[i];
@@ -194,12 +197,14 @@ uint32_t Core::higherReleaseWindow(Priority priority, uint32_t now) const {
   return window;
 }
 
-bool Core::runOnce() {
+FAST_CODE bool Core::runOnce() {
   if (!_started) {
     return false;
   }
 
   const uint32_t now = _port.nowUs(_port.context);
+  _uptimeUs += now - _lastNowUs;
+  _lastNowUs = now;
   for (std::size_t i = 0; i < _count; ++i) {
     collect(_tasks[i], now);
   }
@@ -225,10 +230,10 @@ bool Core::runOnce() {
     _port.enterCritical(_port.context);
   }
   const uint32_t started = nowIsr();
-  if (task.spec.budgetUs != 0) {
+  if (task.spec.startClearanceUs != 0) {
     const uint32_t window = higherReleaseWindow(task.spec.priority, started);
     if (window != UINT32_MAX &&
-        (window <= kStartGuardUs || task.spec.budgetUs >= window - kStartGuardUs)) {
+        (window <= kStartGuardUs || task.spec.startClearanceUs >= window - kStartGuardUs)) {
       ++task.stats.deferrals;
       if (_port.exitCritical != nullptr) {
         _port.exitCritical(_port.context);
@@ -263,12 +268,12 @@ bool Core::runOnce() {
   const uint32_t runtime = finished - started;
   task.stats.lastRuntimeUs = runtime;
   task.stats.totalRuntimeUs += runtime;
-  _busy_us += runtime;
+  _busyUs += runtime;
   if (runtime > task.stats.maxRuntimeUs) {
     task.stats.maxRuntimeUs = runtime;
   }
-  if (task.spec.budgetUs != 0 && runtime > task.spec.budgetUs) {
-    ++task.stats.budgetOverruns;
+  if (task.spec.startClearanceUs != 0 && runtime > task.spec.startClearanceUs) {
+    ++task.stats.clearanceOverruns;
   }
   if (task.spec.deadlineUs != 0 && (finished - released) > task.spec.deadlineUs) {
     ++task.stats.deadlineMisses;
@@ -276,7 +281,7 @@ bool Core::runOnce() {
   return true;
 }
 
-bool Core::readyAt(uint32_t now) const {
+FAST_CODE bool Core::readyAt(uint32_t now) const {
   if (!_started) {
     return false;
   }
@@ -297,7 +302,7 @@ bool Core::ready() const {
   return _started && readyAt(_port.nowUs(_port.context));
 }
 
-bool Core::pump() {
+FAST_CODE bool Core::pump() {
   bool ran = false;
   while (runOnce()) {
     ran = true;
@@ -322,7 +327,7 @@ bool Core::pump() {
   return ran;
 }
 
-bool Core::nextWakeUs(uint32_t *deadlineUs) const {
+FAST_CODE bool Core::nextWakeUs(uint32_t *deadlineUs) const {
   if (!_started) {
     return false;
   }

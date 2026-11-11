@@ -110,9 +110,13 @@ void ThetaGamepad::setup() {
 
 void ThetaGamepad::bootup() {
   Sched::Scheduler &scheduler = Sched::Scheduler::getInstance();
-  scheduler.init();
+  if (!scheduler.init()) {
+    LOG_ERROR("scheduler: the port was not bound");
+  }
   registerTasks();
-  scheduler.start();
+  if (!scheduler.start()) {
+    LOG_ERROR("scheduler: the task set was not started");
+  }
   scheduler.run();
 }
 

@@ -62,7 +62,7 @@ public:
   bool add(const TaskSpec &spec, const char *sub = nullptr);
   bool addPeriodic(const char *name, const char *sub, void (*run)(void *),
                    void *context, uint32_t periodUs, Priority priority,
-                   uint32_t deadlineUs = 0, uint32_t budgetUs = 0,
+                   uint32_t deadlineUs = 0, uint32_t startClearanceUs = 0,
                    MissPolicy miss = MissPolicy::Skip);
   bool addEvent(const char *name, const char *sub, void (*run)(void *),
                 void *context, Priority priority, uint8_t maxPending = 1);
@@ -87,7 +87,7 @@ private:
 
   Core _core = {};
   const char *_subs[kMaxTasks] = {};
-  uint32_t _lastLoadUs = 0;
+  uint64_t _lastLoadUptimeUs = 0;
   mutable TaskInfo _reported = {};
 };
 

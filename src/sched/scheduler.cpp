@@ -41,7 +41,7 @@ bool Scheduler::add(const TaskSpec &spec, const char *sub) {
 bool Scheduler::addPeriodic(const char *name, const char *sub,
                             void (*run)(void *), void *context,
                             uint32_t periodUs, Priority priority,
-                            uint32_t deadlineUs, uint32_t budgetUs,
+                            uint32_t deadlineUs, uint32_t startClearanceUs,
                             MissPolicy miss) {
   TaskSpec spec;
   spec.name = name;
@@ -52,7 +52,7 @@ bool Scheduler::addPeriodic(const char *name, const char *sub,
   spec.miss = miss;
   spec.periodUs = periodUs;
   spec.deadlineUs = deadlineUs;
-  spec.budgetUs = budgetUs;
+  spec.startClearanceUs = startClearanceUs;
   return add(spec, sub);
 }
 
@@ -73,7 +73,7 @@ bool Scheduler::start() {
   if (!_core.start()) {
     return false;
   }
-  _lastLoadUs = _core.nowUs();
+  _lastLoadUptimeUs = 0;
   return true;
 }
 
@@ -86,14 +86,14 @@ FAST_CODE void Scheduler::run() {
 }
 
 uint16_t Scheduler::loadPercent() {
-  const uint32_t now = _core.nowUs();
-  const uint32_t busy = _core.takeBusyUs();
-  const uint32_t delta = now - _lastLoadUs;
-  _lastLoadUs = now;
+  const uint64_t uptime = _core.uptimeUs();
+  const uint64_t busy = _core.takeBusyUs();
+  const uint64_t delta = uptime - _lastLoadUptimeUs;
+  _lastLoadUptimeUs = uptime;
   if (delta == 0) {
     return 0;
   }
-  const uint32_t percent = (100U * busy) / delta;
+  const uint64_t percent = (100U * busy) / delta;
   return percent > 100U ? 100U : static_cast<uint16_t>(percent);
 }
 
@@ -110,11 +110,15 @@ const TaskInfo *Scheduler::taskInfo(TaskIndex task) const {
   info.desiredPeriodUs =
       spec->release == Release::Periodic ? spec->periodUs : 0;
   info.maxExecUs = stats->maxRuntimeUs;
-  info.totalExecUs = stats->totalRuntimeUs;
-  info.avgExecUs =
-      stats->runs == 0 ? 0 : stats->totalRuntimeUs / stats->runs;
-  const uint32_t elapsed = _core.nowUs() - _core.startedUs();
-  info.avgDeltaUs = stats->runs == 0 ? 0 : elapsed / stats->runs;
+  // The total is reported at the width the reply carries, so it wraps there;
+  // the averages are taken from the unwrapped counts.
+  info.totalExecUs = static_cast<uint32_t>(stats->totalRuntimeUs);
+  info.avgExecUs = stats->runs == 0
+                       ? 0
+                       : static_cast<uint32_t>(stats->totalRuntimeUs / stats->runs);
+  info.avgDeltaUs = stats->runs == 0
+                        ? 0
+                        : static_cast<uint32_t>(_core.uptimeUs() / stats->runs);
   // The measured spacing between starts, so a task that is blocked or folded
   // reports the rate it actually ran at.
   info.avgCycleUs = stats->intervals == 0

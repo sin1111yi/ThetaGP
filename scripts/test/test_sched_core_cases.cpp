@@ -189,7 +189,7 @@ void aLateStartAndALongRunAreRecorded() {
   counted.advanceUs = 600;
   TaskSpec spec = periodic("late", &counted, 1000, Priority::Normal);
   spec.deadlineUs = 500;
-  spec.budgetUs = 100;
+  spec.startClearanceUs = 100;
   TaskIndex index = kInvalidTask;
   check(core.add(spec, &index) == AddError::None, "the task is added");
   check(core.start(), "the set starts");
@@ -198,7 +198,7 @@ void aLateStartAndALongRunAreRecorded() {
   const ThetaGP::Sched::TaskStats *stats = core.stats(index);
   check(stats != nullptr && stats->runs == 1, "the run is counted");
   check(stats != nullptr && stats->deadlineMisses == 1, "a run past its deadline is counted");
-  check(stats != nullptr && stats->budgetOverruns == 1, "a run past its budget is counted");
+  check(stats != nullptr && stats->clearanceOverruns == 1, "a run past its clearance is counted");
   check(stats != nullptr && stats->lastRuntimeUs == 600, "the run's length is recorded");
   check(core.stats(9) == nullptr, "an index the set does not carry has no statistics");
 }
@@ -421,8 +421,8 @@ void aTaskWaitsWhileAHigherReleaseIsTooNear() {
             AddError::None,
         "the high task is added");
   TaskSpec spec = periodic("low", &low, 100, Priority::Low);
-  spec.budgetUs = 200;
-  check(core.add(spec, &lowIndex) == AddError::None, "the budgeted task is added");
+  spec.startClearanceUs = 200;
+  check(core.add(spec, &lowIndex) == AddError::None, "the task with a clearance is added");
   check(core.start(), "the set starts");
 
   check(core.runOnce() && high.runs == 1, "the high task runs first");
@@ -521,7 +521,7 @@ void advanceOnEnter(void *context) {
 
 void exitNoop(void *) {}
 
-void aReleaseDueDuringSelectionBlocksABudgetedTask() {
+void aReleaseDueDuringSelectionBlocksATaskWithAClearance() {
   Core core;
   AdvancingClock clock;
   Port port;
@@ -535,7 +535,7 @@ void aReleaseDueDuringSelectionBlocksABudgetedTask() {
   TaskSpec highSpec = periodic("high", &high, 1000, Priority::High);
   highSpec.phaseUs = 1000;
   TaskSpec lowSpec = periodic("low", &low, 1000, Priority::Low);
-  lowSpec.budgetUs = 10;
+  lowSpec.startClearanceUs = 10;
   check(core.add(highSpec) == AddError::None && core.add(lowSpec) == AddError::None,
         "the tasks are added");
   check(core.start(), "the set starts");
@@ -563,6 +563,31 @@ void intervalTotalSurvives32BitOverflow() {
         "the interval total exceeds 32 bits");
 }
 
+void uptimeAndBusyTimeSurviveTheClockWrap() {
+  Core core;
+  Clock clock;
+  attach(core, clock);
+  Counted counted;
+  counted.clock = &clock;
+  counted.advanceUs = 500000000;
+  TaskIndex index = kInvalidTask;
+  check(core.add(periodic("long", &counted, 1000000000, Priority::Normal),
+                 &index) == AddError::None,
+        "the long task is added");
+  check(core.start() && core.runOnce(), "the first release runs");
+  for (int i = 0; i < 9; ++i) {
+    clock.now += 500000000;
+    check(core.runOnce(), "the next release runs");
+  }
+  check(core.stats(index)->totalRuntimeUs == 5000000000ULL,
+        "the runtime total exceeds 32 bits");
+  check(core.uptimeUs() == 9000000000ULL,
+        "the uptime is counted past the clock's wrap");
+  check(core.takeBusyUs() == 5000000000ULL,
+        "the busy time exceeds 32 bits");
+  check(core.takeBusyUs() == 0, "taking the busy time clears it");
+}
+
 } // namespace
 
 int main() {
@@ -581,8 +606,9 @@ int main() {
   aSkippedBacklogKeepsTheNewestRelease();
   aCaughtUpBacklogKeepsItsReleaseTimes();
   aLargeBacklogReplacesAlreadyPendingReleases();
-  aReleaseDueDuringSelectionBlocksABudgetedTask();
+  aReleaseDueDuringSelectionBlocksATaskWithAClearance();
   intervalTotalSurvives32BitOverflow();
+  uptimeAndBusyTimeSurviveTheClockWrap();
 
   std::printf("%d checks, %d failed\n", gRan, gFailed);
   return gFailed == 0 ? 0 : 1;

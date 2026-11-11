@@ -31,9 +31,8 @@ namespace ThetaGP::Sched {
 inline constexpr std::size_t kMaxTasks = 16;
 inline constexpr uint8_t kMaxPending = 255;
 
-// Time left clear before a higher-priority release when a task that declares a
-// budget is started. It covers the dispatch and the port's bookkeeping, not the
-// callback.
+// Added to a task's start clearance: the dispatch and the port's bookkeeping
+// between the check and the callback's first instruction.
 inline constexpr uint32_t kStartGuardUs = 32;
 
 enum class Priority : uint8_t {
@@ -81,9 +80,11 @@ struct TaskSpec {
   // Relative to release. Zero takes the period for a periodic task and means
   // no check for an event task.
   uint32_t deadlineUs = 0;
-  // Declared upper bound of one run. Zero means no budget check and no start
-  // guard; the task may then start at any moment.
-  uint32_t budgetUs = 0;
+  // The time that has to be clear before the next higher-priority periodic
+  // release for a run to start. It gates the start and does not bound the run:
+  // a run longer than it carries on across that release. Zero means the task
+  // starts at any moment.
+  uint32_t startClearanceUs = 0;
   // Event only: posts kept pending, 0 or 1 meaning that posts coalesce.
   uint8_t maxPending = 1;
 };
@@ -110,13 +111,14 @@ struct TaskStats {
   uint32_t runs = 0;
   uint32_t missedReleases = 0;
   uint32_t deadlineMisses = 0;
-  uint32_t budgetOverruns = 0;
+  // Runs that lasted longer than the clearance they started under.
+  uint32_t clearanceOverruns = 0;
   uint32_t maxStartLatencyUs = 0;
   uint32_t maxRuntimeUs = 0;
   uint32_t lastRuntimeUs = 0;
-  uint32_t totalRuntimeUs = 0;
-  // Runs that were held back because a higher-priority release was too near
-  // for the declared budget.
+  uint64_t totalRuntimeUs = 0;
+  // Start attempts held back because a higher-priority release was nearer
+  // than the clearance. One held run counts every attempt made while it waits.
   uint32_t deferrals = 0;
   // The time between consecutive starts, summed over the intervals counted.
   uint64_t sumIntervalUs = 0;
@@ -161,11 +163,12 @@ public:
   const TaskSpec *spec(TaskIndex task) const;
   std::size_t taskCount() const { return _count; }
 
-  // The port's clock, and the microseconds spent in callbacks since the last
-  // call of takeBusyUs().
+  // The port's clock, the microseconds since start() as runOnce() has counted
+  // them, and the microseconds spent in callbacks since the last call of
+  // takeBusyUs(). The two counts do not wrap with the clock.
   uint32_t nowUs() const { return _port.nowUs(_port.context); }
-  uint32_t startedUs() const { return _started_us; }
-  uint32_t takeBusyUs();
+  uint64_t uptimeUs() const { return _uptimeUs; }
+  uint64_t takeBusyUs();
 
 private:
   struct State {
@@ -180,8 +183,9 @@ private:
   Port _port = {};
   std::size_t _count = 0;
   bool _started = false;
-  uint32_t _started_us = 0;
-  uint32_t _busy_us = 0;
+  uint32_t _lastNowUs = 0;
+  uint64_t _uptimeUs = 0;
+  uint64_t _busyUs = 0;
 
   bool valid(TaskIndex task) const {
     return task >= 0 && static_cast<std::size_t>(task) < _count;
