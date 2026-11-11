@@ -89,8 +89,13 @@ void SysDomain::enterDfu(ThetaGP_Reply &reply) {
 
 void SysDomain::taskInfo(const ThetaGP_Request &request, ThetaGP_Reply &reply) {
     const int32_t tid = request.kind.sys_get_task_info.tid;
+    // The id is checked at its own width: narrowed first, an id past the task
+    // index's range would name a task that was not asked for.
+    const Sched::Scheduler &scheduler = Sched::Scheduler::getInstance();
+    const bool inRange =
+        tid >= 0 && static_cast<uint32_t>(tid) < scheduler.taskCount();
     const Sched::TaskInfo *info =
-        Sched::Scheduler::getInstance().taskInfo(static_cast<Sched::TaskIndex>(tid));
+        inRange ? scheduler.taskInfo(static_cast<Sched::TaskIndex>(tid)) : nullptr;
     if (info == nullptr) {
         writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_PARAM,
                      ThetaGP_Reason_REASON_INVALID_TASK_ID);
