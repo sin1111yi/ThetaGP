@@ -8,6 +8,7 @@
 
 #include "wire/flash.h"
 #include "wire/config_d.h"
+#include "wire/coproc_d.h"
 #include "wire/profile_d.h"
 #include "wire/sys_d.h"
 #include "wire/test_d.h"
@@ -146,6 +147,12 @@ uint16_t Dispatch::answer(const uint8_t *payload, uint16_t length,
             break;
         case ThetaGP_Request_sys_get_log_tag:
             SysDomain::log(request, reply);
+            break;
+        case ThetaGP_Request_coproc_get_state_tag:
+            CoprocDomain::state(reply);
+            break;
+        case ThetaGP_Request_coproc_nav_tag:
+            CoprocDomain::nav(request, reply);
             break;
 #if THETAGP_CFG_HAS_FLASH
         case ThetaGP_Request_profile_status_tag:
