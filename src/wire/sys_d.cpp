@@ -121,6 +121,15 @@ void SysDomain::taskInfo(const ThetaGP_Request &request, ThetaGP_Reply &reply) {
     ok.has_late_count = true;
     ok.late_count = info->lateCount;
 #endif
+    // The scheduler's own accounting is always reported: it is what a host
+    // needs to see a task that is being held back or falling behind, and it is
+    // counted whether or not the test counters are built in.
+    ok.has_clearance_overruns = true;
+    ok.clearance_overruns = info->clearanceOverruns;
+    ok.has_deferrals = true;
+    ok.deferrals = info->deferrals;
+    ok.has_missed_releases = true;
+    ok.missed_releases = info->missedReleases;
 }
 
 void SysDomain::usage(ThetaGP_Reply &reply) {

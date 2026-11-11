@@ -205,9 +205,16 @@ FAST_CODE static void taskSystemUpdate(void *context) {
   UNUSED(context);
   Drivers::Device::RunLed::getInstance().update(
       Drivers::Device::SystemTimer::getInstance().getMicros());
+#ifdef BDCFG_COPROCESSOR_UART
+  // The link's quiet half: keep its read armed, and speak after two seconds of
+  // silence so a panel that is not talking can still be heard from here.
+  Drivers::Device::CoprocessorLink::getInstance().tick();
+#endif
 }
 
 #ifdef BDCFG_COPROCESSOR_UART
+// Posted by the UART interrupt when a heartbeat lands, so the answer leaves in
+// the same turn of the loop rather than on the next periodic tick.
 static void taskCoprocessorLink(void *context) {
   UNUSED(context);
   Drivers::Device::CoprocessorLink::getInstance().task();

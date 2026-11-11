@@ -28,6 +28,8 @@
 #include "drivers/device/device.h"
 #include "drivers/peripherals/bus/uart_bus.h"
 
+#include "sched/core.h"
+
 #include <cstdint>
 
 namespace ThetaGP::Drivers::Device {
@@ -43,8 +45,17 @@ public:
   void init() override;
   [[nodiscard]] bool listening() const { return _listening; }
 
-  // One tick: answers a heartbeat that has landed and re-arms the read.
+  // The task the interrupt wakes: answers the heartbeat that landed and arms
+  // the read for the next one.
   void task();
+
+  // The periodic half: keeps the read armed and, after two seconds of silence,
+  // says something so a quiet panel can still be heard from this side.
+  void tick();
+
+  // The task the UART interrupt posts, once the scheduler has handed one out.
+  void setWakeTask(Sched::TaskIndex task) { _wakeTask = task; }
+  [[nodiscard]] Sched::TaskIndex wakeTask() const { return _wakeTask; }
 
   // Called from the UART interrupt once the idle line closes a frame.
   void received() { _landed = true; }
@@ -76,6 +87,8 @@ private:
   // The frame as it arrived. DMA writes into the bus's own buffer, so this is
   // only touched by the task.
   uint8_t _frame[FRAME_BYTES] = {};
+
+  Sched::TaskIndex _wakeTask = Sched::kInvalidTask;
 
   volatile bool _landed = false;
   bool _alive = false;

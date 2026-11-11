@@ -26,6 +26,7 @@
 #include <cstring>
 #include "drivers/peripherals/peripherals_manager.h"
 #include "drivers/device/system_timer.h"
+#include "sched/scheduler.h"
 #include "utils/log/log.h"
 #include "wire/frame.h"
 #include "utils/utils.h"
@@ -45,9 +46,13 @@ COMMON_ZERO_INIT static uint8_t s_linkTx[UartBus::MAX_BUF_SIZE];
 COMMON_ZERO_INIT static uint8_t s_linkRx[UartBus::MAX_BUF_SIZE];
 
 void rxEntry(void *context) {
-  if (context != nullptr) {
-    static_cast<CoprocessorLink *>(context)->received();
+  if (context == nullptr) {
+    return;
   }
+  auto *link = static_cast<CoprocessorLink *>(context);
+  link->received();
+  // This runs in the UART's interrupt: the answer is posted, not run here.
+  Sched::Scheduler::getInstance().postFromIsr(link->wakeTask());
 }
 
 // A fixed-width field, padded with zeroes so the frame keeps one size.
@@ -126,34 +131,12 @@ void CoprocessorLink::init() {
 }
 
 void CoprocessorLink::task() {
-  if (_uart == nullptr) {
+  if (_uart == nullptr || !_landed) {
     return;
   }
 
   const uint32_t nowUs =
       Drivers::Device::SystemTimer::getInstance().getMicros();
-  if (_lastHeardUs == 0) {
-    _lastHeardUs = nowUs;
-  }
-
-  if (!_landed) {
-    // A read that closed without a frame leaves the line armed for the next.
-    // A frame that landed since the check above is left for the next tick.
-    if (!_uart->isRxBusy() && !_landed) {
-      (void)_uart->receive(_frame, FRAME_BYTES);
-    }
-    // Two seconds of silence is a link to test from this side: a frame of our
-    // own says whether the panel's read is the half that is missing.
-    if (nowUs - _lastHeardUs > 2000000U) {
-      // Every two seconds of silence, not once: a panel that was not listening
-      // yet has to hear the next one.
-      if (isOk(_uart->transmit(_ping, FRAME_BYTES))) {
-        _speaking = true;
-        _lastHeardUs = nowUs;
-      }
-    }
-    return;
-  }
   _landed = false;
   _lastHeardUs = nowUs;
 
@@ -172,11 +155,39 @@ void CoprocessorLink::task() {
   (void)_uart->receive(_frame, FRAME_BYTES);
 }
 
+void CoprocessorLink::tick() {
+  if (_uart == nullptr) {
+    return;
+  }
+
+  const uint32_t nowUs =
+      Drivers::Device::SystemTimer::getInstance().getMicros();
+  if (_lastHeardUs == 0) {
+    _lastHeardUs = nowUs;
+  }
+
+  // A read that closed without a frame leaves the line armed for the next.
+  if (!_landed && !_uart->isRxBusy()) {
+    (void)_uart->receive(_frame, FRAME_BYTES);
+  }
+
+  // Two seconds of silence is a link to test from this side: a frame of our own
+  // says whether the panel's read is the half that is missing.
+  if (nowUs - _lastHeardUs > 2000000U) {
+    if (isOk(_uart->transmit(_ping, FRAME_BYTES))) {
+      _speaking = true;
+      _lastHeardUs = nowUs;
+    }
+  }
+}
+
 #else
 
 void CoprocessorLink::init() {}
 
 void CoprocessorLink::task() {}
+
+void CoprocessorLink::tick() {}
 
 #endif
 

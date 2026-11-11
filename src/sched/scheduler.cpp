@@ -79,6 +79,8 @@ bool Scheduler::start() {
 
 bool Scheduler::post(TaskIndex task) { return _core.post(task); }
 
+bool Scheduler::postFromIsr(TaskIndex task) { return _core.postFromIsr(task); }
+
 FAST_CODE void Scheduler::run() {
   for (;;) {
     _core.pump();
@@ -126,6 +128,9 @@ const TaskInfo *Scheduler::taskInfo(TaskIndex task) const {
                           : static_cast<uint32_t>(stats->sumIntervalUs / stats->intervals);
   info.runCount = stats->runs;
   info.lateCount = stats->deadlineMisses;
+  info.clearanceOverruns = stats->clearanceOverruns;
+  info.deferrals = stats->deferrals;
+  info.missedReleases = stats->missedReleases;
   return &info;
 }
 

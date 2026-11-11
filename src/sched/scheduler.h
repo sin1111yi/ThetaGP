@@ -44,6 +44,9 @@ struct TaskInfo {
   uint32_t avgDeltaUs = 0;
   uint32_t runCount = 0;
   uint32_t lateCount = 0;
+  uint32_t clearanceOverruns = 0;
+  uint32_t deferrals = 0;
+  uint32_t missedReleases = 0;
 };
 
 // The scheduler the firmware runs on: a core over the board's clock, with the
@@ -71,6 +74,9 @@ public:
   bool start();
 
   bool post(TaskIndex task);
+  // The same claim, made from an interrupt: the core brackets it with the
+  // mask rather than a lock, so a nested interrupt cannot interleave it.
+  bool postFromIsr(TaskIndex task);
 
   // Runs until the device is reset: every ready task, then the port's sleep.
   [[noreturn]] void run();
