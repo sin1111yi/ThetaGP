@@ -59,13 +59,16 @@
 #define BDCFG_REPORT_RATE_HZ         1000
 
 #define BDCFG_USE_UART_1
+#define BDCFG_USE_UART_2
 
-#define BDCFG_USE_UART_COUNT 1
+#define BDCFG_USE_UART_COUNT 2
 
 #define BDCFG_LOGGER_UART            BUS_UART_1
+#define BDCFG_COPROCESSOR_UART       BUS_UART_2
 
 #define BDCFG_UART_DESC_DATA         \
-        {UartInstance::Uart1, {Port::PortA, Pin::Pin9}, {Port::PortA, Pin::Pin10}, 115200}
+        {UartInstance::Uart1, {Port::PortA, Pin::Pin9}, {Port::PortA, Pin::Pin10}, 115200}, \
+        {UartInstance::Uart4, {Port::PortC, Pin::Pin10}, {Port::PortC, Pin::Pin11}, 4000000}
 
 #define BDCFG_USE_SPI_1
 
