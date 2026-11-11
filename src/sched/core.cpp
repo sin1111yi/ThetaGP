@@ -99,6 +99,10 @@ uint64_t Core::takeBusyUs() {
 }
 
 FAST_CODE void Core::collect(State &task, uint32_t now) {
+  if (task.deferred && static_cast<int32_t>(now - task.deferUntilUs) >= 0) {
+    task.deferred = false;
+  }
+
   const uint32_t period = task.spec.periodUs;
   if (task.spec.release != Release::Periodic || period == 0) {
     return;
@@ -234,7 +238,13 @@ FAST_CODE bool Core::runOnce() {
     const uint32_t window = higherReleaseWindow(task.spec.priority, started);
     if (window != UINT32_MAX &&
         (window <= kStartGuardUs || task.spec.startClearanceUs >= window - kStartGuardUs)) {
-      ++task.stats.deferrals;
+      // One episode counts once: the run is held until the release it waits
+      // on lands, and every attempt inside that wait is the same deferral.
+      if (!task.deferred) {
+        task.deferred = true;
+        ++task.stats.deferrals;
+      }
+      task.deferUntilUs = started + window;
       if (_port.exitCritical != nullptr) {
         _port.exitCritical(_port.context);
       }
@@ -261,6 +271,8 @@ FAST_CODE bool Core::runOnce() {
     ++task.stats.intervals;
   }
   task.stats.lastStartUs = started;
+  task.deferred = false;
+  task.deferUntilUs = 0;
   ++task.stats.runs;
   task.spec.run(task.spec.context);
 
@@ -287,7 +299,7 @@ FAST_CODE bool Core::readyAt(uint32_t now) const {
   }
   for (std::size_t i = 0; i < _count; ++i) {
     const State &task = _tasks[i];
-    if (task.pending > 0) {
+    if (task.pending > 0 && !task.deferred) {
       return true;
     }
     if (task.spec.release == Release::Periodic &&
@@ -338,7 +350,19 @@ FAST_CODE bool Core::nextWakeUs(uint32_t *deadlineUs) const {
   for (std::size_t i = 0; i < _count; ++i) {
     const State &task = _tasks[i];
     if (task.pending > 0) {
-      return false;
+      if (!task.deferred) {
+        return false;
+      }
+      // Held back by its clearance: the core may sleep until that release is
+      // due, then this task gets its turn.
+      const int32_t held = static_cast<int32_t>(task.deferUntilUs - now);
+      const uint32_t until = held > 0 ? static_cast<uint32_t>(held) : 0;
+      if (!found || until < static_cast<uint32_t>(soonest)) {
+        found = true;
+        soonest = static_cast<int32_t>(until);
+        wake = task.deferUntilUs;
+      }
+      continue;
     }
     if (task.spec.release != Release::Periodic) {
       continue;

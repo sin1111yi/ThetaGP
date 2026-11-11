@@ -177,6 +177,10 @@ private:
     uint32_t nextReleaseUs = 0;
     uint32_t firstPendingUs = 0;
     uint8_t pending = 0;
+    // A run held back by its clearance: the task stays pending, and the moment
+    // the higher-priority release it waits on comes due is what wakes the core.
+    bool deferred = false;
+    uint32_t deferUntilUs = 0;
   };
 
   State _tasks[kMaxTasks] = {};
