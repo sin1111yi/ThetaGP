@@ -30,25 +30,27 @@ DTCM. The snapshot below is the BoringTechH743 debug build of this tree.
 | buffer | size | macro | region | definition |
 |---|---:|---|---|---|
 | `Frame::instance` | 5,156 | plain static, function-local | DTCM | `src/wire/frame.cpp:35` |
-| `Scheduler::instance` | 1,748 | plain static, function-local | DTCM | `src/sched/scheduler.h:53` |
+| `Scheduler::instance` | 2,088 | plain static, function-local | DTCM | `src/sched/scheduler.h:54` |
 | `s_replaced` | 4,097 | `COMMON_ZERO_INIT` | AXI | `src/gamepad/config/config_manager.cpp:216` |
 | `s_staging` | 4,097 | `COMMON_ZERO_INIT` | AXI | `src/gamepad/profile/profile_store.cpp:34` |
 | `s_compaction` | 4,096 | `COMMON_ZERO_INIT` | AXI | `src/gamepad/profile/profile_store.cpp:35` |
 | `s_stage` | 4,096 | `COMMON_ZERO_INIT` | AXI | `src/wire/flash.cpp:23` |
 | `s_answer` | 1,064 | `COMMON_ZERO_INIT` | AXI | `src/drivers/gp_emulator/ps4/ps4_auth.cpp:161` |
 | `s_slots` | 1,056 | `COMMON_ZERO_INIT` | AXI | `src/drivers/device/rgb_strip/rgb_strip.cpp:106` |
-| `s_frame` | 1,028 | `COMMON_ZERO_INIT` | AXI | `src/tasks.cpp:52` |
-| `s_reply` | 1,024 | `COMMON_ZERO_INIT` | AXI | `src/tasks.cpp:51` |
+| `s_frame` | 1,028 | `COMMON_ZERO_INIT` | AXI | `src/tasks.cpp:79` |
+| `s_reply` | 1,024 | `COMMON_ZERO_INIT` | AXI | `src/tasks.cpp:78` |
 | `s_config_descriptor` | 1,024 | `COMMON_ZERO_INIT` | AXI | `src/drivers/gp_emulator/usb_driver.cpp:35` |
 | `s_flashSpiTxBuf` | 512 | `COMMON_ZERO_INIT` | AXI | `src/drivers/device/flash/flash_w25qxx.cpp:42` |
 | `s_flashSpiRxBuf` | 512 | `COMMON_ZERO_INIT` | AXI | `src/drivers/device/flash/flash_w25qxx.cpp:43` |
 | `s_logTxBuf` | 256 | `COMMON_ZERO_INIT` | AXI | `src/drivers/device/logger.cpp:34` |
 | `s_logRxBuf` | 256 | `COMMON_ZERO_INIT` | AXI | `src/drivers/device/logger.cpp:35` |
+| `s_linkTx` | 256 | `COMMON_ZERO_INIT` | AXI | `src/drivers/device/coprocessor_link.cpp:44` |
+| `s_linkRx` | 256 | `COMMON_ZERO_INIT` | AXI | `src/drivers/device/coprocessor_link.cpp:45` |
 | `USBDriver::s_cdc_buffer` | 256 | `COMMON_ZERO_INIT` | AXI | `src/drivers/gp_emulator/usb_driver.cpp:37` |
 | `s_challenge` | 256 | plain static | DTCM | `src/drivers/gp_emulator/ps4/ps4_auth.cpp:162` |
 | `descriptorStringBuffer` (×4) | 1,024 | plain static, function-local | DTCM | `src/drivers/gp_emulator/shared/driver_helper.h:33` |
 
-Totals: AXI SRAM 24,574 B, DTCMRAM 8,184 B.
+Totals: AXI SRAM 23,886 B, DTCMRAM 8,524 B.
 
 `getStringDescriptor()` is a `static inline` in a shared header with a
 function-local buffer, so each emulator translation unit that calls it carries its

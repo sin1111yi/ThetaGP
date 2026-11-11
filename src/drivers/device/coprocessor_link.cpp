@@ -40,9 +40,9 @@ namespace ThetaGP::Drivers::Device {
 namespace {
 
 // Two buffers of the bus's own capacity, borrowed by it for the firmware's
-// lifetime. AXI SRAM (COMMON_DATA): the region the UART's DMA reaches.
-COMMON_DATA static uint8_t s_linkTx[UartBus::MAX_BUF_SIZE] = {};
-COMMON_DATA static uint8_t s_linkRx[UartBus::MAX_BUF_SIZE] = {};
+// lifetime. AXI SRAM (COMMON_ZERO_INIT): the region the UART's DMA reaches.
+COMMON_ZERO_INIT static uint8_t s_linkTx[UartBus::MAX_BUF_SIZE];
+COMMON_ZERO_INIT static uint8_t s_linkRx[UartBus::MAX_BUF_SIZE];
 
 void rxEntry(void *context) {
   if (context != nullptr) {
@@ -138,7 +138,8 @@ void CoprocessorLink::task() {
 
   if (!_landed) {
     // A read that closed without a frame leaves the line armed for the next.
-    if (!_uart->isRxBusy()) {
+    // A frame that landed since the check above is left for the next tick.
+    if (!_uart->isRxBusy() && !_landed) {
       (void)_uart->receive(_frame, FRAME_BYTES);
     }
     // Two seconds of silence is a link to test from this side: a frame of our
@@ -173,7 +174,7 @@ void CoprocessorLink::task() {
 
 #else
 
-void CoprocessorLink::init() { return false; }
+void CoprocessorLink::init() {}
 
 void CoprocessorLink::task() {}
 
