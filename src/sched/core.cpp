@@ -234,8 +234,14 @@ FAST_CODE bool Core::runOnce() {
     _port.enterCritical(_port.context);
   }
   const uint32_t started = nowIsr();
+  // The release this run was cleared against, so the run can be held to it
+  // afterwards: the clearance is a gate, not a bound.
+  uint32_t clearedAgainst = UINT32_MAX;
   if (task.spec.startClearanceUs != 0) {
     const uint32_t window = higherReleaseWindow(task.spec.priority, started);
+    if (window != UINT32_MAX) {
+      clearedAgainst = window;
+    }
     if (window != UINT32_MAX &&
         (window <= kStartGuardUs || task.spec.startClearanceUs >= window - kStartGuardUs)) {
       // One episode counts once: the run is held until the release it waits
@@ -284,7 +290,10 @@ FAST_CODE bool Core::runOnce() {
   if (runtime > task.stats.maxRuntimeUs) {
     task.stats.maxRuntimeUs = runtime;
   }
-  if (task.spec.startClearanceUs != 0 && runtime > task.spec.startClearanceUs) {
+  // An overrun is a run that ran past the release it started clear of, not one
+  // longer than the gate: a command that takes 200 us under a 50 us gate is
+  // doing its job, and only the release it collides with matters.
+  if (clearedAgainst != UINT32_MAX && runtime > clearedAgainst) {
     ++task.stats.clearanceOverruns;
   }
   if (task.spec.deadlineUs != 0 && (finished - released) > task.spec.deadlineUs) {
