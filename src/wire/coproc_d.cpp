@@ -94,8 +94,8 @@ void CoprocDomain::nav(const ThetaGP_Request &request, ThetaGP_Reply &reply) {
         return;
     }
     if (!link.sendNav(action, page)) {
-        // The transmitter had the previous frame: the step is not queued, and
-        // the host can ask again.
+        // Four steps are already waiting: the host is asking faster than the
+        // panel is moving, and the step it asked for did not enter the queue.
         writeFailure(reply, ThetaGP_ErrorCode_ERR_BUSY,
                      ThetaGP_Reason_REASON_NONE);
         return;

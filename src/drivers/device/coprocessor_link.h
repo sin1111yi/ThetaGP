@@ -65,7 +65,9 @@ public:
   [[nodiscard]] Sched::TaskIndex wakeTask() const { return _wakeTask; }
 
   // One navigation step for the panel: the action and, for a step that names a
-  // page, which one.
+  // page, which one. The step is queued and leaves on the periodic tick, which
+  // retries a transmitter that was carrying a frame; false means the queue is
+  // full and the step did not enter it.
   bool sendNav(uint8_t action, uint8_t page = 0);
 
   [[nodiscard]] bool alive() const { return _alive; }
@@ -91,6 +93,25 @@ private:
 
   // The steps one frame is read in, as the wire defines them.
   enum : uint8_t { kPrefix = 0, kPayload = 1, kChecksum = 2 };
+
+  struct NavStep {
+    uint8_t action;
+    uint8_t page;
+  };
+
+  // The steps waiting for the transmitter, and how many ticks the one at the
+  // head has been retried: a step that cannot leave in that time is dropped so
+  // a stuck wire does not hold the queue for ever.
+  static constexpr uint8_t kNavQueue = 4;
+  static constexpr uint16_t kNavTries = 100;
+  NavStep _nav[kNavQueue] = {};
+  uint8_t _navHead = 0;
+  uint8_t _navTail = 0;
+  uint16_t _navTried = 0;
+  uint32_t _lastNavUs = 0;
+
+  // Sends the step at the head of the queue, if the transmitter will take it.
+  void flushNav();
 
   bool parse(uint8_t byte);
   void reset();

@@ -57,6 +57,9 @@ constexpr uint32_t kProtocol = 1;
 constexpr uint32_t kStateUs = 500000;
 constexpr uint32_t kAliveUs = 1500000;
 constexpr uint32_t kBoardUs = 2000000;
+// One step is worth a moment on the panel: its mark travels a card in about
+// half a second, and two steps inside that would only start over.
+constexpr uint32_t kNavGapUs = 550000;
 
 // Two buffers of the bus's own capacity, borrowed by it for the firmware's
 // lifetime. AXI SRAM (COMMON_ZERO_INIT): the region the UART's DMA reaches.
@@ -184,6 +187,8 @@ void CoprocessorLink::tick() {
     _lastBoardUs = nowUs;
     sendBoard();
   }
+  flushNav();
+
   if (nowUs - _lastStateUs >= kStateUs) {
     _lastStateUs = nowUs;
     sendState();
@@ -348,14 +353,56 @@ void CoprocessorLink::sendState() {
 }
 
 bool CoprocessorLink::sendNav(uint8_t action, uint8_t page) {
-  ThetaGP_Link_Message message = ThetaGP_Link_Message_init_zero;
-  message.which_kind = ThetaGP_Link_Message_nav_tag;
-  message.kind.nav.action = static_cast<ThetaGP_Link_NavAction>(action);
-  message.kind.nav.page = page;
+  const uint8_t next = static_cast<uint8_t>((_navHead + 1) % kNavQueue);
+  if (next == _navTail) {
+    return false;
+  }
 
-  uint8_t payload[PAYLOAD_MAX] = {};
-  uint16_t length = sizeof payload;
-  return pack(message, payload, &length) && sendFrame(payload, length);
+  _nav[_navHead] = NavStep{action, page};
+  _navHead = next;
+
+  // A transmitter that is free takes it now, so a step asked for from the
+  // command task leaves without waiting for the tick.
+  flushNav();
+  return true;
+}
+
+void CoprocessorLink::flushNav() {
+  while (_navTail != _navHead) {
+    // A step that arrived while the last one is still travelling waits for it:
+    // the panel moves one place at a time, and a burst of steps is a burst of
+    // moves rather than one.
+    const uint32_t nowUs =
+        Drivers::Device::SystemTimer::getInstance().getMicros();
+    if (_lastNavUs != 0 && (nowUs - _lastNavUs) < kNavGapUs) {
+      return;
+    }
+    const NavStep &step = _nav[_navTail];
+
+    ThetaGP_Link_Message message = ThetaGP_Link_Message_init_zero;
+    message.which_kind = ThetaGP_Link_Message_nav_tag;
+    message.kind.nav.action = static_cast<ThetaGP_Link_NavAction>(step.action);
+    message.kind.nav.page = step.page;
+
+    uint8_t payload[PAYLOAD_MAX] = {};
+    uint16_t length = sizeof payload;
+    if (!pack(message, payload, &length) || !sendFrame(payload, length)) {
+      // The transmitter still had the last frame: the step waits for the next
+      // tick, and gives up once it has waited longer than a step is worth.
+      if (++_navTried >= kNavTries) {
+        LOG_ERROR("link: nav %u dropped, the transmitter stayed busy",
+                  static_cast<unsigned>(step.action));
+        _navTried = 0;
+        _navTail = static_cast<uint8_t>((_navTail + 1) % kNavQueue);
+        continue;
+      }
+      return;
+    }
+
+    _navTried = 0;
+    _lastNavUs = nowUs;
+    _navTail = static_cast<uint8_t>((_navTail + 1) % kNavQueue);
+  }
 }
 
 bool CoprocessorLink::sendFrame(const uint8_t *payload, uint16_t length) {
