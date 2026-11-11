@@ -23,13 +23,23 @@
 
 #include "BoardConfig.h"
 
+#include <cstdio>
 #include <cstring>
-#include "drivers/peripherals/peripherals_manager.h"
+
+#include "conf/ThetaGP_Config.h"
 #include "drivers/device/system_timer.h"
+#include "drivers/gp_emulator/usb_driver.h"
+#include "drivers/peripherals/peripherals_manager.h"
+#include "gamepad/config/config_manager.h"
 #include "sched/scheduler.h"
 #include "utils/log/log.h"
-#include "wire/frame.h"
 #include "utils/utils.h"
+#include "wire/frame.h"
+#include "wire/profile_d.h"
+
+#include "pb/Link.pb.h"
+#include "pb_decode.h"
+#include "pb_encode.h"
 
 using ThetaGP::Drivers::Peripheral::BUS::Mode;
 using ThetaGP::Drivers::Peripheral::BUS::UartBus;
@@ -39,6 +49,14 @@ namespace ThetaGP::Drivers::Device {
 #ifdef BDCFG_COPROCESSOR_UART
 
 namespace {
+
+// The schema's own version, as the greetings carry it.
+constexpr uint32_t kProtocol = 1;
+// How often this board says what it shows, and how long a silence is a link
+// that is down rather than one that is quiet.
+constexpr uint32_t kStateUs = 500000;
+constexpr uint32_t kAliveUs = 1500000;
+constexpr uint32_t kBoardUs = 2000000;
 
 // Two buffers of the bus's own capacity, borrowed by it for the firmware's
 // lifetime. AXI SRAM (COMMON_ZERO_INIT): the region the UART's DMA reaches.
@@ -51,47 +69,38 @@ void rxEntry(void *context) {
   }
   auto *link = static_cast<CoprocessorLink *>(context);
   link->received();
-  // This runs in the UART's interrupt: the answer is posted, not run here.
+  // This runs in the UART's interrupt: the reading is posted, not done here.
   Sched::Scheduler::getInstance().postFromIsr(link->wakeTask());
 }
 
-// A fixed-width field, padded with zeroes so the frame keeps one size.
-void putField(uint8_t *field, size_t size, const char *text) {
-  std::strncpy(reinterpret_cast<char *>(field), text, size);
+// A fixed-width field, padded with zeroes so the message keeps one size.
+void putField(char *field, size_t size, const char *text) {
+  std::strncpy(field, text, size - 1);
+  field[size - 1] = '\0';
 }
 
-// The frame as the protocol defines it: a varint length, the payload and the
-// payload's byte sum in the low 16 bits, little endian. A frame whose length
-// and checksum do not hold is refused whole.
-bool frameHolds(const uint8_t *frame, uint16_t size) {
-  if (size < 3) {
+// The footer's release and nothing after it: "0.3.0" rather than
+// "0.3.0-64-ga65c632", which is all the panel has room to say.
+void putRelease(char *field, size_t size) {
+  char release[sizeof(THETAGP_FW_VERSION) + 1] = {};
+  std::strncpy(release, THETAGP_FW_VERSION, sizeof release - 1);
+  char *tail = std::strchr(release, '-');
+  if (tail != nullptr) {
+    *tail = '\0';
+  }
+  putField(field, size, release);
+}
+
+// One message, encoded into the payload buffer a frame carries.
+bool pack(const ThetaGP_Link_Message &message, uint8_t *payload,
+          uint16_t *length) {
+  pb_ostream_t stream = pb_ostream_from_buffer(payload, *length);
+  if (!pb_encode(&stream, ThetaGP_Link_Message_fields, &message)) {
+    LOG_ERROR("link: encode refused: %s", PB_GET_ERROR(&stream));
     return false;
   }
-
-  uint16_t length = 0;
-  uint16_t prefix = 1;
-  if ((frame[0] & 0x80u) != 0) {
-    if (size < 4) {
-      return false;
-    }
-    length = static_cast<uint16_t>((frame[0] & 0x7Fu) |
-                                   ((uint16_t)(frame[1] & 0x7Fu) << 7));
-    prefix = 2;
-  } else {
-    length = frame[0];
-  }
-  if (static_cast<uint16_t>(prefix + length + 2) != size) {
-    return false;
-  }
-
-  uint16_t sum = 0;
-  for (uint16_t i = 0; i < length; ++i) {
-    sum = static_cast<uint16_t>(sum + frame[prefix + i]);
-  }
-  const uint16_t carried =
-      static_cast<uint16_t>(frame[prefix + length] |
-                            ((uint16_t)frame[prefix + length + 1] << 8));
-  return sum == carried;
+  *length = static_cast<uint16_t>(stream.bytes_written);
+  return true;
 }
 
 } // namespace
@@ -104,30 +113,36 @@ void CoprocessorLink::init() {
   _uart->setRxCallback(rxEntry, this);
   _uart->init();
 
-  static const uint8_t ping[] = {'P', 'I', 'N', 'G'};
-  (void)Wire::Frame::encode(ping, sizeof ping, _ping, sizeof _ping);
-
-  uint8_t identity[REPLY_PAYLOAD_BYTES] = {};
-  identity[0] = 'T';
-  identity[1] = 'G';
-  identity[2] = 'I';
-  identity[3] = 'D';
-  putField(identity + 4, 16, BOARD_IDENTIFIER);
-  // The release, not the distance from it: "0.3.0" rather than "0.3.0-64-ga65c632",
-  // which is all a 428x156 panel has room to say.
-  char release[sizeof(THETAGP_FW_VERSION)] = {};
-  std::strncpy(release, THETAGP_FW_VERSION, sizeof release - 1);
-  char *tail = std::strchr(release, '-');
-  if (tail != nullptr) {
-    *tail = '\0';
-  }
-  putField(identity + 20, 20, release);
-  _replyLength = Wire::Frame::encode(identity, sizeof identity, _reply,
-                                     sizeof _reply);
-
-  _listening = isOk(_uart->receive(_frame, FRAME_BYTES));
+  reset();
+  _listening = isOk(_uart->receive(_rx, sizeof _rx));
   LOG_INFO("link: coprocessor uart %s", _listening ? "listening" : "not armed");
   setInitialized(_listening);
+}
+
+void CoprocessorLink::received() {
+  if (_uart == nullptr) {
+    return;
+  }
+
+  // The bus counts the bytes the idle line closed; the interrupt has already
+  // copied them into _rx, and every one of them belongs to the frame being
+  // assembled, whether this read carries all of it or a piece.
+  const uint16_t landed = _uart->_readDmaBufLen;
+  for (uint16_t i = 0; i < landed; ++i) {
+    const uint16_t next =
+        static_cast<uint16_t>((_head + 1) & (kStreamSize - 1));
+    if (next == _tail) {
+      _lost = _lost + 1;
+      continue;
+    }
+    _stream[_head] = _rx[i];
+    _head = next;
+  }
+  _landed = true;
+
+  // The next frame's first byte follows the last one by a few microseconds at
+  // this rate: the read has to be armed here, not when the task runs.
+  (void)_uart->receive(_rx, sizeof _rx);
 }
 
 void CoprocessorLink::task() {
@@ -135,24 +150,16 @@ void CoprocessorLink::task() {
     return;
   }
 
-  const uint32_t nowUs =
-      Drivers::Device::SystemTimer::getInstance().getMicros();
   _landed = false;
-  _lastHeardUs = nowUs;
 
-  if (!frameHolds(_frame, FRAME_BYTES)) {
-    _refused = _refused + 1;
-    _alive = false;
-  } else {
-    _heartbeats = _heartbeats + 1;
-    _alive = true;
-    // The answer says who this is: the panel prints it while the link holds.
-    if (isOk(_uart->transmit(_reply, _replyLength))) {
-      _answered = _answered + 1;
+  while (_tail != _head) {
+    const uint8_t byte = _stream[_tail];
+    _tail = static_cast<uint16_t>((_tail + 1) & (kStreamSize - 1));
+    if (parse(byte)) {
+      handle(_payload, _filled);
+      reset();
     }
   }
-
-  (void)_uart->receive(_frame, FRAME_BYTES);
 }
 
 void CoprocessorLink::tick() {
@@ -162,23 +169,202 @@ void CoprocessorLink::tick() {
 
   const uint32_t nowUs =
       Drivers::Device::SystemTimer::getInstance().getMicros();
-  if (_lastHeardUs == 0) {
-    _lastHeardUs = nowUs;
-  }
 
   // A read that closed without a frame leaves the line armed for the next.
   if (!_landed && !_uart->isRxBusy()) {
-    (void)_uart->receive(_frame, FRAME_BYTES);
+    (void)_uart->receive(_rx, sizeof _rx);
   }
 
-  // Two seconds of silence is a link to test from this side: a frame of our own
-  // says whether the panel's read is the half that is missing.
-  if (nowUs - _lastHeardUs > 2000000U) {
-    if (isOk(_uart->transmit(_ping, FRAME_BYTES))) {
-      _speaking = true;
-      _lastHeardUs = nowUs;
-    }
+  _alive = _lastHeardUs != 0 && (nowUs - _lastHeardUs) < kAliveUs;
+
+  // A board that has been heard is named again every couple of seconds: the
+  // panel greets once every ten, and an answer lost to a busy transmitter
+  // would otherwise leave it unnamed until then.
+  if (_panelHeard && (nowUs - _lastBoardUs) >= kBoardUs) {
+    _lastBoardUs = nowUs;
+    sendBoard();
   }
+  if (nowUs - _lastStateUs >= kStateUs) {
+    _lastStateUs = nowUs;
+    sendState();
+  }
+}
+
+void CoprocessorLink::reset() {
+  _length = 0;
+  _filled = 0;
+  _sum = 0;
+  _prefixBytes = 0;
+  _checksumLow = 0;
+  _checksumBytes = 0;
+  _state = kPrefix;
+}
+
+bool CoprocessorLink::parse(uint8_t byte) {
+  switch (_state) {
+  case kPrefix:
+    _length =
+        _prefixBytes == 0
+            ? static_cast<uint16_t>(byte & 0x7Fu)
+            : static_cast<uint16_t>(_length | ((uint16_t)(byte & 0x7Fu) << 7));
+    if (_prefixBytes == 0 && (byte & 0x80u) != 0) {
+      // A length this small is one byte: anything else continues it.
+      _prefixBytes = 1;
+      return false;
+    }
+    if (_length == 0 || _length > PAYLOAD_MAX) {
+      // Nothing carries an empty payload, and a length past the buffer is a
+      // prefix to give up on.
+      _refused = _refused + 1;
+      reset();
+      return false;
+    }
+    _filled = 0;
+    _sum = 0;
+    _checksumBytes = 0;
+    _state = kPayload;
+    return false;
+
+  case kPayload:
+    _payload[_filled++] = byte;
+    _sum = static_cast<uint16_t>(_sum + byte);
+    if (_filled == _length) {
+      _state = kChecksum;
+      _checksumBytes = 0;
+    }
+    return false;
+
+  case kChecksum:
+    if (_checksumBytes == 0) {
+      _checksumLow = byte;
+      _checksumBytes = 1;
+      return false;
+    }
+    if (_sum != static_cast<uint16_t>(_checksumLow |
+                                      (static_cast<uint16_t>(byte) << 8))) {
+      _refused = _refused + 1;
+      return false;
+    }
+    return true;
+
+  default:
+    reset();
+    return false;
+  }
+}
+
+void CoprocessorLink::handle(const uint8_t *payload, uint16_t length) {
+  ThetaGP_Link_Message message = ThetaGP_Link_Message_init_zero;
+  pb_istream_t stream = pb_istream_from_buffer(payload, length);
+  if (!pb_decode(&stream, ThetaGP_Link_Message_fields, &message)) {
+    // A frame that framed and checksummed but carries no message of this
+    // schema: another build's, or noise the sum let through.
+    _refused = _refused + 1;
+    return;
+  }
+
+  _frames = _frames + 1;
+  _lastHeardUs = Drivers::Device::SystemTimer::getInstance().getMicros();
+  _alive = true;
+  _panelHeard = true;
+
+  switch (message.which_kind) {
+  case ThetaGP_Link_Message_hello_tag:
+    putField(_panelId, sizeof _panelId, message.kind.hello.panel_id);
+    putField(_panelRelease, sizeof _panelRelease, message.kind.hello.release);
+    LOG_INFO("link: panel %s %s %ux%u", _panelId, _panelRelease,
+             static_cast<unsigned>(message.kind.hello.width),
+             static_cast<unsigned>(message.kind.hello.height));
+    sendBoard();
+    break;
+
+  case ThetaGP_Link_Message_beat_tag:
+    if (message.kind.beat.page != _panelPage) {
+      LOG_INFO("link: panel page %u item %u", (unsigned)message.kind.beat.page,
+               (unsigned)message.kind.beat.item);
+    }
+    _panelPage = message.kind.beat.page;
+    _panelItem = message.kind.beat.item;
+    _panelUptimeS = message.kind.beat.uptime_s;
+    _panelDropped = message.kind.beat.dropped;
+    break;
+
+  default:
+    break;
+  }
+}
+
+void CoprocessorLink::sendBoard() {
+  ThetaGP_Link_Message message = ThetaGP_Link_Message_init_zero;
+  message.which_kind = ThetaGP_Link_Message_board_tag;
+  message.kind.board.protocol = kProtocol;
+  putField(message.kind.board.board_id, sizeof message.kind.board.board_id,
+           BOARD_IDENTIFIER);
+  putRelease(message.kind.board.release, sizeof message.kind.board.release);
+
+  uint8_t payload[PAYLOAD_MAX] = {};
+  uint16_t length = sizeof payload;
+  if (pack(message, payload, &length) && sendFrame(payload, length)) {
+    _boards = _boards + 1;
+  }
+}
+
+void CoprocessorLink::sendState() {
+  uint32_t id = 0;
+  uint32_t count = 0;
+#if THETAGP_CFG_HAS_FLASH
+  Gamepad::Config::ConfigManager &manager =
+      Gamepad::Config::ConfigManager::getInstance();
+  id = manager.activeProfileId();
+  count = manager.profileCount();
+#endif
+
+  // The name travels in the profile's body, which lives in the flash: it is
+  // read when the profile changes, and the beats in between carry what was
+  // read then.
+  if (id != _profileNamedId) {
+    _profileNamedId = id;
+    _profileName[0] = '\0';
+#if THETAGP_CFG_HAS_FLASH
+    Wire::readActiveProfileName(_profileName, sizeof _profileName);
+#endif
+  }
+
+  ThetaGP_Link_Message message = ThetaGP_Link_Message_init_zero;
+  message.which_kind = ThetaGP_Link_Message_state_tag;
+  message.kind.state.report_hz = THETAGP_CFG_USB_REPORT_RATE_HZ;
+  message.kind.state.profile_id = id;
+  message.kind.state.profile_count = count;
+  putField(message.kind.state.profile_name,
+           sizeof message.kind.state.profile_name, _profileName);
+  message.kind.state.host_attached = get_usb_mounted();
+  message.kind.state.storing = THETAGP_CFG_HAS_FLASH;
+
+  uint8_t payload[PAYLOAD_MAX] = {};
+  uint16_t length = sizeof payload;
+  if (pack(message, payload, &length)) {
+    (void)sendFrame(payload, length);
+  }
+}
+
+bool CoprocessorLink::sendNav(uint8_t action, uint8_t page) {
+  ThetaGP_Link_Message message = ThetaGP_Link_Message_init_zero;
+  message.which_kind = ThetaGP_Link_Message_nav_tag;
+  message.kind.nav.action = static_cast<ThetaGP_Link_NavAction>(action);
+  message.kind.nav.page = page;
+
+  uint8_t payload[PAYLOAD_MAX] = {};
+  uint16_t length = sizeof payload;
+  return pack(message, payload, &length) && sendFrame(payload, length);
+}
+
+bool CoprocessorLink::sendFrame(const uint8_t *payload, uint16_t length) {
+  const uint16_t size =
+      Wire::Frame::encode(payload, length, _frame, sizeof _frame);
+  if (size == 0) {
+    return false;
+  }
+  return isOk(_uart->transmit(_frame, size));
 }
 
 #else
@@ -188,6 +374,10 @@ void CoprocessorLink::init() {}
 void CoprocessorLink::task() {}
 
 void CoprocessorLink::tick() {}
+
+void CoprocessorLink::received() {}
+
+bool CoprocessorLink::sendNav(uint8_t, uint8_t) { return false; }
 
 #endif
 

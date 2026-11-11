@@ -10,6 +10,10 @@
 
 namespace ThetaGP::Wire {
 
+// The name of the profile in effect, as its body carries it; empty when the
+// board carries no store or the body names nothing.
+void readActiveProfileName(char *out, size_t cap);
+
 // The profile domain's body stream: the one body on its way back to the host,
 // and the one on its way to the store, held between the frames that carry it.
 // One frame is built per call.

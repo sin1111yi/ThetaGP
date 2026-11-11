@@ -356,6 +356,14 @@ bool opensStagedWrite(pb_size_t arm) {
 
 } // namespace
 
+void readActiveProfileName(char *out, size_t cap) {
+    if (out == nullptr || cap == 0) {
+        return;
+    }
+    ProfileStore &store = ProfileStore::getInstance();
+    readProfileName(store, store.getStatus().activeId, out, cap);
+}
+
 ProfileDomain::Answers ProfileDomain::handle(const uint8_t *payload,
                                                uint16_t length,
                                                const ThetaGP_Request &request,

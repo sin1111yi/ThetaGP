@@ -19,9 +19,10 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-// The panel board as a device of this one: the coprocessor sends a heartbeat,
-// this board answers with the frame it received, and the exchange is what says
-// both ends are alive. Payloads stay opaque until the protocol is wired in.
+// The panel board as a device of this one: the messages of Link.proto over a
+// UART. The panel greets, this board answers with what it is and then says
+// what it shows every half second; the panel says what is on its screen, and a
+// navigation step from here moves it.
 
 #pragma once
 
@@ -41,68 +42,115 @@ public:
     return instance;
   }
 
-  // Takes the UART the board binds to the coprocessor and arms the first read.
+  // Claims the UART the board binds to the coprocessor and arms the first read.
   void init() override;
   [[nodiscard]] bool listening() const { return _listening; }
 
-  // The task the interrupt wakes: answers the heartbeat that landed and arms
-  // the read for the next one.
+  // The task the interrupt wakes: reads what landed, answers it and arms the
+  // read for the next frame.
   void task();
 
-  // The periodic half: keeps the read armed and, after two seconds of silence,
-  // says something so a quiet panel can still be heard from this side.
+  // The periodic half: keeps the read armed and says what this board shows, so
+  // a panel that missed one costs half a second at most.
   void tick();
 
-  // The task the UART interrupt posts, once the scheduler has handed one out.
+  // Called from the UART interrupt once the idle line closed a read: the bus
+  // knows how many bytes landed, and the interrupt has copied them already.
+  // The read is armed again here, before the interrupt returns: the next frame
+  // starts within a few microseconds, and a read armed by the task would come
+  // back to a line that has already gone quiet.
+  void received();
+
   void setWakeTask(Sched::TaskIndex task) { _wakeTask = task; }
   [[nodiscard]] Sched::TaskIndex wakeTask() const { return _wakeTask; }
 
-  // Called from the UART interrupt once the idle line closes a frame.
-  void received() { _landed = true; }
-
-  [[nodiscard]] bool speaking() const { return _speaking; }
+  // One navigation step for the panel: the action and, for a step that names a
+  // page, which one.
+  bool sendNav(uint8_t action, uint8_t page = 0);
 
   [[nodiscard]] bool alive() const { return _alive; }
-  [[nodiscard]] uint32_t heartbeats() const { return _heartbeats; }
-  [[nodiscard]] uint32_t answered() const { return _answered; }
+  [[nodiscard]] uint32_t receivedFrames() const { return _frames; }
+  [[nodiscard]] uint32_t boards() const { return _boards; }
   [[nodiscard]] uint32_t refused() const { return _refused; }
 
-  // One heartbeat on the wire: a one-byte length, four payload bytes and the
-  // checksum. The coprocessor sends the same shape, so the read is armed for
-  // exactly this many bytes.
-  static constexpr uint16_t FRAME_BYTES = 7;
+  // What the panel last said it is and shows.
+  [[nodiscard]] const char *panelId() const { return _panelId; }
+  [[nodiscard]] const char *panelRelease() const { return _panelRelease; }
+  [[nodiscard]] bool panelHeard() const { return _panelHeard; }
+  [[nodiscard]] uint32_t panelPage() const { return _panelPage; }
+  [[nodiscard]] uint32_t panelItem() const { return _panelItem; }
+  [[nodiscard]] uint32_t panelUptimeS() const { return _panelUptimeS; }
+  [[nodiscard]] uint32_t panelDropped() const { return _panelDropped; }
 
-  // What a heartbeat is answered with: the board's identifier and the firmware
-  // version, so the panel can say whose display it is. Four magic bytes, then
-  // sixteen and twenty fixed-width fields, framed.
-  static constexpr uint16_t REPLY_PAYLOAD_BYTES = 40;
-  static constexpr uint16_t REPLY_BYTES = 3 + REPLY_PAYLOAD_BYTES;
+  // Largest payload a frame of this link carries: one Link.proto message.
+  static constexpr uint16_t PAYLOAD_MAX = 128;
+  static constexpr uint16_t FRAME_MAX = 2 + PAYLOAD_MAX + 2;
 
 private:
   CoprocessorLink() : Device("coprocessor") {}
 
+  // The steps one frame is read in, as the wire defines them.
+  enum : uint8_t { kPrefix = 0, kPayload = 1, kChecksum = 2 };
+
+  bool parse(uint8_t byte);
+  void reset();
+  void handle(const uint8_t *payload, uint16_t length);
+  void sendBoard();
+  void sendState();
+  bool sendFrame(const uint8_t *payload, uint16_t length);
+
   Peripheral::BUS::UartBus *_uart = nullptr;
   bool _listening = false;
 
-  // The frame as it arrived. DMA writes into the bus's own buffer, so this is
-  // only touched by the task.
-  uint8_t _frame[FRAME_BYTES] = {};
+  // What one read landed in. DMA writes into the bus's own buffer, and the
+  // interrupt hands it here: only the task reads this.
+  uint8_t _rx[Peripheral::BUS::UartBus::MAX_BUF_SIZE] = {};
+  volatile bool _landed = false;
+
+  // What the interrupt has taken off the line and the task has not read yet.
+  // The panel writes a frame in bursts, so a read can close inside one: the
+  // bytes are queued whole and parsed across them.
+  static constexpr uint16_t kStreamSize = 512;
+  uint8_t _stream[kStreamSize] = {};
+  volatile uint16_t _head = 0;
+  volatile uint16_t _tail = 0;
+  volatile uint32_t _lost = 0;
+
+  // The frame being assembled from what landed.
+  uint8_t _payload[PAYLOAD_MAX] = {};
+  uint16_t _length = 0;
+  uint16_t _filled = 0;
+  uint16_t _sum = 0;
+  uint8_t _prefixBytes = 0;
+  uint8_t _checksumLow = 0;
+  uint8_t _checksumBytes = 0;
+  uint8_t _state = kPrefix;
 
   Sched::TaskIndex _wakeTask = Sched::kInvalidTask;
 
-  volatile bool _landed = false;
-  bool _alive = false;
-  bool _speaking = false;
+  volatile bool _alive = false;
+  volatile uint32_t _frames = 0;
+  volatile uint32_t _boards = 0;
+  volatile uint32_t _refused = 0;
 
-  // Sent when nothing has arrived for a while, so a silent panel is still
-  // something this board can be heard by.
-  uint8_t _ping[FRAME_BYTES] = {};
-  uint8_t _reply[REPLY_BYTES] = {};
-  uint16_t _replyLength = 0;
+  // The panel's own last word.
+  char _panelId[21] = {};
+  char _panelRelease[21] = {};
+  uint32_t _panelPage = 0;
+  uint32_t _panelItem = 0;
+  uint32_t _panelUptimeS = 0;
+  // The name the active profile's body carries. It is read from the store when
+  // the profile changes and not on every beat: the body is in the flash, and a
+  // beat has no time for a read.
+  char _profileName[25] = {};
+  uint32_t _profileNamedId = 0xFFFFFFFFu;
+  uint32_t _panelDropped = 0;
+  volatile bool _panelHeard = false;
+  uint32_t _lastBoardUs = 0;
   uint32_t _lastHeardUs = 0;
-  uint32_t _heartbeats = 0;
-  uint32_t _answered = 0;
-  uint32_t _refused = 0;
+  uint32_t _lastStateUs = 0;
+
+  uint8_t _frame[FRAME_MAX] = {};
 };
 
 } // namespace ThetaGP::Drivers::Device

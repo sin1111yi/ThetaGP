@@ -91,8 +91,10 @@ endif()
 set(THETAGP_PB_DIR "${CMAKE_SOURCE_DIR}/lib/ThetaGP.PB")
 
 set(PROTO_SCHEMAS
-    # The one protocol template, from the schema checkout.
+    # The protocol the host and this board exchange, from the schema checkout.
     "${THETAGP_PB_DIR}/protocol/ThetaGP.proto"
+    # The one the two boards exchange, which the host never sees.
+    "${THETAGP_PB_DIR}/protocol/Link.proto"
 )
 # The generated pair lands under src/pb/ and is ignored by git.
 set(PROTO_OUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pb")
@@ -151,10 +153,21 @@ else()
             "python-protobuf and configure from that worktree.")
     else()
         message(STATUS "Generating ${PROTO_PB_OUTPUTS_TEXT} from ${PROTO_SCHEMAS_TEXT} ...")
-        thetagp_run_generator(PROTO_PB_RESULT
-            ${PYTHON3} "${THETAGP_PB_DIR}/generate.py" c
-            --nanopb "${CMAKE_SOURCE_DIR}/lib/nanopb"
-            --out "${PROTO_OUT_DIR}")
+        # One schema at a time: the generator writes the codec of the schema it
+        # is given, and this build compiles one per schema.
+        foreach(PROTO_SCHEMA IN LISTS PROTO_SCHEMAS)
+            cmake_path(GET PROTO_SCHEMA PARENT_PATH PROTO_SCHEMA_DIR)
+            string(REPLACE "${THETAGP_PB_DIR}/" "" PROTO_SCHEMA_RELATIVE
+                   "${PROTO_SCHEMA}")
+            thetagp_run_generator(PROTO_PB_RESULT
+                ${PYTHON3} "${THETAGP_PB_DIR}/generate.py" c
+                --schema "${PROTO_SCHEMA_RELATIVE}"
+                --nanopb "${CMAKE_SOURCE_DIR}/lib/nanopb"
+                --out "${PROTO_OUT_DIR}")
+            if(NOT PROTO_PB_RESULT EQUAL 0)
+                break()
+            endif()
+        endforeach()
         if(NOT PROTO_PB_RESULT EQUAL 0)
             message(FATAL_ERROR
                 "Generating the protobuf codecs failed: "
