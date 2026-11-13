@@ -308,14 +308,28 @@ void CoprocessorLink::handle(const uint8_t *payload, uint16_t length) {
   _panelHeard = true;
 
   switch (message.which_kind) {
-  case ThetaGP_Link_Message_hello_tag:
-    putField(_panelId, sizeof _panelId, message.kind.hello.panel_id);
-    putField(_panelRelease, sizeof _panelRelease, message.kind.hello.release);
-    LOG_INFO("link: panel %s %s %ux%u", _panelId, _panelRelease,
-             static_cast<unsigned>(message.kind.hello.width),
-             static_cast<unsigned>(message.kind.hello.height));
+  case ThetaGP_Link_Message_hello_tag: {
+    char id[sizeof _panelId] = {};
+    char release[sizeof _panelRelease] = {};
+    putField(id, sizeof id, message.kind.hello.panel_id);
+    putField(release, sizeof release, message.kind.hello.release);
+
+    // The panel greets again every ten seconds; only a name that changed is
+    // worth a line.
+    const bool named = std::strcmp(id, _panelId) != 0 ||
+                       std::strcmp(release, _panelRelease) != 0;
+    std::strncpy(_panelId, id, sizeof _panelId - 1);
+    _panelId[sizeof _panelId - 1] = '\0';
+    std::strncpy(_panelRelease, release, sizeof _panelRelease - 1);
+    _panelRelease[sizeof _panelRelease - 1] = '\0';
+    if (named) {
+      LOG_INFO("link: panel %s %s %ux%u", _panelId, _panelRelease,
+               static_cast<unsigned>(message.kind.hello.width),
+               static_cast<unsigned>(message.kind.hello.height));
+    }
     sendBoard();
     break;
+  }
 
   case ThetaGP_Link_Message_beat_tag:
     if (message.kind.beat.page != _panelPage) {
