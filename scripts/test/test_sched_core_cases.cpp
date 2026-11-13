@@ -198,9 +198,80 @@ void aLateStartAndALongRunAreRecorded() {
   const ThetaGP::Sched::TaskStats *stats = core.stats(index);
   check(stats != nullptr && stats->runs == 1, "the run is counted");
   check(stats != nullptr && stats->deadlineMisses == 1, "a run past its deadline is counted");
-  check(stats != nullptr && stats->clearanceOverruns == 1, "a run past its clearance is counted");
+  // Nothing else releases here, so the run crossed no release: a run longer
+  // than the gate it started under is not an overrun by itself.
+  check(stats != nullptr && stats->clearanceOverruns == 0,
+        "a run longer than its gate but clear of every release is not an overrun");
   check(stats != nullptr && stats->lastRuntimeUs == 600, "the run's length is recorded");
   check(core.stats(9) == nullptr, "an index the set does not carry has no statistics");
+}
+
+void aRunThatCrossesTheReleaseItStartedClearOfIsCounted() {
+  Core core;
+  Clock clock;
+  attach(core, clock);
+
+  Counted high;
+  Counted low;
+  TaskIndex highIndex = kInvalidTask;
+  TaskIndex lowIndex = kInvalidTask;
+
+  // The higher-priority task's next release is 200 us after the low run
+  // starts: past the 100 us gate, so the run starts, and inside its 600 us, so
+  // it is the release the run carries on across.
+  TaskSpec highSpec = periodic("high", &high, 1000, Priority::High);
+  highSpec.phaseUs = 800;
+  check(core.add(highSpec, &highIndex) == AddError::None, "the high task is added");
+
+  low.clock = &clock;
+  low.advanceUs = 900;
+  TaskSpec lowSpec = periodic("low", &low, 5000, Priority::Low);
+  lowSpec.startClearanceUs = 100;
+  check(core.add(lowSpec, &lowIndex) == AddError::None, "the low task is added");
+  check(core.start(), "the set starts");
+
+  check(core.runOnce() && low.runs == 1, "the low task runs with the window wide");
+  const ThetaGP::Sched::TaskStats *stats = core.stats(lowIndex);
+  check(stats != nullptr && stats->clearanceOverruns == 1,
+        "a run that crosses the release it started clear of is an overrun");
+  check(stats != nullptr && stats->lastRuntimeUs == 900, "the run's length is recorded");
+}
+
+void aDeferredTaskLetsAnotherReadyOneRun() {
+  Core core;
+  Clock clock;
+  attach(core, clock);
+
+  Counted high;
+  Counted held;
+  Counted other;
+  TaskIndex highIndex = kInvalidTask;
+  TaskIndex heldIndex = kInvalidTask;
+  TaskIndex otherIndex = kInvalidTask;
+
+  check(core.add(periodic("high", &high, 1000, Priority::High), &highIndex) ==
+            AddError::None,
+        "the high task is added");
+  TaskSpec heldSpec = periodic("held", &held, 100, Priority::Normal);
+  heldSpec.startClearanceUs = 200;
+  check(core.add(heldSpec, &heldIndex) == AddError::None,
+        "the task with a clearance is added");
+  TaskSpec otherSpec = periodic("other", &other, 0, Priority::Low);
+  otherSpec.release = Release::Event;
+  check(core.add(otherSpec, &otherIndex) == AddError::None,
+        "the second ready task is added");
+  check(core.start(), "the set starts");
+
+  check(core.runOnce() && high.runs == 1, "the high task runs first");
+  check(core.runOnce() && held.runs == 1, "the held task runs while the window is wide");
+
+  // The window narrows, and an event arrives: the held task is passed over and
+  // the ready one takes the turn instead of the core spinning on the hold.
+  clock.now = 900;
+  check(core.post(otherIndex), "the event is posted");
+  check(core.runOnce() && other.runs == 1, "the ready task runs while the other is held");
+  check(held.runs == 1 && core.stats(heldIndex)->deferrals == 1,
+        "the held task waited its turn");
 }
 
 void postsCoalesceUnlessACountIsAskedFor() {
@@ -595,6 +666,8 @@ int main() {
   aPeriodicTaskRunsOncePerReleaseInIndexOrder();
   aHigherPriorityTaskIsChosenFirst();
   aLateStartAndALongRunAreRecorded();
+  aRunThatCrossesTheReleaseItStartedClearOfIsCounted();
+  aDeferredTaskLetsAnotherReadyOneRun();
   postsCoalesceUnlessACountIsAskedFor();
   aPostInsideACallbackIsKept();
   aMissedPeriodKeepsOneReleaseOrUptoACount();

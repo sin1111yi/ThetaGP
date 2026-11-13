@@ -111,7 +111,8 @@ struct TaskStats {
   uint32_t runs = 0;
   uint32_t missedReleases = 0;
   uint32_t deadlineMisses = 0;
-  // Runs that lasted longer than the clearance they started under.
+  // Runs that carried on past the higher-priority release they started clear
+  // of. A run longer than the gate but clear of every release is not one.
   uint32_t clearanceOverruns = 0;
   uint32_t maxStartLatencyUs = 0;
   uint32_t maxRuntimeUs = 0;

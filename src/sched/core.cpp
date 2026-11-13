@@ -215,47 +215,73 @@ FAST_CODE bool Core::runOnce() {
 
   TaskIndex pick = kInvalidTask;
   Priority best = Priority::Idle;
-  for (std::size_t i = 0; i < _count; ++i) {
-    if (_tasks[i].pending == 0) {
-      continue;
-    }
-    if (pick == kInvalidTask ||
-        static_cast<uint8_t>(_tasks[i].spec.priority) > static_cast<uint8_t>(best)) {
-      pick = static_cast<TaskIndex>(i);
-      best = _tasks[i].spec.priority;
-    }
-  }
-  if (pick == kInvalidTask) {
-    return false;
-  }
-
-  State &task = _tasks[pick];
-  if (_port.enterCritical != nullptr) {
-    _port.enterCritical(_port.context);
-  }
-  const uint32_t started = nowIsr();
-  // The release this run was cleared against, so the run can be held to it
-  // afterwards: the clearance is a gate, not a bound.
+  State *chosen = nullptr;
+  uint32_t started = 0;
+  // The release this run would be cleared against, so the run can be held to
+  // it afterwards: the clearance is a gate, not a bound.
   uint32_t clearedAgainst = UINT32_MAX;
-  if (task.spec.startClearanceUs != 0) {
-    const uint32_t window = higherReleaseWindow(task.spec.priority, started);
-    if (window != UINT32_MAX) {
-      clearedAgainst = window;
+
+  for (;;) {
+    pick = kInvalidTask;
+    best = Priority::Idle;
+    for (std::size_t i = 0; i < _count; ++i) {
+      // A task held back by its clearance is not a candidate: another task
+      // that is ready takes the turn, and the held one comes back when its
+      // release window opens.
+      if (_tasks[i].pending == 0 || _tasks[i].deferred) {
+        continue;
+      }
+      if (pick == kInvalidTask ||
+          static_cast<uint8_t>(_tasks[i].spec.priority) >
+              static_cast<uint8_t>(best)) {
+        pick = static_cast<TaskIndex>(i);
+        best = _tasks[i].spec.priority;
+      }
     }
-    if (window != UINT32_MAX &&
-        (window <= kStartGuardUs || task.spec.startClearanceUs >= window - kStartGuardUs)) {
-      // One episode counts once: the run is held until the release it waits
-      // on lands, and every attempt inside that wait is the same deferral.
-      if (!task.deferred) {
-        task.deferred = true;
-        ++task.stats.deferrals;
-      }
-      task.deferUntilUs = started + window;
-      if (_port.exitCritical != nullptr) {
-        _port.exitCritical(_port.context);
-      }
+    if (pick == kInvalidTask) {
       return false;
     }
+
+    State &candidate = _tasks[pick];
+    if (_port.enterCritical != nullptr) {
+      _port.enterCritical(_port.context);
+    }
+    started = nowIsr();
+    clearedAgainst = UINT32_MAX;
+    bool held = false;
+    if (candidate.spec.startClearanceUs != 0) {
+      const uint32_t window =
+          higherReleaseWindow(candidate.spec.priority, started);
+      if (window != UINT32_MAX) {
+        clearedAgainst = window;
+      }
+      if (window != UINT32_MAX &&
+          (window <= kStartGuardUs ||
+           candidate.spec.startClearanceUs >= window - kStartGuardUs)) {
+        // One episode counts once: the run is held until the release it waits
+        // on lands, and every attempt inside that wait is the same deferral.
+        if (!candidate.deferred) {
+          candidate.deferred = true;
+          ++candidate.stats.deferrals;
+        }
+        candidate.deferUntilUs = started + window;
+        held = true;
+      }
+    }
+    if (_port.exitCritical != nullptr) {
+      _port.exitCritical(_port.context);
+    }
+    if (!held) {
+      chosen = &candidate;
+      break;
+    }
+    // Held back: the turn goes to the next candidate rather than back to a
+    // caller that would only ask again.
+  }
+
+  State &task = *chosen;
+  if (_port.enterCritical != nullptr) {
+    _port.enterCritical(_port.context);
   }
   const uint32_t released = task.firstPendingUs;
   --task.pending;
