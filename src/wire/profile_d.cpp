@@ -10,7 +10,9 @@
 #include "pb_encode.h"
 #include "wire/frame.h"
 #include "wire/dispatch.h"
+#include "BoardConfig.h"
 #include "conf/ThetaGP_Config.h"
+#include "drivers/device/coprocessor_link.h"
 #include "gamepad/config/config_manager.h"
 #include "gamepad/profile/profile_store.h"
 #include "utils/json/json.h"
@@ -748,6 +750,10 @@ void ProfileDomain::select(const ThetaGP_Request &request,
         return;
     }
 
+    // The panel names the profile it shows, so the change reaches it from here:
+    // the store is read on this task, never on the link's periodic tick.
+    Drivers::Device::CoprocessorLink::getInstance().profileChanged();
+
     reply.which_kind = ThetaGP_Reply_profile_select_tag;
     reply.kind.profile_select.id = arm.id;
 }
@@ -772,6 +778,10 @@ void ProfileDomain::save(ThetaGP_Reply &reply) {
                      ThetaGP_Reason_REASON_PROFILE_SAVE_FAILED);
         return;
     }
+
+    // A save can rewrite the name the body carries: the panel reads it from
+    // this task rather than from its tick.
+    Drivers::Device::CoprocessorLink::getInstance().profileChanged();
 
     reply.which_kind = ThetaGP_Reply_profile_save_tag;
     ThetaGP_ProfileSaveOk &ok = reply.kind.profile_save;

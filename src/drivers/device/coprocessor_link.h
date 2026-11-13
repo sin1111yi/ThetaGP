@@ -46,8 +46,9 @@ public:
   void init() override;
   [[nodiscard]] bool listening() const { return _listening; }
 
-  // The task the interrupt wakes: reads what landed, answers it and arms the
-  // read for the next frame.
+  // The task the interrupt wakes: takes what the interrupt queued and handles
+  // it, at most a few frames per call so one burst cannot hold the scheduler's
+  // tasks off for a whole tick. The rest waits for `tick`.
   void task();
 
   // The periodic half: keeps the read armed and says what this board shows, so
@@ -63,6 +64,11 @@ public:
 
   void setWakeTask(Sched::TaskIndex task) { _wakeTask = task; }
   [[nodiscard]] Sched::TaskIndex wakeTask() const { return _wakeTask; }
+
+  // The profile the pages name has changed: the name is read from the store
+  // here, on the task that changed it, and the next beat carries it. Nothing
+  // on the periodic tick reads the flash.
+  void profileChanged();
 
   // One key for the panel. The key is queued and leaves on the periodic tick,
   // which retries a transmitter that was carrying a frame; false means the
@@ -111,6 +117,9 @@ private:
   // Sends the step at the head of the queue, if the transmitter will take it.
   void flushNav();
 
+  // Handles what the interrupt queued, at most kDrainFrames whole messages.
+  void drain();
+
   bool parse(uint8_t byte);
   void reset();
   void handle(const uint8_t *payload, uint16_t length);
@@ -151,6 +160,10 @@ private:
   volatile uint32_t _frames = 0;
   volatile uint32_t _boards = 0;
   volatile uint32_t _refused = 0;
+  uint32_t _txOk = 0;
+  uint32_t _txBusy = 0;
+  uint32_t _txFail = 0;
+  uint32_t _txLoggedUs = 0;
 
   // The panel's own last word.
   char _panelId[21] = {};

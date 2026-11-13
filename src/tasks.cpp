@@ -260,9 +260,11 @@ void ThetaGP::ThetaGamepad::registerTasks(void) {
     LOG_ERROR("scheduler: SYSTEM.UPDATE was not registered");
   }
 #ifdef BDCFG_COPROCESSOR_UART
-  // A heartbeat waits a period at most: the coprocessor sends one every 500 ms.
+  // The panel posts a frame at a couple of hertz, and the interrupt posts this
+  // task for each one: at 50 Hz the longest a frame waits behind a task that is
+  // already running is 20 ms, and a run of it passes 2 us.
   if (!scheduler.addPeriodic("LINK", "PANEL", taskCoprocessorLink, nullptr,
-                              periodUs(20), Priority::Low, 0, kLinkClearanceUs)) {
+                              periodUs(50), Priority::Low, 0, kLinkClearanceUs)) {
     LOG_ERROR("scheduler: LINK.PANEL was not registered");
   }
 #endif

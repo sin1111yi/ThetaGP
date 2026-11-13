@@ -60,6 +60,9 @@ constexpr uint32_t kBoardUs = 2000000;
 // One step is worth a moment on the panel: its mark travels a card in about
 // half a second, and two steps inside that would only start over.
 constexpr uint32_t kNavGapUs = 550000;
+// Frames one call handles before leaving the rest to the next tick: the panel
+// sends at most a couple a second, and a burst should not hold the run long.
+constexpr uint8_t kDrainFrames = 4;
 
 // Two buffers of the bus's own capacity, borrowed by it for the firmware's
 // lifetime. AXI SRAM (COMMON_ZERO_INIT): the region the UART's DMA reaches.
@@ -117,6 +120,12 @@ void CoprocessorLink::init() {
   _uart->init();
 
   reset();
+  // The name the pages print is read once here, where nothing is waiting on a
+  // deadline, and then only when the profile changes.
+#if THETAGP_CFG_HAS_FLASH
+  _profileNamedId = Gamepad::Config::ConfigManager::getInstance().activeProfileId();
+  Wire::readActiveProfileName(_profileName, sizeof _profileName);
+#endif
   _listening = isOk(_uart->receive(_rx, sizeof _rx));
   LOG_INFO("link: coprocessor uart %s", _listening ? "listening" : "not armed");
   setInitialized(_listening);
@@ -154,13 +163,18 @@ void CoprocessorLink::task() {
   }
 
   _landed = false;
+  drain();
+}
 
-  while (_tail != _head) {
+void CoprocessorLink::drain() {
+  uint8_t handled = 0;
+  while (_tail != _head && handled < kDrainFrames) {
     const uint8_t byte = _stream[_tail];
     _tail = static_cast<uint16_t>((_tail + 1) & (kStreamSize - 1));
     if (parse(byte)) {
       handle(_payload, _filled);
       reset();
+      ++handled;
     }
   }
 }
@@ -187,7 +201,23 @@ void CoprocessorLink::tick() {
     _lastBoardUs = nowUs;
     sendBoard();
   }
+  // Bytes the interrupt queued beyond one call's worth are taken here, a few
+  // frames at a time, so nothing is stranded until the next burst.
+  drain();
+
   flushNav();
+
+  if (nowUs - _txLoggedUs >= 3000000U) {
+    _txLoggedUs = nowUs;
+    // A line only when a send or a frame was refused: the counters that never
+    // move are not worth a line every three seconds.
+    if (_txBusy != 0 || _txFail != 0 || _refused != 0) {
+      LOG_INFO("link: tx ok=%u busy=%u fail=%u, rx=%u refused=%u",
+               static_cast<unsigned>(_txOk), static_cast<unsigned>(_txBusy),
+               static_cast<unsigned>(_txFail), static_cast<unsigned>(_frames),
+               static_cast<unsigned>(_refused));
+    }
+  }
 
   if (nowUs - _lastStateUs >= kStateUs) {
     _lastStateUs = nowUs;
@@ -247,7 +277,11 @@ bool CoprocessorLink::parse(uint8_t byte) {
     }
     if (_sum != static_cast<uint16_t>(_checksumLow |
                                       (static_cast<uint16_t>(byte) << 8))) {
+      // A frame that did not hold is dropped whole: the parser goes back to
+      // the length that starts the next one, or every byte after a bad frame
+      // would be read as that frame's tail.
       _refused = _refused + 1;
+      reset();
       return false;
     }
     return true;
@@ -324,17 +358,6 @@ void CoprocessorLink::sendState() {
   count = manager.profileCount();
 #endif
 
-  // The name travels in the profile's body, which lives in the flash: it is
-  // read when the profile changes, and the beats in between carry what was
-  // read then.
-  if (id != _profileNamedId) {
-    _profileNamedId = id;
-    _profileName[0] = '\0';
-#if THETAGP_CFG_HAS_FLASH
-    Wire::readActiveProfileName(_profileName, sizeof _profileName);
-#endif
-  }
-
   ThetaGP_Link_Message message = ThetaGP_Link_Message_init_zero;
   message.which_kind = ThetaGP_Link_Message_state_tag;
   message.kind.state.report_hz = THETAGP_CFG_USB_REPORT_RATE_HZ;
@@ -350,6 +373,18 @@ void CoprocessorLink::sendState() {
   if (pack(message, payload, &length)) {
     (void)sendFrame(payload, length);
   }
+}
+
+void CoprocessorLink::profileChanged() {
+#if THETAGP_CFG_HAS_FLASH
+  // Called from the task that changed the profile: the body it just wrote or
+  // read is the one the name comes from, and a beat follows at once.
+  _profileNamedId =
+      Gamepad::Config::ConfigManager::getInstance().activeProfileId();
+  _profileName[0] = '\0';
+  Wire::readActiveProfileName(_profileName, sizeof _profileName);
+  _lastStateUs = 0;
+#endif
 }
 
 bool CoprocessorLink::sendNav(uint8_t action) {
@@ -410,7 +445,15 @@ bool CoprocessorLink::sendFrame(const uint8_t *payload, uint16_t length) {
   if (size == 0) {
     return false;
   }
-  return isOk(_uart->transmit(_frame, size));
+  const Result sent = _uart->transmit(_frame, size);
+  if (isOk(sent)) {
+    _txOk = _txOk + 1;
+  } else if (sent == Result::Busy) {
+    _txBusy = _txBusy + 1;
+  } else {
+    _txFail = _txFail + 1;
+  }
+  return isOk(sent);
 }
 
 #else
@@ -422,6 +465,8 @@ void CoprocessorLink::task() {}
 void CoprocessorLink::tick() {}
 
 void CoprocessorLink::received() {}
+
+void CoprocessorLink::profileChanged() {}
 
 bool CoprocessorLink::sendNav(uint8_t) { return false; }
 
