@@ -4,6 +4,8 @@
 
 #include "wire/profile_d.h"
 
+#include <cstdio>
+
 #include <cstddef>
 
 #include "pb_decode.h"
@@ -323,12 +325,16 @@ using Gamepad::Profile::ProfileText;
 void readProfileName(ProfileStore &store, uint16_t id, char *out, size_t cap) {
     out[0] = '\0';
     ProfileText text;
-    if (!store.readProfile(id, &text) || text.len == 0) {
-        return;
+    if (store.readProfile(id, &text) && text.len != 0) {
+        Util::Json body;
+        body.parse(text.data, static_cast<int>(text.len));
+        (void)body.getStrCopy("name", out, static_cast<int>(cap));
     }
-    Util::Json body;
-    body.parse(text.data, static_cast<int>(text.len));
-    (void)body.getStrCopy("name", out, static_cast<int>(cap));
+    // The factory profile is the build's own and its body carries no name of
+    // its own: it is called what it is, on the wire and on the panel.
+    if (id == 0 && out[0] == '\0') {
+        std::snprintf(out, cap, "%s", "Default");
+    }
 }
 
 
