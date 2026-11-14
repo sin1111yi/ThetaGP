@@ -75,8 +75,9 @@ void CoprocDomain::nav(const ThetaGP_Request &request, ThetaGP_Reply &reply) {
 
     CoprocessorLink &link = CoprocessorLink::getInstance();
     if (!link.alive()) {
+        // The panel has not been heard from: the step would go nowhere.
         writeFailure(reply, ThetaGP_ErrorCode_ERR_INVALID_STATE,
-                     ThetaGP_Reason_REASON_NOT_IMPLEMENTED);
+                     ThetaGP_Reason_REASON_COPROCESSOR_SILENT);
         return;
     }
     if (!link.sendNav(action)) {
